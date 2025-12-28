@@ -37,8 +37,8 @@ export function PhotoCard({
   return (
     <div 
       className={cn(
-        'group relative rounded-xl overflow-hidden bg-muted cursor-pointer transition-all duration-300',
-        isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300',
+        isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
         disabled && 'opacity-60 cursor-not-allowed'
       )}
       style={{ aspectRatio: `${photo.width}/${photo.height}` }}
