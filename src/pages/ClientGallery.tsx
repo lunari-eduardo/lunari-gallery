@@ -19,7 +19,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Logo } from '@/components/Logo';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
@@ -102,9 +101,8 @@ export default function ClientGallery() {
   if (showWelcome) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <header className="flex items-center justify-between p-4 border-b border-border/50">
+        <header className="flex items-center justify-center p-4 border-b border-border/50">
           <Logo size="sm" />
-          <ThemeToggle />
         </header>
         
         <main className="flex-1 flex items-center justify-center p-6">
@@ -177,26 +175,23 @@ export default function ClientGallery() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
-        <div className="container flex items-center justify-between py-3">
+        <div className="flex items-center justify-between px-3 py-3">
           <Logo size="sm" />
           
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium">{gallery.sessionName}</p>
-              <p className="text-xs text-muted-foreground">
-                {format(gallery.settings.deadline, "dd 'de' MMMM", { locale: ptBR })}
-              </p>
-            </div>
-            <ThemeToggle />
+          <div className="text-right">
+            <p className="text-sm font-medium">{gallery.sessionName}</p>
+            <p className="text-xs text-muted-foreground">
+              {format(gallery.settings.deadline, "dd 'de' MMMM", { locale: ptBR })}
+            </p>
           </div>
         </div>
 
         {/* Selection Bar */}
         <div className={cn(
-          'border-t border-border/50 bg-muted/50 py-2',
+          'border-t border-border/50 bg-muted/50 py-2 px-3',
           isBlocked && 'bg-destructive/10'
         )}>
-          <div className="container flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <span className="text-sm">
                 <span className="font-semibold">{selectedCount}</span>
@@ -233,45 +228,39 @@ export default function ClientGallery() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 container py-6">
-        <div className="grid gap-6 lg:grid-cols-4">
-          <div className="lg:col-span-3">
-            <MasonryGrid>
-              {photos.map((photo, index) => (
-                <MasonryItem key={photo.id}>
-                  <PhotoCard
-                    photo={photo}
-                    watermark={gallery.settings.watermark}
-                    isSelected={photo.isSelected}
-                    allowComments={gallery.settings.allowComments}
-                    disabled={isBlocked}
-                    onSelect={() => toggleSelection(photo.id)}
-                    onViewFullscreen={() => setLightboxIndex(index)}
-                    onComment={() => {}}
-                  />
-                </MasonryItem>
-              ))}
-            </MasonryGrid>
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="sticky top-36">
-              <SelectionSummary 
-                gallery={{
-                  ...gallery,
-                  selectedCount,
-                  extraCount,
-                  extraTotal,
-                  selectionStatus: isConfirmed ? 'confirmed' : 'in_progress',
-                }}
-                onConfirm={() => setShowConfirmDialog(true)}
-                isClient
+      {/* Main Content - Full width gallery */}
+      <main className="flex-1 px-1 sm:px-2 py-2 pb-20">
+        <MasonryGrid>
+          {photos.map((photo, index) => (
+            <MasonryItem key={photo.id}>
+              <PhotoCard
+                photo={photo}
+                watermark={gallery.settings.watermark}
+                isSelected={photo.isSelected}
+                allowComments={gallery.settings.allowComments}
+                disabled={isBlocked}
+                onSelect={() => toggleSelection(photo.id)}
+                onViewFullscreen={() => setLightboxIndex(index)}
+                onComment={() => {}}
               />
-            </div>
-          </div>
-        </div>
+            </MasonryItem>
+          ))}
+        </MasonryGrid>
       </main>
+
+      {/* Bottom Bar Summary */}
+      <SelectionSummary 
+        gallery={{
+          ...gallery,
+          selectedCount,
+          extraCount,
+          extraTotal,
+          selectionStatus: isConfirmed ? 'confirmed' : 'in_progress',
+        }}
+        onConfirm={() => setShowConfirmDialog(true)}
+        isClient
+        variant="bottom-bar"
+      />
 
       {/* Lightbox */}
       {lightboxIndex !== null && (
