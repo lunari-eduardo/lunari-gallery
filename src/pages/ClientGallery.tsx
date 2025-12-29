@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -7,32 +7,28 @@ import {
   Image, 
   Check, 
   AlertTriangle, 
-  Clock,
-  X
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
+import { SelectionReview } from '@/components/SelectionReview';
+import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { mockGalleries } from '@/data/mockData';
 import { GalleryPhoto } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+type SelectionStep = 'gallery' | 'review' | 'checkout';
+
 export default function ClientGallery() {
   const { id } = useParams();
   const [showWelcome, setShowWelcome] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
 
@@ -84,9 +80,19 @@ export default function ClientGallery() {
     toast.success('Comentário salvo!');
   };
 
+  const handleStartConfirmation = () => {
+    // If there are extra photos, go through review first
+    if (extraCount > 0) {
+      setCurrentStep('review');
+    } else {
+      // No extras, go directly to checkout
+      setCurrentStep('checkout');
+    }
+  };
+
   const handleConfirm = () => {
-    setShowConfirmDialog(false);
     setIsConfirmed(true);
+    setCurrentStep('gallery');
     toast.success('Seleção confirmada!', {
       description: 'O fotógrafo receberá sua seleção.',
     });
@@ -168,6 +174,32 @@ export default function ClientGallery() {
           </div>
         </main>
       </div>
+    );
+  }
+
+  // Render Review Step
+  if (currentStep === 'review') {
+    return (
+      <SelectionReview
+        photos={photos}
+        includedPhotos={gallery.includedPhotos}
+        onBack={() => setCurrentStep('gallery')}
+        onContinue={() => setCurrentStep('checkout')}
+      />
+    );
+  }
+
+  // Render Checkout Step
+  if (currentStep === 'checkout') {
+    return (
+      <SelectionCheckout
+        gallery={gallery}
+        selectedCount={selectedCount}
+        extraCount={extraCount}
+        extraTotal={extraTotal}
+        onBack={() => extraCount > 0 ? setCurrentStep('review') : setCurrentStep('gallery')}
+        onConfirm={handleConfirm}
+      />
     );
   }
 
@@ -257,7 +289,7 @@ export default function ClientGallery() {
           extraTotal,
           selectionStatus: isConfirmed ? 'confirmed' : 'in_progress',
         }}
-        onConfirm={() => setShowConfirmDialog(true)}
+        onConfirm={handleStartConfirmation}
         isClient
         variant="bottom-bar"
       />
@@ -276,41 +308,6 @@ export default function ClientGallery() {
           onComment={handleComment}
         />
       )}
-
-      {/* Confirm Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Seleção</DialogTitle>
-            <DialogDescription>
-              Você está prestes a confirmar sua seleção de {selectedCount} fotos.
-              {extraCount > 0 && (
-                <span className="block mt-2 text-primary font-medium">
-                  Valor adicional: R$ {extraTotal.toFixed(2)} ({extraCount} fotos extras)
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="p-4 rounded-lg bg-muted text-sm">
-            <p className="font-medium mb-1">⚠️ Atenção</p>
-            <p className="text-muted-foreground">
-              Após confirmar, você não poderá alterar sua seleção. 
-              Certifique-se de que escolheu todas as fotos desejadas.
-            </p>
-          </div>
-
-          <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Revisar
-            </Button>
-            <Button variant="terracotta" onClick={handleConfirm}>
-              <Check className="h-4 w-4 mr-2" />
-              Confirmar Seleção
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
