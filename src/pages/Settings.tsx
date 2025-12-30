@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { 
   Globe, 
   Palette, 
@@ -19,11 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockGlobalSettings } from '@/data/mockData';
+import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 
 export default function Settings() {
-  const [settings, setSettings] = useState(mockGlobalSettings);
+  const { settings, updateSettings } = useSettings();
 
   const handleSave = () => {
     toast.success('Configurações salvas!');
@@ -58,7 +57,7 @@ export default function Settings() {
             <Input
               id="studioName"
               value={settings.studioName}
-              onChange={(e) => setSettings({ ...settings, studioName: e.target.value })}
+              onChange={(e) => updateSettings({ studioName: e.target.value })}
               placeholder="Seu estúdio"
             />
           </div>
@@ -105,7 +104,7 @@ export default function Settings() {
           </div>
           <Switch
             checked={settings.publicGalleryEnabled}
-            onCheckedChange={(checked) => setSettings({ ...settings, publicGalleryEnabled: checked })}
+            onCheckedChange={(checked) => updateSettings({ publicGalleryEnabled: checked })}
           />
         </div>
       </div>
@@ -129,7 +128,7 @@ export default function Settings() {
           <Select
             value={settings.clientTheme}
             onValueChange={(value: 'light' | 'dark' | 'system') => 
-              setSettings({ ...settings, clientTheme: value })
+              updateSettings({ clientTheme: value })
             }
           >
             <SelectTrigger>
@@ -162,7 +161,7 @@ export default function Settings() {
           <Label>Idioma</Label>
           <Select
             value={settings.language}
-            onValueChange={(value) => setSettings({ ...settings, language: value })}
+            onValueChange={(value) => updateSettings({ language: value })}
           >
             <SelectTrigger>
               <SelectValue />
@@ -198,9 +197,8 @@ export default function Settings() {
               min={1}
               max={90}
               value={settings.defaultExpirationDays}
-              onChange={(e) => setSettings({ 
-                ...settings, 
-                defaultExpirationDays: parseInt(e.target.value) || 10 
+              onChange={(e) => updateSettings({ 
+                defaultExpirationDays: parseInt(e.target.value) || 10
               })}
               className="w-24"
             />
