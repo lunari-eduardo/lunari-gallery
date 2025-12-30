@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Download,
   Droplet,
-  Eye
+  Eye,
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Select,
   SelectContent,
@@ -28,10 +30,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { defaultWelcomeMessage } from '@/data/mockData';
-import { DeadlinePreset, WatermarkType, PreviewResolution, DownloadOption } from '@/types/gallery';
+import { defaultWelcomeMessage, mockClients } from '@/data/mockData';
+import { DeadlinePreset, WatermarkType, PreviewResolution, DownloadOption, Client } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { ClientSelect } from '@/components/ClientSelect';
+import { ClientModal } from '@/components/ClientModal';
 
 const steps = [
   { id: 1, name: 'Cliente', icon: User },
@@ -45,8 +49,11 @@ export default function GalleryCreate() {
   const [currentStep, setCurrentStep] = useState(1);
   
   // Step 1: Client Info
-  const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
+  const [clients, setClients] = useState<Client[]>(mockClients);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [useExistingPassword, setUseExistingPassword] = useState(true);
+  const [newPassword, setNewPassword] = useState('');
   const [sessionName, setSessionName] = useState('');
   const [packageName, setPackageName] = useState('');
   const [includedPhotos, setIncludedPhotos] = useState(30);
@@ -96,6 +103,30 @@ export default function GalleryCreate() {
     return deadlinePreset;
   };
 
+  const handleSaveClient = (clientData: Omit<Client, 'id' | 'status' | 'linkedGalleries' | 'createdAt' | 'updatedAt'>) => {
+    const newClient: Client = {
+      id: `client-${Date.now()}`,
+      ...clientData,
+      status: 'no_gallery',
+      linkedGalleries: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setClients(prev => [newClient, ...prev]);
+    setSelectedClient(newClient);
+    setUseExistingPassword(true);
+    setIsClientModalOpen(false);
+    toast.success('Cliente cadastrado com sucesso!');
+  };
+
+  const handleClientSelect = (client: Client | null) => {
+    setSelectedClient(client);
+    if (client) {
+      setUseExistingPassword(true);
+      setNewPassword('');
+    }
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -110,26 +141,69 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="clientName">Nome do Cliente *</Label>
-                <Input
-                  id="clientName"
-                  placeholder="Ex: Maria Silva"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                />
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 space-y-2">
+                  <Label>Cliente *</Label>
+                  <ClientSelect
+                    clients={clients}
+                    selectedClient={selectedClient}
+                    onSelect={handleClientSelect}
+                    onCreateNew={() => setIsClientModalOpen(true)}
+                  />
+                </div>
+                <div className="pt-6">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setIsClientModalOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientEmail">Email do Cliente *</Label>
-                <Input
-                  id="clientEmail"
-                  type="email"
-                  placeholder="cliente@email.com"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                />
-              </div>
+
+              {selectedClient && (
+                <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
+                  <div className="grid gap-2 md:grid-cols-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Email: </span>
+                      <span className="font-medium">{selectedClient.email}</span>
+                    </div>
+                    {selectedClient.phone && (
+                      <div>
+                        <span className="text-muted-foreground">Telefone: </span>
+                        <span className="font-medium">{selectedClient.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="pt-2 space-y-3">
+                    <Label className="text-sm">Senha de acesso à galeria *</Label>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="useExisting" 
+                        checked={useExistingPassword}
+                        onCheckedChange={(checked) => setUseExistingPassword(checked as boolean)}
+                      />
+                      <label 
+                        htmlFor="useExisting" 
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Usar senha cadastrada
+                      </label>
+                    </div>
+                    {!useExistingPassword && (
+                      <Input
+                        placeholder="Nova senha para esta galeria"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -176,6 +250,12 @@ export default function GalleryCreate() {
                 />
               </div>
             </div>
+
+            <ClientModal
+              open={isClientModalOpen}
+              onOpenChange={setIsClientModalOpen}
+              onSave={handleSaveClient}
+            />
           </div>
         );
 
@@ -466,11 +546,11 @@ export default function GalleryCreate() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Cliente</span>
-                    <span className="font-medium">{clientName || '-'}</span>
+                    <span className="font-medium">{selectedClient?.name || '-'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Email</span>
-                    <span className="font-medium">{clientEmail || '-'}</span>
+                    <span className="font-medium">{selectedClient?.email || '-'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Sessão</span>

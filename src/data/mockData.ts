@@ -1,4 +1,4 @@
-import { Gallery, GlobalSettings, GalleryPhoto } from '@/types/gallery';
+import { Gallery, GlobalSettings, GalleryPhoto, Client } from '@/types/gallery';
 
 const generateMockPhotos = (count: number): GalleryPhoto[] => {
   const aspectRatios = [
@@ -230,3 +230,82 @@ Selecione suas favoritas com calma e aproveite cada momento capturado!
 
 Com carinho,
 {estudio}`;
+
+export const mockClients: Client[] = [
+  {
+    id: 'client-1',
+    name: 'Maria Silva',
+    email: 'maria.silva@email.com',
+    phone: '(11) 99999-1234',
+    galleryPassword: 'maria2024',
+    status: 'active',
+    linkedGalleries: ['gallery-1'],
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'client-2',
+    name: 'João e Ana Costa',
+    email: 'joao.ana@email.com',
+    phone: '(11) 98888-5678',
+    galleryPassword: 'costa2024',
+    status: 'active',
+    linkedGalleries: ['gallery-2'],
+    createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'client-3',
+    name: 'Pedro Oliveira',
+    email: 'pedro.oliveira@email.com',
+    phone: '(21) 97777-9012',
+    galleryPassword: 'pedro123',
+    status: 'active',
+    linkedGalleries: ['gallery-3'],
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'client-4',
+    name: 'Família Rodrigues',
+    email: 'familia.rodrigues@email.com',
+    phone: '(31) 96666-3456',
+    galleryPassword: 'rodrigues2024',
+    status: 'active',
+    linkedGalleries: ['gallery-4'],
+    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'client-5',
+    name: 'Carolina Mendes',
+    email: 'carol.mendes@email.com',
+    phone: '(11) 95555-7890',
+    galleryPassword: 'carol15anos',
+    status: 'no_gallery',
+    linkedGalleries: [],
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'client-6',
+    name: 'Fernanda Lima',
+    email: 'fernanda.lima@email.com',
+    galleryPassword: 'fernanda2024',
+    status: 'no_gallery',
+    linkedGalleries: [],
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'client-7',
+    name: 'Ricardo Santos',
+    email: 'ricardo.santos@email.com',
+    phone: '(41) 94444-1234',
+    galleryPassword: 'ricardo123',
+    status: 'no_gallery',
+    linkedGalleries: [],
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+  },
+];

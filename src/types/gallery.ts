@@ -77,3 +77,17 @@ export interface ExportData {
   filename: string;
   selected: boolean;
 }
+
+export type ClientStatus = 'active' | 'no_gallery';
+
+export interface Client {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  galleryPassword: string;
+  status: ClientStatus;
+  linkedGalleries: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}

@@ -6,7 +6,7 @@ import {
   Settings, 
   Menu, 
   X,
-  Images
+  Users
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
@@ -19,6 +19,7 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Clientes', href: '/clients', icon: Users },
   { name: 'Nova Galeria', href: '/gallery/new', icon: ImagePlus },
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
