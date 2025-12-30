@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Layout } from "@/components/Layout";
 import Index from "./pages/Index";
+import Clients from "./pages/Clients";
 import GalleryCreate from "./pages/GalleryCreate";
 import GalleryDetail from "./pages/GalleryDetail";
 import ClientGallery from "./pages/ClientGallery";
@@ -27,6 +28,7 @@ const App = () => (
             
             {/* Photographer routes (with layout) */}
             <Route path="/" element={<Layout><Index /></Layout>} />
+            <Route path="/clients" element={<Layout><Clients /></Layout>} />
             <Route path="/gallery/new" element={<Layout><GalleryCreate /></Layout>} />
             <Route path="/gallery/:id" element={<Layout><GalleryDetail /></Layout>} />
             <Route path="/settings" element={<Layout><Settings /></Layout>} />

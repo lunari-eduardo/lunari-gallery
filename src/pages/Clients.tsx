@@ -1,0 +1,196 @@
+import { useState } from 'react';
+import { 
+  Plus, 
+  Search, 
+  MoreHorizontal,
+  Pencil,
+  Images,
+  KeyRound,
+  User
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ClientModal } from '@/components/ClientModal';
+import { mockClients } from '@/data/mockData';
+import { Client } from '@/types/gallery';
+import { toast } from 'sonner';
+
+export default function Clients() {
+  const [clients, setClients] = useState<Client[]>(mockClients);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+
+  const filteredClients = clients.filter(client =>
+    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    client.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSaveClient = (clientData: Omit<Client, 'id' | 'status' | 'linkedGalleries' | 'createdAt' | 'updatedAt'>) => {
+    if (editingClient) {
+      // Update existing client
+      setClients(prev => prev.map(c => 
+        c.id === editingClient.id 
+          ? { ...c, ...clientData, updatedAt: new Date() }
+          : c
+      ));
+      toast.success('Cliente atualizado com sucesso!');
+    } else {
+      // Create new client
+      const newClient: Client = {
+        id: `client-${Date.now()}`,
+        ...clientData,
+        status: 'no_gallery',
+        linkedGalleries: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setClients(prev => [newClient, ...prev]);
+      toast.success('Cliente cadastrado com sucesso!');
+    }
+    setIsModalOpen(false);
+    setEditingClient(null);
+  };
+
+  const handleEdit = (client: Client) => {
+    setEditingClient(client);
+    setIsModalOpen(true);
+  };
+
+  const handleViewGalleries = (client: Client) => {
+    if (client.linkedGalleries.length === 0) {
+      toast.info('Este cliente não possui galerias vinculadas.');
+    } else {
+      toast.info(`${client.linkedGalleries.length} galeria(s) vinculada(s).`);
+    }
+  };
+
+  const handleResetPassword = (client: Client) => {
+    toast.success(`Nova senha enviada para ${client.email}`);
+  };
+
+  const getStatusBadge = (status: Client['status']) => {
+    switch (status) {
+      case 'active':
+        return <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">Ativo</Badge>;
+      case 'no_gallery':
+        return <Badge variant="secondary">Sem galeria</Badge>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Clientes</h1>
+          <p className="text-muted-foreground mt-1">
+            Gerencie os clientes das suas galerias
+          </p>
+        </div>
+        <Button onClick={() => { setEditingClient(null); setIsModalOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          Novo Cliente
+        </Button>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por nome ou email..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Table */}
+      <div className="lunari-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cliente</TableHead>
+              <TableHead className="hidden md:table-cell">Telefone</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredClients.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-12">
+                  <User className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">Nenhum cliente encontrado</p>
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredClients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{client.name}</p>
+                      <p className="text-sm text-muted-foreground">{client.email}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-muted-foreground">
+                    {client.phone || '—'}
+                  </TableCell>
+                  <TableCell>
+                    {getStatusBadge(client.status)}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(client)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleViewGalleries(client)}>
+                          <Images className="h-4 w-4 mr-2" />
+                          Ver galerias
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleResetPassword(client)}>
+                          <KeyRound className="h-4 w-4 mr-2" />
+                          Redefinir senha
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Modal */}
+      <ClientModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        client={editingClient}
+        onSave={handleSaveClient}
+      />
+    </div>
+  );
+}
