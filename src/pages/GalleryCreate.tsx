@@ -30,12 +30,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { defaultWelcomeMessage, mockClients } from '@/data/mockData';
+import { defaultWelcomeMessage } from '@/data/mockData';
 import { DeadlinePreset, WatermarkType, PreviewResolution, DownloadOption, Client } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
+import { useClients, CreateClientData } from '@/hooks/useClients';
+import { useGalleries } from '@/hooks/useGalleries';
 
 const steps = [
   { id: 1, name: 'Cliente', icon: User },
@@ -46,10 +48,11 @@ const steps = [
 
 export default function GalleryCreate() {
   const navigate = useNavigate();
+  const { clients, createClient } = useClients();
+  const { createGallery, galleries } = useGalleries();
   const [currentStep, setCurrentStep] = useState(1);
   
   // Step 1: Client Info
-  const [clients, setClients] = useState<Client[]>(mockClients);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [useExistingPassword, setUseExistingPassword] = useState(true);
@@ -78,11 +81,44 @@ export default function GalleryCreate() {
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Create gallery (mock)
+      // Create gallery
+      if (!selectedClient) {
+        toast.error('Selecione um cliente');
+        return;
+      }
+
+      const deadline = new Date();
+      deadline.setDate(deadline.getDate() + getDaysFromPreset());
+
+      const newGallery = createGallery({
+        clientId: selectedClient.id,
+        clientName: selectedClient.name,
+        clientEmail: selectedClient.email,
+        sessionName,
+        packageName,
+        includedPhotos,
+        extraPhotoPrice,
+        settings: {
+          welcomeMessage,
+          deadline,
+          deadlinePreset,
+          watermark: {
+            type: watermarkType,
+            text: watermarkText,
+            opacity: watermarkOpacity,
+            position: 'bottom-right',
+          },
+          previewResolution,
+          allowComments,
+          downloadOption,
+          allowExtraPhotos,
+        },
+      });
+
       toast.success('Galeria criada com sucesso!', {
         description: 'Você pode enviar o link para o cliente agora.',
       });
-      navigate('/');
+      navigate(`/gallery/${newGallery.id}`);
     }
   };
 
@@ -103,16 +139,8 @@ export default function GalleryCreate() {
     return deadlinePreset;
   };
 
-  const handleSaveClient = (clientData: Omit<Client, 'id' | 'status' | 'linkedGalleries' | 'createdAt' | 'updatedAt'>) => {
-    const newClient: Client = {
-      id: `client-${Date.now()}`,
-      ...clientData,
-      status: 'no_gallery',
-      linkedGalleries: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    setClients(prev => [newClient, ...prev]);
+  const handleSaveClient = (clientData: CreateClientData) => {
+    const newClient = createClient(clientData);
     setSelectedClient(newClient);
     setUseExistingPassword(true);
     setIsClientModalOpen(false);

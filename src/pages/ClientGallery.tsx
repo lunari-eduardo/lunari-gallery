@@ -17,7 +17,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
-import { mockGalleries } from '@/data/mockData';
+import { useGalleries } from '@/hooks/useGalleries';
 import { GalleryPhoto } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -26,13 +26,14 @@ type SelectionStep = 'gallery' | 'review' | 'checkout';
 
 export default function ClientGallery() {
   const { id } = useParams();
+  const { getGallery, updatePhotoSelection, updatePhotoComment, confirmSelection } = useGalleries();
   const [showWelcome, setShowWelcome] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
 
-  const gallery = mockGalleries.find(g => g.id === id);
+  const gallery = getGallery(id || '');
 
   useEffect(() => {
     if (gallery) {
@@ -66,14 +67,20 @@ export default function ClientGallery() {
   const extraTotal = extraCount * gallery.extraPhotoPrice;
 
   const toggleSelection = (photoId: string) => {
-    if (isBlocked) return;
+    if (isBlocked || !gallery) return;
     
-    setPhotos(prev => prev.map(p => 
-      p.id === photoId ? { ...p, isSelected: !p.isSelected } : p
-    ));
+    const photo = photos.find(p => p.id === photoId);
+    if (photo) {
+      updatePhotoSelection(gallery.id, photoId, !photo.isSelected);
+      setPhotos(prev => prev.map(p => 
+        p.id === photoId ? { ...p, isSelected: !p.isSelected } : p
+      ));
+    }
   };
 
   const handleComment = (photoId: string, comment: string) => {
+    if (!gallery) return;
+    updatePhotoComment(gallery.id, photoId, comment);
     setPhotos(prev => prev.map(p => 
       p.id === photoId ? { ...p, comment } : p
     ));
@@ -91,6 +98,8 @@ export default function ClientGallery() {
   };
 
   const handleConfirm = () => {
+    if (!gallery) return;
+    confirmSelection(gallery.id);
     setIsConfirmed(true);
     setCurrentStep('gallery');
     toast.success('Seleção confirmada!', {

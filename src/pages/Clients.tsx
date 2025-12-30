@@ -26,12 +26,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ClientModal } from '@/components/ClientModal';
-import { mockClients } from '@/data/mockData';
+import { useClients, CreateClientData } from '@/hooks/useClients';
 import { Client } from '@/types/gallery';
 import { toast } from 'sonner';
 
 export default function Clients() {
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  const { clients, createClient, updateClient } = useClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -41,26 +41,12 @@ export default function Clients() {
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSaveClient = (clientData: Omit<Client, 'id' | 'status' | 'linkedGalleries' | 'createdAt' | 'updatedAt'>) => {
+  const handleSaveClient = (clientData: CreateClientData) => {
     if (editingClient) {
-      // Update existing client
-      setClients(prev => prev.map(c => 
-        c.id === editingClient.id 
-          ? { ...c, ...clientData, updatedAt: new Date() }
-          : c
-      ));
+      updateClient(editingClient.id, clientData);
       toast.success('Cliente atualizado com sucesso!');
     } else {
-      // Create new client
-      const newClient: Client = {
-        id: `client-${Date.now()}`,
-        ...clientData,
-        status: 'no_gallery',
-        linkedGalleries: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      setClients(prev => [newClient, ...prev]);
+      createClient(clientData);
       toast.success('Cliente cadastrado com sucesso!');
     }
     setIsModalOpen(false);

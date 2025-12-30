@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   ArrowLeft, 
   Send, 
-  Settings, 
   RotateCcw, 
   Copy, 
   ExternalLink,
@@ -13,18 +12,9 @@ import {
   Download,
   User,
   Calendar,
-  Image,
-  Clock
+  Image
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
@@ -32,15 +22,16 @@ import { Lightbox } from '@/components/Lightbox';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ActionTimeline } from '@/components/ActionTimeline';
 import { SelectionSummary } from '@/components/SelectionSummary';
-import { mockGalleries } from '@/data/mockData';
+import { useGalleries } from '@/hooks/useGalleries';
 import { toast } from 'sonner';
 
 export default function GalleryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const { getGallery, sendGallery, reopenSelection } = useGalleries();
 
-  const gallery = mockGalleries.find(g => g.id === id);
+  const gallery = getGallery(id || '');
 
   if (!gallery) {
     return (
@@ -64,15 +55,21 @@ export default function GalleryDetail() {
   };
 
   const handleSendGallery = () => {
-    toast.success('Link enviado para o cliente!', {
-      description: `Email enviado para ${gallery.clientEmail}`,
-    });
+    if (gallery) {
+      sendGallery(gallery.id);
+      toast.success('Link enviado para o cliente!', {
+        description: `Email enviado para ${gallery.clientEmail}`,
+      });
+    }
   };
 
   const handleReopenSelection = () => {
-    toast.success('Seleção reaberta!', {
-      description: 'O cliente poderá fazer alterações novamente.',
-    });
+    if (gallery) {
+      reopenSelection(gallery.id);
+      toast.success('Seleção reaberta!', {
+        description: 'O cliente poderá fazer alterações novamente.',
+      });
+    }
   };
 
   const handleExport = (type: 'csv' | 'list') => {

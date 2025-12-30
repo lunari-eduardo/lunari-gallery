@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Grid, List } from 'lucide-react';
+import { Plus, Search, Grid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GalleryCard } from '@/components/GalleryCard';
-import { mockGalleries } from '@/data/mockData';
+import { useGalleries } from '@/hooks/useGalleries';
 import { GalleryStatus } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 
@@ -22,8 +22,9 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const { galleries } = useGalleries();
 
-  const filteredGalleries = mockGalleries.filter((gallery) => {
+  const filteredGalleries = galleries.filter((gallery) => {
     const matchesSearch = 
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
       gallery.sessionName.toLowerCase().includes(search.toLowerCase());
@@ -32,10 +33,10 @@ export default function Dashboard() {
   });
 
   const stats = {
-    total: mockGalleries.length,
-    inProgress: mockGalleries.filter(g => g.status === 'selection_started').length,
-    completed: mockGalleries.filter(g => g.status === 'selection_completed').length,
-    expired: mockGalleries.filter(g => g.status === 'expired').length,
+    total: galleries.length,
+    inProgress: galleries.filter(g => g.status === 'selection_started').length,
+    completed: galleries.filter(g => g.status === 'selection_completed').length,
+    expired: galleries.filter(g => g.status === 'expired').length,
   };
 
   return (
