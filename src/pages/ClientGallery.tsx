@@ -17,16 +17,18 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
+import { DemoImportScreen } from '@/components/DemoImportScreen';
+import { DemoExportButton } from '@/components/DemoExportButton';
 import { useGalleries } from '@/hooks/useGalleries';
 import { GalleryPhoto } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-type SelectionStep = 'gallery' | 'review' | 'checkout';
+type SelectionStep = 'gallery' | 'review' | 'checkout' | 'confirmed';
 
 export default function ClientGallery() {
   const { id } = useParams();
-  const { getGallery, isLoading, updatePhotoSelection, updatePhotoComment, confirmSelection } = useGalleries();
+  const { getGallery, isLoading, updatePhotoSelection, updatePhotoComment, confirmSelection, importGalleryPackage, exportGalleryPackage } = useGalleries();
   const [showWelcome, setShowWelcome] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
@@ -56,16 +58,10 @@ export default function ClientGallery() {
 
   if (!gallery) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <h2 className="font-display text-2xl font-semibold mb-2">
-            Galeria não encontrada
-          </h2>
-          <p className="text-muted-foreground">
-            O link pode estar incorreto ou a galeria foi removida.
-          </p>
-        </div>
-      </div>
+      <DemoImportScreen
+        galleryId={id || 'unknown'}
+        onImport={importGalleryPackage}
+      />
     );
   }
 
@@ -113,7 +109,7 @@ export default function ClientGallery() {
     if (!gallery) return;
     confirmSelection(gallery.id);
     setIsConfirmed(true);
-    setCurrentStep('gallery');
+    setCurrentStep('confirmed'); // New step to show export option
     toast.success('Seleção confirmada!', {
       description: 'O fotógrafo receberá sua seleção.',
     });
@@ -221,6 +217,54 @@ export default function ClientGallery() {
         onBack={() => extraCount > 0 ? setCurrentStep('review') : setCurrentStep('gallery')}
         onConfirm={handleConfirm}
       />
+    );
+  }
+
+  // Render Confirmed Step - Show export option for demo mode
+  if (currentStep === 'confirmed') {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <header className="flex items-center justify-center p-4 border-b border-border/50">
+          <Logo size="sm" />
+        </header>
+        
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center space-y-6 animate-slide-up">
+            <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+              <Check className="h-10 w-10 text-green-500" />
+            </div>
+            
+            <div>
+              <h1 className="font-display text-3xl font-semibold mb-2">
+                Seleção Confirmada!
+              </h1>
+              <p className="text-muted-foreground">
+                Sua seleção de {selectedCount} fotos foi registrada.
+              </p>
+            </div>
+
+            <div className="lunari-card p-6 text-left space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Como estamos em <strong>modo demo</strong> (sem banco de dados), 
+                exporte sua seleção e envie ao fotógrafo para que ele veja as fotos escolhidas.
+              </p>
+              
+              <DemoExportButton 
+                onExport={() => exportGalleryPackage(gallery.id)}
+                galleryId={gallery.id}
+              />
+            </div>
+
+            <Button 
+              variant="outline" 
+              onClick={() => setCurrentStep('gallery')}
+              className="w-full"
+            >
+              Ver galeria novamente
+            </Button>
+          </div>
+        </main>
+      </div>
     );
   }
 

@@ -1,9 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Gallery, GalleryPhoto, GalleryAction, GallerySettings } from '@/types/gallery';
-import { getStorageItem, setStorageItem, generateId } from '@/lib/storage';
+import { getStorageItem, setStorageItem, generateId, serializeWithDates, deserializeWithDates } from '@/lib/storage';
 import { mockGalleries } from '@/data/mockData';
 
 const STORAGE_KEY = 'galleries';
+
+// Demo Package format for import/export
+export interface DemoPackageV1 {
+  version: 1;
+  exportedAt: string;
+  gallery: Gallery;
+}
 
 export interface CreateGalleryData {
   clientId: string;
@@ -32,6 +39,9 @@ export interface UseGalleriesReturn {
   reopenSelection: (galleryId: string) => void;
   sendGallery: (galleryId: string) => void;
   addGalleryAction: (galleryId: string, action: Omit<GalleryAction, 'id' | 'timestamp'>) => void;
+  // Demo Mode functions
+  exportGalleryPackage: (galleryId: string) => string | null;
+  importGalleryPackage: (jsonText: string) => { galleryId: string; mode: 'created' | 'updated' } | { error: string };
 }
 
 export function useGalleries(): UseGalleriesReturn {
@@ -275,6 +285,59 @@ export function useGalleries(): UseGalleriesReturn {
     persistGalleries(newGalleries);
   }, [galleries, persistGalleries]);
 
+  // Demo Mode: Export gallery as JSON package
+  const exportGalleryPackage = useCallback((galleryId: string): string | null => {
+    const gallery = galleries.find(g => g.id === galleryId);
+    if (!gallery) return null;
+
+    const pkg: DemoPackageV1 = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      gallery,
+    };
+
+    return serializeWithDates(pkg);
+  }, [galleries]);
+
+  // Demo Mode: Import gallery from JSON package
+  const importGalleryPackage = useCallback((jsonText: string): { galleryId: string; mode: 'created' | 'updated' } | { error: string } => {
+    try {
+      const pkg = deserializeWithDates<DemoPackageV1>(jsonText);
+
+      // Validate package structure
+      if (!pkg || typeof pkg !== 'object') {
+        return { error: 'JSON inválido' };
+      }
+      if (pkg.version !== 1) {
+        return { error: 'Versão do pacote não suportada' };
+      }
+      if (!pkg.gallery || !pkg.gallery.id) {
+        return { error: 'Galeria inválida no pacote' };
+      }
+      if (!Array.isArray(pkg.gallery.photos)) {
+        return { error: 'Fotos inválidas no pacote' };
+      }
+
+      const existingIndex = galleries.findIndex(g => g.id === pkg.gallery.id);
+      const mode: 'created' | 'updated' = existingIndex >= 0 ? 'updated' : 'created';
+
+      let newGalleries: Gallery[];
+      if (existingIndex >= 0) {
+        // Update existing gallery
+        newGalleries = galleries.map((g, i) => i === existingIndex ? pkg.gallery : g);
+      } else {
+        // Add new gallery at the top
+        newGalleries = [pkg.gallery, ...galleries];
+      }
+
+      persistGalleries(newGalleries);
+      return { galleryId: pkg.gallery.id, mode };
+    } catch (e) {
+      console.error('Import error:', e);
+      return { error: 'Erro ao processar JSON' };
+    }
+  }, [galleries, persistGalleries]);
+
   return {
     galleries,
     isLoading,
@@ -289,5 +352,7 @@ export function useGalleries(): UseGalleriesReturn {
     reopenSelection,
     sendGallery,
     addGalleryAction,
+    exportGalleryPackage,
+    importGalleryPackage,
   };
 }
