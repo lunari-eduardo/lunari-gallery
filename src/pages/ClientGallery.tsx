@@ -26,7 +26,7 @@ type SelectionStep = 'gallery' | 'review' | 'checkout';
 
 export default function ClientGallery() {
   const { id } = useParams();
-  const { getGallery, updatePhotoSelection, updatePhotoComment, confirmSelection } = useGalleries();
+  const { getGallery, isLoading, updatePhotoSelection, updatePhotoComment, confirmSelection } = useGalleries();
   const [showWelcome, setShowWelcome] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
@@ -41,6 +41,18 @@ export default function ClientGallery() {
       setIsConfirmed(gallery.selectionStatus === 'confirmed');
     }
   }, [gallery]);
+
+  // Show loading state while galleries are being loaded
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Carregando galeria...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!gallery) {
     return (

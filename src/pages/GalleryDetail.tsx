@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -7,11 +7,12 @@ import {
   Send, 
   RotateCcw, 
   Copy, 
-  ExternalLink,
+  Eye,
   FileText,
   User,
   Calendar,
-  Image
+  Image,
+  MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,6 +24,7 @@ import { ActionTimeline } from '@/components/ActionTimeline';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { useGalleries } from '@/hooks/useGalleries';
+import { useClients } from '@/hooks/useClients';
 import { toast } from 'sonner';
 
 export default function GalleryDetail() {
@@ -30,9 +32,23 @@ export default function GalleryDetail() {
   const navigate = useNavigate();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
-  const { getGallery, sendGallery, reopenSelection } = useGalleries();
+  const { getGallery, isLoading, sendGallery, reopenSelection } = useGalleries();
+  const { getClientByEmail } = useClients();
 
   const gallery = getGallery(id || '');
+  const client = gallery ? getClientByEmail(gallery.clientEmail) : undefined;
+
+  // Show loading state while galleries are being loaded
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Carregando galeria...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!gallery) {
     return (
@@ -62,6 +78,25 @@ export default function GalleryDetail() {
         description: `Email enviado para ${gallery.clientEmail}`,
       });
     }
+  };
+
+  const handleWhatsAppSend = () => {
+    if (!client?.phone) return;
+    
+    // Format phone number (remove non-digits and ensure country code)
+    let phone = client.phone.replace(/\D/g, '');
+    if (!phone.startsWith('55')) {
+      phone = '55' + phone;
+    }
+    
+    const message = encodeURIComponent(
+      `Olá ${gallery.clientName.split(' ')[0]}! 🎉\n\n` +
+      `Suas fotos da sessão "${gallery.sessionName}" estão prontas para seleção!\n\n` +
+      `Acesse sua galeria através do link:\n${clientLink}\n\n` +
+      `Qualquer dúvida, estou à disposição!`
+    );
+    
+    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
   };
 
   const handleReopenSelection = () => {
@@ -112,11 +147,17 @@ export default function GalleryDetail() {
             Copiar Link
           </Button>
           <Button variant="outline" size="sm" asChild>
-            <a href={clientLink} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-2" />
+            <Link to={`/gallery/${gallery.id}/preview`}>
+              <Eye className="h-4 w-4 mr-2" />
               Visualizar
-            </a>
+            </Link>
           </Button>
+          {client?.phone && (
+            <Button variant="outline" size="sm" onClick={handleWhatsAppSend}>
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Enviar no WhatsApp
+            </Button>
+          )}
           {gallery.status === 'created' && (
             <Button variant="terracotta" size="sm" onClick={handleSendGallery}>
               <Send className="h-4 w-4 mr-2" />
