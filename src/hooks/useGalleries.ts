@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Gallery, GalleryPhoto, GalleryAction, GallerySettings } from '@/types/gallery';
-import { getStorageItem, setStorageItem, isStorageInitialized, generateId } from '@/lib/storage';
+import { getStorageItem, setStorageItem, generateId } from '@/lib/storage';
 import { mockGalleries } from '@/data/mockData';
 
 const STORAGE_KEY = 'galleries';
@@ -38,26 +38,16 @@ export function useGalleries(): UseGalleriesReturn {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize from localStorage or mock data
+  // Initialize from localStorage (preferred) or seed with mock data
   useEffect(() => {
-    const loadGalleries = () => {
-      if (!isStorageInitialized()) {
-        // Will be initialized by useClients hook
-        setGalleries(mockGalleries);
-      } else {
-        const stored = getStorageItem<Gallery[]>(STORAGE_KEY);
-        if (stored) {
-          setGalleries(stored);
-        } else {
-          // If clients were initialized but galleries weren't, save mock galleries
-          setStorageItem(STORAGE_KEY, mockGalleries);
-          setGalleries(mockGalleries);
-        }
-      }
-      setIsLoading(false);
-    };
-
-    loadGalleries();
+    const stored = getStorageItem<Gallery[]>(STORAGE_KEY);
+    if (stored && stored.length > 0) {
+      setGalleries(stored);
+    } else {
+      setStorageItem(STORAGE_KEY, mockGalleries);
+      setGalleries(mockGalleries);
+    }
+    setIsLoading(false);
   }, []);
 
   // Persist changes to localStorage
