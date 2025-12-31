@@ -3,20 +3,29 @@
 
 const STORAGE_PREFIX = 'lunari_';
 
-// Date serialization helpers
-const dateReplacer = (_key: string, value: unknown) => {
+// Date serialization helpers - exported for Demo Mode
+export const dateReplacer = (_key: string, value: unknown) => {
   if (value instanceof Date) {
     return { __type: 'Date', value: value.toISOString() };
   }
   return value;
 };
 
-const dateReviver = (_key: string, value: unknown) => {
+export const dateReviver = (_key: string, value: unknown) => {
   if (value && typeof value === 'object' && (value as { __type?: string }).__type === 'Date') {
     return new Date((value as { value: string }).value);
   }
   return value;
 };
+
+// Serialize/Deserialize with Date support - exported for Demo Mode
+export function serializeWithDates<T>(value: T): string {
+  return JSON.stringify(value, dateReplacer, 2);
+}
+
+export function deserializeWithDates<T>(text: string): T {
+  return JSON.parse(text, dateReviver) as T;
+}
 
 export function getStorageItem<T>(key: string): T | null {
   try {

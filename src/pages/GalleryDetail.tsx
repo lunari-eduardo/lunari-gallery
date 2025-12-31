@@ -23,6 +23,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { ActionTimeline } from '@/components/ActionTimeline';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { PhotoCodesModal } from '@/components/PhotoCodesModal';
+import { DemoModeCard } from '@/components/DemoModeCard';
 import { useGalleries } from '@/hooks/useGalleries';
 import { useClients } from '@/hooks/useClients';
 import { toast } from 'sonner';
@@ -32,7 +33,7 @@ export default function GalleryDetail() {
   const navigate = useNavigate();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
-  const { getGallery, isLoading, sendGallery, reopenSelection } = useGalleries();
+  const { getGallery, isLoading, sendGallery, reopenSelection, exportGalleryPackage, importGalleryPackage } = useGalleries();
   const { getClientByEmail } = useClients();
 
   const gallery = getGallery(id || '');
@@ -248,6 +249,16 @@ export default function GalleryDetail() {
 
         <TabsContent value="details">
           <div className="grid gap-6 md:grid-cols-2">
+            {/* Demo Mode Card - Full Width */}
+            <div className="md:col-span-2">
+              <DemoModeCard
+                galleryId={gallery.id}
+                galleryName={gallery.sessionName}
+                onExport={() => exportGalleryPackage(gallery.id)}
+                onImport={importGalleryPackage}
+              />
+            </div>
+
             <div className="lunari-card p-5 space-y-4">
               <h3 className="font-medium">Informações do Cliente</h3>
               <div className="space-y-2 text-sm">
