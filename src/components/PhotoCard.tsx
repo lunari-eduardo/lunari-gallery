@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Check, MessageSquare, Eye } from 'lucide-react';
-import { GalleryPhoto, WatermarkSettings } from '@/types/gallery';
+import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 
 interface PhotoCardProps {
   photo: GalleryPhoto;
   watermark?: WatermarkSettings;
+  watermarkDisplay?: WatermarkDisplay;
   isSelected: boolean;
   allowComments: boolean;
   disabled?: boolean;
@@ -17,6 +18,7 @@ interface PhotoCardProps {
 export function PhotoCard({ 
   photo, 
   watermark,
+  watermarkDisplay = 'all',
   isSelected, 
   allowComments,
   disabled,
@@ -25,6 +27,9 @@ export function PhotoCard({
   onComment 
 }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Only show watermark on thumbnails if watermarkDisplay is 'all'
+  const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay === 'all';
 
   const watermarkPosition = {
     'top-left': 'top-3 left-3',
@@ -61,7 +66,7 @@ export function PhotoCard({
       )}
 
       {/* Watermark */}
-      {watermark && watermark.type !== 'none' && (
+      {showWatermark && (
         <div 
           className={cn(
             'absolute pointer-events-none select-none',

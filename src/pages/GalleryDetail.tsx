@@ -305,8 +305,8 @@ export default function GalleryDetail() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Resolução preview</span>
-                  <span className="font-medium capitalize">{gallery.settings.previewResolution}</span>
+                  <span className="text-muted-foreground">Tamanho</span>
+                  <span className="font-medium">{gallery.settings.imageResizeOption || 800}px</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Comentários</span>
@@ -314,10 +314,7 @@ export default function GalleryDetail() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Download</span>
-                  <span className="font-medium capitalize">
-                    {gallery.settings.downloadOption === 'disabled' ? 'Desativado' : 
-                     gallery.settings.downloadOption === 'allowed' ? 'Permitido' : 'Após seleção'}
-                  </span>
+                  <span className="font-medium">{gallery.settings.allowDownload ? 'Ativado' : 'Desativado'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Fotos extras</span>

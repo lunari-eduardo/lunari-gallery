@@ -333,6 +333,7 @@ export default function ClientGallery() {
               <PhotoCard
                 photo={photo}
                 watermark={gallery.settings.watermark}
+                watermarkDisplay={gallery.settings.watermarkDisplay}
                 isSelected={photo.isSelected}
                 allowComments={gallery.settings.allowComments}
                 disabled={isBlocked}
@@ -359,13 +360,14 @@ export default function ClientGallery() {
         variant="bottom-bar"
       />
 
-      {/* Lightbox */}
       {lightboxIndex !== null && (
         <Lightbox
           photos={photos}
           currentIndex={lightboxIndex}
           watermark={gallery.settings.watermark}
+          watermarkDisplay={gallery.settings.watermarkDisplay}
           allowComments={gallery.settings.allowComments}
+          allowDownload={gallery.settings.allowDownload}
           disabled={isBlocked}
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}

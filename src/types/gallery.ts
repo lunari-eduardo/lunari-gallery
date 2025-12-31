@@ -1,9 +1,9 @@
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
 export type SelectionStatus = 'in_progress' | 'confirmed' | 'blocked';
 export type WatermarkType = 'none' | 'text' | 'logo';
-export type PreviewResolution = 'low' | 'medium' | 'high';
-export type DownloadOption = 'disabled' | 'allowed' | 'after_selection';
 export type DeadlinePreset = 7 | 10 | 15 | 'custom';
+export type ImageResizeOption = 640 | 800 | 1024 | 1920;
+export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
 
 export interface WatermarkSettings {
   type: WatermarkType;
@@ -18,9 +18,10 @@ export interface GallerySettings {
   deadline: Date;
   deadlinePreset: DeadlinePreset;
   watermark: WatermarkSettings;
-  previewResolution: PreviewResolution;
+  watermarkDisplay: WatermarkDisplay;
+  imageResizeOption: ImageResizeOption;
   allowComments: boolean;
-  downloadOption: DownloadOption;
+  allowDownload: boolean;
   allowExtraPhotos: boolean;
 }
 
