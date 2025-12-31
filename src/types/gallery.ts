@@ -5,6 +5,26 @@ export type DeadlinePreset = 7 | 10 | 15 | 'custom';
 export type ImageResizeOption = 640 | 800 | 1024 | 1920;
 export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
 
+// Tipos para configuração de venda
+export type SaleMode = 'no_sale' | 'sale_with_payment' | 'sale_without_payment';
+export type PricingModel = 'fixed' | 'packages';
+export type ChargeType = 'all_selected' | 'only_extras';
+
+export interface DiscountPackage {
+  id: string;
+  minPhotos: number;
+  maxPhotos: number;
+  pricePerPhoto: number;
+}
+
+export interface SaleSettings {
+  mode: SaleMode;
+  pricingModel: PricingModel;
+  chargeType: ChargeType;
+  fixedPrice: number;
+  discountPackages: DiscountPackage[];
+}
+
 export interface WatermarkSettings {
   type: WatermarkType;
   text?: string;
@@ -53,6 +73,7 @@ export interface Gallery {
   packageName: string;
   includedPhotos: number;
   extraPhotoPrice: number;
+  saleSettings: SaleSettings;
   status: GalleryStatus;
   selectionStatus: SelectionStatus;
   settings: GallerySettings;

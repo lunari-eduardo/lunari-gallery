@@ -1,8 +1,9 @@
-import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard } from 'lucide-react';
+import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Gallery } from '@/types/gallery';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { calculatePhotoPrice } from '@/hooks/useGalleries';
 
 interface SelectionCheckoutProps {
   gallery: Gallery;
@@ -16,12 +17,19 @@ interface SelectionCheckoutProps {
 export function SelectionCheckout({ 
   gallery, 
   selectedCount, 
-  extraCount, 
-  extraTotal,
+  extraCount,
   onBack, 
   onConfirm 
 }: SelectionCheckoutProps) {
   const currentDate = new Date();
+  const { saleSettings } = gallery;
+  const isNoSale = saleSettings?.mode === 'no_sale';
+  const isWithPayment = saleSettings?.mode === 'sale_with_payment';
+  
+  // Calculate prices using the new function
+  const priceInfo = saleSettings 
+    ? calculatePhotoPrice(selectedCount, gallery.includedPhotos, saleSettings)
+    : { chargeableCount: extraCount, total: extraCount * gallery.extraPhotoPrice, pricePerPhoto: gallery.extraPhotoPrice };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -40,7 +48,7 @@ export function SelectionCheckout({
           
           <h1 className="font-display text-lg font-semibold">Confirmar Seleção</h1>
           
-          <div className="w-20" /> {/* Spacer */}
+          <div className="w-20" />
         </div>
       </header>
 
@@ -88,47 +96,50 @@ export function SelectionCheckout({
                 <span className="text-muted-foreground">Fotos selecionadas</span>
                 <span className="font-medium">{selectedCount}</span>
               </div>
-              {extraCount > 0 && (
+              {!isNoSale && priceInfo.chargeableCount > 0 && (
                 <>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Fotos extras</span>
-                    <span className="font-medium text-primary">{extraCount}</span>
+                    <span className="text-muted-foreground">
+                      {saleSettings?.chargeType === 'all_selected' ? 'Fotos cobradas' : 'Fotos extras'}
+                    </span>
+                    <span className="font-medium text-primary">{priceInfo.chargeableCount}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Valor por foto extra</span>
-                    <span className="font-medium">R$ {gallery.extraPhotoPrice.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Valor por foto</span>
+                    <span className="font-medium">R$ {priceInfo.pricePerPhoto.toFixed(2)}</span>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Total */}
-            {extraCount > 0 && (
+            {/* Total - Only show if not no_sale and has chargeable photos */}
+            {!isNoSale && priceInfo.chargeableCount > 0 && (
               <div className="p-4 bg-primary/5">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-semibold text-lg">Valor Adicional</p>
                     <p className="text-sm text-muted-foreground">
-                      {extraCount} fotos × R$ {gallery.extraPhotoPrice.toFixed(2)}
+                      {priceInfo.chargeableCount} fotos × R$ {priceInfo.pricePerPhoto.toFixed(2)}
                     </p>
                   </div>
                   <p className="font-display text-2xl font-bold text-primary">
-                    R$ {extraTotal.toFixed(2)}
+                    R$ {priceInfo.total.toFixed(2)}
                   </p>
                 </div>
               </div>
             )}
 
-            {extraCount === 0 && (
+            {/* No extra charge message */}
+            {(isNoSale || priceInfo.chargeableCount === 0) && (
               <div className="p-4 bg-green-500/10">
                 <div className="flex items-center gap-3">
                   <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
                   <div>
                     <p className="font-medium text-green-600 dark:text-green-400">
-                      Seleção dentro do pacote
+                      {isNoSale ? 'Seleção concluída' : 'Seleção dentro do pacote'}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Sem valor adicional a cobrar
+                      {isNoSale ? 'Sua seleção foi registrada' : 'Sem valor adicional a cobrar'}
                     </p>
                   </div>
                 </div>
@@ -136,16 +147,24 @@ export function SelectionCheckout({
             )}
           </div>
 
-          {/* Payment Notice */}
-          {extraCount > 0 && (
+          {/* Payment Notice - Only show if has chargeable photos */}
+          {!isNoSale && priceInfo.chargeableCount > 0 && (
             <div className="lunari-card p-4 border-primary/30 bg-primary/5">
               <div className="flex gap-3">
-                <CreditCard className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                {isWithPayment ? (
+                  <CreditCard className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                ) : (
+                  <Receipt className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                )}
                 <div>
-                  <p className="font-medium text-sm">Cobrança Posterior</p>
+                  <p className="font-medium text-sm">
+                    {isWithPayment ? 'Pagamento Online' : 'Cobrança Posterior'}
+                  </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    O valor adicional de R$ {extraTotal.toFixed(2)} será cobrado 
-                    posteriormente pelo fotógrafo através do método de pagamento acordado.
+                    {isWithPayment 
+                      ? 'O pagamento será processado após a confirmação. (Em breve)'
+                      : `O valor adicional de R$ ${priceInfo.total.toFixed(2)} será cobrado posteriormente pelo fotógrafo.`
+                    }
                   </p>
                 </div>
               </div>
