@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Gallery, GalleryPhoto, GalleryAction, GallerySettings } from '@/types/gallery';
+import { Gallery, GalleryPhoto, GalleryAction, GallerySettings, SaleSettings } from '@/types/gallery';
 import { getStorageItem, setStorageItem, generateId, serializeWithDates, deserializeWithDates } from '@/lib/storage';
 import { mockGalleries } from '@/data/mockData';
 
@@ -20,9 +20,67 @@ export interface CreateGalleryData {
   packageName: string;
   includedPhotos: number;
   extraPhotoPrice: number;
+  saleSettings: SaleSettings;
   settings: GallerySettings;
   photos?: GalleryPhoto[];
   photoCount?: number; // For generating mock photos when testing
+}
+
+// Função para calcular preço baseado nas configurações de venda
+export function calculatePhotoPrice(
+  selectedCount: number,
+  includedPhotos: number,
+  saleSettings: SaleSettings
+): { chargeableCount: number; total: number; pricePerPhoto: number } {
+  if (saleSettings.mode === 'no_sale') {
+    return { chargeableCount: 0, total: 0, pricePerPhoto: 0 };
+  }
+
+  // Determinar fotos cobráveis
+  const chargeableCount = saleSettings.chargeType === 'only_extras'
+    ? Math.max(0, selectedCount - includedPhotos)
+    : selectedCount;
+
+  if (chargeableCount === 0) {
+    return { chargeableCount: 0, total: 0, pricePerPhoto: saleSettings.fixedPrice };
+  }
+
+  // Calcular preço por foto (fixo ou pacote)
+  if (saleSettings.pricingModel === 'fixed') {
+    return {
+      chargeableCount,
+      total: chargeableCount * saleSettings.fixedPrice,
+      pricePerPhoto: saleSettings.fixedPrice,
+    };
+  }
+
+  // Encontrar pacote aplicável
+  const sortedPackages = [...saleSettings.discountPackages].sort((a, b) => a.minPhotos - b.minPhotos);
+  const applicablePackage = sortedPackages.find(
+    pkg => chargeableCount >= pkg.minPhotos && chargeableCount <= pkg.maxPhotos
+  );
+
+  const pricePerPhoto = applicablePackage?.pricePerPhoto || saleSettings.fixedPrice;
+
+  return {
+    chargeableCount,
+    total: chargeableCount * pricePerPhoto,
+    pricePerPhoto,
+  };
+}
+
+// Migração de galerias antigas sem saleSettings
+function migrateGallery(gallery: any): Gallery {
+  if (!gallery.saleSettings) {
+    gallery.saleSettings = {
+      mode: gallery.extraPhotoPrice > 0 ? 'sale_without_payment' : 'no_sale',
+      pricingModel: 'fixed',
+      chargeType: 'only_extras',
+      fixedPrice: gallery.extraPhotoPrice || 0,
+      discountPackages: [],
+    } as SaleSettings;
+  }
+  return gallery as Gallery;
 }
 
 export interface UseGalleriesReturn {
@@ -50,9 +108,10 @@ export function useGalleries(): UseGalleriesReturn {
 
   // Initialize from localStorage (preferred) or seed with mock data
   useEffect(() => {
-    const stored = getStorageItem<Gallery[]>(STORAGE_KEY);
+    const stored = getStorageItem<any[]>(STORAGE_KEY);
     if (stored && stored.length > 0) {
-      setGalleries(stored);
+      // Migrar galerias antigas
+      setGalleries(stored.map(migrateGallery));
     } else {
       setStorageItem(STORAGE_KEY, mockGalleries);
       setGalleries(mockGalleries);
@@ -106,6 +165,7 @@ export function useGalleries(): UseGalleriesReturn {
       packageName: data.packageName,
       includedPhotos: data.includedPhotos,
       extraPhotoPrice: data.extraPhotoPrice,
+      saleSettings: data.saleSettings,
       status: 'created',
       selectionStatus: 'in_progress',
       settings: data.settings,

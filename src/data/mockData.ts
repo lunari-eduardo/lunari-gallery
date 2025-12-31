@@ -1,4 +1,4 @@
-import { Gallery, GlobalSettings, GalleryPhoto, Client } from '@/types/gallery';
+import { Gallery, GlobalSettings, GalleryPhoto, Client, SaleSettings } from '@/types/gallery';
 
 const generateMockPhotos = (count: number): GalleryPhoto[] => {
   const aspectRatios = [
@@ -36,6 +36,13 @@ export const mockGalleries: Gallery[] = [
     packageName: 'Pacote Premium',
     includedPhotos: 30,
     extraPhotoPrice: 25,
+    saleSettings: {
+      mode: 'sale_without_payment',
+      pricingModel: 'fixed',
+      chargeType: 'only_extras',
+      fixedPrice: 25,
+      discountPackages: [],
+    },
     status: 'selection_started',
     selectionStatus: 'in_progress',
     settings: {
@@ -74,6 +81,17 @@ export const mockGalleries: Gallery[] = [
     packageName: 'Pacote Completo',
     includedPhotos: 100,
     extraPhotoPrice: 35,
+    saleSettings: {
+      mode: 'sale_without_payment',
+      pricingModel: 'packages',
+      chargeType: 'only_extras',
+      fixedPrice: 35,
+      discountPackages: [
+        { id: 'pkg-1', minPhotos: 1, maxPhotos: 10, pricePerPhoto: 35 },
+        { id: 'pkg-2', minPhotos: 11, maxPhotos: 25, pricePerPhoto: 30 },
+        { id: 'pkg-3', minPhotos: 26, maxPhotos: 999, pricePerPhoto: 25 },
+      ],
+    },
     status: 'selection_completed',
     selectionStatus: 'confirmed',
     settings: {
@@ -113,6 +131,13 @@ export const mockGalleries: Gallery[] = [
     packageName: 'Pacote Executivo',
     includedPhotos: 15,
     extraPhotoPrice: 40,
+    saleSettings: {
+      mode: 'no_sale',
+      pricingModel: 'fixed',
+      chargeType: 'only_extras',
+      fixedPrice: 40,
+      discountPackages: [],
+    },
     status: 'sent',
     selectionStatus: 'in_progress',
     settings: {
@@ -150,6 +175,13 @@ export const mockGalleries: Gallery[] = [
     packageName: 'Pacote Família',
     includedPhotos: 40,
     extraPhotoPrice: 20,
+    saleSettings: {
+      mode: 'sale_without_payment',
+      pricingModel: 'fixed',
+      chargeType: 'only_extras',
+      fixedPrice: 20,
+      discountPackages: [],
+    },
     status: 'expired',
     selectionStatus: 'blocked',
     settings: {
@@ -188,6 +220,13 @@ export const mockGalleries: Gallery[] = [
     packageName: 'Pacote Debutante',
     includedPhotos: 50,
     extraPhotoPrice: 30,
+    saleSettings: {
+      mode: 'sale_without_payment',
+      pricingModel: 'fixed',
+      chargeType: 'only_extras',
+      fixedPrice: 30,
+      discountPackages: [],
+    },
     status: 'created',
     selectionStatus: 'in_progress',
     settings: {
