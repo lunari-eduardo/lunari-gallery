@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { defaultWelcomeMessage } from '@/data/mockData';
-import { DeadlinePreset, WatermarkType, PreviewResolution, DownloadOption, Client } from '@/types/gallery';
+import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
@@ -69,12 +69,13 @@ export default function GalleryCreate() {
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
   const [deadlinePreset, setDeadlinePreset] = useState<DeadlinePreset>(7);
   const [customDays, setCustomDays] = useState(10);
+  const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(800);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>('text');
   const [watermarkText, setWatermarkText] = useState('Studio Lunari');
   const [watermarkOpacity, setWatermarkOpacity] = useState(30);
-  const [previewResolution, setPreviewResolution] = useState<PreviewResolution>('medium');
+  const [watermarkDisplay, setWatermarkDisplay] = useState<WatermarkDisplay>('all');
   const [allowComments, setAllowComments] = useState(true);
-  const [downloadOption, setDownloadOption] = useState<DownloadOption>('after_selection');
+  const [allowDownload, setAllowDownload] = useState(false);
   const [allowExtraPhotos, setAllowExtraPhotos] = useState(true);
 
   const handleNext = () => {
@@ -109,9 +110,10 @@ export default function GalleryCreate() {
             opacity: watermarkOpacity,
             position: 'bottom-right',
           },
-          previewResolution,
+          watermarkDisplay,
+          imageResizeOption,
           allowComments,
-          downloadOption,
+          allowDownload,
           allowExtraPhotos,
         },
       });
@@ -421,6 +423,38 @@ export default function GalleryCreate() {
               )}
             </div>
 
+            {/* Image Resize */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Image className="h-4 w-4 text-primary" />
+                <Label>Tamanho das Imagens</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Redimensiona as imagens para economia de armazenamento e carregamento mais rápido
+              </p>
+              <RadioGroup 
+                value={String(imageResizeOption)} 
+                onValueChange={(v) => setImageResizeOption(parseInt(v) as ImageResizeOption)}
+                className="flex flex-wrap gap-3"
+              >
+                {[640, 800, 1024, 1920].map((size) => (
+                  <div key={size} className="flex items-center">
+                    <RadioGroupItem value={String(size)} id={`size-${size}`} className="peer sr-only" />
+                    <Label
+                      htmlFor={`size-${size}`}
+                      className={cn(
+                        "px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary",
+                        size === 800 && "ring-1 ring-primary/30"
+                      )}
+                    >
+                      {size} px
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-xs text-muted-foreground">Lado maior • 800px é o padrão recomendado</p>
+            </div>
+
             {/* Watermark */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -479,38 +513,36 @@ export default function GalleryCreate() {
               )}
 
               {watermarkType !== 'none' && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Opacidade</Label>
-                    <span className="text-sm text-muted-foreground">{watermarkOpacity}%</span>
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Opacidade</Label>
+                      <span className="text-sm text-muted-foreground">{watermarkOpacity}%</span>
+                    </div>
+                    <Slider
+                      value={[watermarkOpacity]}
+                      onValueChange={(v) => setWatermarkOpacity(v[0])}
+                      min={10}
+                      max={100}
+                      step={5}
+                    />
                   </div>
-                  <Slider
-                    value={[watermarkOpacity]}
-                    onValueChange={(v) => setWatermarkOpacity(v[0])}
-                    min={10}
-                    max={100}
-                    step={5}
-                  />
-                </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Onde aplicar</Label>
+                    <Select value={watermarkDisplay} onValueChange={(v) => setWatermarkDisplay(v as WatermarkDisplay)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Sim, nas fotos ampliadas e miniaturas</SelectItem>
+                        <SelectItem value="fullscreen">Sim, somente nas fotos ampliadas</SelectItem>
+                        <SelectItem value="none">Não aplicar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
-            </div>
-
-            {/* Preview Resolution */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-primary" />
-                <Label>Resolução de Visualização</Label>
-              </div>
-              <Select value={previewResolution} onValueChange={(v) => setPreviewResolution(v as PreviewResolution)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Baixa (mais rápida)</SelectItem>
-                  <SelectItem value="medium">Média (recomendada)</SelectItem>
-                  <SelectItem value="high">Alta (mais lenta)</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             {/* Client Interactions */}
@@ -527,18 +559,14 @@ export default function GalleryCreate() {
                 <Switch checked={allowComments} onCheckedChange={setAllowComments} />
               </div>
 
-              <div className="space-y-2">
-                <Label>Opção de Download</Label>
-                <Select value={downloadOption} onValueChange={(v) => setDownloadOption(v as DownloadOption)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="disabled">Desativado</SelectItem>
-                    <SelectItem value="allowed">Permitido (sem marca d'água)</SelectItem>
-                    <SelectItem value="after_selection">Após seleção concluída</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center justify-between py-2">
+                <div>
+                  <p className="font-medium">Permitir download</p>
+                  <p className="text-sm text-muted-foreground">
+                    Cliente poderá baixar as imagens a qualquer momento
+                  </p>
+                </div>
+                <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
               </div>
 
               <div className="flex items-center justify-between py-2">
@@ -615,12 +643,20 @@ export default function GalleryCreate() {
                     <span className="font-medium">{getDaysFromPreset()} dias</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tamanho</span>
+                    <span className="font-medium">{imageResizeOption}px</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Marca d'água</span>
                     <span className="font-medium capitalize">{watermarkType === 'none' ? 'Nenhuma' : watermarkType}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Resolução</span>
-                    <span className="font-medium capitalize">{previewResolution}</span>
+                    <span className="text-muted-foreground">Marca d'água em</span>
+                    <span className="font-medium">
+                      {watermarkType === 'none' ? '-' : 
+                       watermarkDisplay === 'all' ? 'Todas' : 
+                       watermarkDisplay === 'fullscreen' ? 'Ampliadas' : 'Nenhuma'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Comentários</span>
@@ -628,10 +664,7 @@ export default function GalleryCreate() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Download</span>
-                    <span className="font-medium capitalize">
-                      {downloadOption === 'disabled' ? 'Desativado' : 
-                       downloadOption === 'allowed' ? 'Permitido' : 'Após seleção'}
-                    </span>
+                    <span className="font-medium">{allowDownload ? 'Ativado' : 'Desativado'}</span>
                   </div>
                 </div>
               </div>

@@ -6,9 +6,10 @@ import {
   Check, 
   MessageSquare,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Download
 } from 'lucide-react';
-import { GalleryPhoto, WatermarkSettings } from '@/types/gallery';
+import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -17,7 +18,9 @@ interface LightboxProps {
   photos: GalleryPhoto[];
   currentIndex: number;
   watermark?: WatermarkSettings;
+  watermarkDisplay?: WatermarkDisplay;
   allowComments: boolean;
+  allowDownload?: boolean;
   disabled?: boolean;
   onClose: () => void;
   onNavigate: (index: number) => void;
@@ -29,7 +32,9 @@ export function Lightbox({
   photos, 
   currentIndex, 
   watermark,
+  watermarkDisplay = 'all',
   allowComments,
+  allowDownload = false,
   disabled,
   onClose, 
   onNavigate,
@@ -42,6 +47,19 @@ export function Lightbox({
   const [zoom, setZoom] = useState(1);
 
   const currentPhoto = photos[currentIndex];
+  
+  // Show watermark in fullscreen if watermarkDisplay is 'all' or 'fullscreen'
+  const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay !== 'none';
+
+  const handleDownload = () => {
+    if (!currentPhoto || !allowDownload) return;
+    const link = document.createElement('a');
+    link.href = currentPhoto.previewUrl;
+    link.download = currentPhoto.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     setComment(currentPhoto?.comment || '');
@@ -178,7 +196,7 @@ export function Lightbox({
           />
           
           {/* Watermark */}
-          {watermark && watermark.type !== 'none' && (
+          {showWatermark && (
             <div 
               className={cn(
                 'absolute pointer-events-none select-none',
@@ -230,6 +248,17 @@ export function Lightbox({
             >
               <MessageSquare className="h-4 w-4" />
               Comentar
+            </Button>
+          )}
+
+          {allowDownload && (
+            <Button
+              onClick={handleDownload}
+              variant="outline"
+              className="gap-2 text-white border-white/40 hover:bg-white/10"
+            >
+              <Download className="h-4 w-4" />
+              Baixar
             </Button>
           )}
         </div>
