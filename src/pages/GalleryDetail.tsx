@@ -9,7 +9,6 @@ import {
   Copy, 
   ExternalLink,
   FileText,
-  Download,
   User,
   Calendar,
   Image
@@ -22,6 +21,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ActionTimeline } from '@/components/ActionTimeline';
 import { SelectionSummary } from '@/components/SelectionSummary';
+import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { useGalleries } from '@/hooks/useGalleries';
 import { toast } from 'sonner';
 
@@ -29,6 +29,7 @@ export default function GalleryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const { getGallery, sendGallery, reopenSelection } = useGalleries();
 
   const gallery = getGallery(id || '');
@@ -72,32 +73,6 @@ export default function GalleryDetail() {
     }
   };
 
-  const handleExport = (type: 'csv' | 'list') => {
-    const data = selectedPhotos.map(p => ({
-      filename: p.filename,
-      selected: true,
-    }));
-    
-    if (type === 'csv') {
-      const csv = 'filename,selected\n' + data.map(d => `${d.filename},${d.selected}`).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${gallery.sessionName.replace(/\s+/g, '_')}_selecao.csv`;
-      a.click();
-      toast.success('CSV exportado!');
-    } else {
-      const list = data.map(d => d.filename).join('\n');
-      const blob = new Blob([list], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${gallery.sessionName.replace(/\s+/g, '_')}_arquivos.txt`;
-      a.click();
-      toast.success('Lista exportada!');
-    }
-  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -214,31 +189,18 @@ export default function GalleryDetail() {
             </div>
 
             <div>
-              <SelectionSummary 
-                gallery={gallery} 
-                onExport={() => handleExport('csv')}
-              />
+              <SelectionSummary gallery={gallery} />
 
-              <div className="mt-4 flex gap-2">
+              {selectedPhotos.length > 0 && (
                 <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={() => handleExport('csv')}
+                  variant="terracotta" 
+                  className="w-full mt-4"
+                  onClick={() => setIsCodesModalOpen(true)}
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  CSV
+                  Códigos para separação das fotos
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={() => handleExport('list')}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Lista
-                </Button>
-              </div>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -342,6 +304,14 @@ export default function GalleryDetail() {
           onSelect={() => {}}
         />
       )}
+
+      {/* Photo Codes Modal */}
+      <PhotoCodesModal
+        open={isCodesModalOpen}
+        onOpenChange={setIsCodesModalOpen}
+        photos={gallery.photos}
+        clientName={gallery.clientName}
+      />
     </div>
   );
 }

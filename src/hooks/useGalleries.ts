@@ -15,6 +15,7 @@ export interface CreateGalleryData {
   extraPhotoPrice: number;
   settings: GallerySettings;
   photos?: GalleryPhoto[];
+  photoCount?: number; // For generating mock photos when testing
 }
 
 export interface UseGalleriesReturn {
@@ -76,6 +77,27 @@ export function useGalleries(): UseGalleriesReturn {
 
   const createGallery = useCallback((data: CreateGalleryData): Gallery => {
     const now = new Date();
+    
+    // Generate mock photos if none provided (for testing purposes)
+    let photos = data.photos || [];
+    if (photos.length === 0) {
+      const photoCount = data.photoCount || 20; // Default to 20 mock photos
+      photos = Array.from({ length: photoCount }, (_, i) => {
+        const seed = Date.now() + i;
+        return {
+          id: `photo-${generateId()}`,
+          filename: `IMG_${String(i + 1).padStart(4, '0')}.jpg`,
+          thumbnailUrl: `https://picsum.photos/seed/${seed}/400/300`,
+          previewUrl: `https://picsum.photos/seed/${seed}/800/600`,
+          originalUrl: `https://picsum.photos/seed/${seed}/1600/1200`,
+          width: 800,
+          height: 600,
+          isSelected: false,
+          order: i,
+        };
+      });
+    }
+    
     const newGallery: Gallery = {
       id: `gallery-${generateId()}`,
       clientName: data.clientName,
@@ -87,7 +109,7 @@ export function useGalleries(): UseGalleriesReturn {
       status: 'created',
       selectionStatus: 'in_progress',
       settings: data.settings,
-      photos: data.photos || [],
+      photos,
       actions: [
         {
           id: `action-${generateId()}`,
