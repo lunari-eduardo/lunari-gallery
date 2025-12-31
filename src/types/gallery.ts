@@ -65,13 +65,41 @@ export interface Gallery {
   extraTotal: number;
 }
 
+// Tema personalizado para galerias do cliente
+export interface CustomTheme {
+  id: string;
+  name: string;
+  primaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+  accentColor: string;
+  isDefault?: boolean;
+}
+
+// Template de email
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  type: 'gallery_sent' | 'selection_reminder' | 'selection_confirmed';
+  subject: string;
+  body: string;
+}
+
 export interface GlobalSettings {
+  // Configurações gerais
   publicGalleryEnabled: boolean;
   clientTheme: 'light' | 'dark' | 'system';
   language: string;
   defaultExpirationDays: number;
   studioName: string;
   studioLogo?: string;
+  
+  // Personalização
+  customThemes: CustomTheme[];
+  activeThemeId?: string;
+  defaultWatermark: WatermarkSettings;
+  emailTemplates: EmailTemplate[];
+  faviconUrl?: string;
 }
 
 export interface ExportData {
