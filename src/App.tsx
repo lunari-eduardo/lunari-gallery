@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Clients from "./pages/Clients";
 import GalleryCreate from "./pages/GalleryCreate";
 import GalleryDetail from "./pages/GalleryDetail";
+import GalleryPreview from "./pages/GalleryPreview";
 import ClientGallery from "./pages/ClientGallery";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -25,6 +26,9 @@ const App = () => (
           <Routes>
             {/* Client-facing routes (no layout) */}
             <Route path="/client/:id" element={<ClientGallery />} />
+            
+            {/* Photographer preview route (no layout - simulates client view) */}
+            <Route path="/gallery/:id/preview" element={<GalleryPreview />} />
             
             {/* Photographer routes (with layout) */}
             <Route path="/" element={<Layout><Index /></Layout>} />
