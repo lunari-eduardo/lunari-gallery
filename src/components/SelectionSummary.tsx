@@ -1,12 +1,11 @@
 import { Gallery } from '@/types/gallery';
-import { Check, AlertCircle, Download, FileText } from 'lucide-react';
+import { Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface SelectionSummaryProps {
   gallery: Gallery;
   onConfirm?: () => void;
-  onExport?: () => void;
   isClient?: boolean;
   variant?: 'default' | 'bottom-bar';
 }
@@ -14,7 +13,6 @@ interface SelectionSummaryProps {
 export function SelectionSummary({ 
   gallery, 
   onConfirm, 
-  onExport, 
   isClient = false,
   variant = 'default'
 }: SelectionSummaryProps) {
@@ -123,8 +121,10 @@ export function SelectionSummary({
         <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/10 text-sm">
           <AlertCircle className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
           <p className="text-primary">
-            Você selecionou {extraCount} foto{extraCount > 1 ? 's' : ''} além do pacote. 
-            O valor adicional será cobrado posteriormente.
+            {isClient 
+              ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do pacote. O valor adicional será cobrado posteriormente.`
+              : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${extraTotal.toFixed(2)}`
+            }
           </p>
         </div>
       )}
@@ -148,26 +148,6 @@ export function SelectionSummary({
         </div>
       )}
 
-      {!isClient && onExport && (
-        <div className="flex gap-2">
-          <Button 
-            onClick={onExport}
-            variant="outline"
-            className="flex-1"
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Exportar CSV
-          </Button>
-          <Button 
-            onClick={onExport}
-            variant="outline"
-            className="flex-1"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Lista de Arquivos
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

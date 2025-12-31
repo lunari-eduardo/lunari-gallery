@@ -98,6 +98,7 @@ export default function GalleryCreate() {
         packageName,
         includedPhotos,
         extraPhotoPrice,
+        photoCount: uploadedCount || 20, // Generate mock photos for testing
         settings: {
           welcomeMessage,
           deadline,
