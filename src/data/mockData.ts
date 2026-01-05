@@ -89,7 +89,7 @@ export const mockGalleries: Gallery[] = [
       discountPackages: [
         { id: 'pkg-1', minPhotos: 1, maxPhotos: 10, pricePerPhoto: 35 },
         { id: 'pkg-2', minPhotos: 11, maxPhotos: 25, pricePerPhoto: 30 },
-        { id: 'pkg-3', minPhotos: 26, maxPhotos: 999, pricePerPhoto: 25 },
+        { id: 'pkg-3', minPhotos: 26, maxPhotos: null, pricePerPhoto: 25 },
       ],
     },
     status: 'selection_completed',
@@ -327,6 +327,7 @@ export const mockGlobalSettings: GlobalSettings = {
     },
   ],
   faviconUrl: undefined,
+  discountPresets: [],
 };
 
 export const defaultWelcomeMessage = `Olá {cliente}! 💕

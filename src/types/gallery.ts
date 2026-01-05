@@ -13,8 +13,16 @@ export type ChargeType = 'all_selected' | 'only_extras';
 export interface DiscountPackage {
   id: string;
   minPhotos: number;
-  maxPhotos: number;
+  maxPhotos: number | null; // null = infinito (∞)
   pricePerPhoto: number;
+}
+
+// Predefinição de faixas de desconto salva
+export interface DiscountPreset {
+  id: string;
+  name: string;
+  packages: DiscountPackage[];
+  createdAt: Date;
 }
 
 export interface SaleSettings {
@@ -121,6 +129,7 @@ export interface GlobalSettings {
   defaultWatermark: WatermarkSettings;
   emailTemplates: EmailTemplate[];
   faviconUrl?: string;
+  discountPresets: DiscountPreset[];
 }
 
 export interface ExportData {

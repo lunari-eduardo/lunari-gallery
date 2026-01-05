@@ -18,7 +18,8 @@ import {
   Receipt,
   Tag,
   Package,
-  Trash2
+  Trash2,
+  Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,14 +37,23 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
-import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings } from '@/types/gallery';
+import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { useClients, CreateClientData } from '@/hooks/useClients';
 import { useGalleries } from '@/hooks/useGalleries';
+import { useSettings } from '@/hooks/useSettings';
 import { generateId } from '@/lib/storage';
 
 const steps = [
@@ -58,7 +68,12 @@ export default function GalleryCreate() {
   const navigate = useNavigate();
   const { clients, createClient } = useClients();
   const { createGallery } = useGalleries();
+  const { settings, updateSettings } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Preset dialog state
+  const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
+  const [presetName, setPresetName] = useState('');
   
   // Step 1: Client Info
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -184,25 +199,76 @@ export default function GalleryCreate() {
   };
 
   const addDiscountPackage = () => {
-    const lastPackage = discountPackages[discountPackages.length - 1];
-    const minPhotos = lastPackage ? lastPackage.maxPhotos + 1 : 1;
+    const updatedPackages = [...discountPackages];
+    
+    // Se já existe última faixa com infinito, converter para número
+    if (updatedPackages.length > 0) {
+      const lastIndex = updatedPackages.length - 1;
+      const lastPkg = updatedPackages[lastIndex];
+      if (lastPkg.maxPhotos === null) {
+        // Definir valor padrão: minPhotos + 9
+        updatedPackages[lastIndex] = {
+          ...lastPkg,
+          maxPhotos: lastPkg.minPhotos + 9
+        };
+      }
+    }
+    
+    const lastPackage = updatedPackages[updatedPackages.length - 1];
+    const minPhotos = lastPackage ? (lastPackage.maxPhotos as number) + 1 : 1;
+    
     setDiscountPackages([
-      ...discountPackages,
+      ...updatedPackages,
       {
         id: generateId(),
         minPhotos,
-        maxPhotos: minPhotos + 9,
-        pricePerPhoto: fixedPrice - (discountPackages.length + 1) * 5,
+        maxPhotos: null, // Infinito por padrão
+        pricePerPhoto: Math.max(1, fixedPrice - (discountPackages.length + 1) * 5),
       },
     ]);
   };
 
-  const updateDiscountPackage = (id: string, field: keyof DiscountPackage, value: number) => {
+  const updateDiscountPackage = (id: string, field: keyof DiscountPackage, value: number | null) => {
     setDiscountPackages(
       discountPackages.map(pkg =>
         pkg.id === id ? { ...pkg, [field]: value } : pkg
       )
     );
+  };
+  
+  const savePreset = () => {
+    if (!presetName.trim()) {
+      toast.error('Digite um nome para a predefinição');
+      return;
+    }
+    
+    const newPreset: DiscountPreset = {
+      id: generateId(),
+      name: presetName.trim(),
+      packages: discountPackages,
+      createdAt: new Date(),
+    };
+    
+    updateSettings({
+      discountPresets: [...(settings.discountPresets || []), newPreset],
+    });
+    
+    setPresetName('');
+    setShowSavePresetDialog(false);
+    toast.success('Predefinição salva com sucesso!');
+  };
+
+  const loadPreset = (presetId: string) => {
+    const preset = settings.discountPresets?.find(p => p.id === presetId);
+    if (preset) {
+      // Clonar os pacotes com novos IDs
+      const clonedPackages = preset.packages.map(pkg => ({
+        ...pkg,
+        id: generateId(),
+      }));
+      setDiscountPackages(clonedPackages);
+      toast.success(`Predefinição "${preset.name}" carregada`);
+    }
   };
 
   const removeDiscountPackage = (id: string) => {
@@ -570,23 +636,56 @@ export default function GalleryCreate() {
                   {/* Discount Packages Configuration */}
                   {pricingModel === 'packages' && (
                     <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Configurar pacotes</Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={addDiscountPackage}
-                          className="gap-1"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Adicionar faixa
-                        </Button>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <Label className="text-sm font-medium">Configurar faixas</Label>
+                        <div className="flex gap-2 flex-wrap">
+                          {/* Select para carregar predefinição */}
+                          {settings.discountPresets && settings.discountPresets.length > 0 && (
+                            <Select onValueChange={loadPreset}>
+                              <SelectTrigger className="h-8 w-[160px]">
+                                <SelectValue placeholder="Carregar predefinição" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {settings.discountPresets.map(preset => (
+                                  <SelectItem key={preset.id} value={preset.id}>
+                                    {preset.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          
+                          {/* Botão salvar predefinição */}
+                          {discountPackages.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowSavePresetDialog(true)}
+                              className="gap-1"
+                            >
+                              <Save className="h-4 w-4" />
+                              Salvar
+                            </Button>
+                          )}
+                          
+                          {/* Botão adicionar faixa */}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={addDiscountPackage}
+                            className="gap-1"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Adicionar faixa
+                          </Button>
+                        </div>
                       </div>
 
                       {discountPackages.length === 0 ? (
                         <p className="text-sm text-muted-foreground text-center py-4">
-                          Adicione pacotes para definir preços por faixa de quantidade
+                          Adicione faixas para definir preços por quantidade de fotos
                         </p>
                       ) : (
                         <div className="space-y-3">
@@ -605,13 +704,33 @@ export default function GalleryCreate() {
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">Até (fotos)</Label>
-                                  <Input
-                                    type="number"
-                                    min={pkg.minPhotos}
-                                    value={pkg.maxPhotos}
-                                    onChange={(e) => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)}
-                                    className="h-9"
-                                  />
+                                  {index === discountPackages.length - 1 ? (
+                                    <Input
+                                      type="text"
+                                      value={pkg.maxPhotos === null ? '∞' : pkg.maxPhotos}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '' || val === '∞') {
+                                          updateDiscountPackage(pkg.id, 'maxPhotos', null);
+                                        } else {
+                                          const num = parseInt(val);
+                                          if (!isNaN(num)) {
+                                            updateDiscountPackage(pkg.id, 'maxPhotos', num);
+                                          }
+                                        }
+                                      }}
+                                      placeholder="∞"
+                                      className="h-9 text-center"
+                                    />
+                                  ) : (
+                                    <Input
+                                      type="number"
+                                      min={pkg.minPhotos}
+                                      value={pkg.maxPhotos ?? ''}
+                                      onChange={(e) => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)}
+                                      className="h-9"
+                                    />
+                                  )}
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
@@ -638,21 +757,45 @@ export default function GalleryCreate() {
                           ))}
                         </div>
                       )}
-
-                      <div className="pt-2 border-t border-border/50">
-                        <Label htmlFor="basePrice" className="text-sm">Preço base (para faixas não configuradas)</Label>
-                        <Input
-                          id="basePrice"
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={fixedPrice}
-                          onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)}
-                          className="mt-2 max-w-[150px]"
-                        />
-                      </div>
                     </div>
                   )}
+                  
+                  {/* Dialog para salvar predefinição */}
+                  <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Salvar predefinição de faixas</DialogTitle>
+                        <DialogDescription>
+                          Salve esta configuração de faixas para reutilizar em outras galerias
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="presetName">Nome da predefinição</Label>
+                          <Input
+                            id="presetName"
+                            value={presetName}
+                            onChange={(e) => setPresetName(e.target.value)}
+                            placeholder="Ex: Casamentos, Ensaios..."
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-2">Faixas a salvar:</p>
+                          {discountPackages.map((pkg) => (
+                            <p key={pkg.id} className="text-sm">
+                              {pkg.minPhotos} - {pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} fotos: R$ {pkg.pricePerPhoto.toFixed(2)}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSavePresetDialog(false)}>
+                          Cancelar
+                        </Button>
+                        <Button onClick={savePreset}>Salvar predefinição</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
 
                 <div className="h-px bg-border" />

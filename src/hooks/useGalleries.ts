@@ -54,11 +54,13 @@ export function calculatePhotoPrice(
     };
   }
 
-  // Encontrar pacote aplicável
-  const sortedPackages = [...saleSettings.discountPackages].sort((a, b) => a.minPhotos - b.minPhotos);
-  const applicablePackage = sortedPackages.find(
-    pkg => chargeableCount >= pkg.minPhotos && chargeableCount <= pkg.maxPhotos
-  );
+  // Encontrar pacote aplicável (null = infinito)
+  const sortedPackages = [...saleSettings.discountPackages].sort((a, b) => b.minPhotos - a.minPhotos);
+  const applicablePackage = sortedPackages.find(pkg => {
+    const inMin = chargeableCount >= pkg.minPhotos;
+    const inMax = pkg.maxPhotos === null || chargeableCount <= pkg.maxPhotos;
+    return inMin && inMax;
+  });
 
   const pricePerPhoto = applicablePackage?.pricePerPhoto || saleSettings.fixedPrice;
 
