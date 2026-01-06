@@ -8,7 +8,15 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading, accessLoading, hasGalleryAccess } = useAuthContext();
+  const { user, loading, accessLoading, hasGalleryAccess, accessLevel } = useAuthContext();
+
+  console.log('🛡️ ProtectedRoute check:', {
+    user: user?.email,
+    loading,
+    accessLoading,
+    hasGalleryAccess,
+    accessLevel
+  });
 
   if (loading || accessLoading) {
     return (
@@ -19,12 +27,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
+    console.log('🔒 No user, redirecting to /auth');
     return <Navigate to="/auth" replace />;
   }
 
   if (!hasGalleryAccess) {
+    console.log('🚫 No gallery access, redirecting to /access-denied');
     return <Navigate to="/access-denied" replace />;
   }
 
+  console.log('✅ Access granted, rendering children');
   return <>{children}</>;
 }
