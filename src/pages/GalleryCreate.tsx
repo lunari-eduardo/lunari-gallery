@@ -573,10 +573,8 @@ export default function GalleryCreate() {
       case 3:
         return <div className="space-y-6 animate-fade-in">
             <div>
-              <h2 className="font-display text-2xl font-semibold mb-2">
-                Upload de Fotos
-              </h2>
-              <p className="text-muted-foreground">
+              
+              <p className="text-muted-foreground text-lg font-serif">
                 Adicione as fotos da sessão para o cliente selecionar
               </p>
             </div>
