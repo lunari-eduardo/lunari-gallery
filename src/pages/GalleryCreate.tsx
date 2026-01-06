@@ -797,10 +797,8 @@ export default function GalleryCreate() {
       case 5:
         return <div className="space-y-6 animate-fade-in">
             <div>
-              <h2 className="font-display text-2xl font-semibold mb-2">
-                Revisar e Criar
-              </h2>
-              <p className="text-muted-foreground">
+              
+              <p className="text-muted-foreground text-lg font-serif">
                 Confira as informações antes de criar a galeria
               </p>
             </div>
