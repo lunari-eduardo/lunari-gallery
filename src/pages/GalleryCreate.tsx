@@ -340,10 +340,8 @@ export default function GalleryCreate() {
       case 2:
         return <div className="space-y-8 animate-fade-in">
             <div>
-              <h2 className="font-display text-2xl font-semibold mb-2">
-                Configurar Venda de Fotos
-              </h2>
-              <p className="text-muted-foreground">
+              
+              <p className="text-muted-foreground text-lg font-serif">
                 Defina como será a cobrança por fotos extras
               </p>
             </div>
