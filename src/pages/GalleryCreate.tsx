@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -96,7 +96,6 @@ export default function GalleryCreate() {
   
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
-  const [deadlinePreset, setDeadlinePreset] = useState<DeadlinePreset>(7);
   const [customDays, setCustomDays] = useState(10);
   const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(800);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>('text');
@@ -106,6 +105,18 @@ export default function GalleryCreate() {
   const [allowComments, setAllowComments] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
   const [allowExtraPhotos, setAllowExtraPhotos] = useState(true);
+
+  // Initialize from settings
+  useEffect(() => {
+    if (settings) {
+      setCustomDays(settings.defaultExpirationDays || 10);
+      if (settings.defaultWatermark) {
+        setWatermarkType(settings.defaultWatermark.type);
+        setWatermarkText(settings.defaultWatermark.text || 'Studio Lunari');
+        setWatermarkOpacity(settings.defaultWatermark.opacity);
+      }
+    }
+  }, [settings]);
 
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
@@ -126,7 +137,7 @@ export default function GalleryCreate() {
       }
 
       const deadline = new Date();
-      deadline.setDate(deadline.getDate() + getDaysFromPreset());
+      deadline.setDate(deadline.getDate() + customDays);
 
       const saleSettings = getSaleSettings();
 
@@ -143,7 +154,7 @@ export default function GalleryCreate() {
         settings: {
           welcomeMessage,
           deadline,
-          deadlinePreset,
+          deadlinePreset: 'custom' as DeadlinePreset,
           watermark: {
             type: watermarkType,
             text: watermarkText,
@@ -175,11 +186,6 @@ export default function GalleryCreate() {
 
   const mockUpload = () => {
     setUploadedCount(prev => prev + Math.floor(Math.random() * 10) + 5);
-  };
-
-  const getDaysFromPreset = () => {
-    if (deadlinePreset === 'custom') return customDays;
-    return deadlinePreset;
   };
 
   const handleSaveClient = (clientData: CreateClientData) => {
@@ -429,196 +435,196 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            {/* Sale Mode Selection */}
-            <div className="space-y-4">
-              <Label className="text-base font-medium">Configurar venda de fotos?</Label>
-              <RadioGroup
-                value={saleMode}
-                onValueChange={(v) => setSaleMode(v as SaleMode)}
-                className="grid gap-4 md:grid-cols-3"
-              >
-                {/* No Sale */}
-                <div>
-                  <RadioGroupItem value="no_sale" id="sale-no" className="peer sr-only" />
-                  <Label
-                    htmlFor="sale-no"
-                    className={cn(
-                      "flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all h-full",
-                      "hover:border-primary/50 hover:bg-muted/50",
-                      saleMode === 'no_sale' 
-                        ? "border-primary bg-primary/5" 
-                        : "border-border"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center",
-                      saleMode === 'no_sale' ? "bg-primary/20" : "bg-muted"
-                    )}>
-                      <Ban className={cn(
-                        "h-6 w-6",
-                        saleMode === 'no_sale' ? "text-primary" : "text-muted-foreground"
-                      )} />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-medium">Não, sem venda</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        O cliente não será informado sobre os preços das fotos
-                      </p>
-                    </div>
-                  </Label>
-                </div>
+            {/* Two column layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Block - Sale Mode */}
+              <div className="space-y-4">
+                <Label className="text-base font-medium">Configurar venda de fotos?</Label>
+                <RadioGroup
+                  value={saleMode}
+                  onValueChange={(v) => setSaleMode(v as SaleMode)}
+                  className="flex flex-col gap-4"
+                >
+                  {/* No Sale */}
+                  <div>
+                    <RadioGroupItem value="no_sale" id="sale-no" className="peer sr-only" />
+                    <Label
+                      htmlFor="sale-no"
+                      className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all",
+                        "hover:border-primary/50 hover:bg-muted/50",
+                        saleMode === 'no_sale' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                        saleMode === 'no_sale' ? "bg-primary/20" : "bg-muted"
+                      )}>
+                        <Ban className={cn(
+                          "h-5 w-5",
+                          saleMode === 'no_sale' ? "text-primary" : "text-muted-foreground"
+                        )} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Não, sem venda</p>
+                        <p className="text-xs text-muted-foreground">
+                          O cliente não será informado sobre os preços das fotos
+                        </p>
+                      </div>
+                    </Label>
+                  </div>
 
-                {/* Sale with Payment */}
-                <div>
-                  <RadioGroupItem value="sale_with_payment" id="sale-payment" className="peer sr-only" />
-                  <Label
-                    htmlFor="sale-payment"
-                    className={cn(
-                      "flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all h-full relative",
-                      "hover:border-primary/50 hover:bg-muted/50",
-                      saleMode === 'sale_with_payment' 
-                        ? "border-primary bg-primary/5" 
-                        : "border-border"
-                    )}
-                  >
-                    <Badge variant="secondary" className="absolute -top-2 right-2 text-xs">
-                      Em breve
-                    </Badge>
-                    <div className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center",
-                      saleMode === 'sale_with_payment' ? "bg-primary/20" : "bg-muted"
-                    )}>
-                      <CreditCard className={cn(
-                        "h-6 w-6",
-                        saleMode === 'sale_with_payment' ? "text-primary" : "text-muted-foreground"
-                      )} />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-medium">Sim, COM pagamento</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        O cliente será cobrado ao finalizar a seleção
-                      </p>
-                    </div>
-                  </Label>
-                </div>
+                  {/* Sale with Payment */}
+                  <div>
+                    <RadioGroupItem value="sale_with_payment" id="sale-payment" className="peer sr-only" />
+                    <Label
+                      htmlFor="sale-payment"
+                      className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all relative",
+                        "hover:border-primary/50 hover:bg-muted/50",
+                        saleMode === 'sale_with_payment' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border"
+                      )}
+                    >
+                      <Badge variant="secondary" className="absolute -top-2 right-2 text-xs">
+                        Em breve
+                      </Badge>
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                        saleMode === 'sale_with_payment' ? "bg-primary/20" : "bg-muted"
+                      )}>
+                        <CreditCard className={cn(
+                          "h-5 w-5",
+                          saleMode === 'sale_with_payment' ? "text-primary" : "text-muted-foreground"
+                        )} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Sim, COM pagamento</p>
+                        <p className="text-xs text-muted-foreground">
+                          O cliente será cobrado ao finalizar a seleção
+                        </p>
+                      </div>
+                    </Label>
+                  </div>
 
-                {/* Sale without Payment */}
-                <div>
-                  <RadioGroupItem value="sale_without_payment" id="sale-no-payment" className="peer sr-only" />
-                  <Label
-                    htmlFor="sale-no-payment"
-                    className={cn(
-                      "flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all h-full",
-                      "hover:border-primary/50 hover:bg-muted/50",
-                      saleMode === 'sale_without_payment' 
-                        ? "border-primary bg-primary/5" 
-                        : "border-border"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center",
-                      saleMode === 'sale_without_payment' ? "bg-primary/20" : "bg-muted"
-                    )}>
-                      <Receipt className={cn(
-                        "h-6 w-6",
-                        saleMode === 'sale_without_payment' ? "text-primary" : "text-muted-foreground"
-                      )} />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-medium">Sim, SEM pagamento</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        O cliente será apenas informado sobre os preços
-                      </p>
-                    </div>
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
+                  {/* Sale without Payment */}
+                  <div>
+                    <RadioGroupItem value="sale_without_payment" id="sale-no-payment" className="peer sr-only" />
+                    <Label
+                      htmlFor="sale-no-payment"
+                      className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all",
+                        "hover:border-primary/50 hover:bg-muted/50",
+                        saleMode === 'sale_without_payment' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                        saleMode === 'sale_without_payment' ? "bg-primary/20" : "bg-muted"
+                      )}>
+                        <Receipt className={cn(
+                          "h-5 w-5",
+                          saleMode === 'sale_without_payment' ? "text-primary" : "text-muted-foreground"
+                        )} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Sim, SEM pagamento</p>
+                        <p className="text-xs text-muted-foreground">
+                          O cliente será apenas informado sobre os preços
+                        </p>
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
 
-            {/* Pricing Model - Only show if sale is enabled */}
-            {saleMode !== 'no_sale' && (
-              <>
-                <div className="h-px bg-border" />
-                
-                <div className="space-y-4">
-                  <Label className="text-base font-medium">Qual formato de preço deseja usar?</Label>
-                  <RadioGroup
-                    value={pricingModel}
-                    onValueChange={(v) => setPricingModel(v as PricingModel)}
-                    className="grid gap-4 md:grid-cols-2"
-                  >
-                    {/* Fixed Price */}
-                    <div>
-                      <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
-                      <Label
-                        htmlFor="pricing-fixed"
-                        className={cn(
-                          "flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all h-full",
-                          "hover:border-primary/50 hover:bg-muted/50",
-                          pricingModel === 'fixed' 
-                            ? "border-primary bg-primary/5" 
-                            : "border-border"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
+              {/* Right Block - Pricing Configuration (conditional) */}
+              {saleMode !== 'no_sale' && (
+                <div className="space-y-6">
+                  {/* Pricing Model */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-medium">Qual formato de preço?</Label>
+                    <RadioGroup
+                      value={pricingModel}
+                      onValueChange={(v) => setPricingModel(v as PricingModel)}
+                      className="flex flex-col gap-3"
+                    >
+                      {/* Fixed Price */}
+                      <div>
+                        <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
+                        <Label
+                          htmlFor="pricing-fixed"
+                          className={cn(
+                            "flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all",
+                            "hover:border-primary/50 hover:bg-muted/50",
+                            pricingModel === 'fixed' 
+                              ? "border-primary bg-primary/5" 
+                              : "border-border"
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center",
+                              pricingModel === 'fixed' ? "bg-primary/20" : "bg-muted"
+                            )}>
+                              <Tag className={cn(
+                                "h-4 w-4",
+                                pricingModel === 'fixed' ? "text-primary" : "text-muted-foreground"
+                              )} />
+                            </div>
+                            <div>
+                              <p className="font-medium">Preço único por foto</p>
+                              <p className="text-xs text-muted-foreground">
+                                Defina um valor fixo para cada foto
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {pricingModel === 'fixed' && (
+                            <div className="pt-3 border-t border-border/50">
+                              <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
+                              <Input
+                                id="fixedPrice"
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={fixedPrice}
+                                onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)}
+                                className="mt-2"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                          )}
+                        </Label>
+                      </div>
+
+                      {/* Packages with Discount */}
+                      <div>
+                        <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
+                        <Label
+                          htmlFor="pricing-packages"
+                          className={cn(
+                            "flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative",
+                            "hover:border-primary/50 hover:bg-muted/50",
+                            pricingModel === 'packages' 
+                              ? "border-primary bg-primary/5" 
+                              : "border-border"
+                          )}
+                        >
+                          <Badge className="absolute -top-2 right-2 text-xs bg-green-500">
+                            Novo
+                          </Badge>
                           <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center",
-                            pricingModel === 'fixed' ? "bg-primary/20" : "bg-muted"
-                          )}>
-                            <Tag className={cn(
-                              "h-5 w-5",
-                              pricingModel === 'fixed' ? "text-primary" : "text-muted-foreground"
-                            )} />
-                          </div>
-                          <div>
-                            <p className="font-medium">Preço único por foto</p>
-                            <p className="text-xs text-muted-foreground">
-                              Defina um valor fixo para cada foto
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {pricingModel === 'fixed' && (
-                          <div className="pt-3 border-t border-border/50">
-                            <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                            <Input
-                              id="fixedPrice"
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={fixedPrice}
-                              onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)}
-                              className="mt-2"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </div>
-                        )}
-                      </Label>
-                    </div>
-
-                    {/* Packages with Discount */}
-                    <div>
-                      <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
-                      <Label
-                        htmlFor="pricing-packages"
-                        className={cn(
-                          "flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all h-full relative",
-                          "hover:border-primary/50 hover:bg-muted/50",
-                          pricingModel === 'packages' 
-                            ? "border-primary bg-primary/5" 
-                            : "border-border"
-                        )}
-                      >
-                        <Badge className="absolute -top-2 right-2 text-xs bg-green-500">
-                          Novo
-                        </Badge>
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center",
+                            "w-8 h-8 rounded-full flex items-center justify-center",
                             pricingModel === 'packages' ? "bg-primary/20" : "bg-muted"
                           )}>
                             <Package className={cn(
-                              "h-5 w-5",
+                              "h-4 w-4",
                               pricingModel === 'packages' ? "text-primary" : "text-muted-foreground"
                             )} />
                           </div>
@@ -628,10 +634,10 @@ export default function GalleryCreate() {
                               Descontos progressivos por quantidade
                             </p>
                           </div>
-                        </div>
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
 
                   {/* Discount Packages Configuration */}
                   {pricingModel === 'packages' && (
@@ -642,8 +648,8 @@ export default function GalleryCreate() {
                           {/* Select para carregar predefinição */}
                           {settings.discountPresets && settings.discountPresets.length > 0 && (
                             <Select onValueChange={loadPreset}>
-                              <SelectTrigger className="h-8 w-[160px]">
-                                <SelectValue placeholder="Carregar predefinição" />
+                              <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue placeholder="Carregar" />
                               </SelectTrigger>
                               <SelectContent>
                                 {settings.discountPresets.map(preset => (
@@ -678,32 +684,32 @@ export default function GalleryCreate() {
                             className="gap-1"
                           >
                             <Plus className="h-4 w-4" />
-                            Adicionar faixa
+                            Adicionar
                           </Button>
                         </div>
                       </div>
 
                       {discountPackages.length === 0 ? (
                         <p className="text-sm text-muted-foreground text-center py-4">
-                          Adicione faixas para definir preços por quantidade de fotos
+                          Adicione faixas para definir preços por quantidade
                         </p>
                       ) : (
                         <div className="space-y-3">
                           {discountPackages.map((pkg, index) => (
-                            <div key={pkg.id} className="flex items-center gap-3 p-3 rounded-lg bg-background border border-border/50">
-                              <div className="flex-1 grid grid-cols-3 gap-3">
+                            <div key={pkg.id} className="flex items-center gap-2 p-3 rounded-lg bg-background border border-border/50">
+                              <div className="flex-1 grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
-                                  <Label className="text-xs text-muted-foreground">De (fotos)</Label>
+                                  <Label className="text-xs text-muted-foreground">De</Label>
                                   <Input
                                     type="number"
                                     min={1}
                                     value={pkg.minPhotos}
                                     onChange={(e) => updateDiscountPackage(pkg.id, 'minPhotos', parseInt(e.target.value) || 1)}
-                                    className="h-9"
+                                    className="h-8"
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs text-muted-foreground">Até (fotos)</Label>
+                                  <Label className="text-xs text-muted-foreground">Até</Label>
                                   {index === discountPackages.length - 1 ? (
                                     <Input
                                       type="text"
@@ -720,7 +726,7 @@ export default function GalleryCreate() {
                                         }
                                       }}
                                       placeholder="∞"
-                                      className="h-9 text-center"
+                                      className="h-8 text-center"
                                     />
                                   ) : (
                                     <Input
@@ -728,19 +734,19 @@ export default function GalleryCreate() {
                                       min={pkg.minPhotos}
                                       value={pkg.maxPhotos ?? ''}
                                       onChange={(e) => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)}
-                                      className="h-9"
+                                      className="h-8"
                                     />
                                   )}
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
+                                  <Label className="text-xs text-muted-foreground">R$</Label>
                                   <Input
                                     type="number"
                                     min={0}
                                     step={0.01}
                                     value={pkg.pricePerPhoto}
                                     onChange={(e) => updateDiscountPackage(pkg.id, 'pricePerPhoto', parseFloat(e.target.value) || 0)}
-                                    className="h-9"
+                                    className="h-8"
                                   />
                                 </div>
                               </div>
@@ -749,7 +755,7 @@ export default function GalleryCreate() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => removeDiscountPackage(pkg.id)}
-                                className="text-destructive hover:text-destructive"
+                                className="text-destructive hover:text-destructive h-8 w-8"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -759,68 +765,66 @@ export default function GalleryCreate() {
                       )}
                     </div>
                   )}
-                  
-                  {/* Dialog para salvar predefinição */}
-                  <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Salvar predefinição de faixas</DialogTitle>
-                        <DialogDescription>
-                          Salve esta configuração de faixas para reutilizar em outras galerias
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="presetName">Nome da predefinição</Label>
-                          <Input
-                            id="presetName"
-                            value={presetName}
-                            onChange={(e) => setPresetName(e.target.value)}
-                            placeholder="Ex: Casamentos, Ensaios..."
-                          />
-                        </div>
-                        <div className="p-3 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-2">Faixas a salvar:</p>
-                          {discountPackages.map((pkg) => (
-                            <p key={pkg.id} className="text-sm">
-                              {pkg.minPhotos} - {pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} fotos: R$ {pkg.pricePerPhoto.toFixed(2)}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowSavePresetDialog(false)}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={savePreset}>Salvar predefinição</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
 
-                <div className="h-px bg-border" />
-
-                {/* Charge Type */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Tipo de cobrança</Label>
-                  <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
-                    <SelectTrigger className="max-w-md">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="only_extras">Cobrar apenas as fotos extras</SelectItem>
-                      <SelectItem value="all_selected">Cobrar todas as fotos selecionadas</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">
-                    {chargeType === 'only_extras' 
-                      ? `Fotos até o limite do pacote (${includedPhotos}) são gratuitas. Apenas fotos além desse limite serão cobradas.`
-                      : `Todas as fotos selecionadas serão cobradas, independente do pacote.`
-                    }
-                  </p>
+                  {/* Charge Type */}
+                  <div className="space-y-3">
+                    <Label className="text-base font-medium">Tipo de cobrança</Label>
+                    <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="only_extras">Cobrar apenas as fotos extras</SelectItem>
+                        <SelectItem value="all_selected">Cobrar todas as fotos selecionadas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {chargeType === 'only_extras' 
+                        ? `Fotos até o limite do pacote (${includedPhotos}) são gratuitas.`
+                        : `Todas as fotos selecionadas serão cobradas.`
+                      }
+                    </p>
+                  </div>
                 </div>
-              </>
-            )}
+              )}
+            </div>
+            
+            {/* Dialog para salvar predefinição */}
+            <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Salvar predefinição de faixas</DialogTitle>
+                  <DialogDescription>
+                    Salve esta configuração de faixas para reutilizar em outras galerias
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="presetName">Nome da predefinição</Label>
+                    <Input
+                      id="presetName"
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      placeholder="Ex: Casamentos, Ensaios..."
+                    />
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground mb-2">Faixas a salvar:</p>
+                    {discountPackages.map((pkg) => (
+                      <p key={pkg.id} className="text-sm">
+                        {pkg.minPhotos} - {pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} fotos: R$ {pkg.pricePerPhoto.toFixed(2)}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowSavePresetDialog(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={savePreset}>Salvar predefinição</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         );
 
@@ -892,228 +896,228 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            {/* Welcome Message */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-primary" />
-                <Label>Mensagem de Saudação</Label>
-              </div>
-              <Textarea
-                value={welcomeMessage}
-                onChange={(e) => setWelcomeMessage(e.target.value)}
-                placeholder="Personalize a mensagem de boas-vindas..."
-                rows={5}
-                className="resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
-              </p>
-            </div>
-
-            {/* Deadline */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                <Label>Prazo de Seleção *</Label>
-              </div>
-              <RadioGroup 
-                value={String(deadlinePreset)} 
-                onValueChange={(v) => setDeadlinePreset(v === 'custom' ? 'custom' : parseInt(v) as DeadlinePreset)}
-                className="flex flex-wrap gap-3"
-              >
-                {[7, 10, 15].map((days) => (
-                  <div key={days} className="flex items-center">
-                    <RadioGroupItem value={String(days)} id={`days-${days}`} className="peer sr-only" />
-                    <Label
-                      htmlFor={`days-${days}`}
-                      className="px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                    >
-                      {days} dias
-                    </Label>
+            {/* Two column layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Block - Welcome Message & Deadline */}
+              <div className="space-y-6">
+                {/* Welcome Message */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                    <Label>Mensagem de Saudação</Label>
                   </div>
-                ))}
-                <div className="flex items-center">
-                  <RadioGroupItem value="custom" id="days-custom" className="peer sr-only" />
-                  <Label
-                    htmlFor="days-custom"
-                    className="px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                  >
-                    Personalizado
-                  </Label>
-                </div>
-              </RadioGroup>
-              {deadlinePreset === 'custom' && (
-                <div className="flex items-center gap-2 mt-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={customDays}
-                    onChange={(e) => setCustomDays(parseInt(e.target.value) || 10)}
-                    className="w-24"
+                  <Textarea
+                    value={welcomeMessage}
+                    onChange={(e) => setWelcomeMessage(e.target.value)}
+                    placeholder="Personalize a mensagem de boas-vindas..."
+                    rows={6}
+                    className="resize-none"
                   />
-                  <span className="text-muted-foreground">dias</span>
-                </div>
-              )}
-            </div>
-
-            {/* Image Resize */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Image className="h-4 w-4 text-primary" />
-                <Label>Tamanho das Imagens</Label>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Redimensiona as imagens para economia de armazenamento e carregamento mais rápido
-              </p>
-              <RadioGroup 
-                value={String(imageResizeOption)} 
-                onValueChange={(v) => setImageResizeOption(parseInt(v) as ImageResizeOption)}
-                className="flex flex-wrap gap-3"
-              >
-                {[640, 800, 1024, 1920].map((size) => (
-                  <div key={size} className="flex items-center">
-                    <RadioGroupItem value={String(size)} id={`size-${size}`} className="peer sr-only" />
-                    <Label
-                      htmlFor={`size-${size}`}
-                      className={cn(
-                        "px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary",
-                        size === 800 && "ring-1 ring-primary/30"
-                      )}
-                    >
-                      {size} px
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-              <p className="text-xs text-muted-foreground">Lado maior • 800px é o padrão recomendado</p>
-            </div>
-
-            {/* Watermark */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Droplet className="h-4 w-4 text-primary" />
-                <Label>Marca D'água</Label>
-              </div>
-              <RadioGroup 
-                value={watermarkType} 
-                onValueChange={(v) => setWatermarkType(v as WatermarkType)}
-                className="flex flex-wrap gap-3"
-              >
-                <div className="flex items-center">
-                  <RadioGroupItem value="none" id="wm-none" className="peer sr-only" />
-                  <Label
-                    htmlFor="wm-none"
-                    className="px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                  >
-                    Nenhuma
-                  </Label>
-                </div>
-                <div className="flex items-center">
-                  <RadioGroupItem value="text" id="wm-text" className="peer sr-only" />
-                  <Label
-                    htmlFor="wm-text"
-                    className="px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                  >
-                    Texto
-                  </Label>
-                </div>
-                <div className="flex items-center">
-                  <RadioGroupItem value="logo" id="wm-logo" className="peer sr-only" />
-                  <Label
-                    htmlFor="wm-logo"
-                    className="px-4 py-2 rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                  >
-                    Logo
-                  </Label>
-                </div>
-              </RadioGroup>
-
-              {watermarkType === 'text' && (
-                <Input
-                  placeholder="Texto da marca d'água"
-                  value={watermarkText}
-                  onChange={(e) => setWatermarkText(e.target.value)}
-                />
-              )}
-
-              {watermarkType === 'logo' && (
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
-                  <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Clique para fazer upload do logo
+                  <p className="text-xs text-muted-foreground">
+                    Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
                   </p>
                 </div>
-              )}
 
-              {watermarkType !== 'none' && (
-                <>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Opacidade</Label>
-                      <span className="text-sm text-muted-foreground">{watermarkOpacity}%</span>
-                    </div>
-                    <Slider
-                      value={[watermarkOpacity]}
-                      onValueChange={(v) => setWatermarkOpacity(v[0])}
-                      min={10}
-                      max={100}
-                      step={5}
+                {/* Deadline */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    <Label>Prazo de Seleção *</Label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={customDays}
+                      onChange={(e) => setCustomDays(parseInt(e.target.value) || 10)}
+                      className="w-24"
                     />
+                    <span className="text-muted-foreground">dias</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Configuração padrão: {settings.defaultExpirationDays || 10} dias
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Block - Image Settings & Watermark & Interactions */}
+              <div className="space-y-6">
+                {/* Image Resize */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Image className="h-4 w-4 text-primary" />
+                    <Label>Tamanho das Imagens</Label>
+                  </div>
+                  <Select 
+                    value={String(imageResizeOption)} 
+                    onValueChange={(v) => setImageResizeOption(parseInt(v) as ImageResizeOption)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="640">640 px</SelectItem>
+                      <SelectItem value="800">800 px (recomendado)</SelectItem>
+                      <SelectItem value="1024">1024 px</SelectItem>
+                      <SelectItem value="1920">1920 px</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Lado maior • Redimensiona para economia de armazenamento
+                  </p>
+                </div>
+
+                {/* Watermark */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Droplet className="h-4 w-4 text-primary" />
+                    <Label>Marca D'água</Label>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label>Onde aplicar</Label>
-                    <Select value={watermarkDisplay} onValueChange={(v) => setWatermarkDisplay(v as WatermarkDisplay)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Sim, nas fotos ampliadas e miniaturas</SelectItem>
-                        <SelectItem value="fullscreen">Sim, somente nas fotos ampliadas</SelectItem>
-                        <SelectItem value="none">Não aplicar</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  {/* Watermark Type */}
+                  <RadioGroup 
+                    value={watermarkType} 
+                    onValueChange={(v) => setWatermarkType(v as WatermarkType)}
+                    className="flex gap-2"
+                  >
+                    <div className="flex items-center">
+                      <RadioGroupItem value="none" id="wm-none" className="peer sr-only" />
+                      <Label
+                        htmlFor="wm-none"
+                        className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
+                      >
+                        Nenhuma
+                      </Label>
+                    </div>
+                    <div className="flex items-center">
+                      <RadioGroupItem value="text" id="wm-text" className="peer sr-only" />
+                      <Label
+                        htmlFor="wm-text"
+                        className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
+                      >
+                        Texto
+                      </Label>
+                    </div>
+                    <div className="flex items-center">
+                      <RadioGroupItem value="logo" id="wm-logo" className="peer sr-only" />
+                      <Label
+                        htmlFor="wm-logo"
+                        className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
+                      >
+                        Logo
+                      </Label>
+                    </div>
+                  </RadioGroup>
+
+                  {watermarkType === 'text' && (
+                    <Input
+                      placeholder="Texto da marca d'água"
+                      value={watermarkText}
+                      onChange={(e) => setWatermarkText(e.target.value)}
+                    />
+                  )}
+
+                  {watermarkType === 'logo' && (
+                    <>
+                      {settings.defaultWatermark?.logoUrl ? (
+                        <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+                          <img 
+                            src={settings.defaultWatermark.logoUrl} 
+                            alt="Logo" 
+                            className="h-10 object-contain" 
+                          />
+                          <div>
+                            <p className="text-sm font-medium">Logo configurado</p>
+                            <p className="text-xs text-muted-foreground">
+                              Definido nas configurações
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-amber-500/50 rounded-lg p-4 text-center bg-amber-500/5">
+                          <Upload className="h-6 w-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-sm font-medium text-amber-600">
+                            Nenhum logo configurado
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Configure o logo nas configurações do estúdio
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {watermarkType !== 'none' && (
+                    <>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm">Opacidade</Label>
+                          <span className="text-sm text-muted-foreground">{watermarkOpacity}%</span>
+                        </div>
+                        <Slider
+                          value={[watermarkOpacity]}
+                          onValueChange={(v) => setWatermarkOpacity(v[0])}
+                          min={10}
+                          max={100}
+                          step={5}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label className="text-sm">Onde aplicar</Label>
+                        <Select value={watermarkDisplay} onValueChange={(v) => setWatermarkDisplay(v as WatermarkDisplay)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Fotos ampliadas e miniaturas</SelectItem>
+                            <SelectItem value="fullscreen">Somente fotos ampliadas</SelectItem>
+                            <SelectItem value="none">Não aplicar</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Client Interactions */}
+                <div className="space-y-3 pt-2">
+                  <h3 className="font-medium text-sm">Interações do Cliente</h3>
+                  
+                  <div className="flex items-center justify-between py-2">
+                    <div>
+                      <p className="text-sm font-medium">Permitir comentários</p>
+                      <p className="text-xs text-muted-foreground">
+                        Cliente pode comentar em cada foto
+                      </p>
+                    </div>
+                    <Switch checked={allowComments} onCheckedChange={setAllowComments} />
                   </div>
-                </>
-              )}
-            </div>
 
-            {/* Client Interactions */}
-            <div className="space-y-4">
-              <h3 className="font-medium">Interações do Cliente</h3>
-              
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium">Permitir comentários</p>
-                  <p className="text-sm text-muted-foreground">
-                    Cliente pode deixar um comentário por foto
-                  </p>
-                </div>
-                <Switch checked={allowComments} onCheckedChange={setAllowComments} />
-              </div>
-
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium">Permitir download</p>
-                  <p className="text-sm text-muted-foreground">
-                    Cliente poderá baixar as imagens a qualquer momento
-                  </p>
-                </div>
-                <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
-              </div>
-
-              {saleMode !== 'no_sale' && (
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="font-medium">Permitir fotos extras</p>
-                    <p className="text-sm text-muted-foreground">
-                      Cliente pode selecionar além do limite incluso
-                    </p>
+                  <div className="flex items-center justify-between py-2">
+                    <div>
+                      <p className="text-sm font-medium">Permitir download</p>
+                      <p className="text-xs text-muted-foreground">
+                        Cliente pode baixar as imagens
+                      </p>
+                    </div>
+                    <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
                   </div>
-                  <Switch checked={allowExtraPhotos} onCheckedChange={setAllowExtraPhotos} />
+
+                  {saleMode !== 'no_sale' && (
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="text-sm font-medium">Permitir fotos extras</p>
+                        <p className="text-xs text-muted-foreground">
+                          Cliente pode selecionar além do limite
+                        </p>
+                      </div>
+                      <Switch checked={allowExtraPhotos} onCheckedChange={setAllowExtraPhotos} />
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         );
@@ -1207,7 +1211,7 @@ export default function GalleryCreate() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Prazo</span>
-                    <span className="font-medium">{getDaysFromPreset()} dias</span>
+                    <span className="font-medium">{customDays} dias</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tamanho</span>
@@ -1246,7 +1250,7 @@ export default function GalleryCreate() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto animate-fade-in">
+    <div className="max-w-5xl mx-auto animate-fade-in pb-24">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <Button variant="ghost" size="icon" onClick={handleBack}>
@@ -1302,16 +1306,18 @@ export default function GalleryCreate() {
         {renderStep()}
       </div>
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-6">
-        <Button variant="outline" onClick={handleBack}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          {currentStep === 1 ? 'Cancelar' : 'Voltar'}
-        </Button>
-        <Button variant="terracotta" onClick={handleNext}>
-          {currentStep === 5 ? 'Criar Galeria' : 'Próximo'}
-          {currentStep < 5 && <ArrowRight className="h-4 w-4 ml-2" />}
-        </Button>
+      {/* Fixed Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border z-40">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between">
+          <Button variant="outline" onClick={handleBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {currentStep === 1 ? 'Cancelar' : 'Voltar'}
+          </Button>
+          <Button variant="terracotta" onClick={handleNext}>
+            {currentStep === 5 ? 'Criar Galeria' : 'Próximo'}
+            {currentStep < 5 && <ArrowRight className="h-4 w-4 ml-2" />}
+          </Button>
+        </div>
       </div>
     </div>
   );
