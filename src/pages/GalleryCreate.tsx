@@ -1,26 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  ArrowRight, 
-  User, 
-  Image, 
-  Settings, 
-  Check,
-  Upload,
-  Calendar,
-  MessageSquare,
-  Download,
-  Droplet,
-  Plus,
-  Ban,
-  CreditCard,
-  Receipt,
-  Tag,
-  Package,
-  Trash2,
-  Save
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,22 +9,9 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
 import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset } from '@/types/gallery';
 import { cn } from '@/lib/utils';
@@ -55,26 +22,46 @@ import { useClients, CreateClientData } from '@/hooks/useClients';
 import { useGalleries } from '@/hooks/useGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { generateId } from '@/lib/storage';
-
-const steps = [
-  { id: 1, name: 'Cliente', icon: User },
-  { id: 2, name: 'Venda', icon: Tag },
-  { id: 3, name: 'Fotos', icon: Image },
-  { id: 4, name: 'Configurações', icon: Settings },
-  { id: 5, name: 'Revisão', icon: Check },
-];
-
+const steps = [{
+  id: 1,
+  name: 'Cliente',
+  icon: User
+}, {
+  id: 2,
+  name: 'Venda',
+  icon: Tag
+}, {
+  id: 3,
+  name: 'Fotos',
+  icon: Image
+}, {
+  id: 4,
+  name: 'Configurações',
+  icon: Settings
+}, {
+  id: 5,
+  name: 'Revisão',
+  icon: Check
+}];
 export default function GalleryCreate() {
   const navigate = useNavigate();
-  const { clients, createClient } = useClients();
-  const { createGallery } = useGalleries();
-  const { settings, updateSettings } = useSettings();
+  const {
+    clients,
+    createClient
+  } = useClients();
+  const {
+    createGallery
+  } = useGalleries();
+  const {
+    settings,
+    updateSettings
+  } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
-  
+
   // Preset dialog state
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
   const [presetName, setPresetName] = useState('');
-  
+
   // Step 1: Client Info
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -83,17 +70,17 @@ export default function GalleryCreate() {
   const [sessionName, setSessionName] = useState('');
   const [packageName, setPackageName] = useState('');
   const [includedPhotos, setIncludedPhotos] = useState(30);
-  
+
   // Step 2: Sale Settings
   const [saleMode, setSaleMode] = useState<SaleMode>('sale_without_payment');
   const [pricingModel, setPricingModel] = useState<PricingModel>('fixed');
   const [chargeType, setChargeType] = useState<ChargeType>('only_extras');
   const [fixedPrice, setFixedPrice] = useState(25);
   const [discountPackages, setDiscountPackages] = useState<DiscountPackage[]>([]);
-  
+
   // Step 3: Photos (mock)
   const [uploadedCount, setUploadedCount] = useState(0);
-  
+
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
   const [customDays, setCustomDays] = useState(10);
@@ -117,15 +104,13 @@ export default function GalleryCreate() {
       }
     }
   }, [settings]);
-
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
     chargeType,
     fixedPrice,
-    discountPackages,
+    discountPackages
   });
-
   const handleNext = () => {
     if (currentStep < 5) {
       setCurrentStep(currentStep + 1);
@@ -135,12 +120,9 @@ export default function GalleryCreate() {
         toast.error('Selecione um cliente');
         return;
       }
-
       const deadline = new Date();
       deadline.setDate(deadline.getDate() + customDays);
-
       const saleSettings = getSaleSettings();
-
       const newGallery = createGallery({
         clientId: selectedClient.id,
         clientName: selectedClient.name,
@@ -159,23 +141,21 @@ export default function GalleryCreate() {
             type: watermarkType,
             text: watermarkText,
             opacity: watermarkOpacity,
-            position: 'bottom-right',
+            position: 'bottom-right'
           },
           watermarkDisplay,
           imageResizeOption,
           allowComments,
           allowDownload,
-          allowExtraPhotos: saleSettings.mode !== 'no_sale' && allowExtraPhotos,
-        },
+          allowExtraPhotos: saleSettings.mode !== 'no_sale' && allowExtraPhotos
+        }
       });
-
       toast.success('Galeria criada com sucesso!', {
-        description: 'Você pode enviar o link para o cliente agora.',
+        description: 'Você pode enviar o link para o cliente agora.'
       });
       navigate(`/gallery/${newGallery.id}`);
     }
   };
-
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -183,11 +163,9 @@ export default function GalleryCreate() {
       navigate('/');
     }
   };
-
   const mockUpload = () => {
     setUploadedCount(prev => prev + Math.floor(Math.random() * 10) + 5);
   };
-
   const handleSaveClient = (clientData: CreateClientData) => {
     const newClient = createClient(clientData);
     setSelectedClient(newClient);
@@ -195,7 +173,6 @@ export default function GalleryCreate() {
     setIsClientModalOpen(false);
     toast.success('Cliente cadastrado com sucesso!');
   };
-
   const handleClientSelect = (client: Client | null) => {
     setSelectedClient(client);
     if (client) {
@@ -203,10 +180,9 @@ export default function GalleryCreate() {
       setNewPassword('');
     }
   };
-
   const addDiscountPackage = () => {
     const updatedPackages = [...discountPackages];
-    
+
     // Se já existe última faixa com infinito, converter para número
     if (updatedPackages.length > 0) {
       const lastIndex = updatedPackages.length - 1;
@@ -219,100 +195,88 @@ export default function GalleryCreate() {
         };
       }
     }
-    
     const lastPackage = updatedPackages[updatedPackages.length - 1];
     const minPhotos = lastPackage ? (lastPackage.maxPhotos as number) + 1 : 1;
-    
-    setDiscountPackages([
-      ...updatedPackages,
-      {
-        id: generateId(),
-        minPhotos,
-        maxPhotos: null, // Infinito por padrão
-        pricePerPhoto: Math.max(1, fixedPrice - (discountPackages.length + 1) * 5),
-      },
-    ]);
+    setDiscountPackages([...updatedPackages, {
+      id: generateId(),
+      minPhotos,
+      maxPhotos: null,
+      // Infinito por padrão
+      pricePerPhoto: Math.max(1, fixedPrice - (discountPackages.length + 1) * 5)
+    }]);
   };
-
   const updateDiscountPackage = (id: string, field: keyof DiscountPackage, value: number | null) => {
-    setDiscountPackages(
-      discountPackages.map(pkg =>
-        pkg.id === id ? { ...pkg, [field]: value } : pkg
-      )
-    );
+    setDiscountPackages(discountPackages.map(pkg => pkg.id === id ? {
+      ...pkg,
+      [field]: value
+    } : pkg));
   };
-  
   const savePreset = () => {
     if (!presetName.trim()) {
       toast.error('Digite um nome para a predefinição');
       return;
     }
-    
     const newPreset: DiscountPreset = {
       id: generateId(),
       name: presetName.trim(),
       packages: discountPackages,
-      createdAt: new Date(),
+      createdAt: new Date()
     };
-    
     updateSettings({
-      discountPresets: [...(settings.discountPresets || []), newPreset],
+      discountPresets: [...(settings.discountPresets || []), newPreset]
     });
-    
     setPresetName('');
     setShowSavePresetDialog(false);
     toast.success('Predefinição salva com sucesso!');
   };
-
   const loadPreset = (presetId: string) => {
     const preset = settings.discountPresets?.find(p => p.id === presetId);
     if (preset) {
       // Clonar os pacotes com novos IDs
       const clonedPackages = preset.packages.map(pkg => ({
         ...pkg,
-        id: generateId(),
+        id: generateId()
       }));
       setDiscountPackages(clonedPackages);
       toast.success(`Predefinição "${preset.name}" carregada`);
     }
   };
-
   const removeDiscountPackage = (id: string) => {
     setDiscountPackages(discountPackages.filter(pkg => pkg.id !== id));
   };
-
   const getSaleModeLabel = () => {
     switch (saleMode) {
-      case 'no_sale': return 'Sem venda';
-      case 'sale_with_payment': return 'Venda COM pagamento';
-      case 'sale_without_payment': return 'Venda SEM pagamento';
+      case 'no_sale':
+        return 'Sem venda';
+      case 'sale_with_payment':
+        return 'Venda COM pagamento';
+      case 'sale_without_payment':
+        return 'Venda SEM pagamento';
     }
   };
-
   const getPricingModelLabel = () => {
     switch (pricingModel) {
-      case 'fixed': return 'Preço único';
-      case 'packages': return 'Pacotes com desconto';
+      case 'fixed':
+        return 'Preço único';
+      case 'packages':
+        return 'Pacotes com desconto';
     }
   };
-
   const getChargeTypeLabel = () => {
     switch (chargeType) {
-      case 'only_extras': return 'Apenas extras';
-      case 'all_selected': return 'Todas selecionadas';
+      case 'only_extras':
+        return 'Apenas extras';
+      case 'all_selected':
+        return 'Todas selecionadas';
     }
   };
-
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return (
-          <div className="space-y-6 animate-fade-in">
+        return <div className="space-y-6 animate-fade-in">
             <div>
-              <h2 className="font-display text-2xl font-semibold mb-2">
-                Informações do Cliente
-              </h2>
-              <p className="text-muted-foreground">
+              
+              <p className="text-muted-foreground text-lg font-serif">
                 Dados do cliente e detalhes da sessão
               </p>
             </div>
@@ -321,111 +285,60 @@ export default function GalleryCreate() {
               <div className="flex items-center gap-2">
                 <div className="flex-1 space-y-2">
                   <Label>Cliente *</Label>
-                  <ClientSelect
-                    clients={clients}
-                    selectedClient={selectedClient}
-                    onSelect={handleClientSelect}
-                    onCreateNew={() => setIsClientModalOpen(true)}
-                  />
+                  <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />
                 </div>
                 <div className="pt-6">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="icon"
-                    onClick={() => setIsClientModalOpen(true)}
-                  >
+                  <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)}>
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              {selectedClient && (
-                <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
+              {selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-muted-foreground">Email: </span>
                       <span className="font-medium">{selectedClient.email}</span>
                     </div>
-                    {selectedClient.phone && (
-                      <div>
+                    {selectedClient.phone && <div>
                         <span className="text-muted-foreground">Telefone: </span>
                         <span className="font-medium">{selectedClient.phone}</span>
-                      </div>
-                    )}
+                      </div>}
                   </div>
                   
                   <div className="pt-2 space-y-3">
                     <Label className="text-sm">Senha de acesso à galeria *</Label>
                     <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="useExisting" 
-                        checked={useExistingPassword}
-                        onCheckedChange={(checked) => setUseExistingPassword(checked as boolean)}
-                      />
-                      <label 
-                        htmlFor="useExisting" 
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
+                      <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
+                      <label htmlFor="useExisting" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                         Usar senha cadastrada
                       </label>
                     </div>
-                    {!useExistingPassword && (
-                      <Input
-                        placeholder="Nova senha para esta galeria"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                      />
-                    )}
+                    {!useExistingPassword && <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />}
                   </div>
-                </div>
-              )}
+                </div>}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="sessionName">Nome da Sessão *</Label>
-                <Input
-                  id="sessionName"
-                  placeholder="Ex: Ensaio Gestante"
-                  value={sessionName}
-                  onChange={(e) => setSessionName(e.target.value)}
-                />
+                <Input id="sessionName" placeholder="Ex: Ensaio Gestante" value={sessionName} onChange={e => setSessionName(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="packageName">Pacote</Label>
-                <Input
-                  id="packageName"
-                  placeholder="Ex: Pacote Premium"
-                  value={packageName}
-                  onChange={(e) => setPackageName(e.target.value)}
-                />
+                <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={e => setPackageName(e.target.value)} />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
-              <Input
-                id="includedPhotos"
-                type="number"
-                min={1}
-                value={includedPhotos}
-                onChange={(e) => setIncludedPhotos(parseInt(e.target.value) || 0)}
-                className="max-w-[200px]"
-              />
+              <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={e => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
             </div>
 
-            <ClientModal
-              open={isClientModalOpen}
-              onOpenChange={setIsClientModalOpen}
-              onSave={handleSaveClient}
-            />
-          </div>
-        );
-
+            <ClientModal open={isClientModalOpen} onOpenChange={setIsClientModalOpen} onSave={handleSaveClient} />
+          </div>;
       case 2:
-        return (
-          <div className="space-y-8 animate-fade-in">
+        return <div className="space-y-8 animate-fade-in">
             <div>
               <h2 className="font-display text-2xl font-semibold mb-2">
                 Configurar Venda de Fotos
@@ -440,32 +353,13 @@ export default function GalleryCreate() {
               {/* Left Block - Sale Mode */}
               <div className="space-y-4">
                 <Label className="text-base font-medium">Configurar venda de fotos?</Label>
-                <RadioGroup
-                  value={saleMode}
-                  onValueChange={(v) => setSaleMode(v as SaleMode)}
-                  className="flex flex-col gap-4"
-                >
+                <RadioGroup value={saleMode} onValueChange={v => setSaleMode(v as SaleMode)} className="flex flex-col gap-4">
                   {/* No Sale */}
                   <div>
                     <RadioGroupItem value="no_sale" id="sale-no" className="peer sr-only" />
-                    <Label
-                      htmlFor="sale-no"
-                      className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all",
-                        "hover:border-primary/50 hover:bg-muted/50",
-                        saleMode === 'no_sale' 
-                          ? "border-primary bg-primary/5" 
-                          : "border-border"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
-                        saleMode === 'no_sale' ? "bg-primary/20" : "bg-muted"
-                      )}>
-                        <Ban className={cn(
-                          "h-5 w-5",
-                          saleMode === 'no_sale' ? "text-primary" : "text-muted-foreground"
-                        )} />
+                    <Label htmlFor="sale-no" className={cn("flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", saleMode === 'no_sale' ? "border-primary bg-primary/5" : "border-border")}>
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", saleMode === 'no_sale' ? "bg-primary/20" : "bg-muted")}>
+                        <Ban className={cn("h-5 w-5", saleMode === 'no_sale' ? "text-primary" : "text-muted-foreground")} />
                       </div>
                       <div>
                         <p className="font-medium">Não, sem venda</p>
@@ -479,27 +373,12 @@ export default function GalleryCreate() {
                   {/* Sale with Payment */}
                   <div>
                     <RadioGroupItem value="sale_with_payment" id="sale-payment" className="peer sr-only" />
-                    <Label
-                      htmlFor="sale-payment"
-                      className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all relative",
-                        "hover:border-primary/50 hover:bg-muted/50",
-                        saleMode === 'sale_with_payment' 
-                          ? "border-primary bg-primary/5" 
-                          : "border-border"
-                      )}
-                    >
+                    <Label htmlFor="sale-payment" className={cn("flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", saleMode === 'sale_with_payment' ? "border-primary bg-primary/5" : "border-border")}>
                       <Badge variant="secondary" className="absolute -top-2 right-2 text-xs">
                         Em breve
                       </Badge>
-                      <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
-                        saleMode === 'sale_with_payment' ? "bg-primary/20" : "bg-muted"
-                      )}>
-                        <CreditCard className={cn(
-                          "h-5 w-5",
-                          saleMode === 'sale_with_payment' ? "text-primary" : "text-muted-foreground"
-                        )} />
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", saleMode === 'sale_with_payment' ? "bg-primary/20" : "bg-muted")}>
+                        <CreditCard className={cn("h-5 w-5", saleMode === 'sale_with_payment' ? "text-primary" : "text-muted-foreground")} />
                       </div>
                       <div>
                         <p className="font-medium">Sim, COM pagamento</p>
@@ -513,24 +392,9 @@ export default function GalleryCreate() {
                   {/* Sale without Payment */}
                   <div>
                     <RadioGroupItem value="sale_without_payment" id="sale-no-payment" className="peer sr-only" />
-                    <Label
-                      htmlFor="sale-no-payment"
-                      className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all",
-                        "hover:border-primary/50 hover:bg-muted/50",
-                        saleMode === 'sale_without_payment' 
-                          ? "border-primary bg-primary/5" 
-                          : "border-border"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
-                        saleMode === 'sale_without_payment' ? "bg-primary/20" : "bg-muted"
-                      )}>
-                        <Receipt className={cn(
-                          "h-5 w-5",
-                          saleMode === 'sale_without_payment' ? "text-primary" : "text-muted-foreground"
-                        )} />
+                    <Label htmlFor="sale-no-payment" className={cn("flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", saleMode === 'sale_without_payment' ? "border-primary bg-primary/5" : "border-border")}>
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", saleMode === 'sale_without_payment' ? "bg-primary/20" : "bg-muted")}>
+                        <Receipt className={cn("h-5 w-5", saleMode === 'sale_without_payment' ? "text-primary" : "text-muted-foreground")} />
                       </div>
                       <div>
                         <p className="font-medium">Sim, SEM pagamento</p>
@@ -544,38 +408,18 @@ export default function GalleryCreate() {
               </div>
 
               {/* Right Block - Pricing Configuration (conditional) */}
-              {saleMode !== 'no_sale' && (
-                <div className="space-y-6">
+              {saleMode !== 'no_sale' && <div className="space-y-6">
                   {/* Pricing Model */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">Qual formato de preço?</Label>
-                    <RadioGroup
-                      value={pricingModel}
-                      onValueChange={(v) => setPricingModel(v as PricingModel)}
-                      className="flex flex-col gap-3"
-                    >
+                    <RadioGroup value={pricingModel} onValueChange={v => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
                       {/* Fixed Price */}
                       <div>
                         <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
-                        <Label
-                          htmlFor="pricing-fixed"
-                          className={cn(
-                            "flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all",
-                            "hover:border-primary/50 hover:bg-muted/50",
-                            pricingModel === 'fixed' 
-                              ? "border-primary bg-primary/5" 
-                              : "border-border"
-                          )}
-                        >
+                        <Label htmlFor="pricing-fixed" className={cn("flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'fixed' ? "border-primary bg-primary/5" : "border-border")}>
                           <div className="flex items-center gap-3">
-                            <div className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center",
-                              pricingModel === 'fixed' ? "bg-primary/20" : "bg-muted"
-                            )}>
-                              <Tag className={cn(
-                                "h-4 w-4",
-                                pricingModel === 'fixed' ? "text-primary" : "text-muted-foreground"
-                              )} />
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'fixed' ? "bg-primary/20" : "bg-muted")}>
+                              <Tag className={cn("h-4 w-4", pricingModel === 'fixed' ? "text-primary" : "text-muted-foreground")} />
                             </div>
                             <div>
                               <p className="font-medium">Preço único por foto</p>
@@ -585,48 +429,22 @@ export default function GalleryCreate() {
                             </div>
                           </div>
                           
-                          {pricingModel === 'fixed' && (
-                            <div className="pt-3 border-t border-border/50">
+                          {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
                               <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                              <Input
-                                id="fixedPrice"
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={fixedPrice}
-                                onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)}
-                                className="mt-2"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            </div>
-                          )}
+                              <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={e => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={e => e.stopPropagation()} />
+                            </div>}
                         </Label>
                       </div>
 
                       {/* Packages with Discount */}
                       <div>
                         <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
-                        <Label
-                          htmlFor="pricing-packages"
-                          className={cn(
-                            "flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative",
-                            "hover:border-primary/50 hover:bg-muted/50",
-                            pricingModel === 'packages' 
-                              ? "border-primary bg-primary/5" 
-                              : "border-border"
-                          )}
-                        >
+                        <Label htmlFor="pricing-packages" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'packages' ? "border-primary bg-primary/5" : "border-border")}>
                           <Badge className="absolute -top-2 right-2 text-xs bg-green-500">
                             Novo
                           </Badge>
-                          <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center",
-                            pricingModel === 'packages' ? "bg-primary/20" : "bg-muted"
-                          )}>
-                            <Package className={cn(
-                              "h-4 w-4",
-                              pricingModel === 'packages' ? "text-primary" : "text-muted-foreground"
-                            )} />
+                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'packages' ? "bg-primary/20" : "bg-muted")}>
+                            <Package className={cn("h-4 w-4", pricingModel === 'packages' ? "text-primary" : "text-muted-foreground")} />
                           </div>
                           <div>
                             <p className="font-medium">Pacotes com descontos</p>
@@ -640,136 +458,75 @@ export default function GalleryCreate() {
                   </div>
 
                   {/* Discount Packages Configuration */}
-                  {pricingModel === 'packages' && (
-                    <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
+                  {pricingModel === 'packages' && <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <Label className="text-sm font-medium">Configurar faixas</Label>
                         <div className="flex gap-2 flex-wrap">
                           {/* Select para carregar predefinição */}
-                          {settings.discountPresets && settings.discountPresets.length > 0 && (
-                            <Select onValueChange={loadPreset}>
+                          {settings.discountPresets && settings.discountPresets.length > 0 && <Select onValueChange={loadPreset}>
                               <SelectTrigger className="h-8 w-[140px]">
                                 <SelectValue placeholder="Carregar" />
                               </SelectTrigger>
                               <SelectContent>
-                                {settings.discountPresets.map(preset => (
-                                  <SelectItem key={preset.id} value={preset.id}>
+                                {settings.discountPresets.map(preset => <SelectItem key={preset.id} value={preset.id}>
                                     {preset.name}
-                                  </SelectItem>
-                                ))}
+                                  </SelectItem>)}
                               </SelectContent>
-                            </Select>
-                          )}
+                            </Select>}
                           
                           {/* Botão salvar predefinição */}
-                          {discountPackages.length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowSavePresetDialog(true)}
-                              className="gap-1"
-                            >
+                          {discountPackages.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => setShowSavePresetDialog(true)} className="gap-1">
                               <Save className="h-4 w-4" />
                               Salvar
-                            </Button>
-                          )}
+                            </Button>}
                           
                           {/* Botão adicionar faixa */}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={addDiscountPackage}
-                            className="gap-1"
-                          >
+                          <Button type="button" variant="outline" size="sm" onClick={addDiscountPackage} className="gap-1">
                             <Plus className="h-4 w-4" />
                             Adicionar
                           </Button>
                         </div>
                       </div>
 
-                      {discountPackages.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
+                      {discountPackages.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">
                           Adicione faixas para definir preços por quantidade
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {discountPackages.map((pkg, index) => (
-                            <div key={pkg.id} className="flex items-center gap-2 p-3 rounded-lg bg-background border border-border/50">
+                        </p> : <div className="space-y-3">
+                          {discountPackages.map((pkg, index) => <div key={pkg.id} className="flex items-center gap-2 p-3 rounded-lg bg-background border border-border/50">
                               <div className="flex-1 grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">De</Label>
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    value={pkg.minPhotos}
-                                    onChange={(e) => updateDiscountPackage(pkg.id, 'minPhotos', parseInt(e.target.value) || 1)}
-                                    className="h-8"
-                                  />
+                                  <Input type="number" min={1} value={pkg.minPhotos} onChange={e => updateDiscountPackage(pkg.id, 'minPhotos', parseInt(e.target.value) || 1)} className="h-8" />
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">Até</Label>
-                                  {index === discountPackages.length - 1 ? (
-                                    <Input
-                                      type="text"
-                                      value={pkg.maxPhotos === null ? '∞' : pkg.maxPhotos}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === '' || val === '∞') {
-                                          updateDiscountPackage(pkg.id, 'maxPhotos', null);
-                                        } else {
-                                          const num = parseInt(val);
-                                          if (!isNaN(num)) {
-                                            updateDiscountPackage(pkg.id, 'maxPhotos', num);
-                                          }
-                                        }
-                                      }}
-                                      placeholder="∞"
-                                      className="h-8 text-center"
-                                    />
-                                  ) : (
-                                    <Input
-                                      type="number"
-                                      min={pkg.minPhotos}
-                                      value={pkg.maxPhotos ?? ''}
-                                      onChange={(e) => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)}
-                                      className="h-8"
-                                    />
-                                  )}
+                                  {index === discountPackages.length - 1 ? <Input type="text" value={pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || val === '∞') {
+                            updateDiscountPackage(pkg.id, 'maxPhotos', null);
+                          } else {
+                            const num = parseInt(val);
+                            if (!isNaN(num)) {
+                              updateDiscountPackage(pkg.id, 'maxPhotos', num);
+                            }
+                          }
+                        }} placeholder="∞" className="h-8 text-center" /> : <Input type="number" min={pkg.minPhotos} value={pkg.maxPhotos ?? ''} onChange={e => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)} className="h-8" />}
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">R$</Label>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={0.01}
-                                    value={pkg.pricePerPhoto}
-                                    onChange={(e) => updateDiscountPackage(pkg.id, 'pricePerPhoto', parseFloat(e.target.value) || 0)}
-                                    className="h-8"
-                                  />
+                                  <Input type="number" min={0} step={0.01} value={pkg.pricePerPhoto} onChange={e => updateDiscountPackage(pkg.id, 'pricePerPhoto', parseFloat(e.target.value) || 0)} className="h-8" />
                                 </div>
                               </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeDiscountPackage(pkg.id)}
-                                className="text-destructive hover:text-destructive h-8 w-8"
-                              >
+                              <Button type="button" variant="ghost" size="icon" onClick={() => removeDiscountPackage(pkg.id)} className="text-destructive hover:text-destructive h-8 w-8">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            </div>)}
+                        </div>}
+                    </div>}
 
                   {/* Charge Type */}
                   <div className="space-y-3">
                     <Label className="text-base font-medium">Tipo de cobrança</Label>
-                    <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
+                    <Select value={chargeType} onValueChange={v => setChargeType(v as ChargeType)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -779,14 +536,10 @@ export default function GalleryCreate() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      {chargeType === 'only_extras' 
-                        ? `Fotos até o limite do pacote (${includedPhotos}) são gratuitas.`
-                        : `Todas as fotos selecionadas serão cobradas.`
-                      }
+                      {chargeType === 'only_extras' ? `Fotos até o limite do pacote (${includedPhotos}) são gratuitas.` : `Todas as fotos selecionadas serão cobradas.`}
                     </p>
                   </div>
-                </div>
-              )}
+                </div>}
             </div>
             
             {/* Dialog para salvar predefinição */}
@@ -801,20 +554,13 @@ export default function GalleryCreate() {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="presetName">Nome da predefinição</Label>
-                    <Input
-                      id="presetName"
-                      value={presetName}
-                      onChange={(e) => setPresetName(e.target.value)}
-                      placeholder="Ex: Casamentos, Ensaios..."
-                    />
+                    <Input id="presetName" value={presetName} onChange={e => setPresetName(e.target.value)} placeholder="Ex: Casamentos, Ensaios..." />
                   </div>
                   <div className="p-3 rounded-lg bg-muted/50">
                     <p className="text-sm text-muted-foreground mb-2">Faixas a salvar:</p>
-                    {discountPackages.map((pkg) => (
-                      <p key={pkg.id} className="text-sm">
+                    {discountPackages.map(pkg => <p key={pkg.id} className="text-sm">
                         {pkg.minPhotos} - {pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} fotos: R$ {pkg.pricePerPhoto.toFixed(2)}
-                      </p>
-                    ))}
+                      </p>)}
                   </div>
                 </div>
                 <DialogFooter>
@@ -825,12 +571,9 @@ export default function GalleryCreate() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        );
-
+          </div>;
       case 3:
-        return (
-          <div className="space-y-6 animate-fade-in">
+        return <div className="space-y-6 animate-fade-in">
             <div>
               <h2 className="font-display text-2xl font-semibold mb-2">
                 Upload de Fotos
@@ -840,10 +583,7 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            <div 
-              className="border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={mockUpload}
-            >
+            <div className="border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary/50 transition-colors cursor-pointer" onClick={mockUpload}>
               <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-lg font-medium mb-2">
                 Arraste as fotos aqui ou clique para selecionar
@@ -853,8 +593,7 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            {uploadedCount > 0 && (
-              <div className="lunari-card p-4">
+            {uploadedCount > 0 && <div className="lunari-card p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -871,8 +610,7 @@ export default function GalleryCreate() {
                     Limpar
                   </Button>
                 </div>
-              </div>
-            )}
+              </div>}
 
             <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">ℹ️ Informação técnica</p>
@@ -881,12 +619,9 @@ export default function GalleryCreate() {
                 O arquivo original nunca é servido ao cliente, garantindo proteção das suas fotos.
               </p>
             </div>
-          </div>
-        );
-
+          </div>;
       case 4:
-        return (
-          <div className="space-y-8 animate-fade-in">
+        return <div className="space-y-8 animate-fade-in">
             <div>
               <h2 className="font-display text-2xl font-semibold mb-2">
                 Configurações da Galeria
@@ -906,13 +641,7 @@ export default function GalleryCreate() {
                     <MessageSquare className="h-4 w-4 text-primary" />
                     <Label>Mensagem de Saudação</Label>
                   </div>
-                  <Textarea
-                    value={welcomeMessage}
-                    onChange={(e) => setWelcomeMessage(e.target.value)}
-                    placeholder="Personalize a mensagem de boas-vindas..."
-                    rows={6}
-                    className="resize-none"
-                  />
+                  <Textarea value={welcomeMessage} onChange={e => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={6} className="resize-none" />
                   <p className="text-xs text-muted-foreground">
                     Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
                   </p>
@@ -925,14 +654,7 @@ export default function GalleryCreate() {
                     <Label>Prazo de Seleção *</Label>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={90}
-                      value={customDays}
-                      onChange={(e) => setCustomDays(parseInt(e.target.value) || 10)}
-                      className="w-24"
-                    />
+                    <Input type="number" min={1} max={90} value={customDays} onChange={e => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
                     <span className="text-muted-foreground">dias</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -949,10 +671,7 @@ export default function GalleryCreate() {
                     <Image className="h-4 w-4 text-primary" />
                     <Label>Tamanho das Imagens</Label>
                   </div>
-                  <Select 
-                    value={String(imageResizeOption)} 
-                    onValueChange={(v) => setImageResizeOption(parseInt(v) as ImageResizeOption)}
-                  >
+                  <Select value={String(imageResizeOption)} onValueChange={v => setImageResizeOption(parseInt(v) as ImageResizeOption)}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -976,66 +695,39 @@ export default function GalleryCreate() {
                   </div>
                   
                   {/* Watermark Type */}
-                  <RadioGroup 
-                    value={watermarkType} 
-                    onValueChange={(v) => setWatermarkType(v as WatermarkType)}
-                    className="flex gap-2"
-                  >
+                  <RadioGroup value={watermarkType} onValueChange={v => setWatermarkType(v as WatermarkType)} className="flex gap-2">
                     <div className="flex items-center">
                       <RadioGroupItem value="none" id="wm-none" className="peer sr-only" />
-                      <Label
-                        htmlFor="wm-none"
-                        className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                      >
+                      <Label htmlFor="wm-none" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
                         Nenhuma
                       </Label>
                     </div>
                     <div className="flex items-center">
                       <RadioGroupItem value="text" id="wm-text" className="peer sr-only" />
-                      <Label
-                        htmlFor="wm-text"
-                        className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                      >
+                      <Label htmlFor="wm-text" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
                         Texto
                       </Label>
                     </div>
                     <div className="flex items-center">
                       <RadioGroupItem value="logo" id="wm-logo" className="peer sr-only" />
-                      <Label
-                        htmlFor="wm-logo"
-                        className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary"
-                      >
+                      <Label htmlFor="wm-logo" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
                         Logo
                       </Label>
                     </div>
                   </RadioGroup>
 
-                  {watermarkType === 'text' && (
-                    <Input
-                      placeholder="Texto da marca d'água"
-                      value={watermarkText}
-                      onChange={(e) => setWatermarkText(e.target.value)}
-                    />
-                  )}
+                  {watermarkType === 'text' && <Input placeholder="Texto da marca d'água" value={watermarkText} onChange={e => setWatermarkText(e.target.value)} />}
 
-                  {watermarkType === 'logo' && (
-                    <>
-                      {settings.defaultWatermark?.logoUrl ? (
-                        <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
-                          <img 
-                            src={settings.defaultWatermark.logoUrl} 
-                            alt="Logo" 
-                            className="h-10 object-contain" 
-                          />
+                  {watermarkType === 'logo' && <>
+                      {settings.defaultWatermark?.logoUrl ? <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+                          <img src={settings.defaultWatermark.logoUrl} alt="Logo" className="h-10 object-contain" />
                           <div>
                             <p className="text-sm font-medium">Logo configurado</p>
                             <p className="text-xs text-muted-foreground">
                               Definido nas configurações
                             </p>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-amber-500/50 rounded-lg p-4 text-center bg-amber-500/5">
+                        </div> : <div className="border-2 border-dashed border-amber-500/50 rounded-lg p-4 text-center bg-amber-500/5">
                           <Upload className="h-6 w-6 mx-auto text-amber-500 mb-2" />
                           <p className="text-sm font-medium text-amber-600">
                             Nenhum logo configurado
@@ -1043,30 +735,21 @@ export default function GalleryCreate() {
                           <p className="text-xs text-muted-foreground mt-1">
                             Configure o logo nas configurações do estúdio
                           </p>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        </div>}
+                    </>}
 
-                  {watermarkType !== 'none' && (
-                    <>
+                  {watermarkType !== 'none' && <>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-sm">Opacidade</Label>
                           <span className="text-sm text-muted-foreground">{watermarkOpacity}%</span>
                         </div>
-                        <Slider
-                          value={[watermarkOpacity]}
-                          onValueChange={(v) => setWatermarkOpacity(v[0])}
-                          min={10}
-                          max={100}
-                          step={5}
-                        />
+                        <Slider value={[watermarkOpacity]} onValueChange={v => setWatermarkOpacity(v[0])} min={10} max={100} step={5} />
                       </div>
                       
                       <div className="space-y-2">
                         <Label className="text-sm">Onde aplicar</Label>
-                        <Select value={watermarkDisplay} onValueChange={(v) => setWatermarkDisplay(v as WatermarkDisplay)}>
+                        <Select value={watermarkDisplay} onValueChange={v => setWatermarkDisplay(v as WatermarkDisplay)}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -1077,8 +760,7 @@ export default function GalleryCreate() {
                           </SelectContent>
                         </Select>
                       </div>
-                    </>
-                  )}
+                    </>}
                 </div>
 
                 {/* Client Interactions */}
@@ -1105,8 +787,7 @@ export default function GalleryCreate() {
                     <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
                   </div>
 
-                  {saleMode !== 'no_sale' && (
-                    <div className="flex items-center justify-between py-2">
+                  {saleMode !== 'no_sale' && <div className="flex items-center justify-between py-2">
                       <div>
                         <p className="text-sm font-medium">Permitir fotos extras</p>
                         <p className="text-xs text-muted-foreground">
@@ -1114,17 +795,13 @@ export default function GalleryCreate() {
                         </p>
                       </div>
                       <Switch checked={allowExtraPhotos} onCheckedChange={setAllowExtraPhotos} />
-                    </div>
-                  )}
+                    </div>}
                 </div>
               </div>
             </div>
-          </div>
-        );
-
+          </div>;
       case 5:
-        return (
-          <div className="space-y-6 animate-fade-in">
+        return <div className="space-y-6 animate-fade-in">
             <div>
               <h2 className="font-display text-2xl font-semibold mb-2">
                 Revisar e Criar
@@ -1174,8 +851,7 @@ export default function GalleryCreate() {
                     <span className="text-muted-foreground">Modo de venda</span>
                     <span className="font-medium">{getSaleModeLabel()}</span>
                   </div>
-                  {saleMode !== 'no_sale' && (
-                    <>
+                  {saleMode !== 'no_sale' && <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Modelo de preço</span>
                         <span className="font-medium">{getPricingModelLabel()}</span>
@@ -1188,14 +864,11 @@ export default function GalleryCreate() {
                         <span className="text-muted-foreground">Valor por foto</span>
                         <span className="font-medium">R$ {fixedPrice.toFixed(2)}</span>
                       </div>
-                      {pricingModel === 'packages' && discountPackages.length > 0 && (
-                        <div className="flex justify-between">
+                      {pricingModel === 'packages' && discountPackages.length > 0 && <div className="flex justify-between">
                           <span className="text-muted-foreground">Pacotes de desconto</span>
                           <span className="font-medium">{discountPackages.length} configurados</span>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        </div>}
+                    </>}
                 </div>
               </div>
 
@@ -1241,16 +914,12 @@ export default function GalleryCreate() {
                 Após criar a galeria, você poderá enviar o link de seleção para o cliente.
               </p>
             </div>
-          </div>
-        );
-
+          </div>;
       default:
         return null;
     }
   };
-
-  return (
-    <div className="max-w-5xl mx-auto animate-fade-in pb-24">
+  return <div className="max-w-5xl mx-auto animate-fade-in pb-24">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <Button variant="ghost" size="icon" onClick={handleBack}>
@@ -1269,36 +938,19 @@ export default function GalleryCreate() {
       {/* Progress Steps */}
       <div className="flex items-center justify-between mb-8 overflow-x-auto pb-2">
         {steps.map((step, index) => {
-          const Icon = step.icon;
-          const isActive = currentStep === step.id;
-          const isCompleted = currentStep > step.id;
-
-          return (
-            <div key={step.id} className="flex items-center">
-              <div className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors whitespace-nowrap',
-                isActive && 'bg-primary text-primary-foreground',
-                isCompleted && 'bg-primary/20 text-primary',
-                !isActive && !isCompleted && 'text-muted-foreground'
-              )}>
-                {isCompleted ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Icon className="h-4 w-4" />
-                )}
+        const Icon = step.icon;
+        const isActive = currentStep === step.id;
+        const isCompleted = currentStep > step.id;
+        return <div key={step.id} className="flex items-center">
+              <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors whitespace-nowrap', isActive && 'bg-primary text-primary-foreground', isCompleted && 'bg-primary/20 text-primary', !isActive && !isCompleted && 'text-muted-foreground')}>
+                {isCompleted ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 <span className="text-sm font-medium hidden sm:block">
                   {step.name}
                 </span>
               </div>
-              {index < steps.length - 1 && (
-                <div className={cn(
-                  'h-px w-4 md:w-12 mx-1 md:mx-2',
-                  isCompleted ? 'bg-primary' : 'bg-border'
-                )} />
-              )}
-            </div>
-          );
-        })}
+              {index < steps.length - 1 && <div className={cn('h-px w-4 md:w-12 mx-1 md:mx-2', isCompleted ? 'bg-primary' : 'bg-border')} />}
+            </div>;
+      })}
       </div>
 
       {/* Step Content */}
@@ -1319,6 +971,5 @@ export default function GalleryCreate() {
           </Button>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 }
