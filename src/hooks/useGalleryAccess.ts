@@ -28,15 +28,32 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
       setIsLoading(true);
       
       try {
+        // Verify session is active
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔐 Gallery Access - Session check:', session?.user?.id);
+        
+        if (!session) {
+          console.warn('⚠️ No active session found');
+          setAccessLevel('none');
+          setPlanName(null);
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('🔍 Checking access for user:', user.id, user.email);
+
         // 1. Check if user is admin
-        const { data: roleData } = await supabase
+        const { data: roleData, error: roleError } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', user.id)
           .eq('role', 'admin')
           .maybeSingle();
 
+        console.log('📋 Role check result:', { roleData, roleError });
+
         if (roleData) {
+          console.log('✅ User is ADMIN - Full access granted');
           setAccessLevel('admin');
           setPlanName('Administrador');
           setIsLoading(false);
@@ -44,13 +61,16 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
         }
 
         // 2. Check if email is in allowed_emails (PRO access)
-        const { data: allowedEmail } = await supabase
+        const { data: allowedEmail, error: emailError } = await supabase
           .from('allowed_emails')
           .select('email')
           .eq('email', user.email)
           .maybeSingle();
 
+        console.log('📧 Allowed email check:', { allowedEmail, emailError });
+
         if (allowedEmail) {
+          console.log('✅ User email in allowed_emails - PRO access granted');
           setAccessLevel('pro');
           setPlanName('Pro (Acesso Liberado)');
           setIsLoading(false);
@@ -58,7 +78,7 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
         }
 
         // 3. Check subscription for gallery access
-        const { data: subscription } = await supabase
+        const { data: subscription, error: subError } = await supabase
           .from('subscriptions')
           .select(`
             status,
@@ -71,10 +91,12 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
           .eq('status', 'active')
           .maybeSingle();
 
+        console.log('💳 Subscription check:', { subscription, subError });
+
         if (subscription?.plans) {
           const plan = subscription.plans as { code: string; name: string };
-          // Check if plan includes gallery (code contains 'gallery' or 'galery')
           if (plan.code.toLowerCase().includes('galer')) {
+            console.log('✅ User has gallery subscription - Gallery access granted');
             setAccessLevel('gallery');
             setPlanName(plan.name);
             setIsLoading(false);
@@ -83,10 +105,11 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
         }
 
         // No access
+        console.log('❌ No gallery access found for user');
         setAccessLevel('none');
         setPlanName(null);
       } catch (error) {
-        console.error('Error checking gallery access:', error);
+        console.error('❌ Error checking gallery access:', error);
         setAccessLevel('none');
         setPlanName(null);
       } finally {
@@ -94,7 +117,12 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
       }
     };
 
-    checkAccess();
+    // Use setTimeout(0) to avoid potential deadlocks with auth state
+    const timer = setTimeout(() => {
+      checkAccess();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [user]);
 
   return {
