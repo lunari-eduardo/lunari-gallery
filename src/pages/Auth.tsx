@@ -11,16 +11,37 @@ export default function Auth() {
   const navigate = useNavigate();
   const { user, loading, accessLoading, hasGalleryAccess, signInWithGoogle } = useAuthContext();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isProcessingCallback, setIsProcessingCallback] = useState(false);
+
+  // Check if we're processing an OAuth callback (has hash with token)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      console.log('🔐 Processing OAuth callback...');
+      setIsProcessingCallback(true);
+    }
+  }, []);
 
   useEffect(() => {
+    console.log('🔍 Auth page state:', { 
+      user: user?.email, 
+      loading, 
+      accessLoading, 
+      hasGalleryAccess,
+      isProcessingCallback 
+    });
+    
     if (!loading && !accessLoading && user) {
+      console.log('✅ User authenticated, checking access...');
       if (hasGalleryAccess) {
+        console.log('✅ Has gallery access, redirecting to /');
         navigate('/', { replace: true });
       } else {
+        console.log('❌ No gallery access, redirecting to /access-denied');
         navigate('/access-denied', { replace: true });
       }
     }
-  }, [user, loading, accessLoading, hasGalleryAccess, navigate]);
+  }, [user, loading, accessLoading, hasGalleryAccess, navigate, isProcessingCallback]);
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
