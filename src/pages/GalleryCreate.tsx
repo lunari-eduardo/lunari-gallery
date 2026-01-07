@@ -123,14 +123,19 @@ export default function GalleryCreate() {
   });
   // Create Supabase gallery when entering step 3 (for uploads)
   const createSupabaseGalleryForUploads = async () => {
-    if (!selectedClient || supabaseGalleryId) return;
+    // For public galleries, client is optional
+    if (galleryPermission === 'private' && !selectedClient) {
+      toast.error('Selecione um cliente para galeria privada');
+      return;
+    }
+    if (supabaseGalleryId) return;
     
     setIsCreatingGallery(true);
     try {
       const result = await createSupabaseGallery({
-        clienteId: selectedClient.id,
-        clienteNome: selectedClient.name,
-        clienteEmail: selectedClient.email,
+        clienteId: selectedClient?.id || null,
+        clienteNome: selectedClient?.name || 'Galeria Pública',
+        clienteEmail: selectedClient?.email || '',
         nomeSessao: sessionName || 'Nova Sessão',
         nomePacote: packageName,
         fotosIncluidas: includedPhotos,
@@ -155,7 +160,8 @@ export default function GalleryCreate() {
     if (currentStep < 5) {
       // When going to step 3, create Supabase gallery first
       if (currentStep === 2 && !supabaseGalleryId) {
-        if (!selectedClient) {
+        // Only require client for private galleries
+        if (galleryPermission === 'private' && !selectedClient) {
           toast.error('Selecione um cliente primeiro');
           setCurrentStep(1);
           return;
@@ -241,7 +247,9 @@ export default function GalleryCreate() {
   const handleClientSelect = (client: Client | null) => {
     setSelectedClient(client);
     if (client) {
-      setUseExistingPassword(true);
+      // Only use existing password if client actually has one
+      const hasPassword = !!client.galleryPassword;
+      setUseExistingPassword(hasPassword);
       setNewPassword('');
     }
   };
@@ -349,7 +357,12 @@ export default function GalleryCreate() {
             {/* Gallery Permission */}
             <div className="space-y-4">
               <Label className="text-base font-medium">Permissão da Galeria</Label>
-              <RadioGroup value={galleryPermission} onValueChange={(v) => setGalleryPermission(v as GalleryPermission)} className="grid grid-cols-2 gap-4">
+              <RadioGroup value={galleryPermission} onValueChange={(v) => {
+                setGalleryPermission(v as GalleryPermission);
+                if (v === 'public') {
+                  setSelectedClient(null);
+                }
+              }} className="grid grid-cols-2 gap-4">
                 <div>
                   <RadioGroupItem value="public" id="gallery-public" className="peer sr-only" />
                   <Label htmlFor="gallery-public" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", galleryPermission === 'public' ? "border-primary bg-primary/5" : "border-border")}>
@@ -373,45 +386,74 @@ export default function GalleryCreate() {
               </RadioGroup>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 space-y-2">
-                  <Label>Cliente *</Label>
-                  <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />
-                </div>
-                <div className="pt-6">
-                  <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
-                  <div className="grid gap-2 md:grid-cols-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Email: </span>
-                      <span className="font-medium">{selectedClient.email}</span>
-                    </div>
-                    {selectedClient.phone && <div>
-                        <span className="text-muted-foreground">Telefone: </span>
-                        <span className="font-medium">{selectedClient.phone}</span>
-                      </div>}
+            {/* Client Section - Only show for private galleries */}
+            {galleryPermission === 'private' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label>Cliente *</Label>
+                    <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />
                   </div>
-                  
-                  {galleryPermission === 'private' && (
+                  <div className="pt-6">
+                    <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
+                    <div className="grid gap-2 md:grid-cols-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Email: </span>
+                        <span className="font-medium">{selectedClient.email}</span>
+                      </div>
+                      {selectedClient.phone && <div>
+                          <span className="text-muted-foreground">Telefone: </span>
+                          <span className="font-medium">{selectedClient.phone}</span>
+                        </div>}
+                    </div>
+                    
                     <div className="pt-2 space-y-3">
                       <Label className="text-sm">Senha de acesso à galeria *</Label>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
-                        <label htmlFor="useExisting" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                          Usar senha cadastrada
-                        </label>
-                      </div>
-                      {!useExistingPassword && <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />}
+                      
+                      {/* Only show "Use registered password" if client HAS a password */}
+                      {selectedClient.galleryPassword ? (
+                        <>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
+                            <label htmlFor="useExisting" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                              Usar senha cadastrada
+                            </label>
+                          </div>
+                          
+                          {/* Show password visually when using existing */}
+                          {useExistingPassword && (
+                            <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                              <Lock className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-mono text-sm">{selectedClient.galleryPassword}</span>
+                            </div>
+                          )}
+                          
+                          {/* Input for new password when unchecked */}
+                          {!useExistingPassword && <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />}
+                        </>
+                      ) : (
+                        /* Client has NO password - require new password */
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Este cliente não possui senha cadastrada
+                          </p>
+                          <Input 
+                            placeholder="Defina uma senha para a galeria" 
+                            value={newPassword} 
+                            onChange={e => setNewPassword(e.target.value)} 
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>}
-            </div>
+                  </div>}
+              </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
