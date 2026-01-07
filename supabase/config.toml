@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.delete-photos]
 verify_jwt = false
+
+[functions.upload-photo]
+verify_jwt = false

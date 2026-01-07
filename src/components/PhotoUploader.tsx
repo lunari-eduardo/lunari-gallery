@@ -105,7 +105,7 @@ export function PhotoUploader({
       const compressed = await compressImage(item.file, compressionOptions);
       updateItem(item.id, { progress: 30 });
 
-      // Step 2: Get upload URL
+      // Step 2: Upload via Edge Function (proxy to B2)
       updateItem(item.id, { status: 'uploading', progress: 40 });
       
       const { data: { session } } = await supabase.auth.getSession();
@@ -113,87 +113,42 @@ export function PhotoUploader({
         throw new Error('Não autenticado');
       }
 
+      // Create FormData with compressed file
+      const formData = new FormData();
+      formData.append('file', compressed.blob, compressed.filename);
+      formData.append('galleryId', galleryId);
+      formData.append('originalFilename', item.file.name);
+      formData.append('width', compressed.width.toString());
+      formData.append('height', compressed.height.toString());
+
       const response = await fetch(
-        `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/get-upload-url`,
+        `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/upload-photo`,
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({
-            galleryId,
-            filename: compressed.filename,
-            contentType: compressed.blob.type,
-            fileSize: compressed.compressedSize,
-            width: compressed.width,
-            height: compressed.height,
-          }),
+          body: formData,
         }
       );
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Falha ao obter URL de upload');
+        throw new Error(error.error || 'Falha ao enviar foto');
       }
 
-      const uploadData = await response.json();
-      updateItem(item.id, { progress: 50 });
-
-      // Step 3: Upload to B2
-      const uploadResponse = await fetch(uploadData.uploadUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: uploadData.authorizationToken,
-          'Content-Type': compressed.blob.type,
-          'X-Bz-File-Name': encodeURIComponent(uploadData.storageKey),
-          'X-Bz-Content-Sha1': 'do_not_verify',
-        },
-        body: compressed.blob,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Falha ao enviar arquivo para storage');
-      }
-
-      updateItem(item.id, { progress: 80 });
-
-      // Step 4: Save to database
-      updateItem(item.id, { status: 'saving', progress: 90 });
-      
-      const { data: photoRecord, error: dbError } = await supabase
-        .from('galeria_fotos')
-        .insert({
-          galeria_id: galleryId,
-          user_id: session.user.id,
-          filename: compressed.filename,
-          original_filename: item.file.name,
-          storage_key: uploadData.storageKey,
-          file_size: compressed.compressedSize,
-          mime_type: compressed.blob.type,
-          width: compressed.width,
-          height: compressed.height,
-          is_selected: false,
-          order_index: 0,
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        throw new Error('Falha ao salvar foto no banco');
-      }
-
+      const result = await response.json();
       updateItem(item.id, { status: 'done', progress: 100 });
 
       return {
-        id: photoRecord.id,
-        filename: photoRecord.filename,
-        originalFilename: photoRecord.original_filename,
-        storageKey: photoRecord.storage_key,
-        fileSize: photoRecord.file_size,
-        mimeType: photoRecord.mime_type,
-        width: photoRecord.width,
-        height: photoRecord.height,
+        id: result.photo.id,
+        filename: result.photo.filename,
+        originalFilename: result.photo.originalFilename,
+        storageKey: result.photo.storageKey,
+        fileSize: result.photo.fileSize,
+        mimeType: result.photo.mimeType,
+        width: result.photo.width,
+        height: result.photo.height,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
