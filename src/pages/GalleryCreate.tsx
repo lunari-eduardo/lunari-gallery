@@ -703,20 +703,20 @@ export default function GalleryCreate() {
                       </Label>
                     </div>
                     <div className="flex items-center">
-                      <RadioGroupItem value="logo" id="wm-logo" className="peer sr-only" />
-                      <Label htmlFor="wm-logo" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
-                        Logo
+                      <RadioGroupItem value="image" id="wm-image" className="peer sr-only" />
+                      <Label htmlFor="wm-image" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
+                        Imagem
                       </Label>
                     </div>
                   </RadioGroup>
 
                   {watermarkType === 'text' && <Input placeholder="Texto da marca d'água" value={watermarkText} onChange={e => setWatermarkText(e.target.value)} />}
 
-                  {watermarkType === 'logo' && <>
+                  {watermarkType === 'image' && <>
                       {settings.defaultWatermark?.logoUrl ? <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
-                          <img src={settings.defaultWatermark.logoUrl} alt="Logo" className="h-10 object-contain" />
+                          <img src={settings.defaultWatermark.logoUrl} alt="Imagem" className="h-10 object-contain" />
                           <div>
-                            <p className="text-sm font-medium">Logo configurado</p>
+                            <p className="text-sm font-medium">Imagem configurada</p>
                             <p className="text-xs text-muted-foreground">
                               Definido nas configurações
                             </p>
@@ -724,10 +724,10 @@ export default function GalleryCreate() {
                         </div> : <div className="border-2 border-dashed border-amber-500/50 rounded-lg p-4 text-center bg-amber-500/5">
                           <Upload className="h-6 w-6 mx-auto text-amber-500 mb-2" />
                           <p className="text-sm font-medium text-amber-600">
-                            Nenhum logo configurado
+                            Nenhuma imagem configurada
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Configure o logo nas configurações do estúdio
+                            Configure a imagem nas configurações do estúdio
                           </p>
                         </div>}
                     </>}

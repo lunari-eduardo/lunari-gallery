@@ -59,8 +59,12 @@ function parseWatermark(json: Json | null): WatermarkSettings {
     return defaultSettings.defaultWatermark;
   }
   const obj = json as Record<string, unknown>;
+  // Retrocompatibility: convert legacy 'logo' to 'image'
+  let type = (obj.type as WatermarkSettings['type']) || 'none';
+  if ((type as string) === 'logo') type = 'image';
+  
   return {
-    type: (obj.type as WatermarkSettings['type']) || 'none',
+    type,
     text: obj.text as string | undefined,
     logoUrl: obj.logoUrl as string | undefined,
     opacity: (obj.opacity as number) || 30,

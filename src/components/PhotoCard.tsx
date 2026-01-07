@@ -79,7 +79,7 @@ export function PhotoCard({
               {watermark.text}
             </span>
           )}
-          {watermark.type === 'logo' && watermark.logoUrl && (
+          {watermark.type === 'image' && watermark.logoUrl && (
             <img 
               src={watermark.logoUrl} 
               alt="" 
