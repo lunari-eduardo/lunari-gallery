@@ -1094,9 +1094,9 @@ export type Database = {
           client_theme: string | null
           created_at: string | null
           default_expiration_days: number | null
+          default_gallery_permission: string | null
           default_watermark: Json | null
           favicon_url: string | null
-          public_gallery_enabled: boolean | null
           studio_logo_url: string | null
           studio_name: string | null
           updated_at: string | null
@@ -1107,9 +1107,9 @@ export type Database = {
           client_theme?: string | null
           created_at?: string | null
           default_expiration_days?: number | null
+          default_gallery_permission?: string | null
           default_watermark?: Json | null
           favicon_url?: string | null
-          public_gallery_enabled?: boolean | null
           studio_logo_url?: string | null
           studio_name?: string | null
           updated_at?: string | null
@@ -1120,9 +1120,9 @@ export type Database = {
           client_theme?: string | null
           created_at?: string | null
           default_expiration_days?: number | null
+          default_gallery_permission?: string | null
           default_watermark?: Json | null
           favicon_url?: string | null
-          public_gallery_enabled?: boolean | null
           studio_logo_url?: string | null
           studio_name?: string | null
           updated_at?: string | null

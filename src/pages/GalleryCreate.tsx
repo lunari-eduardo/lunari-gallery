@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
-import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset } from '@/types/gallery';
+import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
@@ -63,6 +63,7 @@ export default function GalleryCreate() {
   const [presetName, setPresetName] = useState('');
 
   // Step 1: Client Info
+  const [galleryPermission, setGalleryPermission] = useState<GalleryPermission>('private');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [useExistingPassword, setUseExistingPassword] = useState(true);
@@ -97,6 +98,7 @@ export default function GalleryCreate() {
   useEffect(() => {
     if (settings) {
       setCustomDays(settings.defaultExpirationDays || 10);
+      setGalleryPermission(settings.defaultGalleryPermission || 'private');
       if (settings.defaultWatermark) {
         setWatermarkType(settings.defaultWatermark.type);
         setWatermarkText(settings.defaultWatermark.text || 'Studio Lunari');
@@ -281,6 +283,33 @@ export default function GalleryCreate() {
               </p>
             </div>
 
+            {/* Gallery Permission */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Permissão da Galeria</Label>
+              <RadioGroup value={galleryPermission} onValueChange={(v) => setGalleryPermission(v as GalleryPermission)} className="grid grid-cols-2 gap-4">
+                <div>
+                  <RadioGroupItem value="public" id="gallery-public" className="peer sr-only" />
+                  <Label htmlFor="gallery-public" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", galleryPermission === 'public' ? "border-primary bg-primary/5" : "border-border")}>
+                    <Globe className={cn("h-5 w-5", galleryPermission === 'public' ? "text-primary" : "text-muted-foreground")} />
+                    <div>
+                      <p className="font-medium">Pública</p>
+                      <p className="text-xs text-muted-foreground">Sem senha</p>
+                    </div>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem value="private" id="gallery-private" className="peer sr-only" />
+                  <Label htmlFor="gallery-private" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", galleryPermission === 'private' ? "border-primary bg-primary/5" : "border-border")}>
+                    <Lock className={cn("h-5 w-5", galleryPermission === 'private' ? "text-primary" : "text-muted-foreground")} />
+                    <div>
+                      <p className="font-medium">Privada</p>
+                      <p className="text-xs text-muted-foreground">Requer senha</p>
+                    </div>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="flex-1 space-y-2">
@@ -306,16 +335,18 @@ export default function GalleryCreate() {
                       </div>}
                   </div>
                   
-                  <div className="pt-2 space-y-3">
-                    <Label className="text-sm">Senha de acesso à galeria *</Label>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
-                      <label htmlFor="useExisting" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        Usar senha cadastrada
-                      </label>
+                  {galleryPermission === 'private' && (
+                    <div className="pt-2 space-y-3">
+                      <Label className="text-sm">Senha de acesso à galeria *</Label>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
+                        <label htmlFor="useExisting" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Usar senha cadastrada
+                        </label>
+                      </div>
+                      {!useExistingPassword && <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />}
                     </div>
-                    {!useExistingPassword && <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />}
-                  </div>
+                  )}
                 </div>}
             </div>
 

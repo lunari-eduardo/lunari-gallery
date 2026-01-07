@@ -1,8 +1,6 @@
-import { Globe, Palette, Calendar, Building2 } from 'lucide-react';
+import { Globe, Palette, Calendar, Building2, Shield, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -10,7 +8,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { GlobalSettings } from '@/types/gallery';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { GlobalSettings, GalleryPermission } from '@/types/gallery';
 
 interface GeneralSettingsProps {
   settings: GlobalSettings;
@@ -47,32 +46,47 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
         </div>
       </div>
 
-      {/* Gallery Settings */}
+      {/* Gallery Permission Settings */}
       <div className="lunari-card p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Globe className="h-5 w-5 text-primary" />
+            <Shield className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-medium">Galerias Públicas</h2>
+            <h2 className="font-medium">Permissão Padrão de Galerias</h2>
             <p className="text-sm text-muted-foreground">
-              Controle de acesso às galerias
+              Define a permissão padrão para novas galerias
             </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">Permitir galerias públicas</p>
-            <p className="text-sm text-muted-foreground">
-              Clientes podem acessar galerias sem autenticação
-            </p>
+        <RadioGroup 
+          value={settings.defaultGalleryPermission} 
+          onValueChange={(v) => updateSettings({ defaultGalleryPermission: v as GalleryPermission })}
+          className="space-y-3"
+        >
+          <div className="flex items-center gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="public" id="perm-public" />
+            <Label htmlFor="perm-public" className="flex-1 cursor-pointer">
+              <p className="font-medium">Pública</p>
+              <p className="text-sm text-muted-foreground">
+                Galerias acessíveis sem senha
+              </p>
+            </Label>
+            <Globe className="h-5 w-5 text-muted-foreground" />
           </div>
-          <Switch
-            checked={settings.publicGalleryEnabled}
-            onCheckedChange={(checked) => updateSettings({ publicGalleryEnabled: checked })}
-          />
-        </div>
+
+          <div className="flex items-center gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="private" id="perm-private" />
+            <Label htmlFor="perm-private" className="flex-1 cursor-pointer">
+              <p className="font-medium">Privada</p>
+              <p className="text-sm text-muted-foreground">
+                Requer senha do cliente para acesso
+              </p>
+            </Label>
+            <Lock className="h-5 w-5 text-muted-foreground" />
+          </div>
+        </RadioGroup>
       </div>
 
       {/* Theme Settings */}
