@@ -58,9 +58,9 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
               </Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="logo" id="wm-logo" />
-              <Label htmlFor="wm-logo" className="font-normal cursor-pointer">
-                Logo
+              <RadioGroupItem value="image" id="wm-image" />
+              <Label htmlFor="wm-image" className="font-normal cursor-pointer">
+                Imagem
               </Label>
             </div>
           </RadioGroup>
@@ -116,6 +116,7 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
                 <SelectItem value="center">Centro</SelectItem>
                 <SelectItem value="bottom-left">Inferior Esquerdo</SelectItem>
                 <SelectItem value="bottom-right">Inferior Direito</SelectItem>
+                <SelectItem value="fill">Preencher</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -99,7 +99,7 @@ export const mockGalleries: Gallery[] = [
       deadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
       deadlinePreset: 15,
       watermark: {
-        type: 'logo',
+        type: 'image',
         logoUrl: '/logo.png',
         opacity: 25,
         position: 'bottom-right',
