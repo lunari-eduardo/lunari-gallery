@@ -20,11 +20,11 @@ export interface CloudinaryOptions {
   format?: 'auto' | 'jpg' | 'png' | 'webp';
 }
 
-// Cloudinary cloud name from environment
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo';
+// Cloudinary cloud name - hardcoded for production (VITE_* env vars don't work in Lovable)
+const CLOUDINARY_CLOUD_NAME = 'dxfjakxte';
 
-// B2 bucket URL - this should be configured based on your B2 setup
-const B2_BUCKET_URL = import.meta.env.VITE_B2_BUCKET_URL || '';
+// B2 bucket URL - hardcoded for production
+const B2_BUCKET_URL = 'https://f002.backblazeb2.com/file/lunari-gallery';
 
 /**
  * Map position to Cloudinary gravity
@@ -99,6 +99,9 @@ export function getCloudinaryUrl(options: CloudinaryOptions): string {
 
   // Build the source URL
   const sourceUrl = `${B2_BUCKET_URL}/${storageKey}`;
+  
+  // Debug log - remove after validation
+  console.log('Cloudinary Debug:', { cloudName: CLOUDINARY_CLOUD_NAME, bucketUrl: B2_BUCKET_URL, storageKey, sourceUrl });
   
   // Build transformations array
   const transformations: string[] = [];
