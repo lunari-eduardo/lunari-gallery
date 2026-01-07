@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   accessLevel: AccessLevel;
   hasGalleryAccess: boolean;
+  hasGestaoIntegration: boolean;
   planName: string | null;
   accessLoading: boolean;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -19,7 +20,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, session, loading, signInWithGoogle, signOut } = useAuth();
-  const { hasAccess, accessLevel, planName, isLoading: accessLoading } = useGalleryAccess(user);
+  const { 
+    hasAccess, 
+    accessLevel, 
+    planName, 
+    isLoading: accessLoading,
+    hasGestaoIntegration 
+  } = useGalleryAccess(user);
 
   const value: AuthContextType = {
     user,
@@ -27,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     accessLevel,
     hasGalleryAccess: hasAccess,
+    hasGestaoIntegration,
     planName,
     accessLoading,
     signInWithGoogle,
