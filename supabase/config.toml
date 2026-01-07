@@ -1,1 +1,7 @@
 project_id = "tlnjspsywycbudhewsfv"
+
+[functions.get-upload-url]
+verify_jwt = false
+
+[functions.delete-photos]
+verify_jwt = false
