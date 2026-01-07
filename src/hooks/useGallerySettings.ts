@@ -7,7 +7,7 @@ import { Json } from '@/integrations/supabase/types';
 
 // Default settings for new users
 const defaultSettings: Omit<GlobalSettings, 'customThemes' | 'emailTemplates' | 'discountPresets'> = {
-  publicGalleryEnabled: true,
+  defaultGalleryPermission: 'private',
   clientTheme: 'system',
   defaultExpirationDays: 10,
   studioName: 'Meu Estúdio',
@@ -80,7 +80,7 @@ function rowsToSettings(
   discountPresets: any[]
 ): GlobalSettings {
   const baseSettings = settingsRow ? {
-    publicGalleryEnabled: settingsRow.public_gallery_enabled ?? true,
+    defaultGalleryPermission: (settingsRow.default_gallery_permission as 'public' | 'private') ?? 'private',
     clientTheme: (settingsRow.client_theme as 'light' | 'dark' | 'system') ?? 'system',
     defaultExpirationDays: settingsRow.default_expiration_days ?? 10,
     studioName: settingsRow.studio_name ?? 'Meu Estúdio',
@@ -161,7 +161,7 @@ export function useGallerySettings() {
         .upsert({
           user_id: user.id,
           studio_name: defaultSettings.studioName,
-          public_gallery_enabled: defaultSettings.publicGalleryEnabled,
+          default_gallery_permission: defaultSettings.defaultGalleryPermission,
           client_theme: defaultSettings.clientTheme,
           default_expiration_days: defaultSettings.defaultExpirationDays,
           default_watermark: defaultSettings.defaultWatermark as unknown as Json,
@@ -232,7 +232,7 @@ export function useGallerySettings() {
         studio_name: data.studioName,
         studio_logo_url: data.studioLogo || null,
         favicon_url: data.faviconUrl || null,
-        public_gallery_enabled: data.publicGalleryEnabled,
+        default_gallery_permission: data.defaultGalleryPermission,
         client_theme: data.clientTheme,
         default_expiration_days: data.defaultExpirationDays,
         active_theme_id: data.activeThemeId || null,

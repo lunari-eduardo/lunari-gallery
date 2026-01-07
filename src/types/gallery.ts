@@ -4,6 +4,7 @@ export type WatermarkType = 'none' | 'text' | 'image';
 export type DeadlinePreset = 7 | 10 | 15 | 'custom';
 export type ImageResizeOption = 640 | 800 | 1024 | 1920;
 export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
+export type GalleryPermission = 'public' | 'private';
 
 // Tipos para configuração de venda
 export type SaleMode = 'no_sale' | 'sale_with_payment' | 'sale_without_payment';
@@ -116,7 +117,7 @@ export interface EmailTemplate {
 
 export interface GlobalSettings {
   // Configurações gerais
-  publicGalleryEnabled: boolean;
+  defaultGalleryPermission: GalleryPermission;
   clientTheme: 'light' | 'dark' | 'system';
   defaultExpirationDays: number;
   studioName: string;

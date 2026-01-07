@@ -259,7 +259,7 @@ export const mockGalleries: Gallery[] = [
 
 export const mockGlobalSettings: GlobalSettings = {
   // Configurações gerais
-  publicGalleryEnabled: true,
+  defaultGalleryPermission: 'private',
   clientTheme: 'system',
   defaultExpirationDays: 10,
   studioName: 'Studio Lunari',
