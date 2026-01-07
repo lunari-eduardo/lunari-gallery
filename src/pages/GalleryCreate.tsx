@@ -22,6 +22,8 @@ import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useGalleries } from '@/hooks/useGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { generateId } from '@/lib/storage';
+import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
+import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -79,8 +81,14 @@ export default function GalleryCreate() {
   const [fixedPrice, setFixedPrice] = useState(25);
   const [discountPackages, setDiscountPackages] = useState<DiscountPackage[]>([]);
 
-  // Step 3: Photos (mock)
+  // Step 3: Photos
   const [uploadedCount, setUploadedCount] = useState(0);
+  const [supabaseGalleryId, setSupabaseGalleryId] = useState<string | null>(null);
+  const [isCreatingGallery, setIsCreatingGallery] = useState(false);
+  const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
+  
+  // Supabase galleries hook
+  const { createGallery: createSupabaseGallery } = useSupabaseGalleries();
 
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
@@ -113,11 +121,59 @@ export default function GalleryCreate() {
     fixedPrice,
     discountPackages
   });
-  const handleNext = () => {
+  // Create Supabase gallery when entering step 3 (for uploads)
+  const createSupabaseGalleryForUploads = async () => {
+    if (!selectedClient || supabaseGalleryId) return;
+    
+    setIsCreatingGallery(true);
+    try {
+      const result = await createSupabaseGallery({
+        clienteId: selectedClient.id,
+        clienteNome: selectedClient.name,
+        clienteEmail: selectedClient.email,
+        nomeSessao: sessionName || 'Nova Sessão',
+        nomePacote: packageName,
+        fotosIncluidas: includedPhotos,
+        valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+        prazoSelecaoDias: customDays,
+        permissao: galleryPermission,
+        mensagemBoasVindas: welcomeMessage,
+      });
+      
+      if (result?.id) {
+        setSupabaseGalleryId(result.id);
+      }
+    } catch (error) {
+      console.error('Error creating gallery:', error);
+      toast.error('Erro ao criar galeria para upload');
+    } finally {
+      setIsCreatingGallery(false);
+    }
+  };
+  
+  const handleNext = async () => {
     if (currentStep < 5) {
+      // When going to step 3, create Supabase gallery first
+      if (currentStep === 2 && !supabaseGalleryId) {
+        if (!selectedClient) {
+          toast.error('Selecione um cliente primeiro');
+          setCurrentStep(1);
+          return;
+        }
+        await createSupabaseGalleryForUploads();
+      }
       setCurrentStep(currentStep + 1);
     } else {
-      // Create gallery
+      // Final step - if we have Supabase gallery, navigate there
+      if (supabaseGalleryId) {
+        toast.success('Galeria criada com sucesso!', {
+          description: 'Você pode enviar o link para o cliente agora.'
+        });
+        navigate(`/gallery/${supabaseGalleryId}`);
+        return;
+      }
+      
+      // Fallback to localStorage if no Supabase gallery
       if (!selectedClient) {
         toast.error('Selecione um cliente');
         return;
@@ -165,8 +221,10 @@ export default function GalleryCreate() {
       navigate('/');
     }
   };
-  const mockUpload = () => {
-    setUploadedCount(prev => prev + Math.floor(Math.random() * 10) + 5);
+  
+  const handlePhotoUploadComplete = (photos: UploadedPhoto[]) => {
+    setUploadedPhotos(prev => [...prev, ...photos]);
+    setUploadedCount(prev => prev + photos.length);
   };
   const handleSaveClient = async (clientData: ClientFormData) => {
     try {
@@ -615,15 +673,28 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            <div className="border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary/50 transition-colors cursor-pointer" onClick={mockUpload}>
-              <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-lg font-medium mb-2">
-                Arraste as fotos aqui ou clique para selecionar
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Suporta JPG, PNG, RAW • Máx. 50MB por arquivo
-              </p>
-            </div>
+            {isCreatingGallery ? (
+              <div className="flex flex-col items-center justify-center p-12 space-y-4">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <p className="text-muted-foreground">Preparando galeria para uploads...</p>
+              </div>
+            ) : supabaseGalleryId ? (
+              <PhotoUploader
+                galleryId={supabaseGalleryId}
+                maxWidth={imageResizeOption as 800 | 1024 | 1920}
+                onUploadComplete={handlePhotoUploadComplete}
+              />
+            ) : (
+              <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
+                <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-lg font-medium mb-2">
+                  Preparando área de upload...
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  A galeria será criada automaticamente
+                </p>
+              </div>
+            )}
 
             {uploadedCount > 0 && <div className="lunari-card p-4">
                 <div className="flex items-center justify-between">
@@ -632,23 +703,20 @@ export default function GalleryCreate() {
                       <Image className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium">{uploadedCount} fotos carregadas</p>
+                      <p className="font-medium">{uploadedCount} fotos enviadas</p>
                       <p className="text-sm text-muted-foreground">
-                        Processando derivados (thumbnail + preview)...
+                        Fotos salvas com sucesso
                       </p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setUploadedCount(0)}>
-                    Limpar
-                  </Button>
                 </div>
               </div>}
 
             <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">ℹ️ Informação técnica</p>
               <p>
-                O upload original gera automaticamente versões derivadas (thumbnail + preview). 
-                O arquivo original nunca é servido ao cliente, garantindo proteção das suas fotos.
+                As fotos são comprimidas e enviadas para o BackBlaze B2. 
+                O Cloudinary gera as versões derivadas (thumbnail + preview) automaticamente.
               </p>
             </div>
           </div>;
