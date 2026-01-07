@@ -969,61 +969,197 @@ export type Database = {
         }
         Relationships: []
       }
+      galeria_acoes: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          galeria_id: string
+          id: string
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          galeria_id: string
+          id?: string
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          galeria_id?: string
+          id?: string
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "galeria_acoes_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      galeria_fotos: {
+        Row: {
+          comment: string | null
+          created_at: string
+          file_size: number | null
+          filename: string
+          galeria_id: string
+          height: number | null
+          id: string
+          is_selected: boolean | null
+          mime_type: string | null
+          order_index: number | null
+          original_filename: string
+          storage_key: string
+          updated_at: string
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          file_size?: number | null
+          filename: string
+          galeria_id: string
+          height?: number | null
+          id?: string
+          is_selected?: boolean | null
+          mime_type?: string | null
+          order_index?: number | null
+          original_filename: string
+          storage_key: string
+          updated_at?: string
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          file_size?: number | null
+          filename?: string
+          galeria_id?: string
+          height?: number | null
+          id?: string
+          is_selected?: boolean | null
+          mime_type?: string | null
+          order_index?: number | null
+          original_filename?: string
+          storage_key?: string
+          updated_at?: string
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "galeria_fotos_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       galerias: {
         Row: {
+          cliente_email: string | null
           cliente_id: string
+          cliente_nome: string | null
+          configuracoes: Json | null
           created_at: string
+          enviado_em: string | null
           finalized_at: string | null
           fotos_incluidas: number
+          fotos_selecionadas: number | null
           id: string
+          mensagem_boas_vindas: string | null
+          nome_pacote: string | null
+          nome_sessao: string | null
           orcamento_id: string | null
+          permissao: string | null
+          prazo_selecao: string | null
           prazo_selecao_dias: number | null
           published_at: string | null
           regras_selecao: Json | null
           session_id: string | null
           status: string
           status_pagamento: string | null
+          status_selecao: string | null
+          total_fotos: number | null
           total_fotos_extras_vendidas: number | null
           updated_at: string
           user_id: string
+          valor_extras: number | null
           valor_foto_extra: number
           valor_total_vendido: number | null
         }
         Insert: {
+          cliente_email?: string | null
           cliente_id: string
+          cliente_nome?: string | null
+          configuracoes?: Json | null
           created_at?: string
+          enviado_em?: string | null
           finalized_at?: string | null
           fotos_incluidas?: number
+          fotos_selecionadas?: number | null
           id?: string
+          mensagem_boas_vindas?: string | null
+          nome_pacote?: string | null
+          nome_sessao?: string | null
           orcamento_id?: string | null
+          permissao?: string | null
+          prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
           published_at?: string | null
           regras_selecao?: Json | null
           session_id?: string | null
           status?: string
           status_pagamento?: string | null
+          status_selecao?: string | null
+          total_fotos?: number | null
           total_fotos_extras_vendidas?: number | null
           updated_at?: string
           user_id: string
+          valor_extras?: number | null
           valor_foto_extra?: number
           valor_total_vendido?: number | null
         }
         Update: {
+          cliente_email?: string | null
           cliente_id?: string
+          cliente_nome?: string | null
+          configuracoes?: Json | null
           created_at?: string
+          enviado_em?: string | null
           finalized_at?: string | null
           fotos_incluidas?: number
+          fotos_selecionadas?: number | null
           id?: string
+          mensagem_boas_vindas?: string | null
+          nome_pacote?: string | null
+          nome_sessao?: string | null
           orcamento_id?: string | null
+          permissao?: string | null
+          prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
           published_at?: string | null
           regras_selecao?: Json | null
           session_id?: string | null
           status?: string
           status_pagamento?: string | null
+          status_selecao?: string | null
+          total_fotos?: number | null
           total_fotos_extras_vendidas?: number | null
           updated_at?: string
           user_id?: string
+          valor_extras?: number | null
           valor_foto_extra?: number
           valor_total_vendido?: number | null
         }
