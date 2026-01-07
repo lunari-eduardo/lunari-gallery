@@ -1069,7 +1069,7 @@ export type Database = {
       galerias: {
         Row: {
           cliente_email: string | null
-          cliente_id: string
+          cliente_id: string | null
           cliente_nome: string | null
           configuracoes: Json | null
           created_at: string
@@ -1101,7 +1101,7 @@ export type Database = {
         }
         Insert: {
           cliente_email?: string | null
-          cliente_id: string
+          cliente_id?: string | null
           cliente_nome?: string | null
           configuracoes?: Json | null
           created_at?: string
@@ -1133,7 +1133,7 @@ export type Database = {
         }
         Update: {
           cliente_email?: string | null
-          cliente_id?: string
+          cliente_id?: string | null
           cliente_nome?: string | null
           configuracoes?: Json | null
           created_at?: string

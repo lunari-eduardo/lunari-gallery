@@ -89,7 +89,7 @@ export interface GaleriaAcao {
 }
 
 export interface CreateGaleriaData {
-  clienteId: string;
+  clienteId?: string | null;  // Optional for public galleries
   clienteNome?: string;
   clienteEmail?: string;
   nomeSessao?: string;
@@ -208,7 +208,7 @@ export function useSupabaseGalleries() {
         .from('galerias')
         .insert([{
           user_id: user.id,
-          cliente_id: data.clienteId,
+          cliente_id: data.clienteId || null,  // Allow null for public galleries
           cliente_nome: data.clienteNome || null,
           cliente_email: data.clienteEmail || null,
           nome_sessao: data.nomeSessao || null,

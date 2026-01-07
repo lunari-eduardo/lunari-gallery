@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, MessageSquare, Eye } from 'lucide-react';
+import { Check, MessageSquare, Eye, ImageOff } from 'lucide-react';
 import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +27,7 @@ export function PhotoCard({
   onComment 
 }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   // Only show watermark on thumbnails if watermarkDisplay is 'all'
   const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay === 'all';
@@ -48,17 +49,28 @@ export function PhotoCard({
       )}
       style={{ aspectRatio: `${photo.width}/${photo.height}` }}
     >
-      {/* Image */}
-      <img
-        src={photo.previewUrl}
-        alt={photo.filename}
-        className={cn(
-          'w-full h-full object-cover transition-all duration-500',
-          !isLoaded && 'opacity-0',
-          isLoaded && 'opacity-100'
-        )}
-        onLoad={() => setIsLoaded(true)}
-      />
+      {/* Image with error handling */}
+      {hasError ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted text-muted-foreground">
+          <ImageOff className="h-8 w-8 mb-2" />
+          <span className="text-xs">Erro ao carregar</span>
+        </div>
+      ) : (
+        <img
+          src={photo.previewUrl}
+          alt={photo.filename}
+          className={cn(
+            'w-full h-full object-cover transition-all duration-500',
+            !isLoaded && 'opacity-0',
+            isLoaded && 'opacity-100'
+          )}
+          onLoad={() => setIsLoaded(true)}
+          onError={() => {
+            console.error('Failed to load image:', photo.previewUrl);
+            setHasError(true);
+          }}
+        />
+      )}
 
       {/* Loading skeleton */}
       {!isLoaded && (
