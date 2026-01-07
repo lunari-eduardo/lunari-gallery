@@ -118,7 +118,6 @@ export interface GlobalSettings {
   // Configurações gerais
   publicGalleryEnabled: boolean;
   clientTheme: 'light' | 'dark' | 'system';
-  language: string;
   defaultExpirationDays: number;
   studioName: string;
   studioLogo?: string;

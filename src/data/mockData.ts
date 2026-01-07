@@ -261,7 +261,6 @@ export const mockGlobalSettings: GlobalSettings = {
   // Configurações gerais
   publicGalleryEnabled: true,
   clientTheme: 'system',
-  language: 'pt-BR',
   defaultExpirationDays: 10,
   studioName: 'Studio Lunari',
   studioLogo: undefined,

@@ -1028,6 +1028,155 @@ export type Database = {
           },
         ]
       }
+      gallery_discount_presets: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          packages: Json
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          packages?: Json
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          packages?: Json
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gallery_email_templates: {
+        Row: {
+          body: string
+          created_at: string | null
+          id: string
+          name: string
+          subject: string
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          id?: string
+          name: string
+          subject: string
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          subject?: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gallery_settings: {
+        Row: {
+          active_theme_id: string | null
+          client_theme: string | null
+          created_at: string | null
+          default_expiration_days: number | null
+          default_watermark: Json | null
+          favicon_url: string | null
+          public_gallery_enabled: boolean | null
+          studio_logo_url: string | null
+          studio_name: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          active_theme_id?: string | null
+          client_theme?: string | null
+          created_at?: string | null
+          default_expiration_days?: number | null
+          default_watermark?: Json | null
+          favicon_url?: string | null
+          public_gallery_enabled?: boolean | null
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          active_theme_id?: string | null
+          client_theme?: string | null
+          created_at?: string | null
+          default_expiration_days?: number | null
+          default_watermark?: Json | null
+          favicon_url?: string | null
+          public_gallery_enabled?: boolean | null
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_active_theme"
+            columns: ["active_theme_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_themes: {
+        Row: {
+          accent_color: string
+          background_color: string
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          primary_color: string
+          text_color: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          accent_color?: string
+          background_color?: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          primary_color?: string
+          text_color?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          accent_color?: string
+          background_color?: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          primary_color?: string
+          text_color?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       lead_follow_up_config: {
         Row: {
           ativo: boolean | null
