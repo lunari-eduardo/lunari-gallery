@@ -50,17 +50,17 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password.trim()) return;
+    if (!name.trim() || !email.trim()) return;
 
     onSave({
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim() || undefined,
-      galleryPassword: password,
+      galleryPassword: password.trim() || '',
     });
   };
 
-  const isValid = name.trim() && email.trim() && password.trim();
+  const isValid = name.trim() && email.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -105,7 +105,7 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Senha de acesso à galeria *</Label>
+            <Label htmlFor="password">Senha de acesso à galeria (opcional)</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -130,7 +130,7 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Usada pelo cliente para acessar suas fotos
+              Pode ser definida depois na criação da galeria
             </p>
           </div>
 
