@@ -1,4 +1,4 @@
-import { Globe, Palette, Languages, Calendar, Building2, Upload } from 'lucide-react';
+import { Globe, Palette, Calendar, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -104,38 +104,6 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
               <SelectItem value="system">Sistema (respeita preferência)</SelectItem>
               <SelectItem value="light">Claro (forçado)</SelectItem>
               <SelectItem value="dark">Escuro (forçado)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Language Settings */}
-      <div className="lunari-card p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Languages className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">Idioma</h2>
-            <p className="text-sm text-muted-foreground">
-              Idioma padrão das interfaces
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Idioma</Label>
-          <Select
-            value={settings.language}
-            onValueChange={(value) => updateSettings({ language: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
-              <SelectItem value="en-US">English (US)</SelectItem>
-              <SelectItem value="es-ES">Español</SelectItem>
             </SelectContent>
           </Select>
         </div>

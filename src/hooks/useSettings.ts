@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
+import { useGallerySettings } from './useGallerySettings';
 import { GlobalSettings } from '@/types/gallery';
-import { getStorageItem, setStorageItem, isStorageInitialized } from '@/lib/storage';
 import { mockGlobalSettings } from '@/data/mockData';
-
-const STORAGE_KEY = 'settings';
 
 export interface UseSettingsReturn {
   settings: GlobalSettings;
@@ -12,42 +10,35 @@ export interface UseSettingsReturn {
   resetSettings: () => void;
 }
 
+// This hook provides backward compatibility while using Supabase
 export function useSettings(): UseSettingsReturn {
-  const [settings, setSettings] = useState<GlobalSettings>(mockGlobalSettings);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    settings: dbSettings,
+    isLoading,
+    initializeSettings,
+    updateSettings: updateDbSettings,
+  } = useGallerySettings();
 
-  // Initialize from localStorage or mock data
+  // Initialize settings if user has none
   useEffect(() => {
-    const loadSettings = () => {
-      if (!isStorageInitialized()) {
-        // Will be initialized by useClients hook
-        setSettings(mockGlobalSettings);
-      } else {
-        const stored = getStorageItem<GlobalSettings>(STORAGE_KEY);
-        if (stored) {
-          setSettings(stored);
-        } else {
-          // If other data was initialized but settings weren't, save defaults
-          setStorageItem(STORAGE_KEY, mockGlobalSettings);
-          setSettings(mockGlobalSettings);
-        }
-      }
-      setIsLoading(false);
-    };
+    if (!isLoading && dbSettings && 
+        dbSettings.customThemes.length === 0 && 
+        dbSettings.emailTemplates.length === 0) {
+      initializeSettings.mutate();
+    }
+  }, [isLoading, dbSettings, initializeSettings]);
 
-    loadSettings();
-  }, []);
+  // Use database settings or fallback to mock
+  const settings: GlobalSettings = dbSettings || mockGlobalSettings;
 
-  const updateSettings = useCallback((data: Partial<GlobalSettings>) => {
-    const newSettings = { ...settings, ...data };
-    setStorageItem(STORAGE_KEY, newSettings);
-    setSettings(newSettings);
-  }, [settings]);
+  const updateSettings = (data: Partial<GlobalSettings>) => {
+    updateDbSettings(data);
+  };
 
-  const resetSettings = useCallback(() => {
-    setStorageItem(STORAGE_KEY, mockGlobalSettings);
-    setSettings(mockGlobalSettings);
-  }, []);
+  const resetSettings = () => {
+    // Reset to defaults by re-initializing
+    initializeSettings.mutate();
+  };
 
   return {
     settings,
