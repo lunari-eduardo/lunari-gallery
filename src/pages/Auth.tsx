@@ -16,9 +16,15 @@ export default function Auth() {
   // Check if we're processing an OAuth callback (has hash with token)
   useEffect(() => {
     const hash = window.location.hash;
+    const savedOrigin = localStorage.getItem('auth_origin');
+    
     if (hash && hash.includes('access_token')) {
       console.log('🔐 Processing OAuth callback...');
+      console.log('📍 Saved origin:', savedOrigin);
       setIsProcessingCallback(true);
+      
+      // Limpar origem após processar
+      localStorage.removeItem('auth_origin');
     }
   }, []);
 

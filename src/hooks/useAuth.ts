@@ -32,8 +32,16 @@ export function useAuth() {
   }, []);
 
   const signInWithGoogle = async () => {
-    const redirectUrl = `${window.location.origin}/`;
-    console.log('🚀 Starting Google sign-in, redirect URL:', redirectUrl);
+    // Salvar origem do login para recuperar após callback
+    const origin = window.location.origin;
+    localStorage.setItem('auth_origin', origin);
+    
+    // Normalizar URL removendo barra final para garantir match exato
+    const redirectUrl = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+    
+    console.log('🚀 Starting Google sign-in');
+    console.log('📍 Origin saved:', origin);
+    console.log('🔗 Redirect URL:', redirectUrl);
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -44,6 +52,7 @@ export function useAuth() {
     
     if (error) {
       console.error('❌ Sign-in error:', error);
+      localStorage.removeItem('auth_origin');
     }
     
     return { error };
