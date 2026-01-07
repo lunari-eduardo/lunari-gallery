@@ -11,11 +11,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Client } from '@/types/gallery';
 
+export interface ClientFormData {
+  name: string;
+  email: string;
+  phone?: string;
+  galleryPassword: string;
+}
+
 interface ClientModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   client?: Client | null;
-  onSave: (data: Omit<Client, 'id' | 'status' | 'linkedGalleries' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (data: ClientFormData) => void;
 }
 
 export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalProps) {
