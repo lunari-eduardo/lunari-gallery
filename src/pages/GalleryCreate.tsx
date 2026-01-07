@@ -17,8 +17,8 @@ import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Cli
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
-import { ClientModal } from '@/components/ClientModal';
-import { useClients, CreateClientData } from '@/hooks/useClients';
+import { ClientModal, ClientFormData } from '@/components/ClientModal';
+import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useGalleries } from '@/hooks/useGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { generateId } from '@/lib/storage';
@@ -48,7 +48,7 @@ export default function GalleryCreate() {
   const {
     clients,
     createClient
-  } = useClients();
+  } = useGalleryClients();
   const {
     createGallery
   } = useGalleries();
@@ -168,12 +168,17 @@ export default function GalleryCreate() {
   const mockUpload = () => {
     setUploadedCount(prev => prev + Math.floor(Math.random() * 10) + 5);
   };
-  const handleSaveClient = (clientData: CreateClientData) => {
-    const newClient = createClient(clientData);
-    setSelectedClient(newClient);
-    setUseExistingPassword(true);
-    setIsClientModalOpen(false);
-    toast.success('Cliente cadastrado com sucesso!');
+  const handleSaveClient = async (clientData: ClientFormData) => {
+    try {
+      const newClient = await createClient(clientData);
+      setSelectedClient(newClient);
+      setUseExistingPassword(true);
+      setIsClientModalOpen(false);
+      toast.success('Cliente cadastrado com sucesso!');
+    } catch (error) {
+      console.error('Error creating client:', error);
+      toast.error('Erro ao cadastrar cliente');
+    }
   };
   const handleClientSelect = (client: Client | null) => {
     setSelectedClient(client);

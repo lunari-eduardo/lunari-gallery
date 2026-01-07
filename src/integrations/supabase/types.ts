@@ -247,11 +247,14 @@ export type Database = {
           data_nascimento: string | null
           email: string | null
           endereco: string | null
+          gallery_password: string | null
+          gallery_status: string | null
           id: string
           nome: string
           observacoes: string | null
           origem: string | null
           telefone: string | null
+          total_galerias: number | null
           updated_at: string | null
           user_id: string
           whatsapp: string | null
@@ -261,11 +264,14 @@ export type Database = {
           data_nascimento?: string | null
           email?: string | null
           endereco?: string | null
+          gallery_password?: string | null
+          gallery_status?: string | null
           id?: string
           nome: string
           observacoes?: string | null
           origem?: string | null
           telefone?: string | null
+          total_galerias?: number | null
           updated_at?: string | null
           user_id: string
           whatsapp?: string | null
@@ -275,11 +281,14 @@ export type Database = {
           data_nascimento?: string | null
           email?: string | null
           endereco?: string | null
+          gallery_password?: string | null
+          gallery_status?: string | null
           id?: string
           nome?: string
           observacoes?: string | null
           origem?: string | null
           telefone?: string | null
+          total_galerias?: number | null
           updated_at?: string | null
           user_id?: string
           whatsapp?: string | null
@@ -1027,6 +1036,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gallery_clientes: {
+        Row: {
+          created_at: string
+          email: string
+          gallery_password: string
+          id: string
+          nome: string
+          status: string
+          telefone: string | null
+          total_galerias: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          gallery_password: string
+          id?: string
+          nome: string
+          status?: string
+          telefone?: string | null
+          total_galerias?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          gallery_password?: string
+          id?: string
+          nome?: string
+          status?: string
+          telefone?: string | null
+          total_galerias?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       gallery_discount_presets: {
         Row: {

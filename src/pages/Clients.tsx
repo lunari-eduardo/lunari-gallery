@@ -6,7 +6,8 @@ import {
   Pencil,
   Images,
   KeyRound,
-  User
+  User,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,13 +26,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ClientModal } from '@/components/ClientModal';
-import { useClients, CreateClientData } from '@/hooks/useClients';
-import { Client } from '@/types/gallery';
+import { ClientModal, ClientFormData } from '@/components/ClientModal';
+import { useGalleryClients } from '@/hooks/useGalleryClients';
+import { Client, ClientGalleryStatus } from '@/types/gallery';
 import { toast } from 'sonner';
 
 export default function Clients() {
-  const { clients, createClient, updateClient } = useClients();
+  const { clients, isLoading, createClient, updateClient, hasGestaoIntegration } = useGalleryClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -41,16 +42,21 @@ export default function Clients() {
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSaveClient = (clientData: CreateClientData) => {
-    if (editingClient) {
-      updateClient(editingClient.id, clientData);
-      toast.success('Cliente atualizado com sucesso!');
-    } else {
-      createClient(clientData);
-      toast.success('Cliente cadastrado com sucesso!');
+  const handleSaveClient = async (clientData: ClientFormData) => {
+    try {
+      if (editingClient) {
+        await updateClient(editingClient.id, clientData);
+        toast.success('Cliente atualizado com sucesso!');
+      } else {
+        await createClient(clientData);
+        toast.success('Cliente cadastrado com sucesso!');
+      }
+      setIsModalOpen(false);
+      setEditingClient(null);
+    } catch (error) {
+      console.error('Error saving client:', error);
+      toast.error('Erro ao salvar cliente');
     }
-    setIsModalOpen(false);
-    setEditingClient(null);
   };
 
   const handleEdit = (client: Client) => {
@@ -59,10 +65,10 @@ export default function Clients() {
   };
 
   const handleViewGalleries = (client: Client) => {
-    if (client.linkedGalleries.length === 0) {
+    if (client.totalGalleries === 0) {
       toast.info('Este cliente não possui galerias vinculadas.');
     } else {
-      toast.info(`${client.linkedGalleries.length} galeria(s) vinculada(s).`);
+      toast.info(`${client.totalGalleries} galeria(s) vinculada(s).`);
     }
   };
 
@@ -70,14 +76,24 @@ export default function Clients() {
     toast.success(`Nova senha enviada para ${client.email}`);
   };
 
-  const getStatusBadge = (status: Client['status']) => {
+  const getStatusBadge = (status: ClientGalleryStatus) => {
     switch (status) {
-      case 'active':
+      case 'ativo':
         return <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">Ativo</Badge>;
-      case 'no_gallery':
+      case 'sem_galeria':
+        return <Badge variant="secondary">Sem galeria</Badge>;
+      default:
         return <Badge variant="secondary">Sem galeria</Badge>;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -87,6 +103,9 @@ export default function Clients() {
           <h1 className="font-display text-3xl font-bold tracking-tight">Clientes</h1>
           <p className="text-muted-foreground mt-1">
             Gerencie os clientes das suas galerias
+            {hasGestaoIntegration && (
+              <Badge variant="outline" className="ml-2">Integrado</Badge>
+            )}
           </p>
         </div>
         <Button onClick={() => { setEditingClient(null); setIsModalOpen(true); }}>

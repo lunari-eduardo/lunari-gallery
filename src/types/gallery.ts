@@ -137,7 +137,7 @@ export interface ExportData {
   selected: boolean;
 }
 
-export type ClientStatus = 'active' | 'no_gallery';
+export type ClientGalleryStatus = 'ativo' | 'sem_galeria';
 
 export interface Client {
   id: string;
@@ -145,8 +145,8 @@ export interface Client {
   email: string;
   phone?: string;
   galleryPassword: string;
-  status: ClientStatus;
-  linkedGalleries: string[];
+  status: ClientGalleryStatus;
+  totalGalleries: number;
   createdAt: Date;
   updatedAt: Date;
 }

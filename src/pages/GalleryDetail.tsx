@@ -25,7 +25,7 @@ import { SelectionSummary } from '@/components/SelectionSummary';
 import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { DemoModeCard } from '@/components/DemoModeCard';
 import { useGalleries } from '@/hooks/useGalleries';
-import { useClients } from '@/hooks/useClients';
+import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { toast } from 'sonner';
 
 export default function GalleryDetail() {
@@ -34,10 +34,10 @@ export default function GalleryDetail() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const { getGallery, isLoading, sendGallery, reopenSelection, exportGalleryPackage, importGalleryPackage } = useGalleries();
-  const { getClientByEmail } = useClients();
+  const { getClientById, clients } = useGalleryClients();
 
   const gallery = getGallery(id || '');
-  const client = gallery ? getClientByEmail(gallery.clientEmail) : undefined;
+  const client = gallery ? clients.find(c => c.email === gallery.clientEmail) : undefined;
 
   // Show loading state while galleries are being loaded
   if (isLoading) {
