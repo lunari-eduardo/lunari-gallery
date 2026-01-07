@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Grid, List } from 'lucide-react';
+import { Plus, Search, Grid, List, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GalleryCard } from '@/components/GalleryCard';
 import { useGalleries } from '@/hooks/useGalleries';
-import { GalleryStatus } from '@/types/gallery';
+import { useSupabaseGalleries, Galeria } from '@/hooks/useSupabaseGalleries';
+import { GalleryStatus, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 
 const statusFilters: { value: GalleryStatus | 'all'; label: string }[] = [
@@ -17,14 +18,84 @@ const statusFilters: { value: GalleryStatus | 'all'; label: string }[] = [
   { value: 'expired', label: 'Expiradas' },
 ];
 
+// Map Supabase gallery status to local gallery status
+function mapSupabaseStatus(status: string): GalleryStatus {
+  switch (status) {
+    case 'rascunho':
+    case 'criado':
+      return 'created';
+    case 'enviado':
+      return 'sent';
+    case 'selecao_iniciada':
+      return 'selection_started';
+    case 'selecao_completa':
+      return 'selection_completed';
+    case 'expirado':
+      return 'expired';
+    default:
+      return 'created';
+  }
+}
+
+// Transform Supabase gallery to local format for display
+function transformSupabaseToLocal(galeria: Galeria): Gallery {
+  return {
+    id: galeria.id,
+    clientName: galeria.clienteNome || 'Cliente',
+    clientEmail: galeria.clienteEmail || '',
+    sessionName: galeria.nomeSessao || 'Sessão',
+    packageName: galeria.nomePacote || '',
+    includedPhotos: galeria.fotosIncluidas,
+    extraPhotoPrice: galeria.valorFotoExtra,
+    saleSettings: {
+      mode: 'sale_without_payment',
+      pricingModel: 'fixed',
+      chargeType: 'only_extras',
+      fixedPrice: galeria.valorFotoExtra,
+      discountPackages: [],
+    },
+    status: mapSupabaseStatus(galeria.status),
+    selectionStatus: galeria.statusSelecao === 'confirmado' ? 'confirmed' : 'in_progress',
+    settings: {
+      welcomeMessage: galeria.mensagemBoasVindas || '',
+      deadline: galeria.prazoSelecao || new Date(),
+      deadlinePreset: 'custom',
+      watermark: galeria.configuracoes?.watermark || { type: 'none', opacity: 30, position: 'bottom-right' },
+      watermarkDisplay: galeria.configuracoes?.watermarkDisplay || 'all',
+      imageResizeOption: galeria.configuracoes?.imageResizeOption || 1920,
+      allowComments: galeria.configuracoes?.allowComments ?? true,
+      allowDownload: galeria.configuracoes?.allowDownload ?? false,
+      allowExtraPhotos: galeria.configuracoes?.allowExtraPhotos ?? true,
+    },
+    photos: [],
+    actions: [],
+    createdAt: galeria.createdAt,
+    updatedAt: galeria.updatedAt,
+    selectedCount: galeria.fotosSelecionadas,
+    extraCount: Math.max(0, galeria.fotosSelecionadas - galeria.fotosIncluidas),
+    extraTotal: galeria.valorExtras,
+  };
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const { galleries } = useGalleries();
+  
+  // Get both Supabase and localStorage galleries
+  const { galleries: localGalleries } = useGalleries();
+  const { galleries: supabaseGalleries, isLoading: isLoadingSupabase } = useSupabaseGalleries();
 
-  const filteredGalleries = galleries.filter((gallery) => {
+  // Combine galleries: Supabase first, then localStorage (excluding duplicates)
+  const allGalleries = useMemo(() => {
+    const transformedSupabase = supabaseGalleries.map(transformSupabaseToLocal);
+    const supabaseIds = new Set(transformedSupabase.map(g => g.id));
+    const uniqueLocal = localGalleries.filter(g => !supabaseIds.has(g.id));
+    return [...transformedSupabase, ...uniqueLocal];
+  }, [supabaseGalleries, localGalleries]);
+
+  const filteredGalleries = allGalleries.filter((gallery) => {
     const matchesSearch = 
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
       gallery.sessionName.toLowerCase().includes(search.toLowerCase());
@@ -33,10 +104,10 @@ export default function Dashboard() {
   });
 
   const stats = {
-    total: galleries.length,
-    inProgress: galleries.filter(g => g.status === 'selection_started').length,
-    completed: galleries.filter(g => g.status === 'selection_completed').length,
-    expired: galleries.filter(g => g.status === 'expired').length,
+    total: allGalleries.length,
+    inProgress: allGalleries.filter(g => g.status === 'selection_started').length,
+    completed: allGalleries.filter(g => g.status === 'selection_completed').length,
+    expired: allGalleries.filter(g => g.status === 'expired').length,
   };
 
   return (
@@ -129,7 +200,11 @@ export default function Dashboard() {
       </div>
 
       {/* Gallery Grid */}
-      {filteredGalleries.length > 0 ? (
+      {isLoadingSupabase ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredGalleries.length > 0 ? (
         <div className={cn(
           'grid gap-4 md:gap-6',
           viewMode === 'grid' 

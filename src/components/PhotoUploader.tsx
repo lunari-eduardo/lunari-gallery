@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Upload, X, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -38,6 +38,7 @@ interface PhotoUploaderProps {
   maxWidth?: 800 | 1024 | 1920;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
+  onUploadingChange?: (isUploading: boolean) => void;
   className?: string;
 }
 
@@ -46,12 +47,14 @@ export function PhotoUploader({
   maxWidth = 1920,
   onUploadComplete,
   onUploadStart,
+  onUploadingChange,
   className,
 }: PhotoUploaderProps) {
   const [items, setItems] = useState<PhotoUploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTriggeredRef = useRef(false);
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -205,6 +208,7 @@ export function PhotoUploader({
 
     setIsUploading(true);
     onUploadStart?.();
+    onUploadingChange?.(true);
 
     const results: UploadedPhoto[] = [];
 
@@ -219,6 +223,8 @@ export function PhotoUploader({
     }
 
     setIsUploading(false);
+    onUploadingChange?.(false);
+    uploadTriggeredRef.current = false;
 
     if (results.length > 0) {
       toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
@@ -230,6 +236,15 @@ export function PhotoUploader({
       setItems((prev) => prev.filter((item) => item.status !== 'done'));
     }, 2000);
   };
+
+  // Auto-upload when files are added
+  useEffect(() => {
+    const pendingItems = items.filter((item) => item.status === 'pending');
+    if (pendingItems.length > 0 && !isUploading && !uploadTriggeredRef.current) {
+      uploadTriggeredRef.current = true;
+      startUpload();
+    }
+  }, [items, isUploading]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -292,12 +307,8 @@ export function PhotoUploader({
             <p className="text-sm text-muted-foreground">
               {completedCount} de {items.length} enviadas
               {errorCount > 0 && ` • ${errorCount} erro(s)`}
+              {isUploading && pendingCount > 0 && ' • Enviando...'}
             </p>
-            {pendingCount > 0 && !isUploading && (
-              <Button onClick={startUpload} size="sm">
-                Enviar {pendingCount} foto(s)
-              </Button>
-            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
