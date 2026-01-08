@@ -1,26 +1,66 @@
+import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Eye, Image } from 'lucide-react';
+import { ArrowLeft, Eye, Image, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
-import { useGalleries } from '@/hooks/useGalleries';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
+import { useB2Config } from '@/hooks/useB2Config';
+import { useQuery } from '@tanstack/react-query';
+import { GalleryPhoto, WatermarkSettings } from '@/types/gallery';
 
 export default function GalleryPreview() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getGallery, isLoading } = useGalleries();
-
+  
+  const { getGallery, fetchGalleryPhotos, getPhotoUrl, isLoading } = useSupabaseGalleries();
+  const { data: b2Config, isLoading: isLoadingB2 } = useB2Config();
+  
   const gallery = getGallery(id || '');
+  
+  const { data: photos = [], isLoading: isLoadingPhotos } = useQuery({
+    queryKey: ['galeria-fotos-preview', id],
+    queryFn: () => fetchGalleryPhotos(id!),
+    enabled: !!gallery && !!id,
+  });
 
-  if (isLoading) {
+  const transformedPhotos: GalleryPhoto[] = useMemo(() => {
+    const bucketUrl = b2Config?.fullBucketUrl || '';
+    if (!bucketUrl || !gallery) return [];
+    
+    return photos.map((photo: GaleriaPhoto, index: number) => ({
+      id: photo.id,
+      filename: photo.filename,
+      originalFilename: photo.originalFilename || photo.filename,
+      thumbnailUrl: getPhotoUrl(photo, gallery, 'thumbnail', bucketUrl),
+      previewUrl: getPhotoUrl(photo, gallery, 'preview', bucketUrl),
+      originalUrl: getPhotoUrl(photo, gallery, 'full', bucketUrl),
+      width: photo.width,
+      height: photo.height,
+      isSelected: photo.isSelected,
+      comment: photo.comment || undefined,
+      order: photo.orderIndex || index,
+    }));
+  }, [photos, gallery, b2Config, getPhotoUrl]);
+
+  const watermark: WatermarkSettings = (gallery?.configuracoes?.watermark as WatermarkSettings) || {
+    type: 'none',
+    opacity: 30,
+    position: 'bottom-right',
+  };
+
+  const deadline = gallery?.prazoSelecao || 
+    (gallery ? new Date(gallery.createdAt.getTime() + 7 * 24 * 60 * 60 * 1000) : new Date());
+
+  if (isLoading || isLoadingPhotos || isLoadingB2) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           <p className="text-muted-foreground">Carregando galeria...</p>
         </div>
       </div>
@@ -29,18 +69,17 @@ export default function GalleryPreview() {
 
   if (!gallery) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <h2 className="font-display text-2xl font-semibold mb-2">
-            Galeria não encontrada
-          </h2>
-          <p className="text-muted-foreground mb-4">
-            O link pode estar incorreto ou a galeria foi removida.
-          </p>
-          <Button variant="outline" onClick={() => navigate('/')}>
-            Voltar ao Dashboard
-          </Button>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="font-display text-2xl font-semibold mb-2">
+          Galeria não encontrada
+        </h2>
+        <p className="text-muted-foreground mb-4">
+          O link pode estar incorreto ou a galeria foi removida.
+        </p>
+        <Button variant="outline" onClick={() => navigate('/')}>
+          Voltar ao Dashboard
+        </Button>
       </div>
     );
   }
@@ -66,9 +105,9 @@ export default function GalleryPreview() {
           </div>
           
           <div className="text-right">
-            <p className="text-sm font-medium">{gallery.sessionName}</p>
+            <p className="text-sm font-medium">{gallery.nomeSessao || 'Sessão'}</p>
             <p className="text-xs text-muted-foreground">
-              {format(gallery.settings.deadline, "dd 'de' MMMM", { locale: ptBR })}
+              {format(deadline, "dd 'de' MMMM", { locale: ptBR })}
             </p>
           </div>
         </div>
@@ -78,26 +117,26 @@ export default function GalleryPreview() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <span className="text-sm">
-                <span className="font-semibold">{gallery.photos.length}</span>
+                <span className="font-semibold">{transformedPhotos.length}</span>
                 <span className="text-muted-foreground"> fotos disponíveis</span>
               </span>
               <span className="text-sm text-muted-foreground">
-                {gallery.includedPhotos} incluídas no pacote
+                {gallery.fotosIncluidas} incluídas no pacote
               </span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content - Full width gallery */}
+      {/* Main Content */}
       <main className="flex-1 px-1 sm:px-2 py-2 pb-20">
-        {gallery.photos.length > 0 ? (
+        {transformedPhotos.length > 0 ? (
           <MasonryGrid>
-            {gallery.photos.map((photo) => (
+            {transformedPhotos.map((photo) => (
               <MasonryItem key={photo.id}>
                 <PhotoCard
                   photo={photo}
-                  watermark={gallery.settings.watermark}
+                  watermark={watermark}
                   isSelected={photo.isSelected}
                   allowComments={false}
                   disabled={true}
