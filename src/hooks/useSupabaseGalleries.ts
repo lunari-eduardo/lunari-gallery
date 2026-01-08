@@ -463,16 +463,16 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Get photo URL helper
+  // Get photo URL helper - requires b2BaseUrl from useB2Config hook
   const getPhotoUrl = useCallback(
-    (photo: GaleriaPhoto, gallery?: Galeria, size: 'thumbnail' | 'preview' | 'full' = 'preview'): string => {
+    (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', b2BaseUrl: string): string => {
       const watermark = gallery?.configuracoes?.watermark || null;
       
       if (size === 'thumbnail') {
-        return getThumbnailUrl(photo.storageKey, 300);
+        return getThumbnailUrl(photo.storageKey, b2BaseUrl, 300);
       }
       
-      return getPreviewUrl(photo.storageKey, watermark, size === 'full' ? 1920 : 1200);
+      return getPreviewUrl(photo.storageKey, b2BaseUrl, watermark, size === 'full' ? 1920 : 1200);
     },
     []
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,6 +27,7 @@ import { DemoModeCard } from '@/components/DemoModeCard';
 import { useGalleries } from '@/hooks/useGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
+import { useB2Config } from '@/hooks/useB2Config';
 import { GalleryPhoto, GalleryAction, WatermarkSettings } from '@/types/gallery';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -51,6 +52,8 @@ export default function GalleryDetail() {
   const { getGallery, isLoading, sendGallery, reopenSelection, exportGalleryPackage, importGalleryPackage } = useGalleries();
   const { clients } = useGalleryClients();
 
+  // Fetch B2 config from backend (dynamic downloadUrl)
+  const { data: b2Config, isLoading: isLoadingB2Config } = useB2Config();
   // Get Supabase gallery
   const supabaseGallery = getSupabaseGallery(id || '');
   
@@ -68,23 +71,27 @@ export default function GalleryDetail() {
   const isUsingSupabase = !!supabaseGallery;
   const client = localGallery ? clients.find(c => c.email === localGallery.clientEmail) : undefined;
 
-  // Transform Supabase photos to GalleryPhoto format
-  const transformedPhotos: GalleryPhoto[] = supabasePhotos.map((photo: GaleriaPhoto, index: number) => ({
-    id: photo.id,
-    filename: photo.filename,
-    originalFilename: photo.originalFilename || photo.filename,
-    thumbnailUrl: getPhotoUrl(photo, supabaseGallery, 'thumbnail'),
-    previewUrl: getPhotoUrl(photo, supabaseGallery, 'preview'),
-    originalUrl: getPhotoUrl(photo, supabaseGallery, 'full'),
-    width: photo.width,
-    height: photo.height,
-    isSelected: photo.isSelected,
-    comment: photo.comment || undefined,
-    order: photo.orderIndex || index,
-  }));
+  // Transform Supabase photos to GalleryPhoto format (requires b2Config)
+  const transformedPhotos: GalleryPhoto[] = useMemo(() => {
+    if (!b2Config?.fullBucketUrl) return [];
+    
+    return supabasePhotos.map((photo: GaleriaPhoto, index: number) => ({
+      id: photo.id,
+      filename: photo.filename,
+      originalFilename: photo.originalFilename || photo.filename,
+      thumbnailUrl: getPhotoUrl(photo, supabaseGallery, 'thumbnail', b2Config.fullBucketUrl),
+      previewUrl: getPhotoUrl(photo, supabaseGallery, 'preview', b2Config.fullBucketUrl),
+      originalUrl: getPhotoUrl(photo, supabaseGallery, 'full', b2Config.fullBucketUrl),
+      width: photo.width,
+      height: photo.height,
+      isSelected: photo.isSelected,
+      comment: photo.comment || undefined,
+      order: photo.orderIndex || index,
+    }));
+  }, [supabasePhotos, supabaseGallery, b2Config, getPhotoUrl]);
 
   // Combined loading state
-  const isLoadingData = isLoading || isSupabaseLoading || isLoadingPhotos;
+  const isLoadingData = isLoading || isSupabaseLoading || isLoadingPhotos || isLoadingB2Config;
 
   // Show loading state while galleries are being loaded
   if (isLoadingData) {

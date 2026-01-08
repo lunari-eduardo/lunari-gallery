@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.client-selection]
 verify_jwt = false
+
+[functions.get-b2-config]
+verify_jwt = false
