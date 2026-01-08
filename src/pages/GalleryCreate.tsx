@@ -168,7 +168,7 @@ export default function GalleryCreate() {
       }
       setCurrentStep(currentStep + 1);
     } else {
-      // Final step - if we have Supabase gallery, navigate there
+      // Final step - navigate to the Supabase gallery
       if (supabaseGalleryId) {
         toast.success('Galeria criada com sucesso!', {
           description: 'Você pode enviar o link para o cliente agora.'
@@ -177,45 +177,8 @@ export default function GalleryCreate() {
         return;
       }
       
-      // Fallback to localStorage if no Supabase gallery
-      if (!selectedClient) {
-        toast.error('Selecione um cliente');
-        return;
-      }
-      const deadline = new Date();
-      deadline.setDate(deadline.getDate() + customDays);
-      const saleSettings = getSaleSettings();
-      const newGallery = createGallery({
-        clientId: selectedClient.id,
-        clientName: selectedClient.name,
-        clientEmail: selectedClient.email,
-        sessionName,
-        packageName,
-        includedPhotos,
-        extraPhotoPrice: saleSettings.mode !== 'no_sale' ? fixedPrice : 0,
-        saleSettings,
-        photoCount: uploadedCount || 20,
-        settings: {
-          welcomeMessage,
-          deadline,
-          deadlinePreset: 'custom' as DeadlinePreset,
-          watermark: {
-            type: watermarkType,
-            text: watermarkText,
-            opacity: watermarkOpacity,
-            position: 'bottom-right'
-          },
-          watermarkDisplay,
-          imageResizeOption,
-          allowComments,
-          allowDownload,
-          allowExtraPhotos: saleSettings.mode !== 'no_sale' && allowExtraPhotos
-        }
-      });
-      toast.success('Galeria criada com sucesso!', {
-        description: 'Você pode enviar o link para o cliente agora.'
-      });
-      navigate(`/gallery/${newGallery.id}`);
+      // No gallery created yet - shouldn't happen if flow is correct
+      toast.error('Erro ao criar galeria. Tente novamente.');
     }
   };
   const handleBack = () => {
