@@ -68,22 +68,33 @@ function buildWatermarkTransformation(
   imageWidth?: number, 
   imageHeight?: number
 ): string | null {
-  if (watermark.type === 'none') return null;
+  try {
+    if (watermark.type === 'none') return null;
 
-  // Handle standard watermark type
-  if (watermark.type === 'standard') {
-    // Determine orientation based on image dimensions
-    const isHorizontal = (imageWidth || 800) >= (imageHeight || 600);
-    const logoUrl = getStandardWatermarkUrl(isHorizontal);
-    
-    // Encode URL for Cloudinary overlay (Base64 for overlays)
-    const encodedLogoUrl = btoa(logoUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    
-    // Standard watermark: centered, fixed opacity, responsive width
-    return `l_fetch:${encodedLogoUrl},g_center,o_${STANDARD_WATERMARK_OPACITY},w_400`;
+    // Handle standard watermark type
+    if (watermark.type === 'standard') {
+      // Determine orientation based on image dimensions
+      const isHorizontal = (imageWidth || 800) >= (imageHeight || 600);
+      const logoUrl = getStandardWatermarkUrl(isHorizontal);
+      
+      // Validar URL antes de encodar - deve ser absoluta
+      if (!logoUrl || !logoUrl.startsWith('http')) {
+        console.warn('Watermark URL inválida, ignorando marca d\'água:', logoUrl);
+        return null;
+      }
+      
+      // Encode URL for Cloudinary overlay (Base64 for overlays)
+      const encodedLogoUrl = btoa(logoUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      // Standard watermark: centered, fixed opacity, responsive width
+      return `l_fetch:${encodedLogoUrl},g_center,o_${STANDARD_WATERMARK_OPACITY},w_400`;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Erro ao gerar transformação de marca d\'água:', error);
+    return null;
   }
-
-  return null;
 }
 
 /**
