@@ -145,9 +145,11 @@ export function useGalleries(): UseGalleriesReturn {
       const photoCount = data.photoCount || 20; // Default to 20 mock photos
       photos = Array.from({ length: photoCount }, (_, i) => {
         const seed = Date.now() + i;
+        const originalName = `IMG_${String(i + 1).padStart(4, '0')}.jpg`;
         return {
           id: `photo-${generateId()}`,
-          filename: `IMG_${String(i + 1).padStart(4, '0')}.jpg`,
+          filename: originalName,
+          originalFilename: originalName,
           thumbnailUrl: `https://picsum.photos/seed/${seed}/400/300`,
           previewUrl: `https://picsum.photos/seed/${seed}/800/600`,
           originalUrl: `https://picsum.photos/seed/${seed}/1600/1200`,

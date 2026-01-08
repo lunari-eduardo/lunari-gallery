@@ -49,7 +49,8 @@ export function PhotoCodesModal({
   const generateCode = (): string => {
     if (selectedPhotos.length === 0) return 'Nenhuma foto selecionada';
     
-    const filenames = selectedPhotos.map(p => p.filename);
+    // Usar nome original para exportação (essencial para fotógrafos)
+    const filenames = selectedPhotos.map(p => p.originalFilename || p.filename);
     
     switch (format) {
       case 'windows':

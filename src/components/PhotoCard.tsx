@@ -128,7 +128,7 @@ export function PhotoCard({
         {/* Actions */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
           <span className="text-white/90 text-xs font-medium truncate max-w-[60%]">
-            {photo.filename}
+            {photo.originalFilename || photo.filename}
           </span>
           <div className="flex items-center gap-1.5">
             {allowComments && (
