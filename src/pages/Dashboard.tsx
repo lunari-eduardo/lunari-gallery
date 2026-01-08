@@ -8,6 +8,7 @@ import { useSupabaseGalleries, Galeria } from '@/hooks/useSupabaseGalleries';
 import { GalleryStatus, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { clearGalleryStorage } from '@/lib/storage';
+import { isPast } from 'date-fns';
 
 const statusFilters: { value: GalleryStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Todas' },
@@ -43,6 +44,21 @@ function mapSupabaseStatus(status: string): GalleryStatus {
 
 // Transform Supabase gallery to local format for display
 function transformSupabaseToLocal(galeria: Galeria): Gallery {
+  // Calculate base status from database
+  let status = mapSupabaseStatus(galeria.status);
+  
+  // Check if gallery is expired based on deadline
+  // Only check expiration for galleries that are "sent" or "in selection" (active states)
+  const hasDeadline = galeria.prazoSelecao !== null;
+  const isActiveStatus = ['sent', 'selection_started'].includes(status);
+  
+  if (hasDeadline && isActiveStatus && isPast(galeria.prazoSelecao!)) {
+    status = 'expired';
+  }
+  
+  // Use createdAt as fallback for deadline display, not current date
+  const deadline = galeria.prazoSelecao || galeria.createdAt;
+  
   return {
     id: galeria.id,
     clientName: galeria.clienteNome || 'Cliente',
@@ -58,11 +74,11 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery {
       fixedPrice: galeria.valorFotoExtra,
       discountPackages: [],
     },
-    status: mapSupabaseStatus(galeria.status),
+    status: status,
     selectionStatus: galeria.statusSelecao === 'confirmado' ? 'confirmed' : 'in_progress',
     settings: {
       welcomeMessage: galeria.mensagemBoasVindas || '',
-      deadline: galeria.prazoSelecao || new Date(),
+      deadline: deadline,
       deadlinePreset: 'custom',
       watermark: galeria.configuracoes?.watermark || { type: 'none', opacity: 30, position: 'bottom-right' },
       watermarkDisplay: galeria.configuracoes?.watermarkDisplay || 'all',

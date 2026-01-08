@@ -1,4 +1,4 @@
-import { format, differenceInHours, isPast } from 'date-fns';
+import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Image, User, AlertTriangle, Clock } from 'lucide-react';
 import { Gallery } from '@/types/gallery';
@@ -12,8 +12,13 @@ interface GalleryCardProps {
 
 export function GalleryCard({ gallery, onClick }: GalleryCardProps) {
   const hoursUntilDeadline = differenceInHours(gallery.settings.deadline, new Date());
-  const isNearDeadline = hoursUntilDeadline <= 48 && hoursUntilDeadline > 0;
-  const isExpired = isPast(gallery.settings.deadline);
+  
+  // Use status from gallery (already calculated in transformation) instead of recalculating
+  const isExpired = gallery.status === 'expired';
+  
+  // Only show deadline warning for active galleries (sent or in selection)
+  const isActiveGallery = ['sent', 'selection_started'].includes(gallery.status);
+  const isNearDeadline = isActiveGallery && hoursUntilDeadline <= 48 && hoursUntilDeadline > 0;
 
   const previewPhotos = gallery.photos.slice(0, 4);
 
@@ -21,7 +26,7 @@ export function GalleryCard({ gallery, onClick }: GalleryCardProps) {
     <div 
       className={cn(
         'lunari-card overflow-hidden cursor-pointer group',
-        isNearDeadline && !isExpired && 'ring-2 ring-warning/50',
+        isNearDeadline && 'ring-2 ring-warning/50',
         isExpired && 'ring-2 ring-destructive/50 opacity-75'
       )}
       onClick={onClick}
