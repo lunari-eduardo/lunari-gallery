@@ -504,13 +504,12 @@ export function useSupabaseGalleries() {
       const watermark = gallery?.configuracoes?.watermark || null;
       const watermarkDisplay = gallery?.configuracoes?.watermarkDisplay || 'all';
       
+      // Thumbnails: SEMPRE sem marca d'água (usar getThumbnailUrl)
       if (size === 'thumbnail') {
-        // Thumbnails: apply watermark only if watermarkDisplay is 'all'
-        const thumbnailWatermark = watermarkDisplay === 'all' ? watermark : null;
-        return getPreviewUrl(photo.storageKey, b2BaseUrl, thumbnailWatermark, 300, photo.width, photo.height);
+        return getThumbnailUrl(photo.storageKey, b2BaseUrl, 300);
       }
       
-      // Preview and full: apply watermark unless watermarkDisplay is 'none'
+      // Preview e Full: aplicar marca d'água se watermarkDisplay !== 'none'
       const applyWatermark = watermarkDisplay !== 'none' ? watermark : null;
       return getPreviewUrl(photo.storageKey, b2BaseUrl, applyWatermark, size === 'full' ? 1920 : 1200, photo.width, photo.height);
     },
