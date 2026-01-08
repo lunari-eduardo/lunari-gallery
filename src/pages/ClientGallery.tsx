@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,6 +19,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
+import { PasswordScreen } from '@/components/PasswordScreen';
 import { useB2Config } from '@/hooks/useB2Config';
 import { supabase } from '@/integrations/supabase/client';
 import { getThumbnailUrl, getPreviewUrl, getFullscreenUrl, WatermarkSettings } from '@/lib/cloudinaryUrl';
@@ -30,52 +31,118 @@ type SelectionStep = 'gallery' | 'review' | 'checkout' | 'confirmed';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 
+// Check if the param is a UUID (legacy) or token (new)
+function isUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 export default function ClientGallery() {
-  const { id } = useParams();
+  const { id, token } = useParams();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  
+  // Determine if we're using token or legacy UUID
+  const identifier = token || id;
+  const isLegacyAccess = identifier ? isUUID(identifier) : false;
   
   const [showWelcome, setShowWelcome] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  
+  // Password state
+  const [requiresPassword, setRequiresPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | undefined>();
+  const [isCheckingPassword, setIsCheckingPassword] = useState(false);
+  const [sessionPassword, setSessionPassword] = useState<string | null>(() => {
+    // Check sessionStorage for previously entered password
+    return sessionStorage.getItem(`gallery_password_${identifier}`);
+  });
 
   // Fetch B2 config from backend (dynamic downloadUrl)
   const { data: b2Config, isLoading: isLoadingB2Config, error: b2Error } = useB2Config();
 
-  // 1. Fetch gallery from Supabase
-  const { data: supabaseGallery, isLoading: isLoadingGallery, error: galleryError } = useQuery({
-    queryKey: ['client-gallery', id],
+  // 1. Fetch gallery via Edge Function (handles token + password validation)
+  const { data: galleryResponse, isLoading: isLoadingGallery, error: galleryError, refetch: refetchGallery } = useQuery({
+    queryKey: ['client-gallery', identifier, sessionPassword],
     queryFn: async () => {
-      if (!id) return null;
+      if (!identifier) return null;
       
-      const { data, error } = await supabase
-        .from('galerias')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) {
-        console.error('Gallery fetch error:', error);
-        throw new Error('Galeria não encontrada');
+      // For legacy UUID access, use direct Supabase query
+      if (isLegacyAccess) {
+        const { data, error } = await supabase
+          .from('galerias')
+          .select('*')
+          .eq('id', identifier)
+          .single();
+        
+        if (error) throw new Error('Galeria não encontrada');
+        return { success: true, gallery: data, photos: null, isLegacy: true };
       }
       
-      return data;
+      // For token access, use Edge Function
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/gallery-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: identifier, 
+          password: sessionPassword 
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        if (result.code === 'NOT_FOUND') {
+          throw new Error('Galeria não encontrada');
+        }
+        if (result.code === 'WRONG_PASSWORD') {
+          throw new Error('Senha incorreta');
+        }
+        throw new Error(result.error || 'Erro ao acessar galeria');
+      }
+      
+      return result;
     },
-    enabled: !!id,
-    retry: 1,
+    enabled: !!identifier,
+    retry: false,
   });
 
-  // 2. Fetch photos from Supabase
+  // Handle password requirement
+  useEffect(() => {
+    if (galleryResponse?.requiresPassword) {
+      setRequiresPassword(true);
+    }
+  }, [galleryResponse]);
+
+  // Extract gallery data from response (handle both legacy and new format)
+  const supabaseGallery = useMemo(() => {
+    if (!galleryResponse) return null;
+    if (galleryResponse.isLegacy) return galleryResponse.gallery;
+    if (galleryResponse.success) return galleryResponse.gallery;
+    return null;
+  }, [galleryResponse]);
+
+  // Get gallery ID for queries
+  const galleryId = supabaseGallery?.id || (isLegacyAccess ? identifier : null);
+
+  // 2. Fetch photos from Supabase (for legacy) or use from response (for token)
   const { data: supabasePhotos, isLoading: isLoadingPhotos } = useQuery({
-    queryKey: ['client-gallery-photos', id],
+    queryKey: ['client-gallery-photos', galleryId],
     queryFn: async () => {
-      if (!id) return [];
+      // For token access, photos come from the Edge Function response
+      if (!isLegacyAccess && galleryResponse?.photos) {
+        return galleryResponse.photos;
+      }
+      
+      if (!galleryId) return [];
       
       const { data, error } = await supabase
         .from('galeria_fotos')
         .select('*')
-        .eq('galeria_id', id)
+        .eq('galeria_id', galleryId)
         .order('order_index');
       
       if (error) {
@@ -88,11 +155,16 @@ export default function ClientGallery() {
     enabled: !!supabaseGallery,
   });
 
-  // 3. Transform Supabase data to local format
+  // 3. Transform gallery data to local format (handles both legacy DB row and Edge Function response)
   const transformedGallery = useMemo((): Gallery | null => {
     if (!supabaseGallery) return null;
     
-    const config = supabaseGallery.configuracoes as Record<string, unknown> | null;
+    // Handle Edge Function response format vs legacy DB format
+    const isEdgeFunctionFormat = 'sessionName' in supabaseGallery;
+    
+    const config = isEdgeFunctionFormat 
+      ? (supabaseGallery.settings as Record<string, unknown> | null)
+      : (supabaseGallery.configuracoes as Record<string, unknown> | null);
     const watermark = config?.watermark as WatermarkSettings | undefined;
     const watermarkDisplayRaw = config?.watermarkDisplay as string | undefined;
     const watermarkDisplay: 'all' | 'fullscreen' | 'none' = 
@@ -100,23 +172,46 @@ export default function ClientGallery() {
         ? watermarkDisplayRaw 
         : 'all';
     
-    // Deadline comes from database - if NULL, show "not defined"
-    const deadline = supabaseGallery.prazo_selecao 
-      ? new Date(supabaseGallery.prazo_selecao)
-      : null;
+    const deadlineRaw = isEdgeFunctionFormat ? supabaseGallery.deadline : supabaseGallery.prazo_selecao;
+    const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
     
     return {
       id: supabaseGallery.id,
-      clientName: supabaseGallery.cliente_nome || 'Cliente',
-      clientEmail: supabaseGallery.cliente_email || '',
-      sessionName: supabaseGallery.nome_sessao || 'Sessão de Fotos',
-      packageName: supabaseGallery.nome_pacote || 'Pacote',
-      includedPhotos: supabaseGallery.fotos_incluidas || 10,
-      extraPhotoPrice: supabaseGallery.valor_foto_extra || 25,
+      clientName: (isEdgeFunctionFormat ? supabaseGallery.clientName : supabaseGallery.cliente_nome) || 'Cliente',
+      clientEmail: (isEdgeFunctionFormat ? '' : supabaseGallery.cliente_email) || '',
+      sessionName: (isEdgeFunctionFormat ? supabaseGallery.sessionName : supabaseGallery.nome_sessao) || 'Sessão de Fotos',
+      packageName: (isEdgeFunctionFormat ? supabaseGallery.packageName : supabaseGallery.nome_pacote) || 'Pacote',
+      includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) || 10,
+      extraPhotoPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
       status: 'sent' as Gallery['status'],
-      selectionStatus: supabaseGallery.status_selecao === 'confirmado' ? 'confirmed' : 'in_progress',
-      createdAt: new Date(supabaseGallery.created_at),
-      updatedAt: new Date(supabaseGallery.updated_at),
+      selectionStatus: (isEdgeFunctionFormat ? supabaseGallery.selectionStatus : supabaseGallery.status_selecao) === 'confirmado' ? 'confirmed' : 'in_progress',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      saleSettings: {
+        mode: 'sale_without_payment',
+        pricingModel: 'fixed',
+        chargeType: 'only_extras',
+        fixedPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
+        discountPackages: [],
+      },
+      settings: {
+        welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || 'Olá {cliente}! Bem-vindo à galeria da sua sessão {sessao}.',
+        deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        deadlinePreset: 7,
+        watermark: watermark || { type: 'none', opacity: 50, position: 'bottom-right' },
+        watermarkDisplay,
+        imageResizeOption: 1920,
+        allowComments: config?.allowComments !== false,
+        allowDownload: config?.allowDownload === true,
+        allowExtraPhotos: true,
+      },
+      photos: [],
+      actions: [],
+      selectedCount: 0,
+      extraCount: 0,
+      extraTotal: 0,
+    };
+  }, [supabaseGallery]);
       saleSettings: {
         mode: 'sale_without_payment',
         pricingModel: 'fixed',

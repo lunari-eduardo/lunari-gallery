@@ -130,6 +130,16 @@ export default function GalleryCreate() {
     
     setIsCreatingGallery(true);
     try {
+      // Determine password for private gallery
+      let passwordToUse: string | undefined = undefined;
+      if (galleryPermission === 'private') {
+        if (useExistingPassword && selectedClient?.galleryPassword) {
+          passwordToUse = selectedClient.galleryPassword;
+        } else if (newPassword) {
+          passwordToUse = newPassword;
+        }
+      }
+
       const result = await createSupabaseGallery({
         clienteId: selectedClient?.id || null,
         clienteNome: selectedClient?.name || 'Galeria Pública',
@@ -141,6 +151,7 @@ export default function GalleryCreate() {
         prazoSelecaoDias: customDays,
         permissao: galleryPermission,
         mensagemBoasVindas: welcomeMessage,
+        galleryPassword: passwordToUse,
       });
       
       if (result?.id) {

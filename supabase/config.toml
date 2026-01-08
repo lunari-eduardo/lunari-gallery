@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.diagnose-b2]
 verify_jwt = false
+
+[functions.gallery-access]
+verify_jwt = false

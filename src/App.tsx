@@ -32,6 +32,9 @@ const App = () => (
               {/* Public routes */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/access-denied" element={<AccessDenied />} />
+              {/* Client gallery access via public token */}
+              <Route path="/gallery/:token" element={<ClientGallery />} />
+              {/* Legacy route - redirect to new format (will be handled in component) */}
               <Route path="/client/:id" element={<ClientGallery />} />
               
               {/* Photographer preview route (no layout - simulates client view) */}

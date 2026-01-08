@@ -13,7 +13,9 @@ import {
   Calendar,
   Image,
   AlertCircle,
-  Loader2
+  Loader2,
+  Lock,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -113,15 +115,49 @@ export default function GalleryDetail() {
   }
 
   const selectedPhotos = transformedPhotos.filter(p => p.isSelected);
-  const clientLink = `${window.location.origin}/client/${supabaseGallery.id}`;
+  
+  // Use public_token for client link if available, otherwise show warning
+  const hasPublicToken = !!supabaseGallery.publicToken;
+  const clientLink = hasPublicToken
+    ? `${window.location.origin}/gallery/${supabaseGallery.publicToken}`
+    : null;
   
   // Calculate deadline
   const deadline = supabaseGallery.prazoSelecao || 
     new Date(supabaseGallery.createdAt.getTime() + (supabaseGallery.prazoSelecaoDias || 7) * 24 * 60 * 60 * 1000);
 
   const handleCopyLink = () => {
+    if (!clientLink) {
+      toast.error('Envie a galeria primeiro para gerar o link');
+      return;
+    }
     navigator.clipboard.writeText(clientLink);
     toast.success('Link copiado!');
+  };
+
+  const handleCopyPassword = () => {
+    if (supabaseGallery.galleryPassword) {
+      navigator.clipboard.writeText(supabaseGallery.galleryPassword);
+      toast.success('Senha copiada!');
+    }
+  };
+
+  const handleCopyWhatsAppMessage = () => {
+    if (!clientLink) {
+      toast.error('Envie a galeria primeiro');
+      return;
+    }
+    
+    let message = `Olá! 🎉\n\nSua galeria de fotos está pronta!\n\n📸 ${supabaseGallery.nomeSessao || 'Sessão de Fotos'}\n\n🔗 Link: ${clientLink}`;
+    
+    if (supabaseGallery.permissao === 'private' && supabaseGallery.galleryPassword) {
+      message += `\n\n🔐 Senha: ${supabaseGallery.galleryPassword}`;
+    }
+    
+    message += `\n\nSelecione suas fotos favoritas com calma! ❤️`;
+    
+    navigator.clipboard.writeText(message);
+    toast.success('Mensagem copiada para WhatsApp!');
   };
 
   const handleSendGallery = async () => {
@@ -260,10 +296,24 @@ export default function GalleryDetail() {
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={handleCopyLink}>
-            <Copy className="h-4 w-4 mr-2" />
-            Copiar Link
-          </Button>
+          {hasPublicToken && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleCopyLink}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar Link
+              </Button>
+              {supabaseGallery.permissao === 'private' && supabaseGallery.galleryPassword && (
+                <Button variant="outline" size="sm" onClick={handleCopyPassword}>
+                  <Lock className="h-4 w-4 mr-2" />
+                  Copiar Senha
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handleCopyWhatsAppMessage}>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Mensagem WhatsApp
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link to={`/gallery/${supabaseGallery.id}/preview`}>
               <Eye className="h-4 w-4 mr-2" />
