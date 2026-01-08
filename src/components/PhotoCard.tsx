@@ -65,8 +65,12 @@ export function PhotoCard({
             isLoaded && 'opacity-100'
           )}
           onLoad={() => setIsLoaded(true)}
-          onError={() => {
-            console.error('Failed to load image:', photo.previewUrl);
+          onError={(e) => {
+            console.error('Imagem falhou:', {
+              src: e.currentTarget.src,
+              filename: photo.filename,
+              previewUrl: photo.previewUrl,
+            });
             setHasError(true);
           }}
         />

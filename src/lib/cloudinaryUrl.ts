@@ -81,6 +81,10 @@ function buildWatermarkTransformation(watermark: WatermarkSettings): string {
 /**
  * Generate a Cloudinary URL for an image stored in B2
  */
+/**
+ * Generate a Cloudinary URL for an image stored in B2
+ * Format: https://res.cloudinary.com/{cloud}/image/fetch/{transformations}/{encodedRemoteUrl}
+ */
 export function getCloudinaryUrl(options: CloudinaryOptions): string {
   const {
     storageKey,
@@ -91,37 +95,22 @@ export function getCloudinaryUrl(options: CloudinaryOptions): string {
     format = 'auto',
   } = options;
 
-  // If no B2 URL configured, return empty (will use placeholder)
-  if (!B2_BUCKET_URL) {
-    console.warn('B2_BUCKET_URL not configured');
-    return `/placeholder.svg`;
+  // Validate storageKey
+  if (!storageKey || typeof storageKey !== 'string' || storageKey.trim() === '') {
+    console.error('Cloudinary: storageKey inválido:', storageKey);
+    return '/placeholder.svg';
   }
 
-  // Build the source URL
+  // Build source URL from B2
   const sourceUrl = `${B2_BUCKET_URL}/${storageKey}`;
-  
-  // Debug log - remove after validation
-  console.log('Cloudinary Debug:', { cloudName: CLOUDINARY_CLOUD_NAME, bucketUrl: B2_BUCKET_URL, storageKey, sourceUrl });
-  
+
   // Build transformations array
   const transformations: string[] = [];
-
-  // Quality and format
   transformations.push(`f_${format}`);
   transformations.push(`q_${quality}`);
-
-  // Resize if specified
-  if (width) {
-    transformations.push(`w_${width}`);
-  }
-  if (height) {
-    transformations.push(`h_${height}`);
-  }
-
-  // Maintain aspect ratio
-  if (width || height) {
-    transformations.push('c_limit');
-  }
+  if (width) transformations.push(`w_${width}`);
+  if (height) transformations.push(`h_${height}`);
+  if (width || height) transformations.push('c_limit');
 
   // Add watermark if configured
   if (watermark && watermark.type !== 'none') {
@@ -131,11 +120,20 @@ export function getCloudinaryUrl(options: CloudinaryOptions): string {
     }
   }
 
-  // Build final Cloudinary URL using fetch
+  // Build final URL with proper encoding
   const transformString = transformations.join(',');
   const encodedSourceUrl = encodeURIComponent(sourceUrl);
-  
-  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch/${transformString}/${encodedSourceUrl}`;
+  const finalUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch/${transformString}/${encodedSourceUrl}`;
+
+  // Debug log
+  console.log('Cloudinary Build:', {
+    constants: { cloudName: CLOUDINARY_CLOUD_NAME, bucketUrl: B2_BUCKET_URL },
+    input: { storageKey, width, height },
+    sourceUrl,
+    finalUrl,
+  });
+
+  return finalUrl;
 }
 
 /**
