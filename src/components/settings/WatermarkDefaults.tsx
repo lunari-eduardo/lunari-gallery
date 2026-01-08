@@ -43,8 +43,14 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
           <RadioGroup
             value={watermark.type}
             onValueChange={(value: WatermarkType) => updateWatermark({ type: value })}
-            className="flex gap-4"
+            className="flex flex-wrap gap-4"
           >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="standard" id="wm-standard" />
+              <Label htmlFor="wm-standard" className="font-normal cursor-pointer">
+                Padrão
+              </Label>
+            </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="none" id="wm-none" />
               <Label htmlFor="wm-none" className="font-normal cursor-pointer">
@@ -66,6 +72,39 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
           </RadioGroup>
         </div>
 
+        {/* Standard Watermark Preview */}
+        {watermark.type === 'standard' && (
+          <div className="space-y-3 p-4 rounded-lg bg-muted/50">
+            <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <div className="h-20 flex items-center justify-center bg-black/80 rounded mb-1">
+                  <img 
+                    src="/watermarks/horizontal.png" 
+                    alt="Horizontal" 
+                    className="h-12 object-contain" 
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">Fotos horizontais</span>
+              </div>
+              <div className="text-center">
+                <div className="h-20 flex items-center justify-center bg-black/80 rounded mb-1">
+                  <img 
+                    src="/watermarks/vertical.png" 
+                    alt="Vertical" 
+                    className="h-14 object-contain" 
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">Fotos verticais</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A marca d'água correta será aplicada automaticamente baseado na orientação da foto.
+              Opacidade fixa em 40%.
+            </p>
+          </div>
+        )}
+
         {/* Text (if type is text) */}
         {watermark.type === 'text' && (
           <div className="space-y-2">
@@ -79,8 +118,8 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
           </div>
         )}
 
-        {/* Opacity (if not none) */}
-        {watermark.type !== 'none' && (
+        {/* Opacity (if text or image - NOT for standard) */}
+        {(watermark.type === 'text' || watermark.type === 'image') && (
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <Label>Opacidade</Label>
@@ -97,8 +136,8 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
           </div>
         )}
 
-        {/* Position (if not none) */}
-        {watermark.type !== 'none' && (
+        {/* Position (if text or image - NOT for standard) */}
+        {(watermark.type === 'text' || watermark.type === 'image') && (
           <div className="space-y-2">
             <Label>Posição</Label>
             <Select

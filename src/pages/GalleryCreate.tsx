@@ -92,7 +92,7 @@ export default function GalleryCreate() {
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
   const [customDays, setCustomDays] = useState(10);
   const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(800);
-  const [watermarkType, setWatermarkType] = useState<WatermarkType>('text');
+  const [watermarkType, setWatermarkType] = useState<WatermarkType>('standard');
   const [watermarkText, setWatermarkText] = useState('Studio Lunari');
   const [watermarkOpacity, setWatermarkOpacity] = useState(30);
   const [watermarkDisplay, setWatermarkDisplay] = useState<WatermarkDisplay>('all');
@@ -807,7 +807,13 @@ export default function GalleryCreate() {
                   </div>
                   
                   {/* Watermark Type */}
-                  <RadioGroup value={watermarkType} onValueChange={v => setWatermarkType(v as WatermarkType)} className="flex gap-2">
+                  <RadioGroup value={watermarkType} onValueChange={v => setWatermarkType(v as WatermarkType)} className="flex flex-wrap gap-2">
+                    <div className="flex items-center">
+                      <RadioGroupItem value="standard" id="wm-standard" className="peer sr-only" />
+                      <Label htmlFor="wm-standard" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
+                        Padrão
+                      </Label>
+                    </div>
                     <div className="flex items-center">
                       <RadioGroupItem value="none" id="wm-none" className="peer sr-only" />
                       <Label htmlFor="wm-none" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
@@ -827,6 +833,21 @@ export default function GalleryCreate() {
                       </Label>
                     </div>
                   </RadioGroup>
+
+                  {/* Standard Watermark Preview */}
+                  {watermarkType === 'standard' && (
+                    <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+                      <div className="h-12 flex items-center justify-center bg-black/80 rounded px-2">
+                        <img src="/watermarks/horizontal.png" alt="Marca d'água padrão" className="h-8 object-contain" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
+                        <p className="text-xs text-muted-foreground">
+                          Aplicada automaticamente baseado na orientação (opacidade fixa 40%)
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {watermarkType === 'text' && <Input placeholder="Texto da marca d'água" value={watermarkText} onChange={e => setWatermarkText(e.target.value)} />}
 
@@ -850,7 +871,8 @@ export default function GalleryCreate() {
                         </div>}
                     </>}
 
-                  {watermarkType !== 'none' && <>
+                  {/* Opacity and display - only for text/image, NOT for standard */}
+                  {(watermarkType === 'text' || watermarkType === 'image') && <>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-sm">Opacidade</Label>
@@ -873,6 +895,23 @@ export default function GalleryCreate() {
                         </Select>
                       </div>
                     </>}
+
+                  {/* Display setting for standard watermark */}
+                  {watermarkType === 'standard' && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">Onde aplicar</Label>
+                      <Select value={watermarkDisplay} onValueChange={v => setWatermarkDisplay(v as WatermarkDisplay)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Fotos ampliadas e miniaturas</SelectItem>
+                          <SelectItem value="fullscreen">Somente fotos ampliadas</SelectItem>
+                          <SelectItem value="none">Não aplicar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Client Interactions */}
