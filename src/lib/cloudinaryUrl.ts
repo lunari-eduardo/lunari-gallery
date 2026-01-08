@@ -37,6 +37,9 @@ const B2_BUCKET_URL = 'https://f005.backblazeb2.com/file/lunari-gallery';
 // Cloudinary Fetch API base URL
 const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch`;
 
+// Toggle para debug - se false, usa URL direta do B2
+const USE_CLOUDINARY = true;
+
 /**
  * Map watermark position to Cloudinary gravity
  */
@@ -95,6 +98,12 @@ export function getCloudinaryUrl(options: ImageOptions): string {
   // Build source URL from B2
   const sourceUrl = `${B2_BUCKET_URL}/${storageKey}`;
 
+  // Se Cloudinary desabilitado, retornar URL direta do B2
+  if (!USE_CLOUDINARY) {
+    console.log('Cloudinary DISABLED - usando B2 direto:', sourceUrl);
+    return sourceUrl;
+  }
+
   // Build transformations array
   const transformations: string[] = [];
 
@@ -118,17 +127,16 @@ export function getCloudinaryUrl(options: ImageOptions): string {
     }
   }
 
-  // Build final URL
+  // Build final URL - SEM encodeURIComponent (Cloudinary aceita URL não-codificada)
   const transformString = transformations.join(',');
-  const encodedSourceUrl = encodeURIComponent(sourceUrl);
-
-  const finalUrl = `${CLOUDINARY_FETCH_BASE}/${transformString}/${encodedSourceUrl}`;
+  const finalUrl = `${CLOUDINARY_FETCH_BASE}/${transformString}/${sourceUrl}`;
 
   console.log('Cloudinary URL Build:', {
     storageKey,
     sourceUrl,
     transformations: transformString,
-    finalUrl: finalUrl.substring(0, 150) + '...',
+    finalUrl,
+    b2Direct: sourceUrl,
   });
 
   return finalUrl;
