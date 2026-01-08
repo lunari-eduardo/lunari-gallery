@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Clients from "./pages/Clients";
 import GalleryCreate from "./pages/GalleryCreate";
 import GalleryDetail from "./pages/GalleryDetail";
+import GalleryEdit from "./pages/GalleryEdit";
 import GalleryPreview from "./pages/GalleryPreview";
 import ClientGallery from "./pages/ClientGallery";
 import Settings from "./pages/Settings";
@@ -32,8 +33,8 @@ const App = () => (
               {/* Public routes */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/access-denied" element={<AccessDenied />} />
-              {/* Client gallery access via public token */}
-              <Route path="/gallery/:token" element={<ClientGallery />} />
+              {/* Client gallery access via public token - new route */}
+              <Route path="/g/:token" element={<ClientGallery />} />
               {/* Legacy route - redirect to new format (will be handled in component) */}
               <Route path="/client/:id" element={<ClientGallery />} />
               
@@ -63,6 +64,11 @@ const App = () => (
               <Route path="/gallery/:id" element={
                 <ProtectedRoute>
                   <Layout><GalleryDetail /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/gallery/:id/edit" element={
+                <ProtectedRoute>
+                  <Layout><GalleryEdit /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/settings" element={
