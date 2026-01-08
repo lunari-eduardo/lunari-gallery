@@ -1,6 +1,7 @@
 /**
- * Cloudinary URL generator for dynamic image delivery with watermarks
- * Fetches images from B2 and applies transformations on-the-fly
+ * Image URL generator for B2 storage
+ * Since the B2 bucket is public, we can serve images directly without Cloudinary
+ * This eliminates the Cloudinary "Allowed fetch domains" security restriction issue
  */
 
 export interface WatermarkSettings {
@@ -11,7 +12,7 @@ export interface WatermarkSettings {
   position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'fill';
 }
 
-export interface CloudinaryOptions {
+export interface ImageOptions {
   storageKey: string;
   width?: number;
   height?: number;
@@ -20,124 +21,37 @@ export interface CloudinaryOptions {
   format?: 'auto' | 'jpg' | 'png' | 'webp';
 }
 
-// Cloudinary cloud name - hardcoded for production (VITE_* env vars don't work in Lovable)
-const CLOUDINARY_CLOUD_NAME = 'dxfjakxte';
-
-// B2 bucket URL - hardcoded for production
+// B2 bucket URL - hardcoded for production (confirmed via diagnose-b2 edge function)
 const B2_BUCKET_URL = 'https://f005.backblazeb2.com/file/lunari-gallery';
 
 /**
- * Map position to Cloudinary gravity
+ * Generate a direct B2 URL for an image
+ * Since the bucket is public, images can be accessed directly
  */
-function getGravity(position: WatermarkSettings['position']): string {
-  const gravityMap: Record<string, string> = {
-    'top-left': 'north_west',
-    'top-right': 'north_east',
-    'bottom-left': 'south_west',
-    'bottom-right': 'south_east',
-    'center': 'center',
-    'fill': 'center',
-  };
-  return gravityMap[position] || 'south_east';
-}
-
-/**
- * Build watermark transformation string
- */
-function buildWatermarkTransformation(watermark: WatermarkSettings): string {
-  if (watermark.type === 'none') return '';
-
-  const gravity = getGravity(watermark.position);
-  const opacity = Math.round(watermark.opacity);
-
-  if (watermark.type === 'text' && watermark.text) {
-    // Text watermark
-    // Encode text for URL safety
-    const encodedText = encodeURIComponent(watermark.text);
-    
-    if (watermark.position === 'fill') {
-      // Tiled text watermark (diagonal pattern)
-      return `l_text:Arial_40_bold:${encodedText},o_${opacity},a_-30,fl_tiled`;
-    }
-    
-    return `l_text:Arial_30_bold:${encodedText},o_${opacity},g_${gravity},x_20,y_20`;
-  }
-
-  if (watermark.type === 'image' && watermark.logoUrl) {
-    // Image watermark - using fetch overlay
-    // Note: Logo needs to be accessible via URL
-    const encodedUrl = encodeURIComponent(watermark.logoUrl);
-    
-    if (watermark.position === 'fill') {
-      return `l_fetch:${btoa(watermark.logoUrl)},o_${opacity},fl_tiled,w_200`;
-    }
-    
-    return `l_fetch:${btoa(watermark.logoUrl)},o_${opacity},g_${gravity},w_150,x_20,y_20`;
-  }
-
-  return '';
-}
-
-/**
- * Generate a Cloudinary URL for an image stored in B2
- */
-/**
- * Generate a Cloudinary URL for an image stored in B2
- * Format: https://res.cloudinary.com/{cloud}/image/fetch/{transformations}/{encodedRemoteUrl}
- */
-export function getCloudinaryUrl(options: CloudinaryOptions): string {
-  const {
-    storageKey,
-    width,
-    height,
-    watermark,
-    quality = 'auto',
-    format = 'auto',
-  } = options;
+export function getCloudinaryUrl(options: ImageOptions): string {
+  const { storageKey } = options;
 
   // Validate storageKey
   if (!storageKey || typeof storageKey !== 'string' || storageKey.trim() === '') {
-    console.error('Cloudinary: storageKey inválido:', storageKey);
+    console.error('Image URL: storageKey inválido:', storageKey);
     return '/placeholder.svg';
   }
 
-  // Build source URL from B2
-  const sourceUrl = `${B2_BUCKET_URL}/${storageKey}`;
+  // Build direct B2 URL (bucket is public)
+  const directUrl = `${B2_BUCKET_URL}/${storageKey}`;
 
-  // Build transformations array
-  const transformations: string[] = [];
-  transformations.push(`f_${format}`);
-  transformations.push(`q_${quality}`);
-  if (width) transformations.push(`w_${width}`);
-  if (height) transformations.push(`h_${height}`);
-  if (width || height) transformations.push('c_limit');
-
-  // Add watermark if configured
-  if (watermark && watermark.type !== 'none') {
-    const watermarkTransform = buildWatermarkTransformation(watermark);
-    if (watermarkTransform) {
-      transformations.push(watermarkTransform);
-    }
-  }
-
-  // Build final URL with proper encoding
-  const transformString = transformations.join(',');
-  const encodedSourceUrl = encodeURIComponent(sourceUrl);
-  const finalUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch/${transformString}/${encodedSourceUrl}`;
-
-  // Debug log
-  console.log('Cloudinary Build:', {
-    constants: { cloudName: CLOUDINARY_CLOUD_NAME, bucketUrl: B2_BUCKET_URL },
-    input: { storageKey, width, height },
-    sourceUrl,
-    finalUrl,
+  console.log('Image URL Build:', {
+    bucketUrl: B2_BUCKET_URL,
+    storageKey,
+    directUrl,
   });
 
-  return finalUrl;
+  return directUrl;
 }
 
 /**
- * Generate a thumbnail URL (small, no watermark)
+ * Generate a thumbnail URL
+ * For now, returns the same direct URL since we're not using Cloudinary transformations
  */
 export function getThumbnailUrl(storageKey: string, size: number = 300): string {
   return getCloudinaryUrl({
@@ -150,7 +64,7 @@ export function getThumbnailUrl(storageKey: string, size: number = 300): string 
 }
 
 /**
- * Generate a preview URL (medium, with watermark)
+ * Generate a preview URL
  */
 export function getPreviewUrl(
   storageKey: string,
@@ -167,7 +81,7 @@ export function getPreviewUrl(
 }
 
 /**
- * Generate a fullscreen URL (large, with watermark)
+ * Generate a fullscreen URL
  */
 export function getFullscreenUrl(
   storageKey: string,
@@ -183,8 +97,8 @@ export function getFullscreenUrl(
 }
 
 /**
- * Check if Cloudinary is properly configured
+ * Check if image storage is properly configured
  */
 export function isCloudinaryConfigured(): boolean {
-  return Boolean(CLOUDINARY_CLOUD_NAME && B2_BUCKET_URL);
+  return Boolean(B2_BUCKET_URL);
 }
