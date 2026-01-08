@@ -10,7 +10,8 @@ import {
   Calendar as CalendarIcon,
   RotateCcw,
   Image,
-  Plus
+  Plus,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,9 +20,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
+import { ClientSelect } from '@/components/ClientSelect';
+import { ClientModal } from '@/components/ClientModal';
+import { PhotoUploader } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
+import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Client } from '@/types/gallery';
+
+// Format phone to Brazilian format (XX) XXXXX-XXXX
+function formatPhoneBR(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
 
 export default function GalleryEdit() {
   const { id } = useParams();
@@ -37,16 +52,29 @@ export default function GalleryEdit() {
     isDeleting
   } = useSupabaseGalleries();
 
+  const {
+    clients,
+    isLoading: isClientsLoading,
+    createClient,
+    refetch: refetchClients
+  } = useGalleryClients();
+
   const gallery = getGallery(id || '');
   
   // Form state
   const [nomeSessao, setNomeSessao] = useState('');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clienteNome, setClienteNome] = useState('');
   const [clienteEmail, setClienteEmail] = useState('');
+  const [clienteTelefone, setClienteTelefone] = useState('');
   const [nomePacote, setNomePacote] = useState('');
   const [fotosIncluidas, setFotosIncluidas] = useState(0);
   const [valorFotoExtra, setValorFotoExtra] = useState(0);
   const [prazoSelecao, setPrazoSelecao] = useState<Date | undefined>();
+  
+  // UI state
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [showPhotoUploader, setShowPhotoUploader] = useState(false);
 
   // Initialize form with gallery data
   useEffect(() => {
@@ -54,15 +82,51 @@ export default function GalleryEdit() {
       setNomeSessao(gallery.nomeSessao || '');
       setClienteNome(gallery.clienteNome || '');
       setClienteEmail(gallery.clienteEmail || '');
+      setClienteTelefone(gallery.clienteTelefone ? formatPhoneBR(gallery.clienteTelefone) : '');
       setNomePacote(gallery.nomePacote || '');
       setFotosIncluidas(gallery.fotosIncluidas);
       setValorFotoExtra(gallery.valorFotoExtra);
       setPrazoSelecao(gallery.prazoSelecao || undefined);
+      
+      // Try to find matching client
+      if (gallery.clienteId) {
+        const matchingClient = clients.find(c => c.id === gallery.clienteId);
+        if (matchingClient) {
+          setSelectedClient(matchingClient);
+        }
+      }
     }
-  }, [gallery]);
+  }, [gallery, clients]);
+
+  // Handle client selection
+  const handleClientSelect = (client: Client | null) => {
+    setSelectedClient(client);
+    if (client) {
+      setClienteNome(client.name);
+      setClienteEmail(client.email);
+      setClienteTelefone(client.phone ? formatPhoneBR(client.phone) : '');
+    }
+  };
+
+  // Handle creating new client
+  const handleCreateClient = async (data: { name: string; email: string; phone?: string; galleryPassword: string }) => {
+    try {
+      const newClient = await createClient(data);
+      setSelectedClient(newClient);
+      setClienteNome(newClient.name);
+      setClienteEmail(newClient.email);
+      setClienteTelefone(newClient.phone ? formatPhoneBR(newClient.phone) : '');
+      setIsClientModalOpen(false);
+      toast.success('Cliente criado!');
+      refetchClients();
+    } catch (error) {
+      console.error('Error creating client:', error);
+      toast.error('Erro ao criar cliente');
+    }
+  };
 
   // Loading state
-  if (isSupabaseLoading) {
+  if (isSupabaseLoading || isClientsLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="flex flex-col items-center gap-4">
@@ -98,12 +162,16 @@ export default function GalleryEdit() {
 
   const handleSave = async () => {
     try {
+      // Clean phone number for storage
+      const cleanPhone = clienteTelefone.replace(/\D/g, '');
+      
       await updateGallery({
         id: gallery.id,
         data: {
           nomeSessao,
           clienteNome,
           clienteEmail,
+          clienteTelefone: cleanPhone || undefined,
           nomePacote: nomePacote || undefined,
           fotosIncluidas,
           valorFotoExtra,
@@ -118,9 +186,6 @@ export default function GalleryEdit() {
   const handleExtendDeadline = async (days: number) => {
     const newDeadline = addDays(prazoSelecao || new Date(), days);
     setPrazoSelecao(newDeadline);
-    
-    // Note: updateGallery doesn't currently support prazoSelecao update directly
-    // This would need to be added to the hook if needed
     toast.success(`Prazo estendido em ${days} dias!`);
   };
 
@@ -140,8 +205,12 @@ export default function GalleryEdit() {
     }
   };
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setClienteTelefone(formatPhoneBR(e.target.value));
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -164,243 +233,284 @@ export default function GalleryEdit() {
         />
       </div>
 
-      {/* Main Form */}
-      <div className="grid gap-6">
-        {/* Basic Info Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Image className="h-5 w-5" />
-              Informações da Galeria
-            </CardTitle>
-            <CardDescription>
-              Dados básicos e configurações de preço
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="nomeSessao">Nome da Sessão</Label>
-                <Input
-                  id="nomeSessao"
-                  value={nomeSessao}
-                  onChange={(e) => setNomeSessao(e.target.value)}
-                  placeholder="Ex: Ensaio Família Silva"
-                />
+      {/* Two Column Layout */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Left Column - Info & Deadline */}
+        <div className="space-y-6">
+          {/* Basic Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Image className="h-5 w-5" />
+                Informações da Galeria
+              </CardTitle>
+              <CardDescription>
+                Dados básicos e configurações de preço
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="nomeSessao">Nome da Sessão</Label>
+                  <Input
+                    id="nomeSessao"
+                    value={nomeSessao}
+                    onChange={(e) => setNomeSessao(e.target.value)}
+                    placeholder="Ex: Ensaio Família Silva"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="nomePacote">Pacote (opcional)</Label>
+                  <Input
+                    id="nomePacote"
+                    value={nomePacote}
+                    onChange={(e) => setNomePacote(e.target.value)}
+                    placeholder="Ex: Premium"
+                  />
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="nomePacote">Pacote (opcional)</Label>
-                <Input
-                  id="nomePacote"
-                  value={nomePacote}
-                  onChange={(e) => setNomePacote(e.target.value)}
-                  placeholder="Ex: Premium"
-                />
-              </div>
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+              {/* Client Selection */}
               <div className="space-y-2">
-                <Label htmlFor="clienteNome">Nome do Cliente</Label>
-                <Input
-                  id="clienteNome"
-                  value={clienteNome}
-                  onChange={(e) => setClienteNome(e.target.value)}
-                  placeholder="Nome do cliente"
+                <Label>Cliente</Label>
+                <ClientSelect
+                  clients={clients}
+                  selectedClient={selectedClient}
+                  onSelect={handleClientSelect}
+                  onCreateNew={() => setIsClientModalOpen(true)}
                 />
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="clienteEmail">Email do Cliente</Label>
-                <Input
-                  id="clienteEmail"
-                  type="email"
-                  value={clienteEmail}
-                  onChange={(e) => setClienteEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="fotosIncluidas">Fotos Incluídas</Label>
-                <Input
-                  id="fotosIncluidas"
-                  type="number"
-                  min="0"
-                  value={fotosIncluidas}
-                  onChange={(e) => setFotosIncluidas(parseInt(e.target.value) || 0)}
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="clienteEmail">Email do Cliente</Label>
+                  <Input
+                    id="clienteEmail"
+                    type="email"
+                    value={clienteEmail}
+                    onChange={(e) => setClienteEmail(e.target.value)}
+                    placeholder="email@exemplo.com"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="clienteTelefone">Telefone</Label>
+                  <Input
+                    id="clienteTelefone"
+                    type="tel"
+                    value={clienteTelefone}
+                    onChange={handlePhoneChange}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="valorFotoExtra">Valor Foto Extra (R$)</Label>
-                <Input
-                  id="valorFotoExtra"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={valorFotoExtra}
-                  onChange={(e) => setValorFotoExtra(parseFloat(e.target.value) || 0)}
-                />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="fotosIncluidas">Fotos Incluídas</Label>
+                  <Input
+                    id="fotosIncluidas"
+                    type="number"
+                    min="0"
+                    value={fotosIncluidas}
+                    onChange={(e) => setFotosIncluidas(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="valorFotoExtra">Valor Foto Extra (R$)</Label>
+                  <Input
+                    id="valorFotoExtra"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={valorFotoExtra}
+                    onChange={(e) => setValorFotoExtra(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="pt-4 flex justify-end">
-              <Button 
-                onClick={handleSave}
-                disabled={isUpdating}
-                variant="terracotta"
-              >
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Salvar Alterações
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="pt-4 flex justify-end">
+                <Button 
+                  onClick={handleSave}
+                  disabled={isUpdating}
+                  variant="terracotta"
+                >
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Salvar Alterações
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Deadline Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Prazo de Seleção
-            </CardTitle>
-            <CardDescription>
-              Defina até quando o cliente pode fazer a seleção
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="space-y-2">
-                <Label>Data limite</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-[240px] justify-start text-left font-normal",
-                        !prazoSelecao && "text-muted-foreground"
-                      )}
+          {/* Deadline Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5" />
+                Prazo de Seleção
+              </CardTitle>
+              <CardDescription>
+                Defina até quando o cliente pode fazer a seleção
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="space-y-2">
+                  <Label>Data limite</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-[240px] justify-start text-left font-normal",
+                          !prazoSelecao && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {prazoSelecao ? format(prazoSelecao, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : "Selecionar data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={prazoSelecao}
+                        onSelect={setPrazoSelecao}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleExtendDeadline(7)}
+                  >
+                    +7 dias
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleExtendDeadline(14)}
+                  >
+                    +14 dias
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleExtendDeadline(30)}
+                  >
+                    +30 dias
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Photos & Actions */}
+        <div className="space-y-6">
+          {/* Photos Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Image className="h-5 w-5" />
+                Fotos da Galeria
+              </CardTitle>
+              <CardDescription>
+                {gallery.totalFotos} fotos nesta galeria
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!showPhotoUploader ? (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowPhotoUploader(true)}
+                  className="w-full"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Adicionar Fotos
+                </Button>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Carregar novas fotos</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setShowPhotoUploader(false)}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {prazoSelecao ? format(prazoSelecao, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : "Selecionar data"}
+                      Fechar
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={prazoSelecao}
-                      onSelect={setPrazoSelecao}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                  </div>
+                  <PhotoUploader galleryId={gallery.id} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleExtendDeadline(7)}
-                >
-                  +7 dias
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleExtendDeadline(14)}
-                >
-                  +14 dias
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleExtendDeadline(30)}
-                >
-                  +30 dias
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Actions Card */}
+          <Card className="border-destructive/20">
+            <CardHeader>
+              <CardTitle>Ações da Galeria</CardTitle>
+              <CardDescription>
+                Ações que afetam a disponibilidade da galeria
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {canReactivate && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
+                  <div>
+                    <p className="font-medium">Reativar Galeria</p>
+                    <p className="text-sm text-muted-foreground">
+                      Permite que o cliente faça novas seleções
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline"
+                    onClick={handleReactivate}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reativar
+                  </Button>
+                </div>
+              )}
 
-        {/* Photos Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Image className="h-5 w-5" />
-              Fotos da Galeria
-            </CardTitle>
-            <CardDescription>
-              {gallery.totalFotos} fotos nesta galeria
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              variant="outline" 
-              onClick={() => navigate(`/gallery/${id}`)}
-              className="w-full sm:w-auto"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Ver e Gerenciar Fotos
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Actions Card */}
-        <Card className="border-destructive/20">
-          <CardHeader>
-            <CardTitle>Ações da Galeria</CardTitle>
-            <CardDescription>
-              Ações que afetam a disponibilidade da galeria
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {canReactivate && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-destructive/5 border border-destructive/20">
                 <div>
-                  <p className="font-medium">Reativar Galeria</p>
+                  <p className="font-medium text-destructive">Excluir Galeria</p>
                   <p className="text-sm text-muted-foreground">
-                    Permite que o cliente faça novas seleções
+                    Remove permanentemente a galeria e todas as fotos
                   </p>
                 </div>
-                <Button 
-                  variant="outline"
-                  onClick={handleReactivate}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reativar
-                </Button>
+                <DeleteGalleryDialog 
+                  galleryName={gallery.nomeSessao || 'Esta galeria'}
+                  onDelete={handleDelete}
+                />
               </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-              <div>
-                <p className="font-medium text-destructive">Excluir Galeria</p>
-                <p className="text-sm text-muted-foreground">
-                  Remove permanentemente a galeria e todas as fotos
-                </p>
-              </div>
-              <DeleteGalleryDialog 
-                galleryName={gallery.nomeSessao || 'Esta galeria'}
-                onDelete={handleDelete}
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Client Modal */}
+      <ClientModal
+        open={isClientModalOpen}
+        onOpenChange={setIsClientModalOpen}
+        onSave={handleCreateClient}
+      />
     </div>
   );
 }

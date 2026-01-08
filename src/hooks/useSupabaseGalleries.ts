@@ -75,6 +75,7 @@ export interface Galeria {
   enviadoEm: Date | null;
   clienteNome: string | null;
   clienteEmail: string | null;
+  clienteTelefone: string | null;
   // Token and password for client access
   publicToken: string | null;
   galleryPassword: string | null;
@@ -95,6 +96,7 @@ export interface CreateGaleriaData {
   clienteId?: string | null;  // Optional for public galleries
   clienteNome?: string;
   clienteEmail?: string;
+  clienteTelefone?: string;
   nomeSessao?: string;
   nomePacote?: string;
   fotosIncluidas?: number;
@@ -137,6 +139,7 @@ function transformGaleria(row: any): Galeria {
     enviadoEm: row.enviado_em ? new Date(row.enviado_em) : null,
     clienteNome: row.cliente_nome,
     clienteEmail: row.cliente_email,
+    clienteTelefone: row.cliente_telefone || null,
     publicToken: row.public_token || null,
     galleryPassword: row.gallery_password || null,
   };
@@ -270,6 +273,7 @@ export function useSupabaseGalleries() {
       
       if (data.clienteNome !== undefined) updateData.cliente_nome = data.clienteNome;
       if (data.clienteEmail !== undefined) updateData.cliente_email = data.clienteEmail;
+      if (data.clienteTelefone !== undefined) updateData.cliente_telefone = data.clienteTelefone;
       if (data.nomeSessao !== undefined) updateData.nome_sessao = data.nomeSessao;
       if (data.nomePacote !== undefined) updateData.nome_pacote = data.nomePacote;
       if (data.fotosIncluidas !== undefined) updateData.fotos_incluidas = data.fotosIncluidas;
