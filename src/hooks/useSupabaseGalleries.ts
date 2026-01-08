@@ -463,9 +463,9 @@ export function useSupabaseGalleries() {
 
   // Reopen selection
   const reopenSelectionMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, days }: { id: string; days: number }) => {
       const prazoSelecao = new Date();
-      prazoSelecao.setDate(prazoSelecao.getDate() + 7);
+      prazoSelecao.setDate(prazoSelecao.getDate() + days);
 
       const { error } = await supabase
         .from('galerias')
@@ -473,6 +473,9 @@ export function useSupabaseGalleries() {
           status: 'selecao_iniciada',
           status_selecao: 'em_andamento',
           prazo_selecao: prazoSelecao.toISOString(),
+          prazo_selecao_dias: days,
+          finalized_at: null,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', id);
 
@@ -485,7 +488,7 @@ export function useSupabaseGalleries() {
           galeria_id: id,
           user_id: user.id,
           tipo: 'selecao_reaberta',
-          descricao: 'Seleção reaberta pelo fotógrafo',
+          descricao: `Seleção reaberta pelo fotógrafo (${days} dias de prazo)`,
         });
       }
     },
