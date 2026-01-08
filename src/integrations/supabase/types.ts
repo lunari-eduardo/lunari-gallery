@@ -1071,6 +1071,7 @@ export type Database = {
           cliente_email: string | null
           cliente_id: string | null
           cliente_nome: string | null
+          cliente_telefone: string | null
           configuracoes: Json | null
           created_at: string
           enviado_em: string | null
@@ -1105,6 +1106,7 @@ export type Database = {
           cliente_email?: string | null
           cliente_id?: string | null
           cliente_nome?: string | null
+          cliente_telefone?: string | null
           configuracoes?: Json | null
           created_at?: string
           enviado_em?: string | null
@@ -1139,6 +1141,7 @@ export type Database = {
           cliente_email?: string | null
           cliente_id?: string | null
           cliente_nome?: string | null
+          cliente_telefone?: string | null
           configuracoes?: Json | null
           created_at?: string
           enviado_em?: string | null

@@ -366,7 +366,7 @@ export default function GalleryDetail() {
       </div>
 
       {/* Main Content */}
-      <Tabs defaultValue="photos" className="space-y-6">
+      <Tabs defaultValue="selection" className="space-y-6">
         <TabsList>
           <TabsTrigger value="photos">Fotos ({transformedPhotos.length})</TabsTrigger>
           <TabsTrigger value="selection">Seleção ({selectedPhotos.length})</TabsTrigger>
