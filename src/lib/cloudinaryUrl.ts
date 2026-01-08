@@ -12,7 +12,7 @@
  */
 
 export interface WatermarkSettings {
-  type: 'none' | 'text' | 'image';
+  type: 'none' | 'standard' | 'text' | 'image';
   text?: string;
   logoUrl?: string;
   opacity: number; // 0-100
@@ -27,6 +27,8 @@ export interface ImageOptions {
   watermark?: WatermarkSettings | null;
   quality?: 'auto' | number;
   format?: 'auto' | 'jpg' | 'png' | 'webp';
+  imageWidth?: number;  // Original image width for orientation detection
+  imageHeight?: number; // Original image height for orientation detection
 }
 
 // Cloudinary Cloud Name - MUST match the secret CLOUDINARY_CLOUD_NAME
@@ -34,6 +36,16 @@ const CLOUDINARY_CLOUD_NAME = 'dmaavprll';
 
 // Cloudinary Fetch API base URL
 const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch`;
+
+// Standard watermark images (served from public folder)
+const getStandardWatermarkUrl = (isHorizontal: boolean): string => {
+  // Use the deployed origin for watermark URLs
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/watermarks/${isHorizontal ? 'horizontal' : 'vertical'}.png`;
+};
+
+// Fixed opacity for standard watermark
+const STANDARD_WATERMARK_OPACITY = 40;
 
 /**
  * Map watermark position to Cloudinary gravity
@@ -53,8 +65,25 @@ function getGravity(position: WatermarkSettings['position']): string {
 /**
  * Build watermark transformation string for Cloudinary
  */
-function buildWatermarkTransformation(watermark: WatermarkSettings): string | null {
+function buildWatermarkTransformation(
+  watermark: WatermarkSettings, 
+  imageWidth?: number, 
+  imageHeight?: number
+): string | null {
   if (watermark.type === 'none') return null;
+
+  // Handle standard watermark type
+  if (watermark.type === 'standard') {
+    // Determine orientation based on image dimensions
+    const isHorizontal = (imageWidth || 800) >= (imageHeight || 600);
+    const logoUrl = getStandardWatermarkUrl(isHorizontal);
+    
+    // Encode URL for Cloudinary overlay (Base64 for overlays)
+    const encodedLogoUrl = btoa(logoUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    
+    // Standard watermark: centered, fixed opacity, responsive width
+    return `l_fetch:${encodedLogoUrl},g_center,o_${STANDARD_WATERMARK_OPACITY},w_400`;
+  }
 
   const gravity = getGravity(watermark.position);
   const opacity = Math.round(watermark.opacity);
@@ -85,7 +114,7 @@ function buildWatermarkTransformation(watermark: WatermarkSettings): string | nu
  * https://res.cloudinary.com/<cloud>/image/fetch/f_auto,q_auto,w_1200,c_limit/https%3A%2F%2F<downloadUrl>%2Ffile%2F<bucket>%2F<storage_key>
  */
 export function getCloudinaryUrl(options: ImageOptions): string {
-  const { storageKey, b2BaseUrl, width, height, watermark, quality = 'auto', format = 'auto' } = options;
+  const { storageKey, b2BaseUrl, width, height, watermark, quality = 'auto', format = 'auto', imageWidth, imageHeight } = options;
 
   // Validate inputs
   if (!storageKey || typeof storageKey !== 'string' || storageKey.trim() === '') {
@@ -118,7 +147,7 @@ export function getCloudinaryUrl(options: ImageOptions): string {
 
   // Apply watermark if configured
   if (watermark && watermark.type !== 'none') {
-    const watermarkTransform = buildWatermarkTransformation(watermark);
+    const watermarkTransform = buildWatermarkTransformation(watermark, imageWidth, imageHeight);
     if (watermarkTransform) {
       transformations.push(watermarkTransform);
     }
@@ -161,7 +190,9 @@ export function getPreviewUrl(
   storageKey: string,
   b2BaseUrl: string,
   watermark: WatermarkSettings | null,
-  maxWidth: number = 1200
+  maxWidth: number = 1200,
+  imageWidth?: number,
+  imageHeight?: number
 ): string {
   return getCloudinaryUrl({
     storageKey,
@@ -170,6 +201,8 @@ export function getPreviewUrl(
     quality: 'auto',
     format: 'auto',
     watermark,
+    imageWidth,
+    imageHeight,
   });
 }
 
@@ -179,7 +212,9 @@ export function getPreviewUrl(
 export function getFullscreenUrl(
   storageKey: string,
   b2BaseUrl: string,
-  watermark: WatermarkSettings | null
+  watermark: WatermarkSettings | null,
+  imageWidth?: number,
+  imageHeight?: number
 ): string {
   return getCloudinaryUrl({
     storageKey,
@@ -188,6 +223,8 @@ export function getFullscreenUrl(
     quality: 'auto',
     format: 'auto',
     watermark,
+    imageWidth,
+    imageHeight,
   });
 }
 

@@ -223,19 +223,24 @@ export default function ClientGallery() {
     // If b2Config is loading or failed, show photos with placeholder URLs
     const bucketUrl = b2Config?.fullBucketUrl || '';
     
-    return supabasePhotos.map((photo) => ({
-      id: photo.id,
-      filename: photo.original_filename || photo.filename,
-      originalFilename: photo.original_filename || photo.filename,
-      thumbnailUrl: bucketUrl ? getThumbnailUrl(photo.storage_key, bucketUrl, 300) : '/placeholder.svg',
-      previewUrl: bucketUrl ? getPreviewUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark, 1200) : '/placeholder.svg',
-      originalUrl: bucketUrl ? getFullscreenUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark) : '/placeholder.svg',
-      width: photo.width || 800,
-      height: photo.height || 600,
-      isSelected: photo.is_selected || false,
-      comment: photo.comment || '',
-      order: photo.order_index || 0,
-    }));
+    return supabasePhotos.map((photo) => {
+      const photoWidth = photo.width || 800;
+      const photoHeight = photo.height || 600;
+      
+      return {
+        id: photo.id,
+        filename: photo.original_filename || photo.filename,
+        originalFilename: photo.original_filename || photo.filename,
+        thumbnailUrl: bucketUrl ? getThumbnailUrl(photo.storage_key, bucketUrl, 300) : '/placeholder.svg',
+        previewUrl: bucketUrl ? getPreviewUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark, 1200, photoWidth, photoHeight) : '/placeholder.svg',
+        originalUrl: bucketUrl ? getFullscreenUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark, photoWidth, photoHeight) : '/placeholder.svg',
+        width: photoWidth,
+        height: photoHeight,
+        isSelected: photo.is_selected || false,
+        comment: photo.comment || '',
+        order: photo.order_index || 0,
+      };
+    });
   }, [supabasePhotos, transformedGallery, b2Config]);
 
   // 5. Mutation for toggling selection via Edge Function
