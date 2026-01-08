@@ -75,6 +75,9 @@ export interface Galeria {
   enviadoEm: Date | null;
   clienteNome: string | null;
   clienteEmail: string | null;
+  // Token and password for client access
+  publicToken: string | null;
+  galleryPassword: string | null;
   // Relations
   photos?: GaleriaPhoto[];
 }
@@ -100,6 +103,7 @@ export interface CreateGaleriaData {
   configuracoes?: GaleriaConfiguracoes;
   prazoSelecaoDias?: number;
   permissao?: 'public' | 'private';
+  galleryPassword?: string;  // Password for private galleries
 }
 
 // Transform database row to Galeria
@@ -133,7 +137,19 @@ function transformGaleria(row: any): Galeria {
     enviadoEm: row.enviado_em ? new Date(row.enviado_em) : null,
     clienteNome: row.cliente_nome,
     clienteEmail: row.cliente_email,
+    publicToken: row.public_token || null,
+    galleryPassword: row.gallery_password || null,
   };
+}
+
+// Generate random token (12 alphanumeric characters)
+function generatePublicToken(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 12; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 // Transform database row to GaleriaPhoto
@@ -219,6 +235,7 @@ export function useSupabaseGalleries() {
           configuracoes: (data.configuracoes || {}) as Json,
           prazo_selecao_dias: data.prazoSelecaoDias || 7,
           permissao: data.permissao || 'private',
+          gallery_password: data.galleryPassword || null,
           status: 'rascunho',
         }])
         .select()
@@ -360,11 +377,19 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Send gallery to client
+  // Send gallery to client - generates public_token and sets password
   const sendGalleryMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Get current gallery to check for existing token and get settings
+      const gallery = getGallery(id);
+      if (!gallery) throw new Error('Galeria não encontrada');
+
+      // Generate new token if doesn't exist
+      const publicToken = gallery.publicToken || generatePublicToken();
+      
+      // Calculate deadline based on prazoSelecaoDias
       const prazoSelecao = new Date();
-      prazoSelecao.setDate(prazoSelecao.getDate() + 7); // Default 7 days
+      prazoSelecao.setDate(prazoSelecao.getDate() + (gallery.prazoSelecaoDias || 7));
 
       const { error } = await supabase
         .from('galerias')
@@ -372,6 +397,7 @@ export function useSupabaseGalleries() {
           status: 'enviado',
           enviado_em: new Date().toISOString(),
           prazo_selecao: prazoSelecao.toISOString(),
+          public_token: publicToken,
         })
         .eq('id', id);
 
@@ -387,6 +413,8 @@ export function useSupabaseGalleries() {
           descricao: 'Galeria enviada para o cliente',
         });
       }
+
+      return { publicToken };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });

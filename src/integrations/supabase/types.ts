@@ -1077,6 +1077,7 @@ export type Database = {
           finalized_at: string | null
           fotos_incluidas: number
           fotos_selecionadas: number | null
+          gallery_password: string | null
           id: string
           mensagem_boas_vindas: string | null
           nome_pacote: string | null
@@ -1085,6 +1086,7 @@ export type Database = {
           permissao: string | null
           prazo_selecao: string | null
           prazo_selecao_dias: number | null
+          public_token: string | null
           published_at: string | null
           regras_selecao: Json | null
           session_id: string | null
@@ -1109,6 +1111,7 @@ export type Database = {
           finalized_at?: string | null
           fotos_incluidas?: number
           fotos_selecionadas?: number | null
+          gallery_password?: string | null
           id?: string
           mensagem_boas_vindas?: string | null
           nome_pacote?: string | null
@@ -1117,6 +1120,7 @@ export type Database = {
           permissao?: string | null
           prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
+          public_token?: string | null
           published_at?: string | null
           regras_selecao?: Json | null
           session_id?: string | null
@@ -1141,6 +1145,7 @@ export type Database = {
           finalized_at?: string | null
           fotos_incluidas?: number
           fotos_selecionadas?: number | null
+          gallery_password?: string | null
           id?: string
           mensagem_boas_vindas?: string | null
           nome_pacote?: string | null
@@ -1149,6 +1154,7 @@ export type Database = {
           permissao?: string | null
           prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
+          public_token?: string | null
           published_at?: string | null
           regras_selecao?: Json | null
           session_id?: string | null
@@ -2527,6 +2533,7 @@ export type Database = {
         Args: { p_appointment_id: string; p_keep_payments?: boolean }
         Returns: Json
       }
+      generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
