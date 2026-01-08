@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Grid, List, Loader2 } from 'lucide-react';
+import { Plus, Search, Grid, List, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GalleryCard } from '@/components/GalleryCard';
-import { useGalleries } from '@/hooks/useGalleries';
 import { useSupabaseGalleries, Galeria } from '@/hooks/useSupabaseGalleries';
 import { GalleryStatus, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
+import { clearGalleryStorage } from '@/lib/storage';
 
 const statusFilters: { value: GalleryStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Todas' },
@@ -25,12 +25,16 @@ function mapSupabaseStatus(status: string): GalleryStatus {
     case 'criado':
       return 'created';
     case 'enviado':
+    case 'publicada':
       return 'sent';
     case 'selecao_iniciada':
+    case 'em_selecao':
       return 'selection_started';
     case 'selecao_completa':
+    case 'confirmada':
       return 'selection_completed';
     case 'expirado':
+    case 'expirada':
       return 'expired';
     default:
       return 'created';
@@ -67,7 +71,7 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery {
       allowDownload: galeria.configuracoes?.allowDownload ?? false,
       allowExtraPhotos: galeria.configuracoes?.allowExtraPhotos ?? true,
     },
-    photos: [],
+    photos: [], // Photos are fetched separately when needed
     actions: [],
     createdAt: galeria.createdAt,
     updatedAt: galeria.updatedAt,
@@ -83,17 +87,18 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
-  // Get both Supabase and localStorage galleries
-  const { galleries: localGalleries } = useGalleries();
-  const { galleries: supabaseGalleries, isLoading: isLoadingSupabase } = useSupabaseGalleries();
+  // Only use Supabase galleries - localStorage removed
+  const { galleries: supabaseGalleries, isLoading, error } = useSupabaseGalleries();
 
-  // Combine galleries: Supabase first, then localStorage (excluding duplicates)
+  // Clear any legacy localStorage galleries on mount
+  useEffect(() => {
+    clearGalleryStorage();
+  }, []);
+
+  // Transform galleries
   const allGalleries = useMemo(() => {
-    const transformedSupabase = supabaseGalleries.map(transformSupabaseToLocal);
-    const supabaseIds = new Set(transformedSupabase.map(g => g.id));
-    const uniqueLocal = localGalleries.filter(g => !supabaseIds.has(g.id));
-    return [...transformedSupabase, ...uniqueLocal];
-  }, [supabaseGalleries, localGalleries]);
+    return supabaseGalleries.map(transformSupabaseToLocal);
+  }, [supabaseGalleries]);
 
   const filteredGalleries = allGalleries.filter((gallery) => {
     const matchesSearch = 
@@ -200,9 +205,22 @@ export default function Dashboard() {
       </div>
 
       {/* Gallery Grid */}
-      {isLoadingSupabase ? (
+      {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+          <h3 className="font-display text-xl font-semibold mb-2">
+            Erro ao carregar galerias
+          </h3>
+          <p className="text-muted-foreground mb-4">
+            Não foi possível conectar ao banco de dados.
+          </p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Tentar novamente
+          </Button>
         </div>
       ) : filteredGalleries.length > 0 ? (
         <div className={cn(
@@ -228,7 +246,9 @@ export default function Dashboard() {
             Nenhuma galeria encontrada
           </h3>
           <p className="text-muted-foreground mb-6">
-            Tente ajustar os filtros ou criar uma nova galeria
+            {allGalleries.length === 0 
+              ? 'Crie sua primeira galeria para começar' 
+              : 'Tente ajustar os filtros ou criar uma nova galeria'}
           </p>
           <Button 
             onClick={() => navigate('/gallery/new')}

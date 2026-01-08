@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal, ClientFormData } from '@/components/ClientModal';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
-import { useGalleries } from '@/hooks/useGalleries';
+// useGalleries removed - now using only Supabase
 import { useSettings } from '@/hooks/useSettings';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
@@ -51,9 +51,7 @@ export default function GalleryCreate() {
     clients,
     createClient
   } = useGalleryClients();
-  const {
-    createGallery
-  } = useGalleries();
+  // localStorage galleries removed - only using Supabase now
   const {
     settings,
     updateSettings

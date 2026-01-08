@@ -8,7 +8,8 @@ import {
   Image, 
   Check, 
   AlertTriangle, 
-  Clock
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
@@ -18,9 +19,6 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
-import { DemoImportScreen } from '@/components/DemoImportScreen';
-import { DemoExportButton } from '@/components/DemoExportButton';
-import { useGalleries } from '@/hooks/useGalleries';
 import { useB2Config } from '@/hooks/useB2Config';
 import { supabase } from '@/integrations/supabase/client';
 import { getThumbnailUrl, getPreviewUrl, getFullscreenUrl, WatermarkSettings } from '@/lib/cloudinaryUrl';
@@ -35,7 +33,6 @@ const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 export default function ClientGallery() {
   const { id } = useParams();
   const queryClient = useQueryClient();
-  const { getGallery, isLoading: isLocalLoading, updatePhotoSelection, updatePhotoComment, confirmSelection, importGalleryPackage, exportGalleryPackage } = useGalleries();
   
   const [showWelcome, setShowWelcome] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -44,7 +41,7 @@ export default function ClientGallery() {
   const [isConfirmed, setIsConfirmed] = useState(false);
 
   // Fetch B2 config from backend (dynamic downloadUrl)
-  const { data: b2Config, isLoading: isLoadingB2Config } = useB2Config();
+  const { data: b2Config, isLoading: isLoadingB2Config, error: b2Error } = useB2Config();
 
   // 1. Fetch gallery from Supabase
   const { data: supabaseGallery, isLoading: isLoadingGallery, error: galleryError } = useQuery({
@@ -59,21 +56,21 @@ export default function ClientGallery() {
         .single();
       
       if (error) {
-        console.log('Supabase gallery fetch error:', error);
-        return null;
+        console.error('Gallery fetch error:', error);
+        throw new Error('Galeria não encontrada');
       }
       
       return data;
     },
     enabled: !!id,
-    retry: false,
+    retry: 1,
   });
 
   // 2. Fetch photos from Supabase
   const { data: supabasePhotos, isLoading: isLoadingPhotos } = useQuery({
     queryKey: ['client-gallery-photos', id],
     queryFn: async () => {
-      if (!id) return null;
+      if (!id) return [];
       
       const { data, error } = await supabase
         .from('galeria_fotos')
@@ -82,11 +79,11 @@ export default function ClientGallery() {
         .order('order_index');
       
       if (error) {
-        console.log('Supabase photos fetch error:', error);
-        return null;
+        console.error('Photos fetch error:', error);
+        return [];
       }
       
-      return data;
+      return data || [];
     },
     enabled: !!supabaseGallery,
   });
@@ -103,6 +100,11 @@ export default function ClientGallery() {
         ? watermarkDisplayRaw 
         : 'all';
     
+    // Deadline comes from database - if NULL, show "not defined"
+    const deadline = supabaseGallery.prazo_selecao 
+      ? new Date(supabaseGallery.prazo_selecao)
+      : null;
+    
     return {
       id: supabaseGallery.id,
       clientName: supabaseGallery.cliente_nome || 'Cliente',
@@ -111,7 +113,7 @@ export default function ClientGallery() {
       packageName: supabaseGallery.nome_pacote || 'Pacote',
       includedPhotos: supabaseGallery.fotos_incluidas || 10,
       extraPhotoPrice: supabaseGallery.valor_foto_extra || 25,
-      status: 'sent' as Gallery['status'], // Map Supabase status
+      status: 'sent' as Gallery['status'],
       selectionStatus: supabaseGallery.status_selecao === 'confirmado' ? 'confirmed' : 'in_progress',
       createdAt: new Date(supabaseGallery.created_at),
       updatedAt: new Date(supabaseGallery.updated_at),
@@ -124,7 +126,7 @@ export default function ClientGallery() {
       },
       settings: {
         welcomeMessage: supabaseGallery.mensagem_boas_vindas || 'Olá {cliente}! Bem-vindo à galeria da sua sessão {sessao}.',
-        deadline: supabaseGallery.prazo_selecao ? new Date(supabaseGallery.prazo_selecao) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Fallback only for display
         deadlinePreset: 7,
         watermark: watermark || { type: 'none', opacity: 50, position: 'bottom-right' },
         watermarkDisplay,
@@ -141,17 +143,23 @@ export default function ClientGallery() {
     };
   }, [supabaseGallery]);
 
+  // Check if deadline is actually set in database
+  const hasDeadline = !!supabaseGallery?.prazo_selecao;
+
   // 4. Transform photos with Cloudinary URLs (requires b2Config from backend)
   const photos = useMemo((): GalleryPhoto[] => {
-    if (!supabasePhotos || !transformedGallery || !b2Config?.fullBucketUrl) return [];
+    if (!supabasePhotos || !transformedGallery) return [];
+    
+    // If b2Config is loading or failed, show photos with placeholder URLs
+    const bucketUrl = b2Config?.fullBucketUrl || '';
     
     return supabasePhotos.map((photo) => ({
       id: photo.id,
       filename: photo.original_filename || photo.filename,
       originalFilename: photo.original_filename || photo.filename,
-      thumbnailUrl: getThumbnailUrl(photo.storage_key, b2Config.fullBucketUrl, 300),
-      previewUrl: getPreviewUrl(photo.storage_key, b2Config.fullBucketUrl, transformedGallery.settings.watermark, 1200),
-      originalUrl: getFullscreenUrl(photo.storage_key, b2Config.fullBucketUrl, transformedGallery.settings.watermark),
+      thumbnailUrl: bucketUrl ? getThumbnailUrl(photo.storage_key, bucketUrl, 300) : '/placeholder.svg',
+      previewUrl: bucketUrl ? getPreviewUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark, 1200) : '/placeholder.svg',
+      originalUrl: bucketUrl ? getFullscreenUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark) : '/placeholder.svg',
       width: photo.width || 800,
       height: photo.height || 600,
       isSelected: photo.is_selected || false,
@@ -177,7 +185,6 @@ export default function ClientGallery() {
       return response.json();
     },
     onSuccess: (data) => {
-      // Update local state optimistically
       setLocalPhotos(prev => prev.map(p => 
         p.id === data.photo.id 
           ? { ...p, isSelected: data.photo.is_selected, comment: data.photo.comment || p.comment } 
@@ -186,7 +193,6 @@ export default function ClientGallery() {
     },
     onError: (error: Error) => {
       toast.error(error.message);
-      // Refetch to sync state
       queryClient.invalidateQueries({ queryKey: ['client-gallery-photos', id] });
     },
   });
@@ -194,7 +200,6 @@ export default function ClientGallery() {
   // 6. Mutation for confirming selection
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      // Update gallery status to confirmed
       const { error } = await supabase
         .from('galerias')
         .update({ 
@@ -227,20 +232,8 @@ export default function ClientGallery() {
     }
   }, [photos, supabaseGallery?.status_selecao]);
 
-  // Fallback to localStorage gallery
-  const localGallery = getGallery(id || '');
-  
-  useEffect(() => {
-    if (localGallery && !supabaseGallery && !isLoadingGallery) {
-      setLocalPhotos(localGallery.photos.map(p => ({ ...p })));
-      setIsConfirmed(localGallery.selectionStatus === 'confirmed');
-    }
-  }, [localGallery, supabaseGallery, isLoadingGallery]);
-
-  // Determine which gallery to use
-  const gallery = transformedGallery || localGallery;
-  const isLoading = isLoadingGallery || isLoadingPhotos || isLocalLoading || isLoadingB2Config;
-  const useSupabase = !!supabaseGallery;
+  const gallery = transformedGallery;
+  const isLoading = isLoadingGallery || isLoadingPhotos || isLoadingB2Config;
 
   // Loading state
   if (isLoading) {
@@ -254,19 +247,50 @@ export default function ClientGallery() {
     );
   }
 
-  // No gallery found - show demo import
-  if (!gallery) {
+  // Error state - gallery not found
+  if (galleryError || !gallery) {
     return (
-      <DemoImportScreen
-        galleryId={id || 'unknown'}
-        onImport={importGalleryPackage}
-      />
+      <div className="min-h-screen flex flex-col bg-background">
+        <header className="flex items-center justify-center p-4 border-b border-border/50">
+          <Logo size="sm" />
+        </header>
+        
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center space-y-6">
+            <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+              <AlertCircle className="h-10 w-10 text-destructive" />
+            </div>
+            
+            <div>
+              <h1 className="font-display text-2xl font-semibold mb-2">
+                Galeria não encontrada
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                Verifique se o link está correto ou entre em contato com o fotógrafo.
+              </p>
+            </div>
+
+            <div className="lunari-card p-4">
+              <p className="text-xs text-muted-foreground">
+                ID solicitado: <code className="bg-muted px-1 rounded">{id}</code>
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
     );
   }
 
-  const hoursUntilDeadline = differenceInHours(gallery.settings.deadline, new Date());
-  const isNearDeadline = hoursUntilDeadline <= 48 && hoursUntilDeadline > 0;
-  const isExpired = isPast(gallery.settings.deadline);
+  // B2 config error - show warning but continue
+  if (b2Error && !b2Config) {
+    console.warn('B2 config failed to load, images may not display correctly');
+  }
+
+  const hoursUntilDeadline = hasDeadline 
+    ? differenceInHours(gallery.settings.deadline, new Date())
+    : 999;
+  const isNearDeadline = hasDeadline && hoursUntilDeadline <= 48 && hoursUntilDeadline > 0;
+  const isExpired = hasDeadline && isPast(gallery.settings.deadline);
   const isBlocked = isExpired || isConfirmed;
 
   const selectedCount = localPhotos.filter(p => p.isSelected).length;
@@ -276,40 +300,21 @@ export default function ClientGallery() {
   const toggleSelection = (photoId: string) => {
     if (isBlocked) return;
     
-    if (useSupabase) {
-      // Use Edge Function for Supabase galleries
-      const photo = localPhotos.find(p => p.id === photoId);
-      if (photo) {
-        // Optimistic update
-        setLocalPhotos(prev => prev.map(p => 
-          p.id === photoId ? { ...p, isSelected: !p.isSelected } : p
-        ));
-        selectionMutation.mutate({ photoId, action: 'toggle' });
-      }
-    } else {
-      // Use localStorage for demo galleries
-      const photo = localPhotos.find(p => p.id === photoId);
-      if (photo) {
-        updatePhotoSelection(gallery.id, photoId, !photo.isSelected);
-        setLocalPhotos(prev => prev.map(p => 
-          p.id === photoId ? { ...p, isSelected: !p.isSelected } : p
-        ));
-      }
+    const photo = localPhotos.find(p => p.id === photoId);
+    if (photo) {
+      // Optimistic update
+      setLocalPhotos(prev => prev.map(p => 
+        p.id === photoId ? { ...p, isSelected: !p.isSelected } : p
+      ));
+      selectionMutation.mutate({ photoId, action: 'toggle' });
     }
   };
 
   const handleComment = (photoId: string, comment: string) => {
-    if (useSupabase) {
-      setLocalPhotos(prev => prev.map(p => 
-        p.id === photoId ? { ...p, comment } : p
-      ));
-      selectionMutation.mutate({ photoId, action: 'comment', comment });
-    } else {
-      updatePhotoComment(gallery.id, photoId, comment);
-      setLocalPhotos(prev => prev.map(p => 
-        p.id === photoId ? { ...p, comment } : p
-      ));
-    }
+    setLocalPhotos(prev => prev.map(p => 
+      p.id === photoId ? { ...p, comment } : p
+    ));
+    selectionMutation.mutate({ photoId, action: 'comment', comment });
     toast.success('Comentário salvo!');
   };
 
@@ -322,16 +327,7 @@ export default function ClientGallery() {
   };
 
   const handleConfirm = () => {
-    if (useSupabase) {
-      confirmMutation.mutate();
-    } else {
-      confirmSelection(gallery.id);
-      setIsConfirmed(true);
-      setCurrentStep('confirmed');
-      toast.success('Seleção confirmada!', {
-        description: 'O fotógrafo receberá sua seleção.',
-      });
-    }
+    confirmMutation.mutate();
   };
 
   // Parse welcome message
@@ -373,12 +369,14 @@ export default function ClientGallery() {
                 <Check className="h-4 w-4 text-primary" />
                 <span>{gallery.includedPhotos} fotos incluídas</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>
-                  até {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
-                </span>
-              </div>
+              {hasDeadline && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span>
+                    até {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
+                  </span>
+                </div>
+              )}
             </div>
 
             {isNearDeadline && (
@@ -462,28 +460,12 @@ export default function ClientGallery() {
               </p>
             </div>
 
-            {!useSupabase && (
-              <div className="lunari-card p-6 text-left space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Como estamos em <strong>modo demo</strong> (sem banco de dados), 
-                  exporte sua seleção e envie ao fotógrafo para que ele veja as fotos escolhidas.
-                </p>
-                
-                <DemoExportButton 
-                  onExport={() => exportGalleryPackage(gallery.id)}
-                  galleryId={gallery.id}
-                />
-              </div>
-            )}
-
-            {useSupabase && (
-              <div className="lunari-card p-6 text-left">
-                <p className="text-sm text-muted-foreground">
-                  O fotógrafo já recebeu sua seleção e entrará em contato em breve 
-                  para os próximos passos.
-                </p>
-              </div>
-            )}
+            <div className="lunari-card p-6 text-left">
+              <p className="text-sm text-muted-foreground">
+                O fotógrafo já recebeu sua seleção e entrará em contato em breve 
+                para os próximos passos.
+              </p>
+            </div>
 
             <Button 
               variant="outline" 
@@ -507,9 +489,11 @@ export default function ClientGallery() {
           
           <div className="text-right">
             <p className="text-sm font-medium">{gallery.sessionName}</p>
-            <p className="text-xs text-muted-foreground">
-              {format(gallery.settings.deadline, "dd 'de' MMMM", { locale: ptBR })}
-            </p>
+            {hasDeadline && (
+              <p className="text-xs text-muted-foreground">
+                {format(gallery.settings.deadline, "dd 'de' MMMM", { locale: ptBR })}
+              </p>
+            )}
           </div>
         </div>
 

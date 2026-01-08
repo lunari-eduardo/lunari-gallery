@@ -62,3 +62,8 @@ export function setStorageInitialized(): void {
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
+
+// Clear gallery storage (for migration cleanup)
+export function clearGalleryStorage(): void {
+  localStorage.removeItem(STORAGE_PREFIX + 'galleries');
+}
