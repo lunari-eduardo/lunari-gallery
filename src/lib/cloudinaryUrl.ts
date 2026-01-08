@@ -29,8 +29,8 @@ export interface ImageOptions {
   imageHeight?: number; // Original image height for orientation detection
 }
 
-// Cloudinary Cloud Name - MUST match the secret CLOUDINARY_CLOUD_NAME
-const CLOUDINARY_CLOUD_NAME = 'dmaavprll';
+// Cloudinary Cloud Name - read from environment variable
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dxfjakxte';
 
 // Cloudinary Fetch API base URL
 const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch`;
