@@ -249,7 +249,7 @@ export default function ClientGallery() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ galleryId: id, photoId, action, comment }),
+        body: JSON.stringify({ galleryId, photoId, action, comment }),
       });
       
       if (!response.ok) {
@@ -268,7 +268,7 @@ export default function ClientGallery() {
     },
     onError: (error: Error) => {
       toast.error(error.message);
-      queryClient.invalidateQueries({ queryKey: ['client-gallery-photos', id] });
+      queryClient.invalidateQueries({ queryKey: ['client-gallery-photos', galleryId] });
     },
   });
 
@@ -283,7 +283,7 @@ export default function ClientGallery() {
           finalized_at: new Date().toISOString(),
           fotos_selecionadas: localPhotos.filter(p => p.isSelected).length,
         })
-        .eq('id', id);
+        .eq('id', galleryId);
       
       if (error) throw error;
     },

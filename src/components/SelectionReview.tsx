@@ -78,11 +78,6 @@ export function SelectionReview({
                   <Check className="h-4 w-4 text-primary-foreground" />
                 </div>
               </div>
-              {index >= includedPhotos && (
-                <div className="absolute top-1 right-1 bg-primary text-primary-foreground text-xs px-1.5 py-0.5 rounded font-medium">
-                  Extra
-                </div>
-              )}
             </div>
           ))}
         </div>
