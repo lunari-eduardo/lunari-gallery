@@ -8,7 +8,6 @@ import {
   Loader2,
   AlertCircle,
   Calendar as CalendarIcon,
-  RotateCcw,
   Image,
   Plus,
   Upload
@@ -20,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
+import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
@@ -212,9 +212,9 @@ export default function GalleryEdit() {
     navigate('/');
   };
 
-  const handleReactivate = async () => {
+  const handleReactivate = async (days: number = 7) => {
     try {
-      await reopenSelection(gallery.id);
+      await reopenSelection({ id: gallery.id, days });
       toast.success('Galeria reativada!', {
         description: 'O cliente pode fazer seleções novamente.',
       });
@@ -496,13 +496,11 @@ export default function GalleryEdit() {
                       Permite que o cliente faça novas seleções
                     </p>
                   </div>
-                  <Button 
-                    variant="outline"
-                    onClick={handleReactivate}
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Reativar
-                  </Button>
+                  <ReactivateGalleryDialog
+                    galleryName={gallery.nomeSessao || 'Esta galeria'}
+                    clientLink={gallery.publicToken ? `${window.location.origin}/g/${gallery.publicToken}` : null}
+                    onReactivate={handleReactivate}
+                  />
                 </div>
               )}
 

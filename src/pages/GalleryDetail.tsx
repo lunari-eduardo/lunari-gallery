@@ -5,7 +5,6 @@ import { ptBR } from 'date-fns/locale';
 import { 
   ArrowLeft, 
   Send, 
-  RotateCcw, 
   Eye,
   FileText,
   User,
@@ -26,6 +25,7 @@ import { SelectionSummary } from '@/components/SelectionSummary';
 import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
+import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useB2Config } from '@/hooks/useB2Config';
 import { useSettings } from '@/hooks/useSettings';
@@ -143,15 +143,8 @@ export default function GalleryDetail() {
     }
   };
 
-  const handleReopenSelection = async () => {
-    try {
-      await reopenSupabaseSelection(supabaseGallery.id);
-      toast.success('Seleção reaberta!', {
-        description: 'O cliente poderá fazer alterações novamente.',
-      });
-    } catch (error) {
-      console.error('Error reopening selection:', error);
-    }
+  const handleReopenSelection = async (days: number) => {
+    await reopenSupabaseSelection({ id: supabaseGallery.id, days });
   };
 
   const handleDeleteGallery = async () => {
@@ -307,10 +300,11 @@ export default function GalleryDetail() {
           </Button>
           
           {canReactivate && (
-            <Button variant="outline" size="sm" onClick={handleReopenSelection}>
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reativar
-            </Button>
+            <ReactivateGalleryDialog
+              galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
+              clientLink={clientLink}
+              onReactivate={handleReopenSelection}
+            />
           )}
           
           <DeleteGalleryDialog 
