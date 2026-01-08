@@ -29,8 +29,8 @@ export interface ImageOptions {
   format?: 'auto' | 'jpg' | 'png' | 'webp';
 }
 
-// Cloudinary Cloud Name
-const CLOUDINARY_CLOUD_NAME = 'dxfjakxte';
+// Cloudinary Cloud Name - MUST match the secret CLOUDINARY_CLOUD_NAME
+const CLOUDINARY_CLOUD_NAME = 'dmaavprll';
 
 // Cloudinary Fetch API base URL
 const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch`;

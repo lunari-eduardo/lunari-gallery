@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.get-b2-config]
 verify_jwt = false
+
+[functions.test-image-access]
+verify_jwt = false
+
+[functions.diagnose-b2]
+verify_jwt = false
