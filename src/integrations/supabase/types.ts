@@ -976,7 +976,7 @@ export type Database = {
           galeria_id: string
           id: string
           tipo: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -984,7 +984,7 @@ export type Database = {
           galeria_id: string
           id?: string
           tipo: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -992,7 +992,7 @@ export type Database = {
           galeria_id?: string
           id?: string
           tipo?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

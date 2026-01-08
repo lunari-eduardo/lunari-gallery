@@ -159,11 +159,13 @@ export default function GalleryDetail() {
     navigate('/');
   };
 
-  // Check if gallery can be reactivated
-  const canReactivate = supabaseGallery.statusSelecao === 'confirmada' || 
+  // Check if gallery can be reactivated (supports both 'confirmado' and 'confirmada')
+  const canReactivate = supabaseGallery.statusSelecao === 'confirmado' || 
+                        supabaseGallery.statusSelecao === 'confirmada' || 
                         supabaseGallery.status === 'selecao_completa' ||
                         supabaseGallery.status === 'expirado' ||
-                        supabaseGallery.status === 'expirada';
+                        supabaseGallery.status === 'expirada' ||
+                        supabaseGallery.finalizedAt !== null;
 
   // Default watermark settings
   const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
