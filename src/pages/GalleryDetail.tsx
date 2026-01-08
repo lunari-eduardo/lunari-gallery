@@ -162,9 +162,9 @@ export default function GalleryDetail() {
 
   // Default watermark settings
   const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
-    type: 'none',
-    opacity: 30,
-    position: 'bottom-right',
+    type: 'standard',
+    opacity: 40,
+    position: 'center',
   };
 
   // Map status

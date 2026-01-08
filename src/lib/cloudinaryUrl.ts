@@ -12,11 +12,9 @@
  */
 
 export interface WatermarkSettings {
-  type: 'none' | 'standard' | 'text' | 'image';
-  text?: string;
-  logoUrl?: string;
+  type: 'none' | 'standard';
   opacity: number; // 0-100
-  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'fill';
+  position: 'center'; // Standard watermark always uses center
 }
 
 export interface ImageOptions {
@@ -83,25 +81,6 @@ function buildWatermarkTransformation(
     
     // Standard watermark: centered, fixed opacity, responsive width
     return `l_fetch:${encodedLogoUrl},g_center,o_${STANDARD_WATERMARK_OPACITY},w_400`;
-  }
-
-  const gravity = getGravity(watermark.position);
-  const opacity = Math.round(watermark.opacity);
-
-  if (watermark.type === 'text' && watermark.text) {
-    // Encode text for URL - replace spaces with %2520 for double encoding
-    const escapedText = encodeURIComponent(watermark.text).replace(/%20/g, '%2520');
-    
-    // Text overlay: l_text:Font_Size:Text,g_position,o_opacity,co_color
-    return `l_text:Arial_40:${escapedText},g_${gravity},o_${opacity},co_white`;
-  }
-
-  if (watermark.type === 'image' && watermark.logoUrl) {
-    // For logo overlay, we use fetch with the logo URL (Base64 ONLY for overlays)
-    const encodedLogoUrl = btoa(watermark.logoUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    
-    // Image overlay: l_fetch:base64url,g_position,o_opacity,w_width
-    return `l_fetch:${encodedLogoUrl},g_${gravity},o_${opacity},w_150`;
   }
 
   return null;

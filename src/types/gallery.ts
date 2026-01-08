@@ -1,6 +1,6 @@
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
 export type SelectionStatus = 'in_progress' | 'confirmed' | 'blocked';
-export type WatermarkType = 'none' | 'standard' | 'text' | 'image';
+export type WatermarkType = 'none' | 'standard';
 export type DeadlinePreset = 7 | 10 | 15 | 'custom';
 export type ImageResizeOption = 640 | 800 | 1024 | 1920;
 export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
@@ -36,10 +36,8 @@ export interface SaleSettings {
 
 export interface WatermarkSettings {
   type: WatermarkType;
-  text?: string;
-  logoUrl?: string;
   opacity: number;
-  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'fill';
+  position: 'center'; // Standard watermark always uses center
 }
 
 export interface GallerySettings {

@@ -502,12 +502,17 @@ export function useSupabaseGalleries() {
   const getPhotoUrl = useCallback(
     (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', b2BaseUrl: string): string => {
       const watermark = gallery?.configuracoes?.watermark || null;
+      const watermarkDisplay = gallery?.configuracoes?.watermarkDisplay || 'all';
       
       if (size === 'thumbnail') {
-        return getThumbnailUrl(photo.storageKey, b2BaseUrl, 300);
+        // Thumbnails: apply watermark only if watermarkDisplay is 'all'
+        const thumbnailWatermark = watermarkDisplay === 'all' ? watermark : null;
+        return getPreviewUrl(photo.storageKey, b2BaseUrl, thumbnailWatermark, 300, photo.width, photo.height);
       }
       
-      return getPreviewUrl(photo.storageKey, b2BaseUrl, watermark, size === 'full' ? 1920 : 1200);
+      // Preview and full: apply watermark unless watermarkDisplay is 'none'
+      const applyWatermark = watermarkDisplay !== 'none' ? watermark : null;
+      return getPreviewUrl(photo.storageKey, b2BaseUrl, applyWatermark, size === 'full' ? 1920 : 1200, photo.width, photo.height);
     },
     []
   );

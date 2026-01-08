@@ -195,29 +195,9 @@ export function Lightbox({
             style={{ transform: `scale(${zoom})` }}
           />
           
-          {/* Watermark */}
-          {showWatermark && (
-            <div 
-              className={cn(
-                'absolute pointer-events-none select-none',
-                watermarkPosition[watermark.position]
-              )}
-              style={{ opacity: watermark.opacity / 100 }}
-            >
-              {watermark.type === 'text' && (
-                <span className="text-white text-lg font-medium drop-shadow-lg">
-                  {watermark.text}
-                </span>
-              )}
-              {watermark.type === 'image' && watermark.logoUrl && (
-                <img 
-                  src={watermark.logoUrl} 
-                  alt="" 
-                  className="h-12 w-auto drop-shadow-lg"
-                />
-              )}
-            </div>
-          )}
+          {/* Watermark - Note: Watermarks are now applied via Cloudinary transformation */}
+          {/* This client-side watermark overlay is kept for backwards compatibility but
+              the actual watermark is applied to the image via Cloudinary URL transformations */}
         </div>
       </div>
 

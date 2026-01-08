@@ -34,12 +34,12 @@ const steps = [{
   icon: Tag
 }, {
   id: 3,
-  name: 'Fotos',
-  icon: Image
-}, {
-  id: 4,
   name: 'Configurações',
   icon: Settings
+}, {
+  id: 4,
+  name: 'Fotos',
+  icon: Image
 }, {
   id: 5,
   name: 'Revisão',
@@ -93,8 +93,6 @@ export default function GalleryCreate() {
   const [customDays, setCustomDays] = useState(10);
   const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(800);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>('standard');
-  const [watermarkText, setWatermarkText] = useState('Studio Lunari');
-  const [watermarkOpacity, setWatermarkOpacity] = useState(30);
   const [watermarkDisplay, setWatermarkDisplay] = useState<WatermarkDisplay>('all');
   const [allowComments, setAllowComments] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
@@ -107,8 +105,6 @@ export default function GalleryCreate() {
       setGalleryPermission(settings.defaultGalleryPermission || 'private');
       if (settings.defaultWatermark) {
         setWatermarkType(settings.defaultWatermark.type);
-        setWatermarkText(settings.defaultWatermark.text || 'Studio Lunari');
-        setWatermarkOpacity(settings.defaultWatermark.opacity);
       }
     }
   }, [settings]);
@@ -167,8 +163,8 @@ export default function GalleryCreate() {
   
   const handleNext = async () => {
     if (currentStep < 5) {
-      // When going to step 3, create Supabase gallery first
-      if (currentStep === 2 && !supabaseGalleryId) {
+      // When going to step 4 (Fotos), create Supabase gallery first with configurations
+      if (currentStep === 3 && !supabaseGalleryId) {
         // Only require client for private galleries
         if (galleryPermission === 'private' && !selectedClient) {
           toast.error('Selecione um cliente primeiro');
@@ -189,8 +185,7 @@ export default function GalleryCreate() {
               configuracoes: {
                 watermark: {
                   type: watermarkType,
-                  text: watermarkText,
-                  opacity: watermarkOpacity,
+                  opacity: 40,
                   position: 'center',
                 },
                 watermarkDisplay: watermarkDisplay,
@@ -706,7 +701,7 @@ export default function GalleryCreate() {
               </DialogContent>
             </Dialog>
           </div>;
-      case 3:
+      case 4:
         return <div className="space-y-6 animate-fade-in">
             <div>
               
@@ -762,7 +757,7 @@ export default function GalleryCreate() {
               </p>
             </div>
           </div>;
-      case 4:
+      case 3:
         return <div className="space-y-8 animate-fade-in">
             <div>
               
@@ -834,7 +829,7 @@ export default function GalleryCreate() {
                     <Label>Marca D'água</Label>
                   </div>
                   
-                  {/* Watermark Type */}
+                  {/* Watermark Type - Only standard and none */}
                   <RadioGroup value={watermarkType} onValueChange={v => setWatermarkType(v as WatermarkType)} className="flex flex-wrap gap-2">
                     <div className="flex items-center">
                       <RadioGroupItem value="standard" id="wm-standard" className="peer sr-only" />
@@ -846,18 +841,6 @@ export default function GalleryCreate() {
                       <RadioGroupItem value="none" id="wm-none" className="peer sr-only" />
                       <Label htmlFor="wm-none" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
                         Nenhuma
-                      </Label>
-                    </div>
-                    <div className="flex items-center">
-                      <RadioGroupItem value="text" id="wm-text" className="peer sr-only" />
-                      <Label htmlFor="wm-text" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
-                        Texto
-                      </Label>
-                    </div>
-                    <div className="flex items-center">
-                      <RadioGroupItem value="image" id="wm-image" className="peer sr-only" />
-                      <Label htmlFor="wm-image" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
-                        Imagem
                       </Label>
                     </div>
                   </RadioGroup>
@@ -877,54 +860,7 @@ export default function GalleryCreate() {
                     </div>
                   )}
 
-                  {watermarkType === 'text' && <Input placeholder="Texto da marca d'água" value={watermarkText} onChange={e => setWatermarkText(e.target.value)} />}
-
-                  {watermarkType === 'image' && <>
-                      {settings.defaultWatermark?.logoUrl ? <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
-                          <img src={settings.defaultWatermark.logoUrl} alt="Imagem" className="h-10 object-contain" />
-                          <div>
-                            <p className="text-sm font-medium">Imagem configurada</p>
-                            <p className="text-xs text-muted-foreground">
-                              Definido nas configurações
-                            </p>
-                          </div>
-                        </div> : <div className="border-2 border-dashed border-amber-500/50 rounded-lg p-4 text-center bg-amber-500/5">
-                          <Upload className="h-6 w-6 mx-auto text-amber-500 mb-2" />
-                          <p className="text-sm font-medium text-amber-600">
-                            Nenhuma imagem configurada
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Configure a imagem nas configurações do estúdio
-                          </p>
-                        </div>}
-                    </>}
-
-                  {/* Opacity and display - only for text/image, NOT for standard */}
-                  {(watermarkType === 'text' || watermarkType === 'image') && <>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm">Opacidade</Label>
-                          <span className="text-sm text-muted-foreground">{watermarkOpacity}%</span>
-                        </div>
-                        <Slider value={[watermarkOpacity]} onValueChange={v => setWatermarkOpacity(v[0])} min={10} max={100} step={5} />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm">Onde aplicar</Label>
-                        <Select value={watermarkDisplay} onValueChange={v => setWatermarkDisplay(v as WatermarkDisplay)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Fotos ampliadas e miniaturas</SelectItem>
-                            <SelectItem value="fullscreen">Somente fotos ampliadas</SelectItem>
-                            <SelectItem value="none">Não aplicar</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>}
-
-                  {/* Display setting for standard watermark */}
+                  {/* Display setting for watermark */}
                   {watermarkType === 'standard' && (
                     <div className="space-y-2">
                       <Label className="text-sm">Onde aplicar</Label>

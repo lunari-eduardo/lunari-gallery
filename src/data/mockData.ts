@@ -43,10 +43,9 @@ export const mockGlobalSettings: GlobalSettings = {
   ],
   activeThemeId: 'theme-default',
   defaultWatermark: {
-    type: 'text',
-    text: 'Studio Lunari',
-    opacity: 30,
-    position: 'bottom-right',
+    type: 'standard',
+    opacity: 40,
+    position: 'center',
   },
   emailTemplates: [
     {

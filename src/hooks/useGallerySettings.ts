@@ -14,9 +14,9 @@ const defaultSettings: Omit<GlobalSettings, 'customThemes' | 'emailTemplates' | 
   studioLogo: undefined,
   activeThemeId: undefined,
   defaultWatermark: {
-    type: 'none',
-    opacity: 30,
-    position: 'bottom-right',
+    type: 'standard',
+    opacity: 40,
+    position: 'center',
   },
   faviconUrl: undefined,
 };
@@ -59,16 +59,17 @@ function parseWatermark(json: Json | null): WatermarkSettings {
     return defaultSettings.defaultWatermark;
   }
   const obj = json as Record<string, unknown>;
-  // Retrocompatibility: convert legacy 'logo' to 'image'
-  let type = (obj.type as WatermarkSettings['type']) || 'none';
-  if ((type as string) === 'logo') type = 'image';
+  // Simplify: only 'none' or 'standard' supported
+  let type = (obj.type as WatermarkSettings['type']) || 'standard';
+  // Convert legacy types to 'standard'
+  if (type !== 'none' && type !== 'standard') {
+    type = 'standard';
+  }
   
   return {
     type,
-    text: obj.text as string | undefined,
-    logoUrl: obj.logoUrl as string | undefined,
-    opacity: (obj.opacity as number) || 30,
-    position: (obj.position as WatermarkSettings['position']) || 'bottom-right',
+    opacity: type === 'standard' ? 40 : (obj.opacity as number) || 40,
+    position: 'center',
   };
 }
 
