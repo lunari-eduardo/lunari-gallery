@@ -13,9 +13,11 @@ const generateMockPhotos = (count: number): GalleryPhoto[] => {
   return Array.from({ length: count }, (_, i) => {
     const aspect = aspectRatios[i % aspectRatios.length];
     const photoId = i + 1;
+    const originalName = `IMG_${String(photoId).padStart(4, '0')}.jpg`;
     return {
       id: `photo-${photoId}`,
-      filename: `IMG_${String(photoId).padStart(4, '0')}.jpg`,
+      filename: originalName,
+      originalFilename: originalName,
       thumbnailUrl: `https://picsum.photos/seed/${photoId}/400/400`,
       previewUrl: `https://picsum.photos/seed/${photoId}/${aspect.width}/${aspect.height}`,
       originalUrl: `https://picsum.photos/seed/${photoId}/${aspect.width * 2}/${aspect.height * 2}`,

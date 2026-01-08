@@ -55,7 +55,7 @@ export function Lightbox({
     if (!currentPhoto || !allowDownload) return;
     const link = document.createElement('a');
     link.href = currentPhoto.previewUrl;
-    link.download = currentPhoto.filename;
+    link.download = currentPhoto.originalFilename || currentPhoto.filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -129,7 +129,7 @@ export function Lightbox({
             {currentIndex + 1} / {photos.length}
           </span>
           <span className="text-white/60 text-sm hidden sm:block">
-            {currentPhoto.filename}
+            {currentPhoto.originalFilename || currentPhoto.filename}
           </span>
         </div>
         <div className="flex items-center gap-2">

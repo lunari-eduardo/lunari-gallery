@@ -56,7 +56,9 @@ export interface GallerySettings {
 
 export interface GalleryPhoto {
   id: string;
-  filename: string;
+  filename: string;           // UUID técnico para storage
+  originalFilename: string;   // Nome original do arquivo (DSC_0001.jpg)
+  displayName?: string;       // Nome de exibição customizado (opcional)
   thumbnailUrl: string;
   previewUrl: string;
   originalUrl: string;

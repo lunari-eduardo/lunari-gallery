@@ -144,6 +144,7 @@ export default function ClientGallery() {
     return supabasePhotos.map((photo) => ({
       id: photo.id,
       filename: photo.original_filename || photo.filename,
+      originalFilename: photo.original_filename || photo.filename,
       thumbnailUrl: getThumbnailUrl(photo.storage_key, 300),
       previewUrl: getPreviewUrl(photo.storage_key, transformedGallery.settings.watermark, 1200),
       originalUrl: getFullscreenUrl(photo.storage_key, transformedGallery.settings.watermark),

@@ -72,6 +72,7 @@ export default function GalleryDetail() {
   const transformedPhotos: GalleryPhoto[] = supabasePhotos.map((photo: GaleriaPhoto, index: number) => ({
     id: photo.id,
     filename: photo.filename,
+    originalFilename: photo.originalFilename || photo.filename,
     thumbnailUrl: getPhotoUrl(photo, supabaseGallery, 'thumbnail'),
     previewUrl: getPhotoUrl(photo, supabaseGallery, 'preview'),
     originalUrl: getPhotoUrl(photo, supabaseGallery, 'full'),
