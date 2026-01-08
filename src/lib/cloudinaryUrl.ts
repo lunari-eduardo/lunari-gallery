@@ -4,11 +4,11 @@
  * Architecture:
  * [B2 Storage] → [Cloudinary Fetch API] → [CDN Cache] → [Client]
  * 
- * Benefits:
- * - Dynamic watermarks (text/image) per gallery
- * - CDN caching (reduces B2 bandwidth costs)
- * - Automatic format optimization (WebP when supported)
- * - Responsive sizing per device
+ * IMPORTANT RULES:
+ * 1. Cloudinary is the mandatory delivery layer (not optional)
+ * 2. Use normal URLs with encodeURIComponent (NOT Base64)
+ * 3. NEVER hardcode B2 shard (f002, f005, etc) - use downloadUrl from backend
+ * 4. The b2BaseUrl must come from the get-b2-config Edge Function
  */
 
 export interface WatermarkSettings {
@@ -21,6 +21,7 @@ export interface WatermarkSettings {
 
 export interface ImageOptions {
   storageKey: string;
+  b2BaseUrl: string; // REQUIRED: e.g. "https://f005.backblazeb2.com/file/lunari-gallery"
   width?: number;
   height?: number;
   watermark?: WatermarkSettings | null;
@@ -28,29 +29,11 @@ export interface ImageOptions {
   format?: 'auto' | 'jpg' | 'png' | 'webp';
 }
 
-// Cloudinary Cloud Name (confirmed via user's Cloudinary dashboard)
+// Cloudinary Cloud Name
 const CLOUDINARY_CLOUD_NAME = 'dxfjakxte';
-
-// B2 bucket URL (confirmed via diagnose-b2 edge function)
-const B2_BUCKET_URL = 'https://f005.backblazeb2.com/file/lunari-gallery';
 
 // Cloudinary Fetch API base URL
 const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch`;
-
-// Toggle para debug - se false, usa URL direta do B2
-const USE_CLOUDINARY = true;
-
-/**
- * Encode URL to Base64 URL-safe format for Cloudinary Fetch API
- * This prevents Cloudinary from misinterpreting slashes in the remote URL
- */
-function toBase64UrlSafe(url: string): string {
-  const base64 = btoa(url);
-  return base64
-    .replace(/\+/g, '-')  // + → -
-    .replace(/\//g, '_')  // / → _
-    .replace(/=+$/, '');  // remove padding
-}
 
 /**
  * Map watermark position to Cloudinary gravity
@@ -85,7 +68,7 @@ function buildWatermarkTransformation(watermark: WatermarkSettings): string | nu
   }
 
   if (watermark.type === 'image' && watermark.logoUrl) {
-    // For logo overlay, we use fetch with the logo URL
+    // For logo overlay, we use fetch with the logo URL (Base64 ONLY for overlays)
     const encodedLogoUrl = btoa(watermark.logoUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     
     // Image overlay: l_fetch:base64url,g_position,o_opacity,w_width
@@ -97,24 +80,26 @@ function buildWatermarkTransformation(watermark: WatermarkSettings): string | nu
 
 /**
  * Generate a Cloudinary Fetch URL for an image stored in B2
+ * 
+ * CORRECT FORMAT:
+ * https://res.cloudinary.com/<cloud>/image/fetch/f_auto,q_auto,w_1200,c_limit/https%3A%2F%2F<downloadUrl>%2Ffile%2F<bucket>%2F<storage_key>
  */
 export function getCloudinaryUrl(options: ImageOptions): string {
-  const { storageKey, width, height, watermark, quality = 'auto', format = 'auto' } = options;
+  const { storageKey, b2BaseUrl, width, height, watermark, quality = 'auto', format = 'auto' } = options;
 
-  // Validate storageKey
+  // Validate inputs
   if (!storageKey || typeof storageKey !== 'string' || storageKey.trim() === '') {
     console.error('Cloudinary URL: storageKey inválido:', storageKey);
     return '/placeholder.svg';
   }
 
-  // Build source URL from B2
-  const sourceUrl = `${B2_BUCKET_URL}/${storageKey}`;
-
-  // Se Cloudinary desabilitado, retornar URL direta do B2
-  if (!USE_CLOUDINARY) {
-    console.log('Cloudinary DISABLED - usando B2 direto:', sourceUrl);
-    return sourceUrl;
+  if (!b2BaseUrl || typeof b2BaseUrl !== 'string') {
+    console.error('Cloudinary URL: b2BaseUrl inválido:', b2BaseUrl);
+    return '/placeholder.svg';
   }
+
+  // Build source URL from B2 (using dynamic downloadUrl from backend)
+  const sourceUrl = `${b2BaseUrl}/${storageKey}`;
 
   // Build transformations array
   const transformations: string[] = [];
@@ -139,17 +124,17 @@ export function getCloudinaryUrl(options: ImageOptions): string {
     }
   }
 
-  // Build final URL with Base64 encoding for complex URLs
+  // Build final URL with encodeURIComponent (NOT Base64)
   const transformString = transformations.join(',');
-  const base64Source = toBase64UrlSafe(sourceUrl);
-  const finalUrl = `${CLOUDINARY_FETCH_BASE}/${transformString}/base64:${base64Source}`;
+  const encodedSource = encodeURIComponent(sourceUrl);
+  const finalUrl = `${CLOUDINARY_FETCH_BASE}/${transformString}/${encodedSource}`;
 
   console.log('Cloudinary URL Build:', {
     storageKey,
+    b2BaseUrl,
     sourceUrl,
-    base64Source: base64Source.substring(0, 50) + '...',
     transformations: transformString,
-    finalUrl: finalUrl.substring(0, 120) + '...',
+    finalUrl,
   });
 
   return finalUrl;
@@ -158,9 +143,10 @@ export function getCloudinaryUrl(options: ImageOptions): string {
 /**
  * Generate a thumbnail URL (small, no watermark)
  */
-export function getThumbnailUrl(storageKey: string, size: number = 300): string {
+export function getThumbnailUrl(storageKey: string, b2BaseUrl: string, size: number = 300): string {
   return getCloudinaryUrl({
     storageKey,
+    b2BaseUrl,
     width: size,
     quality: 'auto',
     format: 'auto',
@@ -173,11 +159,13 @@ export function getThumbnailUrl(storageKey: string, size: number = 300): string 
  */
 export function getPreviewUrl(
   storageKey: string,
+  b2BaseUrl: string,
   watermark: WatermarkSettings | null,
   maxWidth: number = 1200
 ): string {
   return getCloudinaryUrl({
     storageKey,
+    b2BaseUrl,
     width: maxWidth,
     quality: 'auto',
     format: 'auto',
@@ -190,10 +178,12 @@ export function getPreviewUrl(
  */
 export function getFullscreenUrl(
   storageKey: string,
+  b2BaseUrl: string,
   watermark: WatermarkSettings | null
 ): string {
   return getCloudinaryUrl({
     storageKey,
+    b2BaseUrl,
     width: 1920,
     quality: 'auto',
     format: 'auto',
@@ -205,5 +195,5 @@ export function getFullscreenUrl(
  * Check if Cloudinary is properly configured
  */
 export function isCloudinaryConfigured(): boolean {
-  return Boolean(CLOUDINARY_CLOUD_NAME && B2_BUCKET_URL);
+  return Boolean(CLOUDINARY_CLOUD_NAME);
 }

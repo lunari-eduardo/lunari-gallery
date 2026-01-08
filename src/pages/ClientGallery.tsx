@@ -21,6 +21,7 @@ import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { DemoImportScreen } from '@/components/DemoImportScreen';
 import { DemoExportButton } from '@/components/DemoExportButton';
 import { useGalleries } from '@/hooks/useGalleries';
+import { useB2Config } from '@/hooks/useB2Config';
 import { supabase } from '@/integrations/supabase/client';
 import { getThumbnailUrl, getPreviewUrl, getFullscreenUrl, WatermarkSettings } from '@/lib/cloudinaryUrl';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
@@ -41,6 +42,9 @@ export default function ClientGallery() {
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
+
+  // Fetch B2 config from backend (dynamic downloadUrl)
+  const { data: b2Config, isLoading: isLoadingB2Config } = useB2Config();
 
   // 1. Fetch gallery from Supabase
   const { data: supabaseGallery, isLoading: isLoadingGallery, error: galleryError } = useQuery({
@@ -137,24 +141,24 @@ export default function ClientGallery() {
     };
   }, [supabaseGallery]);
 
-  // 4. Transform photos with Cloudinary URLs
+  // 4. Transform photos with Cloudinary URLs (requires b2Config from backend)
   const photos = useMemo((): GalleryPhoto[] => {
-    if (!supabasePhotos || !transformedGallery) return [];
+    if (!supabasePhotos || !transformedGallery || !b2Config?.fullBucketUrl) return [];
     
     return supabasePhotos.map((photo) => ({
       id: photo.id,
       filename: photo.original_filename || photo.filename,
       originalFilename: photo.original_filename || photo.filename,
-      thumbnailUrl: getThumbnailUrl(photo.storage_key, 300),
-      previewUrl: getPreviewUrl(photo.storage_key, transformedGallery.settings.watermark, 1200),
-      originalUrl: getFullscreenUrl(photo.storage_key, transformedGallery.settings.watermark),
+      thumbnailUrl: getThumbnailUrl(photo.storage_key, b2Config.fullBucketUrl, 300),
+      previewUrl: getPreviewUrl(photo.storage_key, b2Config.fullBucketUrl, transformedGallery.settings.watermark, 1200),
+      originalUrl: getFullscreenUrl(photo.storage_key, b2Config.fullBucketUrl, transformedGallery.settings.watermark),
       width: photo.width || 800,
       height: photo.height || 600,
       isSelected: photo.is_selected || false,
       comment: photo.comment || '',
       order: photo.order_index || 0,
     }));
-  }, [supabasePhotos, transformedGallery]);
+  }, [supabasePhotos, transformedGallery, b2Config]);
 
   // 5. Mutation for toggling selection via Edge Function
   const selectionMutation = useMutation({
@@ -235,7 +239,7 @@ export default function ClientGallery() {
 
   // Determine which gallery to use
   const gallery = transformedGallery || localGallery;
-  const isLoading = isLoadingGallery || isLoadingPhotos || isLocalLoading;
+  const isLoading = isLoadingGallery || isLoadingPhotos || isLocalLoading || isLoadingB2Config;
   const useSupabase = !!supabaseGallery;
 
   // Loading state
