@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Loader2,
   Lock,
-  MessageSquare
+  MessageSquare,
+  Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,6 +27,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { ActionTimeline } from '@/components/ActionTimeline';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { PhotoCodesModal } from '@/components/PhotoCodesModal';
+import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useB2Config } from '@/hooks/useB2Config';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
@@ -44,6 +46,7 @@ export default function GalleryDetail() {
     fetchGalleryPhotos, 
     sendGallery: sendSupabaseGallery,
     reopenSelection: reopenSupabaseSelection,
+    deleteGallery: deleteSupabaseGallery,
     getPhotoUrl,
     isLoading: isSupabaseLoading 
   } = useSupabaseGalleries();
@@ -119,7 +122,7 @@ export default function GalleryDetail() {
   // Use public_token for client link if available, otherwise show warning
   const hasPublicToken = !!supabaseGallery.publicToken;
   const clientLink = hasPublicToken
-    ? `${window.location.origin}/gallery/${supabaseGallery.publicToken}`
+    ? `${window.location.origin}/g/${supabaseGallery.publicToken}`
     : null;
   
   // Calculate deadline
@@ -181,6 +184,17 @@ export default function GalleryDetail() {
       console.error('Error reopening selection:', error);
     }
   };
+
+  const handleDeleteGallery = async () => {
+    await deleteSupabaseGallery(supabaseGallery.id);
+    navigate('/');
+  };
+
+  // Check if gallery can be reactivated
+  const canReactivate = supabaseGallery.statusSelecao === 'confirmada' || 
+                        supabaseGallery.status === 'selecao_completa' ||
+                        supabaseGallery.status === 'expirado' ||
+                        supabaseGallery.status === 'expirada';
 
   // Default watermark settings
   const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
@@ -296,6 +310,14 @@ export default function GalleryDetail() {
         </div>
 
         <div className="flex gap-2 flex-wrap">
+          {/* Primary Actions */}
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/gallery/${supabaseGallery.id}/edit`}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Editar
+            </Link>
+          </Button>
+          
           {hasPublicToken && (
             <>
               <Button variant="outline" size="sm" onClick={handleCopyLink}>
@@ -314,24 +336,32 @@ export default function GalleryDetail() {
               </Button>
             </>
           )}
+          
           <Button variant="outline" size="sm" asChild>
             <Link to={`/gallery/${supabaseGallery.id}/preview`}>
               <Eye className="h-4 w-4 mr-2" />
               Visualizar
             </Link>
           </Button>
+          
           {supabaseGallery.status === 'rascunho' && (
             <Button variant="terracotta" size="sm" onClick={handleSendGallery}>
               <Send className="h-4 w-4 mr-2" />
               Enviar para Cliente
             </Button>
           )}
-          {supabaseGallery.statusSelecao === 'confirmada' && (
+          
+          {canReactivate && (
             <Button variant="outline" size="sm" onClick={handleReopenSelection}>
               <RotateCcw className="h-4 w-4 mr-2" />
-              Reabrir Seleção
+              Reativar
             </Button>
           )}
+          
+          <DeleteGalleryDialog 
+            galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
+            onDelete={handleDeleteGallery}
+          />
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, 
+  Images, 
   ImagePlus, 
   Settings, 
   Menu, 
@@ -18,7 +18,7 @@ interface LayoutProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Galerias', href: '/', icon: Images },
   { name: 'Clientes', href: '/clients', icon: Users },
   { name: 'Nova Galeria', href: '/gallery/new', icon: ImagePlus },
   { name: 'Configurações', href: '/settings', icon: Settings },
