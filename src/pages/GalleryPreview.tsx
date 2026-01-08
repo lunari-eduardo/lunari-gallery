@@ -48,9 +48,9 @@ export default function GalleryPreview() {
   }, [photos, gallery, b2Config, getPhotoUrl]);
 
   const watermark: WatermarkSettings = (gallery?.configuracoes?.watermark as WatermarkSettings) || {
-    type: 'none',
-    opacity: 30,
-    position: 'bottom-right',
+    type: 'standard',
+    opacity: 40,
+    position: 'center',
   };
 
   const deadline = gallery?.prazoSelecao || 

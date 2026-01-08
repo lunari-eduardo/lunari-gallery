@@ -80,7 +80,7 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery {
       welcomeMessage: galeria.mensagemBoasVindas || '',
       deadline: deadline,
       deadlinePreset: 'custom',
-      watermark: galeria.configuracoes?.watermark || { type: 'none', opacity: 30, position: 'bottom-right' },
+      watermark: galeria.configuracoes?.watermark || { type: 'standard', opacity: 40, position: 'center' },
       watermarkDisplay: galeria.configuracoes?.watermarkDisplay || 'all',
       imageResizeOption: galeria.configuracoes?.imageResizeOption || 1920,
       allowComments: galeria.configuracoes?.allowComments ?? true,

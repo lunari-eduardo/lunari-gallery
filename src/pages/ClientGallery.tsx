@@ -198,7 +198,7 @@ export default function ClientGallery() {
         welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || 'Olá {cliente}! Bem-vindo à galeria da sua sessão {sessao}.',
         deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         deadlinePreset: 7,
-        watermark: watermark || { type: 'none', opacity: 50, position: 'bottom-right' },
+        watermark: watermark || { type: 'standard', opacity: 40, position: 'center' },
         watermarkDisplay,
         imageResizeOption: 1920,
         allowComments: config?.allowComments !== false,

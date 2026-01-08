@@ -29,17 +29,6 @@ export function PhotoCard({
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // Only show watermark on thumbnails if watermarkDisplay is 'all'
-  const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay === 'all';
-
-  const watermarkPosition = {
-    'top-left': 'top-3 left-3',
-    'top-right': 'top-3 right-3',
-    'bottom-left': 'bottom-3 left-3',
-    'bottom-right': 'bottom-3 right-3',
-    'center': 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
-  };
-
   return (
     <div 
       className={cn(
@@ -81,29 +70,8 @@ export function PhotoCard({
         <div className="absolute inset-0 bg-muted animate-pulse" />
       )}
 
-      {/* Watermark */}
-      {showWatermark && (
-        <div 
-          className={cn(
-            'absolute pointer-events-none select-none',
-            watermarkPosition[watermark.position]
-          )}
-          style={{ opacity: watermark.opacity / 100 }}
-        >
-          {watermark.type === 'text' && (
-            <span className="text-white text-sm font-medium drop-shadow-lg">
-              {watermark.text}
-            </span>
-          )}
-          {watermark.type === 'image' && watermark.logoUrl && (
-            <img 
-              src={watermark.logoUrl} 
-              alt="" 
-              className="h-8 w-auto drop-shadow-lg"
-            />
-          )}
-        </div>
-      )}
+      {/* Watermark - Note: Watermarks are now applied via Cloudinary transformation */}
+      {/* This is just a visual indicator that watermark is enabled */}
 
       {/* Overlay */}
       <div className={cn(
