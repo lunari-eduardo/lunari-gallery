@@ -6,7 +6,6 @@ import {
   ArrowLeft, 
   Send, 
   RotateCcw, 
-  Copy, 
   Eye,
   FileText,
   User,
@@ -14,8 +13,6 @@ import {
   Image,
   AlertCircle,
   Loader2,
-  Lock,
-  MessageSquare,
   Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,8 +25,10 @@ import { ActionTimeline } from '@/components/ActionTimeline';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
+import { SendGalleryModal } from '@/components/SendGalleryModal';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useB2Config } from '@/hooks/useB2Config';
+import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -39,6 +38,10 @@ export default function GalleryDetail() {
   const navigate = useNavigate();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  
+  // Get settings for email templates
+  const { settings } = useSettings();
   
   // Only use Supabase
   const { 
@@ -128,40 +131,6 @@ export default function GalleryDetail() {
   // Calculate deadline
   const deadline = supabaseGallery.prazoSelecao || 
     new Date(supabaseGallery.createdAt.getTime() + (supabaseGallery.prazoSelecaoDias || 7) * 24 * 60 * 60 * 1000);
-
-  const handleCopyLink = () => {
-    if (!clientLink) {
-      toast.error('Envie a galeria primeiro para gerar o link');
-      return;
-    }
-    navigator.clipboard.writeText(clientLink);
-    toast.success('Link copiado!');
-  };
-
-  const handleCopyPassword = () => {
-    if (supabaseGallery.galleryPassword) {
-      navigator.clipboard.writeText(supabaseGallery.galleryPassword);
-      toast.success('Senha copiada!');
-    }
-  };
-
-  const handleCopyWhatsAppMessage = () => {
-    if (!clientLink) {
-      toast.error('Envie a galeria primeiro');
-      return;
-    }
-    
-    let message = `Olá! 🎉\n\nSua galeria de fotos está pronta!\n\n📸 ${supabaseGallery.nomeSessao || 'Sessão de Fotos'}\n\n🔗 Link: ${clientLink}`;
-    
-    if (supabaseGallery.permissao === 'private' && supabaseGallery.galleryPassword) {
-      message += `\n\n🔐 Senha: ${supabaseGallery.galleryPassword}`;
-    }
-    
-    message += `\n\nSelecione suas fotos favoritas com calma! ❤️`;
-    
-    navigator.clipboard.writeText(message);
-    toast.success('Mensagem copiada para WhatsApp!');
-  };
 
   const handleSendGallery = async () => {
     try {
@@ -318,25 +287,6 @@ export default function GalleryDetail() {
             </Link>
           </Button>
           
-          {hasPublicToken && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleCopyLink}>
-                <Copy className="h-4 w-4 mr-2" />
-                Copiar Link
-              </Button>
-              {supabaseGallery.permissao === 'private' && supabaseGallery.galleryPassword && (
-                <Button variant="outline" size="sm" onClick={handleCopyPassword}>
-                  <Lock className="h-4 w-4 mr-2" />
-                  Copiar Senha
-                </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={handleCopyWhatsAppMessage}>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Mensagem WhatsApp
-              </Button>
-            </>
-          )}
-          
           <Button variant="outline" size="sm" asChild>
             <Link to={`/gallery/${supabaseGallery.id}/preview`}>
               <Eye className="h-4 w-4 mr-2" />
@@ -344,12 +294,15 @@ export default function GalleryDetail() {
             </Link>
           </Button>
           
-          {supabaseGallery.status === 'rascunho' && (
-            <Button variant="terracotta" size="sm" onClick={handleSendGallery}>
-              <Send className="h-4 w-4 mr-2" />
-              Enviar para Cliente
-            </Button>
-          )}
+          {/* Send/Share Button */}
+          <Button 
+            variant="terracotta" 
+            size="sm" 
+            onClick={() => setIsSendModalOpen(true)}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            {hasPublicToken ? 'Compartilhar' : 'Enviar para Cliente'}
+          </Button>
           
           {canReactivate && (
             <Button variant="outline" size="sm" onClick={handleReopenSelection}>
@@ -548,6 +501,15 @@ export default function GalleryDetail() {
         onOpenChange={setIsCodesModalOpen}
         photos={transformedPhotos}
         clientName={supabaseGallery.clienteNome || 'Cliente'}
+      />
+
+      {/* Send Gallery Modal */}
+      <SendGalleryModal
+        isOpen={isSendModalOpen}
+        onOpenChange={setIsSendModalOpen}
+        gallery={supabaseGallery}
+        settings={settings}
+        onSendGallery={handleSendGallery}
       />
     </div>
   );

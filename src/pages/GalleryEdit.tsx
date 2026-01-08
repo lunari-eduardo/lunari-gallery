@@ -22,9 +22,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
-import { PhotoUploader } from '@/components/PhotoUploader';
+import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
@@ -41,6 +42,7 @@ function formatPhoneBR(value: string): string {
 export default function GalleryEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
   const { 
     getGallery,
@@ -60,6 +62,9 @@ export default function GalleryEdit() {
   } = useGalleryClients();
 
   const gallery = getGallery(id || '');
+  
+  // Local photo count for immediate UI update
+  const [localPhotoCount, setLocalPhotoCount] = useState<number | null>(null);
   
   // Form state
   const [nomeSessao, setNomeSessao] = useState('');
@@ -88,6 +93,11 @@ export default function GalleryEdit() {
       setValorFotoExtra(gallery.valorFotoExtra);
       setPrazoSelecao(gallery.prazoSelecao || undefined);
       
+      // Initialize local photo count
+      if (localPhotoCount === null) {
+        setLocalPhotoCount(gallery.totalFotos);
+      }
+      
       // Try to find matching client
       if (gallery.clienteId) {
         const matchingClient = clients.find(c => c.id === gallery.clienteId);
@@ -97,6 +107,14 @@ export default function GalleryEdit() {
       }
     }
   }, [gallery, clients]);
+
+  // Handle upload complete - update local count immediately
+  const handleUploadComplete = (photos: UploadedPhoto[]) => {
+    setLocalPhotoCount(prev => (prev || 0) + photos.length);
+    // Invalidate queries to sync with database
+    queryClient.invalidateQueries({ queryKey: ['galerias'] });
+    queryClient.invalidateQueries({ queryKey: ['galeria-fotos', id] });
+  };
 
   // Handle client selection
   const handleClientSelect = (client: Client | null) => {
@@ -430,7 +448,7 @@ export default function GalleryEdit() {
                 Fotos da Galeria
               </CardTitle>
               <CardDescription>
-                {gallery.totalFotos} fotos nesta galeria
+                {localPhotoCount ?? gallery.totalFotos} fotos nesta galeria
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -455,7 +473,7 @@ export default function GalleryEdit() {
                       Fechar
                     </Button>
                   </div>
-                  <PhotoUploader galleryId={gallery.id} />
+                  <PhotoUploader galleryId={gallery.id} onUploadComplete={handleUploadComplete} />
                 </div>
               )}
             </CardContent>
