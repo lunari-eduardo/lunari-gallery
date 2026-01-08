@@ -322,6 +322,62 @@ export default function ClientGallery() {
     );
   }
 
+  // Handle password submit
+  const handlePasswordSubmit = async (password: string) => {
+    setIsCheckingPassword(true);
+    setPasswordError(undefined);
+    
+    try {
+      // Store password in session and refetch
+      sessionStorage.setItem(`gallery_password_${identifier}`, password);
+      setSessionPassword(password);
+      
+      // Force refetch with new password
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/gallery-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: identifier, 
+          password: password 
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        if (result.code === 'WRONG_PASSWORD') {
+          setPasswordError('Senha incorreta');
+          sessionStorage.removeItem(`gallery_password_${identifier}`);
+          return;
+        }
+        throw new Error(result.error || 'Erro ao acessar galeria');
+      }
+      
+      // Success - refetch gallery data
+      await refetchGallery();
+      setRequiresPassword(false);
+    } catch (error) {
+      setPasswordError('Erro ao verificar senha');
+      sessionStorage.removeItem(`gallery_password_${identifier}`);
+    } finally {
+      setIsCheckingPassword(false);
+    }
+  };
+
+  // Password screen - BEFORE error check
+  if (requiresPassword && !gallery) {
+    return (
+      <PasswordScreen
+        sessionName={galleryResponse?.sessionName}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
+        onSubmit={handlePasswordSubmit}
+        error={passwordError}
+        isLoading={isCheckingPassword}
+      />
+    );
+  }
+
   // Error state - gallery not found
   if (galleryError || !gallery) {
     return (
@@ -347,7 +403,7 @@ export default function ClientGallery() {
 
             <div className="lunari-card p-4">
               <p className="text-xs text-muted-foreground">
-                ID solicitado: <code className="bg-muted px-1 rounded">{id}</code>
+                ID solicitado: <code className="bg-muted px-1 rounded">{identifier}</code>
               </p>
             </div>
           </div>
