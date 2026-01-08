@@ -51,7 +51,7 @@ serve(async (req) => {
     }
 
     const authData = await response.json();
-    const expectedFrontendUrl = "https://f002.backblazeb2.com";
+    const expectedFrontendUrl = "https://f005.backblazeb2.com";
     const realDownloadUrl = authData.downloadUrl;
     const urlMatch = realDownloadUrl === expectedFrontendUrl;
 
