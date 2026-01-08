@@ -212,31 +212,6 @@ export default function ClientGallery() {
       extraTotal: 0,
     };
   }, [supabaseGallery]);
-      saleSettings: {
-        mode: 'sale_without_payment',
-        pricingModel: 'fixed',
-        chargeType: 'only_extras',
-        fixedPrice: supabaseGallery.valor_foto_extra || 25,
-        discountPackages: [],
-      },
-      settings: {
-        welcomeMessage: supabaseGallery.mensagem_boas_vindas || 'Olá {cliente}! Bem-vindo à galeria da sua sessão {sessao}.',
-        deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Fallback only for display
-        deadlinePreset: 7,
-        watermark: watermark || { type: 'none', opacity: 50, position: 'bottom-right' },
-        watermarkDisplay,
-        imageResizeOption: 1920,
-        allowComments: config?.allowComments !== false,
-        allowDownload: config?.allowDownload === true,
-        allowExtraPhotos: true,
-      },
-      photos: [],
-      actions: [],
-      selectedCount: 0,
-      extraCount: 0,
-      extraTotal: 0,
-    };
-  }, [supabaseGallery]);
 
   // Check if deadline is actually set in database
   const hasDeadline = !!supabaseGallery?.prazo_selecao;
