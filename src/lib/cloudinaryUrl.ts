@@ -24,7 +24,7 @@ export interface CloudinaryOptions {
 const CLOUDINARY_CLOUD_NAME = 'dxfjakxte';
 
 // B2 bucket URL - hardcoded for production
-const B2_BUCKET_URL = 'https://f002.backblazeb2.com/file/lunari-gallery';
+const B2_BUCKET_URL = 'https://f005.backblazeb2.com/file/lunari-gallery';
 
 /**
  * Map position to Cloudinary gravity

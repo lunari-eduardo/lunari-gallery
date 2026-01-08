@@ -238,7 +238,7 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Galeria criada com sucesso!');
+      // Toast removido - será mostrado apenas no final do fluxo de criação
     },
     onError: (error) => {
       console.error('Error creating gallery:', error);
