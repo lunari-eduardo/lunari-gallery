@@ -86,7 +86,7 @@ export default function GalleryCreate() {
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   
   // Supabase galleries hook
-  const { createGallery: createSupabaseGallery } = useSupabaseGalleries();
+  const { createGallery: createSupabaseGallery, updateGallery } = useSupabaseGalleries();
 
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
@@ -179,12 +179,40 @@ export default function GalleryCreate() {
       }
       setCurrentStep(currentStep + 1);
     } else {
-      // Final step - navigate to the Supabase gallery
+      // Final step - save all configurations and navigate to the gallery
       if (supabaseGalleryId) {
-        toast.success('Galeria criada com sucesso!', {
-          description: 'Você pode enviar o link para o cliente agora.'
-        });
-        navigate(`/gallery/${supabaseGalleryId}`);
+        try {
+          // Update gallery with all settings from Step 4
+          await updateGallery({
+            id: supabaseGalleryId,
+            data: {
+              configuracoes: {
+                watermark: {
+                  type: watermarkType,
+                  text: watermarkText,
+                  opacity: watermarkOpacity,
+                  position: 'center',
+                },
+                watermarkDisplay: watermarkDisplay,
+                imageResizeOption: (imageResizeOption === 640 ? 800 : imageResizeOption) as 800 | 1024 | 1920,
+                allowComments: allowComments,
+                allowDownload: allowDownload,
+                allowExtraPhotos: allowExtraPhotos,
+              },
+              mensagemBoasVindas: welcomeMessage,
+              prazoSelecaoDias: customDays,
+              valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+            }
+          });
+          
+          toast.success('Galeria criada com sucesso!', {
+            description: 'Você pode enviar o link para o cliente agora.'
+          });
+          navigate(`/gallery/${supabaseGalleryId}`);
+        } catch (error) {
+          console.error('Error finalizing gallery:', error);
+          toast.error('Erro ao finalizar galeria');
+        }
         return;
       }
       
