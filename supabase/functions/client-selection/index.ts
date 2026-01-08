@@ -140,14 +140,14 @@ Deno.serve(async (req) => {
         .eq('id', galleryId);
     }
 
-    // 9. Log action
+    // 9. Log action (user_id is null for anonymous client actions)
     await supabase.from('galeria_acoes').insert({
       galeria_id: galleryId,
       tipo: action === 'comment' ? 'comment_added' : (updateData.is_selected ? 'photo_selected' : 'photo_deselected'),
       descricao: action === 'comment' 
         ? `Comentário adicionado à foto` 
         : (updateData.is_selected ? 'Foto selecionada pelo cliente' : 'Foto desmarcada pelo cliente'),
-      user_id: gallery.id, // Use gallery id as pseudo user for anonymous actions
+      user_id: null, // Anonymous client action
     });
 
     return new Response(
