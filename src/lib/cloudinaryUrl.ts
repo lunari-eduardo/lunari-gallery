@@ -41,6 +41,18 @@ const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAM
 const USE_CLOUDINARY = true;
 
 /**
+ * Encode URL to Base64 URL-safe format for Cloudinary Fetch API
+ * This prevents Cloudinary from misinterpreting slashes in the remote URL
+ */
+function toBase64UrlSafe(url: string): string {
+  const base64 = btoa(url);
+  return base64
+    .replace(/\+/g, '-')  // + → -
+    .replace(/\//g, '_')  // / → _
+    .replace(/=+$/, '');  // remove padding
+}
+
+/**
  * Map watermark position to Cloudinary gravity
  */
 function getGravity(position: WatermarkSettings['position']): string {
@@ -127,16 +139,17 @@ export function getCloudinaryUrl(options: ImageOptions): string {
     }
   }
 
-  // Build final URL - SEM encodeURIComponent (Cloudinary aceita URL não-codificada)
+  // Build final URL with Base64 encoding for complex URLs
   const transformString = transformations.join(',');
-  const finalUrl = `${CLOUDINARY_FETCH_BASE}/${transformString}/${sourceUrl}`;
+  const base64Source = toBase64UrlSafe(sourceUrl);
+  const finalUrl = `${CLOUDINARY_FETCH_BASE}/${transformString}/base64:${base64Source}`;
 
   console.log('Cloudinary URL Build:', {
     storageKey,
     sourceUrl,
+    base64Source: base64Source.substring(0, 50) + '...',
     transformations: transformString,
-    finalUrl,
-    b2Direct: sourceUrl,
+    finalUrl: finalUrl.substring(0, 120) + '...',
   });
 
   return finalUrl;
