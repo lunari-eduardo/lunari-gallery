@@ -35,33 +35,12 @@ const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dxf
 // Cloudinary Fetch API base URL
 const CLOUDINARY_FETCH_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/fetch`;
 
-// Standard watermark images (served from public folder)
-const getStandardWatermarkUrl = (isHorizontal: boolean): string => {
-  // Use the deployed origin for watermark URLs
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}/watermarks/${isHorizontal ? 'horizontal' : 'vertical'}.png`;
-};
-
 // Fixed opacity for standard watermark
 const STANDARD_WATERMARK_OPACITY = 40;
 
 /**
- * Map watermark position to Cloudinary gravity
- */
-function getGravity(position: WatermarkSettings['position']): string {
-  const gravityMap: Record<string, string> = {
-    'top-left': 'north_west',
-    'top-right': 'north_east',
-    'bottom-left': 'south_west',
-    'bottom-right': 'south_east',
-    'center': 'center',
-    'fill': 'center',
-  };
-  return gravityMap[position] || 'south_east';
-}
-
-/**
  * Build watermark transformation string for Cloudinary
+ * Uses Cloudinary assets with public_id (stable, no external URL dependency)
  */
 function buildWatermarkTransformation(
   watermark: WatermarkSettings, 
@@ -71,23 +50,16 @@ function buildWatermarkTransformation(
   try {
     if (watermark.type === 'none') return null;
 
-    // Handle standard watermark type
     if (watermark.type === 'standard') {
       // Determine orientation based on image dimensions
       const isHorizontal = (imageWidth || 800) >= (imageHeight || 600);
-      const logoUrl = getStandardWatermarkUrl(isHorizontal);
       
-      // Validar URL antes de encodar - deve ser absoluta
-      if (!logoUrl || !logoUrl.startsWith('http')) {
-        console.warn('Watermark URL inválida, ignorando marca d\'água:', logoUrl);
-        return null;
-      }
+      // Use Cloudinary public_id for overlay (folder separator is ":" in transformations)
+      // Assets already uploaded: watermarks/horizontal and watermarks/vertical
+      const watermarkPublicId = isHorizontal ? 'watermarks:horizontal' : 'watermarks:vertical';
       
-      // Encode URL for Cloudinary overlay (Base64 for overlays)
-      const encodedLogoUrl = btoa(logoUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      
-      // Standard watermark: centered, fixed opacity, responsive width
-      return `l_fetch:${encodedLogoUrl},g_center,o_${STANDARD_WATERMARK_OPACITY},w_400`;
+      // Overlay by public_id - stable, no external URL dependency
+      return `l_${watermarkPublicId},g_center,o_${STANDARD_WATERMARK_OPACITY},w_400`;
     }
 
     return null;
