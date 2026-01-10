@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getPreviewUrl, getThumbnailUrl, WatermarkSettings } from '@/lib/cloudinaryUrl';
+import { buildImageUrl } from '@/hooks/useR2Config';
+import { WatermarkSettings } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
 
 // Types based on database schema
@@ -498,20 +499,18 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Get photo URL helper - requires b2BaseUrl from useB2Config hook
+  // Get photo URL helper - now uses R2 Worker for serving images
+  // b2BaseUrl parameter kept for backwards compatibility but ignored
   const getPhotoUrl = useCallback(
-    (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', b2BaseUrl: string): string => {
-      const watermark = gallery?.configuracoes?.watermark || null;
-      const watermarkDisplay = gallery?.configuracoes?.watermarkDisplay || 'all';
+    (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', b2BaseUrl?: string): string => {
+      // New R2 structure: use preview_path, thumb_path, or original_path
+      // For now (Phase 1.2), all point to same path until resize is implemented
+      const photoPath = photo.storageKey; // Will be updated to use new fields
       
-      // Thumbnails: SEMPRE sem marca d'água (usar getThumbnailUrl)
-      if (size === 'thumbnail') {
-        return getThumbnailUrl(photo.storageKey, b2BaseUrl, 300);
-      }
+      if (!photoPath) return '/placeholder.svg';
       
-      // Preview e Full: aplicar marca d'água se watermarkDisplay !== 'none'
-      const applyWatermark = watermarkDisplay !== 'none' ? watermark : null;
-      return getPreviewUrl(photo.storageKey, b2BaseUrl, applyWatermark, size === 'full' ? 1920 : 1200, photo.width, photo.height);
+      // Use R2 Worker to serve images
+      return buildImageUrl(photoPath);
     },
     []
   );

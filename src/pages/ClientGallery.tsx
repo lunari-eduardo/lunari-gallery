@@ -20,9 +20,9 @@ import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { PasswordScreen } from '@/components/PasswordScreen';
-import { useB2Config } from '@/hooks/useB2Config';
+import { buildImageUrl } from '@/hooks/useR2Config';
 import { supabase } from '@/integrations/supabase/client';
-import { getThumbnailUrl, getPreviewUrl, getFullscreenUrl, WatermarkSettings } from '@/lib/cloudinaryUrl';
+import { WatermarkSettings } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -61,8 +61,7 @@ export default function ClientGallery() {
     return sessionStorage.getItem(`gallery_password_${identifier}`);
   });
 
-  // Fetch B2 config from backend (dynamic downloadUrl)
-  const { data: b2Config, isLoading: isLoadingB2Config, error: b2Error } = useB2Config();
+  // R2 Worker is used for image URLs (no async config needed)
 
   // 1. Fetch gallery via Edge Function (handles token + password validation)
   const { data: galleryResponse, isLoading: isLoadingGallery, error: galleryError, refetch: refetchGallery } = useQuery({
@@ -216,24 +215,22 @@ export default function ClientGallery() {
   // Check if deadline is actually set in database
   const hasDeadline = !!supabaseGallery?.prazo_selecao;
 
-  // 4. Transform photos with Cloudinary URLs (requires b2Config from backend)
+  // 4. Transform photos with R2 Worker URLs
   const photos = useMemo((): GalleryPhoto[] => {
     if (!supabasePhotos || !transformedGallery) return [];
-    
-    // If b2Config is loading or failed, show photos with placeholder URLs
-    const bucketUrl = b2Config?.fullBucketUrl || '';
     
     return supabasePhotos.map((photo) => {
       const photoWidth = photo.width || 800;
       const photoHeight = photo.height || 600;
+      const storagePath = photo.storage_key;
       
       return {
         id: photo.id,
         filename: photo.original_filename || photo.filename,
         originalFilename: photo.original_filename || photo.filename,
-        thumbnailUrl: bucketUrl ? getThumbnailUrl(photo.storage_key, bucketUrl, 300) : '/placeholder.svg',
-        previewUrl: bucketUrl ? getPreviewUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark, 1200, photoWidth, photoHeight) : '/placeholder.svg',
-        originalUrl: bucketUrl ? getFullscreenUrl(photo.storage_key, bucketUrl, transformedGallery.settings.watermark, photoWidth, photoHeight) : '/placeholder.svg',
+        thumbnailUrl: buildImageUrl(storagePath),
+        previewUrl: buildImageUrl(storagePath),
+        originalUrl: buildImageUrl(storagePath),
         width: photoWidth,
         height: photoHeight,
         isSelected: photo.is_selected || false,
@@ -241,7 +238,7 @@ export default function ClientGallery() {
         order: photo.order_index || 0,
       };
     });
-  }, [supabasePhotos, transformedGallery, b2Config]);
+  }, [supabasePhotos, transformedGallery]);
 
   // 5. Mutation for toggling selection via Edge Function
   const selectionMutation = useMutation({
@@ -316,8 +313,9 @@ export default function ClientGallery() {
     }
   }, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
 
+
   const gallery = transformedGallery;
-  const isLoading = isLoadingGallery || isLoadingPhotos || isLoadingB2Config;
+  const isLoading = isLoadingGallery || isLoadingPhotos;
 
   // Loading state
   if (isLoading) {
@@ -421,10 +419,7 @@ export default function ClientGallery() {
     );
   }
 
-  // B2 config error - show warning but continue
-  if (b2Error && !b2Config) {
-    console.warn('B2 config failed to load, images may not display correctly');
-  }
+  // R2 config is synchronous - no error handling needed
 
   const hoursUntilDeadline = hasDeadline 
     ? differenceInHours(gallery.settings.deadline, new Date())

@@ -27,7 +27,7 @@ import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
-import { useB2Config } from '@/hooks/useB2Config';
+import { useR2Config } from '@/hooks/useR2Config';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
 import { toast } from 'sonner';
@@ -54,8 +54,8 @@ export default function GalleryDetail() {
     isLoading: isSupabaseLoading 
   } = useSupabaseGalleries();
 
-  // Fetch B2 config from backend (dynamic downloadUrl)
-  const { data: b2Config, isLoading: isLoadingB2Config } = useB2Config();
+  // Get R2 config for image URLs
+  const { workerUrl } = useR2Config();
   
   // Get Supabase gallery
   const supabaseGallery = getSupabaseGallery(id || '');
@@ -67,28 +67,27 @@ export default function GalleryDetail() {
     enabled: !!supabaseGallery && !!id,
   });
 
-  // Transform Supabase photos to GalleryPhoto format (requires b2Config)
+  // Transform Supabase photos to GalleryPhoto format (uses R2 Worker)
   const transformedPhotos: GalleryPhoto[] = useMemo(() => {
-    const bucketUrl = b2Config?.fullBucketUrl || '';
-    if (!bucketUrl) return [];
+    if (!workerUrl) return [];
     
     return supabasePhotos.map((photo: GaleriaPhoto, index: number) => ({
       id: photo.id,
       filename: photo.filename,
       originalFilename: photo.originalFilename || photo.filename,
-      thumbnailUrl: getPhotoUrl(photo, supabaseGallery, 'thumbnail', bucketUrl),
-      previewUrl: getPhotoUrl(photo, supabaseGallery, 'preview', bucketUrl),
-      originalUrl: getPhotoUrl(photo, supabaseGallery, 'full', bucketUrl),
+      thumbnailUrl: getPhotoUrl(photo, supabaseGallery, 'thumbnail'),
+      previewUrl: getPhotoUrl(photo, supabaseGallery, 'preview'),
+      originalUrl: getPhotoUrl(photo, supabaseGallery, 'full'),
       width: photo.width,
       height: photo.height,
       isSelected: photo.isSelected,
       comment: photo.comment || undefined,
       order: photo.orderIndex || index,
     }));
-  }, [supabasePhotos, supabaseGallery, b2Config, getPhotoUrl]);
+  }, [supabasePhotos, supabaseGallery, workerUrl, getPhotoUrl]);
 
   // Combined loading state
-  const isLoadingData = isSupabaseLoading || isLoadingPhotos || isLoadingB2Config;
+  const isLoadingData = isSupabaseLoading || isLoadingPhotos;
 
   // Show loading state while galleries are being loaded
   if (isLoadingData) {

@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Upload, X, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { 
@@ -11,7 +10,7 @@ import {
 } from '@/lib/imageCompression';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
+import { getWorkerUrl } from '@/hooks/useR2Config';
 export interface UploadedPhoto {
   id: string;
   filename: string;
@@ -105,7 +104,7 @@ export function PhotoUploader({
       const compressed = await compressImage(item.file, compressionOptions);
       updateItem(item.id, { progress: 30 });
 
-      // Step 2: Upload via Edge Function (proxy to B2)
+      // Step 2: Upload via Cloudflare Worker (R2 storage)
       updateItem(item.id, { status: 'uploading', progress: 40 });
       
       const { data: { session } } = await supabase.auth.getSession();
@@ -121,19 +120,18 @@ export function PhotoUploader({
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
 
-      const response = await fetch(
-        `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/upload-photo`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      );
+      // Upload to Cloudflare Worker
+      const workerUrl = getWorkerUrl();
+      const response = await fetch(`${workerUrl}/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Falha ao enviar foto' }));
         throw new Error(error.error || 'Falha ao enviar foto');
       }
 
@@ -144,7 +142,7 @@ export function PhotoUploader({
         id: result.photo.id,
         filename: result.photo.filename,
         originalFilename: result.photo.originalFilename,
-        storageKey: result.photo.storageKey,
+        storageKey: result.photo.storageKey || result.photo.originalPath,
         fileSize: result.photo.fileSize,
         mimeType: result.photo.mimeType,
         width: result.photo.width,
@@ -153,6 +151,7 @@ export function PhotoUploader({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
       updateItem(item.id, { status: 'error', error: message });
+      console.error('Upload error:', error);
       return null;
     }
   };
