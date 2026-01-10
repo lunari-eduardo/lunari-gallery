@@ -9,7 +9,6 @@ import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
-import { useB2Config } from '@/hooks/useB2Config';
 import { useQuery } from '@tanstack/react-query';
 import { GalleryPhoto, WatermarkSettings } from '@/types/gallery';
 
@@ -18,7 +17,6 @@ export default function GalleryPreview() {
   const navigate = useNavigate();
   
   const { getGallery, fetchGalleryPhotos, getPhotoUrl, isLoading } = useSupabaseGalleries();
-  const { data: b2Config, isLoading: isLoadingB2 } = useB2Config();
   
   const gallery = getGallery(id || '');
   
@@ -29,23 +27,22 @@ export default function GalleryPreview() {
   });
 
   const transformedPhotos: GalleryPhoto[] = useMemo(() => {
-    const bucketUrl = b2Config?.fullBucketUrl || '';
-    if (!bucketUrl || !gallery) return [];
+    if (!gallery) return [];
     
     return photos.map((photo: GaleriaPhoto, index: number) => ({
       id: photo.id,
       filename: photo.filename,
       originalFilename: photo.originalFilename || photo.filename,
-      thumbnailUrl: getPhotoUrl(photo, gallery, 'thumbnail', bucketUrl),
-      previewUrl: getPhotoUrl(photo, gallery, 'preview', bucketUrl),
-      originalUrl: getPhotoUrl(photo, gallery, 'full', bucketUrl),
+      thumbnailUrl: getPhotoUrl(photo, gallery, 'thumbnail'),
+      previewUrl: getPhotoUrl(photo, gallery, 'preview'),
+      originalUrl: getPhotoUrl(photo, gallery, 'full'),
       width: photo.width,
       height: photo.height,
       isSelected: photo.isSelected,
       comment: photo.comment || undefined,
       order: photo.orderIndex || index,
     }));
-  }, [photos, gallery, b2Config, getPhotoUrl]);
+  }, [photos, gallery, getPhotoUrl]);
 
   const watermark: WatermarkSettings = (gallery?.configuracoes?.watermark as WatermarkSettings) || {
     type: 'standard',
@@ -56,7 +53,7 @@ export default function GalleryPreview() {
   const deadline = gallery?.prazoSelecao || 
     (gallery ? new Date(gallery.createdAt.getTime() + 7 * 24 * 60 * 60 * 1000) : new Date());
 
-  if (isLoading || isLoadingPhotos || isLoadingB2) {
+  if (isLoading || isLoadingPhotos) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
