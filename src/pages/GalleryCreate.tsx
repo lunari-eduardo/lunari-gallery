@@ -752,8 +752,8 @@ export default function GalleryCreate() {
             <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">ℹ️ Informação técnica</p>
               <p>
-                As fotos são comprimidas e enviadas para o BackBlaze B2. 
-                O Cloudinary gera as versões derivadas (thumbnail + preview) automaticamente.
+                As fotos são comprimidas e enviadas de forma segura. 
+                As versões derivadas (thumbnail + preview) são geradas automaticamente.
               </p>
             </div>
           </div>;

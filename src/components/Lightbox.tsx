@@ -195,9 +195,7 @@ export function Lightbox({
             style={{ transform: `scale(${zoom})` }}
           />
           
-          {/* Watermark - Note: Watermarks are now applied via Cloudinary transformation */}
-          {/* This client-side watermark overlay is kept for backwards compatibility but
-              the actual watermark is applied to the image via Cloudinary URL transformations */}
+          {/* Watermark is applied server-side */}
         </div>
       </div>
 

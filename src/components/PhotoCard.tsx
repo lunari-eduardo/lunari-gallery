@@ -70,8 +70,7 @@ export function PhotoCard({
         <div className="absolute inset-0 bg-muted animate-pulse" />
       )}
 
-      {/* Watermark - Note: Watermarks are now applied via Cloudinary transformation */}
-      {/* This is just a visual indicator that watermark is enabled */}
+      {/* Watermark indicator */}
 
       {/* Overlay */}
       <div className={cn(

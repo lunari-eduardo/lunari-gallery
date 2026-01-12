@@ -566,6 +566,10 @@ export type Database = {
           data_pagamento: string | null
           descricao: string | null
           id: string
+          ip_checkout_url: string | null
+          ip_order_nsu: string | null
+          ip_receipt_url: string | null
+          ip_transaction_nsu: string | null
           mp_expiration_date: string | null
           mp_payment_id: string | null
           mp_payment_link: string | null
@@ -573,6 +577,7 @@ export type Database = {
           mp_preference_id: string | null
           mp_qr_code: string | null
           mp_qr_code_base64: string | null
+          provedor: string | null
           session_id: string | null
           status: string | null
           tipo_cobranca: string
@@ -586,6 +591,10 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           id?: string
+          ip_checkout_url?: string | null
+          ip_order_nsu?: string | null
+          ip_receipt_url?: string | null
+          ip_transaction_nsu?: string | null
           mp_expiration_date?: string | null
           mp_payment_id?: string | null
           mp_payment_link?: string | null
@@ -593,6 +602,7 @@ export type Database = {
           mp_preference_id?: string | null
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
+          provedor?: string | null
           session_id?: string | null
           status?: string | null
           tipo_cobranca: string
@@ -606,6 +616,10 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           id?: string
+          ip_checkout_url?: string | null
+          ip_order_nsu?: string | null
+          ip_receipt_url?: string | null
+          ip_transaction_nsu?: string | null
           mp_expiration_date?: string | null
           mp_payment_id?: string | null
           mp_payment_link?: string | null
@@ -613,6 +627,7 @@ export type Database = {
           mp_preference_id?: string | null
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
+          provedor?: string | null
           session_id?: string | null
           status?: string | null
           tipo_cobranca?: string

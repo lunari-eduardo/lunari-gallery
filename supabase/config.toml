@@ -1,25 +1,13 @@
 project_id = "tlnjspsywycbudhewsfv"
 
-[functions.get-upload-url]
-verify_jwt = false
-
 [functions.delete-photos]
 verify_jwt = false
 
-[functions.upload-photo]
+[functions.gallery-access]
 verify_jwt = false
 
 [functions.client-selection]
 verify_jwt = false
 
-[functions.get-b2-config]
-verify_jwt = false
-
-[functions.test-image-access]
-verify_jwt = false
-
-[functions.diagnose-b2]
-verify_jwt = false
-
-[functions.gallery-access]
+[functions.confirm-selection]
 verify_jwt = false
