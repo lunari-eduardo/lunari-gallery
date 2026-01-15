@@ -7,14 +7,19 @@
  * Routes:
  * - POST /upload - Upload image to R2
  * - GET /image/{path} - Serve image from R2
+ * 
+ * Authentication: JWT validated locally using SUPABASE_JWT_SECRET
  */
+
+import * as jose from 'jose';
 
 export interface Env {
   // R2 Bucket binding (configured in wrangler.toml)
   GALLERY_BUCKET: R2Bucket;
-  // Supabase config for auth validation and DB operations
+  // Supabase config
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_JWT_SECRET: string;
 }
 
 // CORS headers for cross-origin requests
@@ -24,36 +29,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
 
-// Validate Supabase JWT and return user info
+// Validate Supabase JWT directly (no HTTP call needed)
 async function validateAuth(
   request: Request,
   env: Env
 ): Promise<{ userId: string; email: string } | null> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
+    console.log('No Authorization header');
     return null;
   }
 
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    // Validate token with Supabase
-    const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      },
+    const secret = new TextEncoder().encode(env.SUPABASE_JWT_SECRET);
+    
+    const { payload } = await jose.jwtVerify(token, secret, {
+      issuer: `${env.SUPABASE_URL}/auth/v1`,
+      audience: 'authenticated',
     });
 
-    if (!response.ok) {
-      console.error('Auth validation failed:', response.status);
+    const userId = payload.sub;
+    const email = payload.email as string;
+
+    if (!userId) {
+      console.log('No sub claim in JWT');
       return null;
     }
 
-    const user = await response.json();
-    return { userId: user.id, email: user.email };
+    console.log(`Auth OK: user ${userId}`);
+    return { userId, email: email || '' };
   } catch (error) {
-    console.error('Auth error:', error);
+    console.error('JWT validation error:', error);
     return null;
   }
 }
@@ -63,7 +71,6 @@ async function handleUpload(
   request: Request,
   env: Env
 ): Promise<Response> {
-  // Validate authentication
   const user = await validateAuth(request, env);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Não autorizado' }), {
@@ -128,7 +135,7 @@ async function handleUpload(
       user_id: user.userId,
       filename,
       original_filename: originalFilename,
-      storage_key: originalPath, // Legacy field, keep for now
+      storage_key: originalPath,
       original_path: originalPath,
       preview_path: previewPath,
       thumb_path: thumbPath,
