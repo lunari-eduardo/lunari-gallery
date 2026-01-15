@@ -1026,13 +1026,18 @@ export type Database = {
           file_size: number | null
           filename: string
           galeria_id: string
+          has_watermark: boolean | null
           height: number | null
           id: string
           is_selected: boolean | null
           mime_type: string | null
           order_index: number | null
           original_filename: string
+          original_path: string | null
+          preview_path: string | null
+          preview_wm_path: string | null
           storage_key: string
+          thumb_path: string | null
           updated_at: string
           user_id: string
           width: number | null
@@ -1043,13 +1048,18 @@ export type Database = {
           file_size?: number | null
           filename: string
           galeria_id: string
+          has_watermark?: boolean | null
           height?: number | null
           id?: string
           is_selected?: boolean | null
           mime_type?: string | null
           order_index?: number | null
           original_filename: string
+          original_path?: string | null
+          preview_path?: string | null
+          preview_wm_path?: string | null
           storage_key: string
+          thumb_path?: string | null
           updated_at?: string
           user_id: string
           width?: number | null
@@ -1060,13 +1070,18 @@ export type Database = {
           file_size?: number | null
           filename?: string
           galeria_id?: string
+          has_watermark?: boolean | null
           height?: number | null
           id?: string
           is_selected?: boolean | null
           mime_type?: string | null
           order_index?: number | null
           original_filename?: string
+          original_path?: string | null
+          preview_path?: string | null
+          preview_wm_path?: string | null
           storage_key?: string
+          thumb_path?: string | null
           updated_at?: string
           user_id?: string
           width?: number | null
@@ -2551,6 +2566,7 @@ export type Database = {
         Args: { p_appointment_id: string; p_keep_payments?: boolean }
         Returns: Json
       }
+      fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
