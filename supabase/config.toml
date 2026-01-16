@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.confirm-selection]
 verify_jwt = false
+
+[functions.b2-upload]
+verify_jwt = false

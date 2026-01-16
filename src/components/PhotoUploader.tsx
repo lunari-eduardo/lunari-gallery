@@ -10,7 +10,6 @@ import {
 } from '@/lib/imageCompression';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getWorkerUrl } from '@/hooks/useR2Config';
 export interface UploadedPhoto {
   id: string;
   filename: string;
@@ -104,7 +103,7 @@ export function PhotoUploader({
       const compressed = await compressImage(item.file, compressionOptions);
       updateItem(item.id, { progress: 30 });
 
-      // Step 2: Upload via Cloudflare Worker (R2 storage)
+      // Step 2: Upload via B2 Edge Function
       updateItem(item.id, { status: 'uploading', progress: 40 });
       
       const { data: { session } } = await supabase.auth.getSession();
@@ -120,33 +119,30 @@ export function PhotoUploader({
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
 
-      // Upload to Cloudflare Worker
-      const workerUrl = getWorkerUrl();
-      const response = await fetch(`${workerUrl}/upload`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+      // Upload to B2 via Supabase Edge Function
+      const { data, error: uploadError } = await supabase.functions.invoke('b2-upload', {
         body: formData,
       });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Falha ao enviar foto' }));
-        throw new Error(error.error || 'Falha ao enviar foto');
+      if (uploadError) {
+        throw new Error(uploadError.message || 'Falha ao enviar foto');
       }
 
-      const result = await response.json();
+      if (!data?.success) {
+        throw new Error(data?.error || 'Falha ao enviar foto');
+      }
+
       updateItem(item.id, { status: 'done', progress: 100 });
 
       return {
-        id: result.photo.id,
-        filename: result.photo.filename,
-        originalFilename: result.photo.originalFilename,
-        storageKey: result.photo.storageKey || result.photo.originalPath,
-        fileSize: result.photo.fileSize,
-        mimeType: result.photo.mimeType,
-        width: result.photo.width,
-        height: result.photo.height,
+        id: data.photo.id,
+        filename: data.photo.filename,
+        originalFilename: data.photo.originalFilename,
+        storageKey: data.photo.storageKey,
+        fileSize: data.photo.fileSize,
+        mimeType: data.photo.mimeType,
+        width: data.photo.width,
+        height: data.photo.height,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';

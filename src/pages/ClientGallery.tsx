@@ -20,7 +20,7 @@ import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { PasswordScreen } from '@/components/PasswordScreen';
-import { buildImageUrl } from '@/hooks/useR2Config';
+import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
@@ -219,6 +219,9 @@ export default function ClientGallery() {
   const photos = useMemo((): GalleryPhoto[] => {
     if (!supabasePhotos || !transformedGallery) return [];
     
+    // Get watermark settings from gallery
+    const watermarkSettings = transformedGallery.settings?.watermark;
+    
     return supabasePhotos.map((photo) => {
       const photoWidth = photo.width || 800;
       const photoHeight = photo.height || 600;
@@ -228,9 +231,9 @@ export default function ClientGallery() {
         id: photo.id,
         filename: photo.original_filename || photo.filename,
         originalFilename: photo.original_filename || photo.filename,
-        thumbnailUrl: buildImageUrl(storagePath),
-        previewUrl: buildImageUrl(storagePath),
-        originalUrl: buildImageUrl(storagePath),
+        thumbnailUrl: getCloudinaryPhotoUrl(storagePath, 'thumbnail', null),
+        previewUrl: getCloudinaryPhotoUrl(storagePath, 'preview', watermarkSettings),
+        originalUrl: getCloudinaryPhotoUrl(storagePath, 'full', watermarkSettings),
         width: photoWidth,
         height: photoHeight,
         isSelected: photo.is_selected || false,
