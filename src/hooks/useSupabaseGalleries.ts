@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { buildImageUrl } from '@/hooks/useR2Config';
+import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { WatermarkSettings } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
 
@@ -499,18 +499,18 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Get photo URL helper - now uses R2 Worker for serving images
-  // b2BaseUrl parameter kept for backwards compatibility but ignored
+  // Get photo URL helper - uses Cloudinary for transformations on B2 images
   const getPhotoUrl = useCallback(
-    (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', b2BaseUrl?: string): string => {
-      // New R2 structure: use preview_path, thumb_path, or original_path
-      // For now (Phase 1.2), all point to same path until resize is implemented
-      const photoPath = photo.storageKey; // Will be updated to use new fields
+    (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', _b2BaseUrl?: string): string => {
+      const photoPath = photo.storageKey;
       
       if (!photoPath) return '/placeholder.svg';
       
-      // Use R2 Worker to serve images
-      return buildImageUrl(photoPath);
+      // Get watermark settings from gallery configuration
+      const watermarkSettings = gallery?.configuracoes?.watermark;
+      
+      // Use Cloudinary for image transformations (resize + watermark)
+      return getCloudinaryPhotoUrl(photoPath, size, watermarkSettings);
     },
     []
   );

@@ -27,7 +27,6 @@ import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
-import { useR2Config } from '@/hooks/useR2Config';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
 import { toast } from 'sonner';
@@ -54,9 +53,6 @@ export default function GalleryDetail() {
     isLoading: isSupabaseLoading 
   } = useSupabaseGalleries();
 
-  // Get R2 config for image URLs
-  const { workerUrl } = useR2Config();
-  
   // Get Supabase gallery
   const supabaseGallery = getSupabaseGallery(id || '');
   
@@ -67,10 +63,8 @@ export default function GalleryDetail() {
     enabled: !!supabaseGallery && !!id,
   });
 
-  // Transform Supabase photos to GalleryPhoto format (uses R2 Worker)
+  // Transform Supabase photos to GalleryPhoto format (uses Cloudinary)
   const transformedPhotos: GalleryPhoto[] = useMemo(() => {
-    if (!workerUrl) return [];
-    
     return supabasePhotos.map((photo: GaleriaPhoto, index: number) => ({
       id: photo.id,
       filename: photo.filename,
@@ -84,7 +78,7 @@ export default function GalleryDetail() {
       comment: photo.comment || undefined,
       order: photo.orderIndex || index,
     }));
-  }, [supabasePhotos, supabaseGallery, workerUrl, getPhotoUrl]);
+  }, [supabasePhotos, supabaseGallery, getPhotoUrl]);
 
   // Combined loading state
   const isLoadingData = isSupabaseLoading || isLoadingPhotos;
