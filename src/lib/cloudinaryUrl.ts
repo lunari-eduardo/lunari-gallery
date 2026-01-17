@@ -8,6 +8,9 @@ import { WatermarkSettings } from '@/types/gallery';
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
 const B2_BUCKET_URL = import.meta.env.VITE_B2_BUCKET_URL || '';
 
+// Fixed URL for watermarks - uses published domain for consistency
+const WATERMARK_BASE_URL = 'https://lunari-gallery.lovable.app';
+
 export interface CloudinaryOptions {
   size?: 'thumbnail' | 'preview' | 'full';
   width?: number;
@@ -15,6 +18,8 @@ export interface CloudinaryOptions {
   quality?: 'auto' | number;
   format?: 'auto' | 'jpg' | 'png' | 'webp';
   watermark?: WatermarkSettings | null;
+  photoWidth?: number;
+  photoHeight?: number;
 }
 
 // Size presets
@@ -70,9 +75,14 @@ export function buildCloudinaryUrl(
     const watermark = options.watermark;
     const opacity = watermark.opacity || 40;
     
-    // Use app's public watermark URL - standard uses horizontal by default
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const watermarkUrl = `${baseUrl}/watermarks/horizontal.png`;
+    // Detect photo orientation based on dimensions
+    // If photo is wider than tall (or equal), use horizontal watermark
+    // If photo is taller than wide, use vertical watermark
+    const isHorizontal = (options.photoWidth || 800) >= (options.photoHeight || 600);
+    const watermarkFile = isHorizontal ? 'horizontal.png' : 'vertical.png';
+    
+    // Use fixed published URL for watermark (ensures consistency across environments)
+    const watermarkUrl = `${WATERMARK_BASE_URL}/watermarks/${watermarkFile}`;
 
     // Cloudinary fetch overlay syntax
     const encodedWatermark = encodeUrlForCloudinary(watermarkUrl);
@@ -96,11 +106,18 @@ export function buildCloudinaryUrl(
 
 /**
  * Get photo URL with appropriate size and watermark
+ * @param storagePath - Path to image in B2
+ * @param size - Image size preset
+ * @param watermarkSettings - Watermark configuration
+ * @param photoWidth - Original photo width (for orientation detection)
+ * @param photoHeight - Original photo height (for orientation detection)
  */
 export function getCloudinaryPhotoUrl(
   storagePath: string | null | undefined,
   size: 'thumbnail' | 'preview' | 'full',
-  watermarkSettings?: WatermarkSettings | null
+  watermarkSettings?: WatermarkSettings | null,
+  photoWidth?: number,
+  photoHeight?: number
 ): string {
   // Only apply watermark to preview and full sizes
   const applyWatermark = size !== 'thumbnail' && watermarkSettings && watermarkSettings.type !== 'none';
@@ -108,5 +125,7 @@ export function getCloudinaryPhotoUrl(
   return buildCloudinaryUrl(storagePath, {
     size,
     watermark: applyWatermark ? watermarkSettings : null,
+    photoWidth,
+    photoHeight,
   });
 }

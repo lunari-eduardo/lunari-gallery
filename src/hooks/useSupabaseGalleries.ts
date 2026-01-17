@@ -510,7 +510,8 @@ export function useSupabaseGalleries() {
       const watermarkSettings = gallery?.configuracoes?.watermark;
       
       // Use Cloudinary for image transformations (resize + watermark)
-      return getCloudinaryPhotoUrl(photoPath, size, watermarkSettings);
+      // Pass photo dimensions for orientation-based watermark selection
+      return getCloudinaryPhotoUrl(photoPath, size, watermarkSettings, photo.width, photo.height);
     },
     []
   );
