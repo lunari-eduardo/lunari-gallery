@@ -87,8 +87,7 @@ export function buildCloudinaryUrl(
     transformations.push('fl_relative');
     transformations.push('w_1.0');
     
-    // Apply opacity and position
-    transformations.push(`o_${opacity}`);
+    // Position and apply (opacity kept at 100% - watermark image already has correct opacity)
     transformations.push(`g_${gravity}`);
     transformations.push('fl_layer_apply');
   }
