@@ -8,9 +8,6 @@ import { WatermarkSettings } from '@/types/gallery';
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
 const B2_BUCKET_URL = import.meta.env.VITE_B2_BUCKET_URL || '';
 
-// Fixed URL for watermarks - uses published domain for consistency
-const WATERMARK_BASE_URL = 'https://lunari-gallery.lovable.app';
-
 export interface CloudinaryOptions {
   size?: 'thumbnail' | 'preview' | 'full';
   width?: number;
@@ -28,13 +25,6 @@ const SIZE_PRESETS = {
   preview: { width: 1200, quality: 'auto' as const },
   full: { width: 1920, quality: 'auto' as const },
 };
-
-/**
- * Encode URL for Cloudinary l_fetch overlay
- */
-function encodeUrlForCloudinary(url: string): string {
-  return btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 /**
  * Build a Cloudinary URL for an image stored in B2
@@ -79,19 +69,17 @@ export function buildCloudinaryUrl(
     // If photo is wider than tall (or equal), use horizontal watermark
     // If photo is taller than wide, use vertical watermark
     const isHorizontal = (options.photoWidth || 800) >= (options.photoHeight || 600);
-    const watermarkFile = isHorizontal ? 'horizontal.png' : 'vertical.png';
     
-    // Use fixed published URL for watermark (ensures consistency across environments)
-    const watermarkUrl = `${WATERMARK_BASE_URL}/watermarks/${watermarkFile}`;
-
-    // Cloudinary fetch overlay syntax
-    const encodedWatermark = encodeUrlForCloudinary(watermarkUrl);
+    // Use watermark uploaded directly to Cloudinary
+    // Path in Cloudinary: watermarks/horizontal.png -> reference as watermarks:horizontal
+    const watermarkPublicId = isHorizontal ? 'watermarks:horizontal' : 'watermarks:vertical';
     
     // Map position to Cloudinary gravity (standard always uses center)
     const gravity = 'center';
 
-    // Add watermark overlay
-    transformations.push(`l_fetch:${encodedWatermark}`);
+    // Cloudinary overlay syntax for uploaded images (not fetch)
+    // l_<public_id> references images in your Cloudinary account
+    transformations.push(`l_${watermarkPublicId}`);
     transformations.push(`g_${gravity}`);
     transformations.push(`o_${opacity}`);
     transformations.push('fl_layer_apply');
