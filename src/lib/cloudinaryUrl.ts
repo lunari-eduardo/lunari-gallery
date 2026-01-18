@@ -80,8 +80,16 @@ export function buildCloudinaryUrl(
     // Cloudinary overlay syntax for uploaded images (not fetch)
     // l_<public_id> references images in your Cloudinary account
     transformations.push(`l_${watermarkPublicId}`);
-    transformations.push(`g_${gravity}`);
+    
+    // Scale watermark relative to base image (100% width)
+    // fl_relative makes w_1.0 mean "100% of base image width"
+    transformations.push('c_scale');
+    transformations.push('fl_relative');
+    transformations.push('w_1.0');
+    
+    // Apply opacity and position
     transformations.push(`o_${opacity}`);
+    transformations.push(`g_${gravity}`);
     transformations.push('fl_layer_apply');
   }
 
