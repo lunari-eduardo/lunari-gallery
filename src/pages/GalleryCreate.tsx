@@ -91,7 +91,7 @@ export default function GalleryCreate() {
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
   const [customDays, setCustomDays] = useState(10);
-  const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(800);
+  const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(1920);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>('standard');
   const [watermarkDisplay, setWatermarkDisplay] = useState<WatermarkDisplay>('all');
   const [allowComments, setAllowComments] = useState(true);
@@ -189,7 +189,7 @@ export default function GalleryCreate() {
                   position: 'center',
                 },
                 watermarkDisplay: watermarkDisplay,
-                imageResizeOption: (imageResizeOption === 640 ? 800 : imageResizeOption) as 800 | 1024 | 1920,
+                imageResizeOption: imageResizeOption,
                 allowComments: allowComments,
                 allowDownload: allowDownload,
                 allowExtraPhotos: allowExtraPhotos,
@@ -718,7 +718,7 @@ export default function GalleryCreate() {
             ) : supabaseGalleryId ? (
               <PhotoUploader
                 galleryId={supabaseGalleryId}
-                maxWidth={imageResizeOption as 800 | 1024 | 1920}
+                maxLongEdge={imageResizeOption}
                 onUploadComplete={handlePhotoUploadComplete}
               />
             ) : (
@@ -811,14 +811,13 @@ export default function GalleryCreate() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="640">640 px</SelectItem>
-                      <SelectItem value="800">800 px (recomendado)</SelectItem>
                       <SelectItem value="1024">1024 px</SelectItem>
-                      <SelectItem value="1920">1920 px</SelectItem>
+                      <SelectItem value="1920">1920 px (recomendado)</SelectItem>
+                      <SelectItem value="2560">2560 px (4K)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Lado maior • Redimensiona para economia de armazenamento
+                    Aresta longa • Fotos são redimensionadas proporcionalmente
                   </p>
                 </div>
 

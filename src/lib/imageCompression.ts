@@ -4,7 +4,7 @@
  */
 
 export interface CompressionOptions {
-  maxWidth: 800 | 1024 | 1920;
+  maxLongEdge: 1024 | 1920 | 2560;
   quality: number; // 0.7-0.85
   removeExif: boolean;
 }
@@ -22,7 +22,7 @@ export interface CompressedImage {
  * Default compression options
  */
 export const defaultCompressionOptions: CompressionOptions = {
-  maxWidth: 1920,
+  maxLongEdge: 1920,
   quality: 0.8,
   removeExif: true,
 };
@@ -40,20 +40,25 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 }
 
 /**
- * Calculate new dimensions maintaining aspect ratio
+ * Calculate new dimensions maintaining aspect ratio based on long edge
  */
 function calculateDimensions(
   width: number,
   height: number,
-  maxWidth: number
+  maxLongEdge: number
 ): { width: number; height: number } {
-  if (width <= maxWidth) {
+  // Determine which is the long edge
+  const longEdge = Math.max(width, height);
+  
+  // If long edge is already within limit, keep original
+  if (longEdge <= maxLongEdge) {
     return { width, height };
   }
 
-  const ratio = maxWidth / width;
+  // Calculate ratio based on long edge
+  const ratio = maxLongEdge / longEdge;
   return {
-    width: maxWidth,
+    width: Math.round(width * ratio),
     height: Math.round(height * ratio),
   };
 }
@@ -72,11 +77,11 @@ export async function compressImage(
   const originalWidth = img.naturalWidth;
   const originalHeight = img.naturalHeight;
 
-  // Calculate new dimensions
+  // Calculate new dimensions based on long edge
   const { width, height } = calculateDimensions(
     originalWidth,
     originalHeight,
-    opts.maxWidth
+    opts.maxLongEdge
   );
 
   // Create canvas and draw resized image
