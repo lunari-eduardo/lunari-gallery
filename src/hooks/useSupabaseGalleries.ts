@@ -28,7 +28,7 @@ export interface GaleriaPhoto {
 export interface GaleriaConfiguracoes {
   watermark?: WatermarkSettings;
   watermarkDisplay?: 'all' | 'fullscreen' | 'none';
-  imageResizeOption?: 800 | 1024 | 1920;
+  imageResizeOption?: 1024 | 1920 | 2560;
   allowComments?: boolean;
   allowDownload?: boolean;
   allowExtraPhotos?: boolean;

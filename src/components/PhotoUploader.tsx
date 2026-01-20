@@ -33,7 +33,7 @@ interface PhotoUploadItem {
 
 interface PhotoUploaderProps {
   galleryId: string;
-  maxWidth?: 800 | 1024 | 1920;
+  maxLongEdge?: 1024 | 1920 | 2560;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
@@ -42,7 +42,7 @@ interface PhotoUploaderProps {
 
 export function PhotoUploader({
   galleryId,
-  maxWidth = 1920,
+  maxLongEdge = 1920,
   onUploadComplete,
   onUploadStart,
   onUploadingChange,
@@ -95,7 +95,7 @@ export function PhotoUploader({
       updateItem(item.id, { status: 'compressing', progress: 10 });
       
       const compressionOptions: Partial<CompressionOptions> = {
-        maxWidth,
+        maxLongEdge,
         quality: 0.8,
         removeExif: true,
       };

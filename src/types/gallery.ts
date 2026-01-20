@@ -2,7 +2,7 @@ export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selectio
 export type SelectionStatus = 'in_progress' | 'confirmed' | 'blocked';
 export type WatermarkType = 'none' | 'standard';
 export type DeadlinePreset = 7 | 10 | 15 | 'custom';
-export type ImageResizeOption = 640 | 800 | 1024 | 1920;
+export type ImageResizeOption = 1024 | 1920 | 2560;
 export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
 export type GalleryPermission = 'public' | 'private';
 
