@@ -152,8 +152,16 @@ export function Lightbox({
     if (e.touches.length === 2 && initialPinchDistance !== null) {
       e.preventDefault();
       const currentDistance = getDistance(e.touches);
-      const scale = currentDistance / initialPinchDistance;
-      const newZoom = Math.min(4, Math.max(1, initialZoom * scale));
+      
+      // Use delta in pixels instead of ratio for smooth control
+      const distanceDelta = currentDistance - initialPinchDistance;
+      
+      // Sensitivity: 200px of finger movement = 1x zoom increment
+      const sensitivity = 200;
+      const zoomDelta = distanceDelta / sensitivity;
+      
+      // Apply with smooth limits (1x to 2x)
+      const newZoom = clamp(initialZoom + zoomDelta, 1, 2);
       setZoom(newZoom);
     } else if (e.touches.length === 1 && isPanning && zoom > 1) {
       e.preventDefault();
@@ -193,8 +201,8 @@ export function Lightbox({
   const handleWheel = (e: React.WheelEvent) => {
     if (!isMobile) {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.25 : 0.25;
-      setZoom(z => Math.min(4, Math.max(1, z + delta)));
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      setZoom(z => clamp(z + delta, 1, 2));
     }
   };
 
@@ -231,7 +239,7 @@ export function Lightbox({
                 variant="ghost"
                 size="icon"
                 className="text-white hover:bg-white/10"
-                onClick={() => setZoom(z => Math.max(1, z - 0.5))}
+                onClick={() => setZoom(z => Math.max(1, z - 0.25))}
                 disabled={zoom <= 1}
               >
                 <ZoomOut className="h-5 w-5" />
@@ -240,8 +248,8 @@ export function Lightbox({
                 variant="ghost"
                 size="icon"
                 className="text-white hover:bg-white/10"
-                onClick={() => setZoom(z => Math.min(4, z + 0.5))}
-                disabled={zoom >= 4}
+                onClick={() => setZoom(z => Math.min(2, z + 0.25))}
+                disabled={zoom >= 2}
               >
                 <ZoomIn className="h-5 w-5" />
               </Button>
