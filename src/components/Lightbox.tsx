@@ -193,8 +193,8 @@ export function Lightbox({
             zoom > 1 ? "overflow-auto" : "overflow-hidden"
           )}
           style={{ 
-            maxHeight: 'calc(100vh - 180px)', 
-            maxWidth: 'calc(100vw - 120px)',
+            width: 'calc(100vw - 120px)',
+            height: 'calc(100vh - 180px)',
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,255,255,0.2) transparent'
           }}
@@ -202,17 +202,13 @@ export function Lightbox({
           <img
             src={currentPhoto.previewUrl}
             alt={currentPhoto.filename}
-            className={cn(
-              "object-contain transition-transform duration-200",
-              zoom === 1 && "max-h-full max-w-full"
-            )}
+            className="transition-transform duration-200"
             style={{ 
+              maxWidth: zoom === 1 ? '100%' : 'none',
+              maxHeight: zoom === 1 ? '100%' : 'none',
+              objectFit: 'contain',
               transform: zoom > 1 ? `scale(${zoom})` : undefined,
               transformOrigin: 'center center',
-              ...(zoom > 1 && {
-                maxHeight: 'none',
-                maxWidth: 'none',
-              })
             }}
           />
         </div>
