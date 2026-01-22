@@ -52,11 +52,29 @@ export function Lightbox({
   const [zoom, setZoom] = useState(1);
   const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
   const [initialZoom, setInitialZoom] = useState(1);
+  
+  // Pan states
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
 
   const currentPhoto = photos[currentIndex];
   
   // Show watermark in fullscreen if watermarkDisplay is 'all' or 'fullscreen'
   const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay !== 'none';
+
+  // Utility functions
+  const clamp = (value: number, min: number, max: number) => 
+    Math.min(Math.max(value, min), max);
+
+  const calculateMaxOffset = (currentZoom: number) => {
+    const containerWidth = isMobile ? window.innerWidth - 32 : window.innerWidth - 120;
+    const containerHeight = isMobile ? window.innerHeight - 140 : window.innerHeight - 180;
+    const extraWidth = containerWidth * (currentZoom - 1) / 2;
+    const extraHeight = containerHeight * (currentZoom - 1) / 2;
+    return { x: extraWidth, y: extraHeight };
+  };
 
   const handleDownload = () => {
     if (!currentPhoto || !allowDownload) return;
@@ -72,7 +90,15 @@ export function Lightbox({
     setComment(currentPhoto?.comment || '');
     setShowComment(false);
     setZoom(1);
+    setPanOffset({ x: 0, y: 0 });
   }, [currentIndex, currentPhoto?.comment]);
+
+  // Reset pan when zoom returns to 1
+  useEffect(() => {
+    if (zoom === 1) {
+      setPanOffset({ x: 0, y: 0 });
+    }
+  }, [zoom]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
@@ -93,21 +119,33 @@ export function Lightbox({
     };
   }, [handleKeyDown]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      setInitialPinchDistance(getDistance(e.touches));
-      setInitialZoom(zoom);
-    } else if (e.touches.length === 1) {
-      setTouchStart(e.touches[0].clientX);
-    }
-  };
-
   const getDistance = (touches: React.TouchList) => {
     return Math.hypot(
       touches[0].clientX - touches[1].clientX,
       touches[0].clientY - touches[1].clientY
     );
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      setInitialPinchDistance(getDistance(e.touches));
+      setInitialZoom(zoom);
+      setIsPanning(false);
+    } else if (e.touches.length === 1) {
+      if (zoom > 1) {
+        // Start pan
+        setIsPanning(true);
+        setPanStart({ 
+          x: e.touches[0].clientX, 
+          y: e.touches[0].clientY 
+        });
+        setLastPanOffset(panOffset);
+      } else {
+        // Swipe for navigation
+        setTouchStart(e.touches[0].clientX);
+      }
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -117,13 +155,26 @@ export function Lightbox({
       const scale = currentDistance / initialPinchDistance;
       const newZoom = Math.min(4, Math.max(1, initialZoom * scale));
       setZoom(newZoom);
+    } else if (e.touches.length === 1 && isPanning && zoom > 1) {
+      e.preventDefault();
+      const deltaX = e.touches[0].clientX - panStart.x;
+      const deltaY = e.touches[0].clientY - panStart.y;
+      const maxOffset = calculateMaxOffset(zoom);
+      
+      setPanOffset({
+        x: clamp(lastPanOffset.x + deltaX, -maxOffset.x, maxOffset.x),
+        y: clamp(lastPanOffset.y + deltaY, -maxOffset.y, maxOffset.y)
+      });
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
+    setIsPanning(false);
+    
     if (e.touches.length < 2) {
       setInitialPinchDistance(null);
     }
+    
     // Swipe navigation only when not zoomed
     if (touchStart !== null && e.changedTouches.length === 1 && zoom === 1) {
       const touchEnd = e.changedTouches[0].clientX;
@@ -236,14 +287,13 @@ export function Lightbox({
         {/* Image */}
         <div 
           className={cn(
-            "relative flex items-center justify-center",
-            zoom > 1 ? "overflow-auto" : "overflow-hidden"
+            "relative flex items-center justify-center overflow-hidden",
+            zoom > 1 && "cursor-grab",
+            isPanning && "cursor-grabbing"
           )}
           style={{ 
             width: isMobile ? 'calc(100vw - 32px)' : 'calc(100vw - 120px)',
             height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(255,255,255,0.2) transparent'
           }}
           onClick={(e) => e.stopPropagation()}
           onWheel={handleWheel}
@@ -251,13 +301,17 @@ export function Lightbox({
           <img
             src={currentPhoto.previewUrl}
             alt={currentPhoto.filename}
-            className="transition-transform duration-200"
+            className="transition-transform duration-200 select-none"
+            draggable={false}
             style={{ 
               maxWidth: zoom === 1 ? '100%' : 'none',
               maxHeight: zoom === 1 ? '100%' : 'none',
               objectFit: 'contain',
-              transform: zoom > 1 ? `scale(${zoom})` : undefined,
+              transform: zoom > 1 
+                ? `scale(${zoom}) translate(${panOffset.x / zoom}px, ${panOffset.y / zoom}px)` 
+                : undefined,
               transformOrigin: 'center center',
+              touchAction: zoom > 1 ? 'none' : 'pan-x',
             }}
           />
         </div>
@@ -270,13 +324,14 @@ export function Lightbox({
             onClick={() => !disabled && onSelect(currentPhoto.id)}
             disabled={disabled}
             variant={currentPhoto.isSelected ? 'terracotta' : 'outline'}
+            size={isMobile ? 'icon' : 'default'}
             className={cn(
-              'gap-2',
+              !isMobile && 'gap-2',
               !currentPhoto.isSelected && 'text-white border-white/40 hover:bg-white/10'
             )}
           >
             <Check className="h-4 w-4" />
-            {currentPhoto.isSelected ? 'Selecionada' : 'Selecionar'}
+            {!isMobile && (currentPhoto.isSelected ? 'Selecionada' : 'Selecionar')}
           </Button>
 
           {onFavorite && (
@@ -284,15 +339,16 @@ export function Lightbox({
               onClick={() => !disabled && onFavorite(currentPhoto.id)}
               disabled={disabled}
               variant="outline"
+              size={isMobile ? 'icon' : 'default'}
               className={cn(
-                'gap-2',
+                !isMobile && 'gap-2',
                 currentPhoto.isFavorite 
                   ? 'text-red-500 border-red-500/40' 
                   : 'text-white border-white/40 hover:bg-white/10'
               )}
             >
               <Heart className={cn("h-4 w-4", currentPhoto.isFavorite && "fill-current")} />
-              {currentPhoto.isFavorite ? 'Favoritada' : 'Favoritar'}
+              {!isMobile && (currentPhoto.isFavorite ? 'Favoritada' : 'Favoritar')}
             </Button>
           )}
           
@@ -300,13 +356,15 @@ export function Lightbox({
             <Button
               onClick={() => setShowComment(!showComment)}
               variant="outline"
+              size={isMobile ? 'icon' : 'default'}
               className={cn(
-                'gap-2 text-white border-white/40 hover:bg-white/10',
+                !isMobile && 'gap-2',
+                'text-white border-white/40 hover:bg-white/10',
                 currentPhoto.comment && 'text-primary border-primary'
               )}
             >
               <MessageSquare className="h-4 w-4" />
-              Comentar
+              {!isMobile && 'Comentar'}
             </Button>
           )}
 
@@ -314,10 +372,14 @@ export function Lightbox({
             <Button
               onClick={handleDownload}
               variant="outline"
-              className="gap-2 text-white border-white/40 hover:bg-white/10"
+              size={isMobile ? 'icon' : 'default'}
+              className={cn(
+                !isMobile && 'gap-2',
+                'text-white border-white/40 hover:bg-white/10'
+              )}
             >
               <Download className="h-4 w-4" />
-              Baixar
+              {!isMobile && 'Baixar'}
             </Button>
           )}
         </div>
