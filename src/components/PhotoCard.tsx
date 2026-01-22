@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, MessageSquare, Eye, ImageOff } from 'lucide-react';
+import { Check, MessageSquare, Heart, ImageOff } from 'lucide-react';
 import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,7 @@ interface PhotoCardProps {
   onSelect: () => void;
   onViewFullscreen: () => void;
   onComment?: () => void;
+  onFavorite?: () => void;
 }
 
 export function PhotoCard({ 
@@ -24,10 +25,18 @@ export function PhotoCard({
   disabled,
   onSelect, 
   onViewFullscreen,
-  onComment 
+  onComment,
+  onFavorite
 }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+
+  const handleContainerClick = (e: React.MouseEvent) => {
+    // Only open fullscreen if clicking on the image area, not on action buttons
+    if (!disabled) {
+      onViewFullscreen();
+    }
+  };
 
   return (
     <div 
@@ -37,6 +46,7 @@ export function PhotoCard({
         disabled && 'opacity-60 cursor-not-allowed'
       )}
       style={{ aspectRatio: `${photo.width}/${photo.height}` }}
+      onClick={handleContainerClick}
     >
       {/* Image with error handling */}
       {hasError ? (
@@ -66,17 +76,12 @@ export function PhotoCard({
       )}
 
       {/* Loading skeleton */}
-      {!isLoaded && (
+      {!isLoaded && !hasError && (
         <div className="absolute inset-0 bg-muted animate-pulse" />
       )}
 
-      {/* Watermark indicator */}
-
-      {/* Overlay */}
-      <div className={cn(
-        'absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300',
-        isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-      )}>
+      {/* Overlay - appears only on hover */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100">
         {/* Selection indicator */}
         <button
           onClick={(e) => { e.stopPropagation(); if (!disabled) onSelect(); }}
@@ -109,18 +114,32 @@ export function PhotoCard({
                 <MessageSquare className="h-4 w-4" />
               </button>
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); onViewFullscreen(); }}
-              className="h-8 w-8 rounded-full bg-black/40 flex items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-colors"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
+            {onFavorite && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onFavorite(); }}
+                className={cn(
+                  'h-8 w-8 rounded-full flex items-center justify-center transition-colors',
+                  photo.isFavorite 
+                    ? 'bg-red-500/20 text-red-500' 
+                    : 'bg-black/40 text-white/80 hover:bg-black/60 hover:text-white'
+                )}
+              >
+                <Heart className={cn("h-4 w-4", photo.isFavorite && "fill-current")} />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Comment indicator */}
-      {photo.comment && (
+      {/* Favorite indicator - always visible when favorited */}
+      {photo.isFavorite && (
+        <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-red-500 flex items-center justify-center">
+          <Heart className="h-3 w-3 text-white fill-current" />
+        </div>
+      )}
+
+      {/* Comment indicator - only show if not favorited (to avoid overlap) */}
+      {photo.comment && !photo.isFavorite && (
         <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
           <MessageSquare className="h-3 w-3 text-primary-foreground" />
         </div>

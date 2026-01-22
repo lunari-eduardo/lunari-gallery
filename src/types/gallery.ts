@@ -63,6 +63,7 @@ export interface GalleryPhoto {
   width: number;
   height: number;
   isSelected: boolean;
+  isFavorite: boolean;        // Foto favoritada pelo cliente
   comment?: string;
   order: number;
 }

@@ -7,7 +7,8 @@ import {
   MessageSquare,
   ZoomIn,
   ZoomOut,
-  Download
+  Download,
+  Heart
 } from 'lucide-react';
 import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ interface LightboxProps {
   onNavigate: (index: number) => void;
   onSelect: (photoId: string) => void;
   onComment?: (photoId: string, comment: string) => void;
+  onFavorite?: (photoId: string) => void;
 }
 
 export function Lightbox({ 
@@ -39,7 +41,8 @@ export function Lightbox({
   onClose, 
   onNavigate,
   onSelect,
-  onComment
+  onComment,
+  onFavorite
 }: LightboxProps) {
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState('');
@@ -110,12 +113,11 @@ export function Lightbox({
     setShowComment(false);
   };
 
-  const watermarkPosition = {
-    'top-left': 'top-4 left-4',
-    'top-right': 'top-4 right-4',
-    'bottom-left': 'bottom-4 left-4',
-    'bottom-right': 'bottom-4 right-4',
-    'center': 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    // Close if clicking directly on the background container (not on image or buttons)
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
   };
 
   if (!currentPhoto) return null;
@@ -164,14 +166,15 @@ export function Lightbox({
 
       {/* Main Content */}
       <div 
-        className="flex-1 flex items-center justify-center p-4 relative overflow-hidden"
+        className="flex-1 flex items-center justify-center p-4 relative overflow-hidden cursor-pointer"
+        onClick={handleBackgroundClick}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
         {/* Navigation Arrows */}
         {currentIndex > 0 && (
           <button
-            onClick={() => onNavigate(currentIndex - 1)}
+            onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex - 1); }}
             className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-black/40 flex items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-colors z-10"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -179,7 +182,7 @@ export function Lightbox({
         )}
         {currentIndex < photos.length - 1 && (
           <button
-            onClick={() => onNavigate(currentIndex + 1)}
+            onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex + 1); }}
             className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-black/40 flex items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-colors z-10"
           >
             <ChevronRight className="h-6 w-6" />
@@ -198,6 +201,7 @@ export function Lightbox({
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,255,255,0.2) transparent'
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <img
             src={currentPhoto.previewUrl}
@@ -229,6 +233,23 @@ export function Lightbox({
             <Check className="h-4 w-4" />
             {currentPhoto.isSelected ? 'Selecionada' : 'Selecionar'}
           </Button>
+
+          {onFavorite && (
+            <Button
+              onClick={() => !disabled && onFavorite(currentPhoto.id)}
+              disabled={disabled}
+              variant="outline"
+              className={cn(
+                'gap-2',
+                currentPhoto.isFavorite 
+                  ? 'text-red-500 border-red-500/40' 
+                  : 'text-white border-white/40 hover:bg-white/10'
+              )}
+            >
+              <Heart className={cn("h-4 w-4", currentPhoto.isFavorite && "fill-current")} />
+              {currentPhoto.isFavorite ? 'Favoritada' : 'Favoritar'}
+            </Button>
+          )}
           
           {allowComments && (
             <Button

@@ -8,7 +8,7 @@ const corsHeaders = {
 interface RequestBody {
   galleryId: string;
   photoId: string;
-  action: 'toggle' | 'select' | 'deselect' | 'comment';
+  action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite';
   comment?: string;
 }
 
@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     // 5. Fetch current photo state
     const { data: photo, error: photoError } = await supabase
       .from('galeria_fotos')
-      .select('id, is_selected, comment')
+      .select('id, is_selected, is_favorite, comment')
       .eq('id', photoId)
       .eq('galeria_id', galleryId)
       .single();
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     }
 
     // 6. Prepare update based on action
-    let updateData: { is_selected?: boolean; comment?: string; updated_at?: string } = {
+    let updateData: { is_selected?: boolean; is_favorite?: boolean; comment?: string; updated_at?: string } = {
       updated_at: new Date().toISOString()
     };
 
@@ -109,6 +109,9 @@ Deno.serve(async (req) => {
         break;
       case 'comment':
         updateData.comment = comment || '';
+        break;
+      case 'favorite':
+        updateData.is_favorite = !photo.is_favorite;
         break;
       default:
         return new Response(
@@ -141,12 +144,21 @@ Deno.serve(async (req) => {
     }
 
     // 9. Log action (user_id is null for anonymous client actions)
+    const actionType = action === 'comment' 
+      ? 'comment_added' 
+      : action === 'favorite'
+        ? (updateData.is_favorite ? 'photo_favorited' : 'photo_unfavorited')
+        : (updateData.is_selected ? 'photo_selected' : 'photo_deselected');
+    const actionDesc = action === 'comment' 
+      ? 'Comentário adicionado à foto' 
+      : action === 'favorite'
+        ? (updateData.is_favorite ? 'Foto favoritada pelo cliente' : 'Foto desfavoritada pelo cliente')
+        : (updateData.is_selected ? 'Foto selecionada pelo cliente' : 'Foto desmarcada pelo cliente');
+    
     await supabase.from('galeria_acoes').insert({
       galeria_id: galleryId,
-      tipo: action === 'comment' ? 'comment_added' : (updateData.is_selected ? 'photo_selected' : 'photo_deselected'),
-      descricao: action === 'comment' 
-        ? `Comentário adicionado à foto` 
-        : (updateData.is_selected ? 'Foto selecionada pelo cliente' : 'Foto desmarcada pelo cliente'),
+      tipo: actionType,
+      descricao: actionDesc,
       user_id: null, // Anonymous client action
     });
 
@@ -155,7 +167,8 @@ Deno.serve(async (req) => {
         success: true,
         photo: {
           id: photoId,
-          is_selected: action === 'comment' ? photo.is_selected : updateData.is_selected,
+          is_selected: action === 'comment' || action === 'favorite' ? photo.is_selected : updateData.is_selected,
+          is_favorite: action === 'favorite' ? updateData.is_favorite : photo.is_favorite,
           comment: action === 'comment' ? updateData.comment : photo.comment,
         }
       }),
