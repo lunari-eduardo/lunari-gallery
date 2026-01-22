@@ -75,6 +75,7 @@ export default function GalleryDetail() {
       width: photo.width,
       height: photo.height,
       isSelected: photo.isSelected,
+      isFavorite: photo.isFavorite ?? false,
       comment: photo.comment || undefined,
       order: photo.orderIndex || index,
     }));

@@ -19,6 +19,7 @@ export interface GaleriaPhoto {
   height: number;
   storageKey: string;
   isSelected: boolean;
+  isFavorite: boolean;
   comment: string | null;
   orderIndex: number;
   createdAt: Date;
@@ -170,6 +171,7 @@ function transformPhoto(row: any): GaleriaPhoto {
     height: row.height,
     storageKey: row.storage_key,
     isSelected: row.is_selected,
+    isFavorite: row.is_favorite ?? false,
     comment: row.comment,
     orderIndex: row.order_index,
     createdAt: new Date(row.created_at),

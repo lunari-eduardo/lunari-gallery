@@ -237,6 +237,7 @@ export default function ClientGallery() {
         width: photoWidth,
         height: photoHeight,
         isSelected: photo.is_selected || false,
+        isFavorite: photo.is_favorite || false,
         comment: photo.comment || '',
         order: photo.order_index || 0,
       };
@@ -245,7 +246,7 @@ export default function ClientGallery() {
 
   // 5. Mutation for toggling selection via Edge Function
   const selectionMutation = useMutation({
-    mutationFn: async ({ photoId, action, comment }: { photoId: string; action: 'toggle' | 'select' | 'deselect' | 'comment'; comment?: string }) => {
+    mutationFn: async ({ photoId, action, comment }: { photoId: string; action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite'; comment?: string }) => {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -262,7 +263,12 @@ export default function ClientGallery() {
     onSuccess: (data) => {
       setLocalPhotos(prev => prev.map(p => 
         p.id === data.photo.id 
-          ? { ...p, isSelected: data.photo.is_selected, comment: data.photo.comment || p.comment } 
+          ? { 
+              ...p, 
+              isSelected: data.photo.is_selected, 
+              isFavorite: data.photo.is_favorite ?? p.isFavorite,
+              comment: data.photo.comment || p.comment 
+            } 
           : p
       ));
     },
@@ -454,6 +460,13 @@ export default function ClientGallery() {
     ));
     selectionMutation.mutate({ photoId, action: 'comment', comment });
     toast.success('Comentário salvo!');
+  };
+
+  const handleFavorite = (photoId: string) => {
+    setLocalPhotos(prev => prev.map(p => 
+      p.id === photoId ? { ...p, isFavorite: !p.isFavorite } : p
+    ));
+    selectionMutation.mutate({ photoId, action: 'favorite' });
   };
 
   const handleStartConfirmation = () => {
@@ -737,6 +750,7 @@ export default function ClientGallery() {
                 onSelect={() => toggleSelection(photo.id)}
                 onViewFullscreen={() => setLightboxIndex(index)}
                 onComment={() => {}}
+                onFavorite={() => handleFavorite(photo.id)}
               />
             </MasonryItem>
           ))}
@@ -770,6 +784,7 @@ export default function ClientGallery() {
           onNavigate={setLightboxIndex}
           onSelect={(photoId) => toggleSelection(photoId)}
           onComment={handleComment}
+          onFavorite={handleFavorite}
         />
       )}
     </div>

@@ -1032,6 +1032,7 @@ export type Database = {
           has_watermark: boolean | null
           height: number | null
           id: string
+          is_favorite: boolean | null
           is_selected: boolean | null
           mime_type: string | null
           order_index: number | null
@@ -1054,6 +1055,7 @@ export type Database = {
           has_watermark?: boolean | null
           height?: number | null
           id?: string
+          is_favorite?: boolean | null
           is_selected?: boolean | null
           mime_type?: string | null
           order_index?: number | null
@@ -1076,6 +1078,7 @@ export type Database = {
           has_watermark?: boolean | null
           height?: number | null
           id?: string
+          is_favorite?: boolean | null
           is_selected?: boolean | null
           mime_type?: string | null
           order_index?: number | null
