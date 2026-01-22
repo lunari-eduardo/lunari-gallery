@@ -188,19 +188,31 @@ export function Lightbox({
 
         {/* Image */}
         <div 
-          className="relative flex items-center justify-center overflow-hidden"
+          className={cn(
+            "relative flex items-center justify-center",
+            zoom > 1 ? "overflow-auto" : "overflow-hidden"
+          )}
           style={{ 
             maxHeight: 'calc(100vh - 180px)', 
-            maxWidth: 'calc(100vw - 120px)' 
+            maxWidth: 'calc(100vw - 120px)',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(255,255,255,0.2) transparent'
           }}
         >
           <img
             src={currentPhoto.previewUrl}
             alt={currentPhoto.filename}
-            className="max-h-full max-w-full object-contain transition-transform duration-200"
+            className={cn(
+              "object-contain transition-transform duration-200",
+              zoom === 1 && "max-h-full max-w-full"
+            )}
             style={{ 
-              transform: `scale(${zoom})`,
-              transformOrigin: 'center center'
+              transform: zoom > 1 ? `scale(${zoom})` : undefined,
+              transformOrigin: 'center center',
+              ...(zoom > 1 && {
+                maxHeight: 'none',
+                maxWidth: 'none',
+              })
             }}
           />
         </div>
