@@ -2,6 +2,7 @@ import { Droplets } from 'lucide-react';
 import { WatermarkSettings, WatermarkType } from '@/types/gallery';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Slider } from '@/components/ui/slider';
 
 interface WatermarkDefaultsProps {
   watermark: WatermarkSettings;
@@ -53,25 +54,50 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
 
         {/* Standard Watermark Preview */}
         {watermark.type === 'standard' && (
-          <div className="space-y-3 p-4 rounded-lg bg-muted/50">
+          <div className="space-y-4 p-4 rounded-lg bg-muted/50">
             <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
+            
+            {/* Opacity Slider */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Opacidade</Label>
+                <span className="text-sm font-medium text-muted-foreground">{watermark.opacity}%</span>
+              </div>
+              <Slider
+                value={[watermark.opacity]}
+                onValueChange={(value) => updateWatermark({ opacity: value[0] })}
+                min={10}
+                max={100}
+                step={5}
+                className="w-full"
+              />
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
-                <div className="h-20 flex items-center justify-center bg-black/80 rounded mb-1">
+                <div 
+                  className="h-20 flex items-center justify-center bg-black/80 rounded mb-1"
+                  style={{ position: 'relative' }}
+                >
                   <img 
                     src="/watermarks/horizontal.png" 
                     alt="Horizontal" 
                     className="h-12 object-contain" 
+                    style={{ opacity: watermark.opacity / 100 }}
                   />
                 </div>
                 <span className="text-xs text-muted-foreground">Fotos horizontais</span>
               </div>
               <div className="text-center">
-                <div className="h-20 flex items-center justify-center bg-black/80 rounded mb-1">
+                <div 
+                  className="h-20 flex items-center justify-center bg-black/80 rounded mb-1"
+                  style={{ position: 'relative' }}
+                >
                   <img 
                     src="/watermarks/vertical.png" 
                     alt="Vertical" 
                     className="h-14 object-contain" 
+                    style={{ opacity: watermark.opacity / 100 }}
                   />
                 </div>
                 <span className="text-xs text-muted-foreground">Fotos verticais</span>
@@ -79,7 +105,6 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
             </div>
             <p className="text-xs text-muted-foreground">
               A marca d'água correta será aplicada automaticamente baseado na orientação da foto.
-              Opacidade fixa em 40%.
             </p>
           </div>
         )}

@@ -93,6 +93,7 @@ export default function GalleryCreate() {
   const [customDays, setCustomDays] = useState(10);
   const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(1920);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>('standard');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(40);
   const [watermarkDisplay, setWatermarkDisplay] = useState<WatermarkDisplay>('all');
   const [allowComments, setAllowComments] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
@@ -105,6 +106,7 @@ export default function GalleryCreate() {
       setGalleryPermission(settings.defaultGalleryPermission || 'private');
       if (settings.defaultWatermark) {
         setWatermarkType(settings.defaultWatermark.type);
+        setWatermarkOpacity(settings.defaultWatermark.opacity || 40);
       }
     }
   }, [settings]);
@@ -185,7 +187,7 @@ export default function GalleryCreate() {
               configuracoes: {
                 watermark: {
                   type: watermarkType,
-                  opacity: 40,
+                  opacity: watermarkOpacity,
                   position: 'center',
                 },
                 watermarkDisplay: watermarkDisplay,
@@ -846,15 +848,40 @@ export default function GalleryCreate() {
 
                   {/* Standard Watermark Preview */}
                   {watermarkType === 'standard' && (
-                    <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
-                      <div className="h-12 flex items-center justify-center bg-black/80 rounded px-2">
-                        <img src="/watermarks/horizontal.png" alt="Marca d'água padrão" className="h-8 object-contain" />
+                    <div className="space-y-4 p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-4">
+                        <div 
+                          className="h-12 flex items-center justify-center bg-black/80 rounded px-2"
+                        >
+                          <img 
+                            src="/watermarks/horizontal.png" 
+                            alt="Marca d'água padrão" 
+                            className="h-8 object-contain" 
+                            style={{ opacity: watermarkOpacity / 100 }}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
+                          <p className="text-xs text-muted-foreground">
+                            Aplicada automaticamente baseado na orientação
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
-                        <p className="text-xs text-muted-foreground">
-                          Aplicada automaticamente baseado na orientação (opacidade fixa 40%)
-                        </p>
+                      
+                      {/* Opacity Slider */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm">Opacidade</Label>
+                          <span className="text-sm font-medium text-muted-foreground">{watermarkOpacity}%</span>
+                        </div>
+                        <Slider
+                          value={[watermarkOpacity]}
+                          onValueChange={(value) => setWatermarkOpacity(value[0])}
+                          min={10}
+                          max={100}
+                          step={5}
+                          className="w-full"
+                        />
                       </div>
                     </div>
                   )}

@@ -68,7 +68,7 @@ function parseWatermark(json: Json | null): WatermarkSettings {
   
   return {
     type,
-    opacity: type === 'standard' ? 40 : (obj.opacity as number) || 40,
+    opacity: (obj.opacity as number) || 40,
     position: 'center',
   };
 }
