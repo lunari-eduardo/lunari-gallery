@@ -187,15 +187,22 @@ export function Lightbox({
         )}
 
         {/* Image */}
-        <div className="relative max-h-full max-w-full overflow-auto">
+        <div 
+          className="relative flex items-center justify-center overflow-hidden"
+          style={{ 
+            maxHeight: 'calc(100vh - 180px)', 
+            maxWidth: 'calc(100vw - 120px)' 
+          }}
+        >
           <img
             src={currentPhoto.previewUrl}
             alt={currentPhoto.filename}
-            className="max-h-[80vh] max-w-full object-contain transition-transform duration-200"
-            style={{ transform: `scale(${zoom})` }}
+            className="max-h-full max-w-full object-contain transition-transform duration-200"
+            style={{ 
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center center'
+            }}
           />
-          
-          {/* Watermark is applied server-side */}
         </div>
       </div>
 
