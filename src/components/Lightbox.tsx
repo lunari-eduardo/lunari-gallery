@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -50,9 +50,11 @@ export function Lightbox({
   const [comment, setComment] = useState('');
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
-  const [initialZoom, setInitialZoom] = useState(1);
-  const [isPinching, setIsPinching] = useState(false);
+  
+  // Refs for gesture data (synchronous - available immediately within same frame)
+  const isPinchingRef = useRef(false);
+  const initialPinchDistanceRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef(1);
   
   // Pan states
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -153,22 +155,22 @@ export function Lightbox({
     if (e.touches.length === 2) {
       e.preventDefault();
       
-      // FIRST FRAME WITH 2 FINGERS: Only initialize, don't apply zoom
-      if (!isPinching) {
-        setIsPinching(true);
-        setInitialPinchDistance(getDistance(e.touches));
-        setInitialZoom(zoom);
+      // FIRST FRAME WITH 2 FINGERS: Only initialize refs, don't apply zoom
+      if (!isPinchingRef.current) {
+        isPinchingRef.current = true;
+        initialPinchDistanceRef.current = getDistance(e.touches);
+        pinchStartZoomRef.current = zoom;
         // Don't apply zoom on this frame - just capture references
         return;
       }
       
-      // SUBSEQUENT FRAMES: Calculate and apply zoom
-      if (initialPinchDistance !== null) {
+      // SUBSEQUENT FRAMES: Calculate and apply zoom using refs (synchronous)
+      if (initialPinchDistanceRef.current !== null) {
         const currentDistance = getDistance(e.touches);
-        const distanceDelta = currentDistance - initialPinchDistance;
+        const distanceDelta = currentDistance - initialPinchDistanceRef.current;
         const sensitivity = 200;
         const zoomDelta = distanceDelta / sensitivity;
-        const newZoom = clamp(initialZoom + zoomDelta, 1, 2);
+        const newZoom = clamp(pinchStartZoomRef.current + zoomDelta, 1, 2);
         setZoom(newZoom);
       }
     } else if (e.touches.length === 1 && isPanning && zoom > 1) {
@@ -187,11 +189,11 @@ export function Lightbox({
   const handleTouchEnd = (e: React.TouchEvent) => {
     setIsPanning(false);
     
-    // Finalize pinch when there are no longer 2 fingers
+    // Finalize pinch when there are no longer 2 fingers - reset refs immediately
     if (e.touches.length < 2) {
-      setIsPinching(false);
-      setInitialPinchDistance(null);
-      // initialZoom will be recaptured on next pinch
+      isPinchingRef.current = false;
+      initialPinchDistanceRef.current = null;
+      // pinchStartZoomRef will be recaptured on next pinch
     }
     
     // Swipe navigation only when not zoomed
