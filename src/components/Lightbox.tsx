@@ -14,6 +14,7 @@ import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/galle
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface LightboxProps {
   photos: GalleryPhoto[];
@@ -44,10 +45,13 @@ export function Lightbox({
   onComment,
   onFavorite
 }: LightboxProps) {
+  const isMobile = useIsMobile();
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState('');
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
+  const [initialZoom, setInitialZoom] = useState(1);
 
   const currentPhoto = photos[currentIndex];
   
@@ -90,22 +94,57 @@ export function Lightbox({
   }, [handleKeyDown]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.touches[0].clientX);
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      setInitialPinchDistance(getDistance(e.touches));
+      setInitialZoom(zoom);
+    } else if (e.touches.length === 1) {
+      setTouchStart(e.touches[0].clientX);
+    }
+  };
+
+  const getDistance = (touches: React.TouchList) => {
+    return Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && initialPinchDistance !== null) {
+      e.preventDefault();
+      const currentDistance = getDistance(e.touches);
+      const scale = currentDistance / initialPinchDistance;
+      const newZoom = Math.min(4, Math.max(1, initialZoom * scale));
+      setZoom(newZoom);
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStart === null) return;
-    const touchEnd = e.changedTouches[0].clientX;
-    const diff = touchStart - touchEnd;
-
-    if (Math.abs(diff) > 50) {
-      if (diff > 0 && currentIndex < photos.length - 1) {
-        onNavigate(currentIndex + 1);
-      } else if (diff < 0 && currentIndex > 0) {
-        onNavigate(currentIndex - 1);
-      }
+    if (e.touches.length < 2) {
+      setInitialPinchDistance(null);
     }
-    setTouchStart(null);
+    // Swipe navigation only when not zoomed
+    if (touchStart !== null && e.changedTouches.length === 1 && zoom === 1) {
+      const touchEnd = e.changedTouches[0].clientX;
+      const diff = touchStart - touchEnd;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0 && currentIndex < photos.length - 1) {
+          onNavigate(currentIndex + 1);
+        } else if (diff < 0 && currentIndex > 0) {
+          onNavigate(currentIndex - 1);
+        }
+      }
+      setTouchStart(null);
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!isMobile) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.25 : 0.25;
+      setZoom(z => Math.min(4, Math.max(1, z + delta)));
+    }
   };
 
   const handleSaveComment = () => {
@@ -135,24 +174,28 @@ export function Lightbox({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white hover:bg-white/10"
-            onClick={() => setZoom(z => Math.max(1, z - 0.5))}
-            disabled={zoom <= 1}
-          >
-            <ZoomOut className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white hover:bg-white/10"
-            onClick={() => setZoom(z => Math.min(3, z + 0.5))}
-            disabled={zoom >= 3}
-          >
-            <ZoomIn className="h-5 w-5" />
-          </Button>
+          {!isMobile && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10"
+                onClick={() => setZoom(z => Math.max(1, z - 0.5))}
+                disabled={zoom <= 1}
+              >
+                <ZoomOut className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10"
+                onClick={() => setZoom(z => Math.min(4, z + 0.5))}
+                disabled={zoom >= 4}
+              >
+                <ZoomIn className="h-5 w-5" />
+              </Button>
+            </>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -166,9 +209,10 @@ export function Lightbox({
 
       {/* Main Content */}
       <div 
-        className="flex-1 flex items-center justify-center p-4 relative overflow-hidden cursor-pointer"
+        className="flex-1 flex items-center justify-center p-2 md:p-4 relative overflow-hidden cursor-pointer"
         onClick={handleBackgroundClick}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {/* Navigation Arrows */}
@@ -196,12 +240,13 @@ export function Lightbox({
             zoom > 1 ? "overflow-auto" : "overflow-hidden"
           )}
           style={{ 
-            width: 'calc(100vw - 120px)',
-            height: 'calc(100vh - 180px)',
+            width: isMobile ? 'calc(100vw - 32px)' : 'calc(100vw - 120px)',
+            height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,255,255,0.2) transparent'
           }}
           onClick={(e) => e.stopPropagation()}
+          onWheel={handleWheel}
         >
           <img
             src={currentPhoto.previewUrl}
