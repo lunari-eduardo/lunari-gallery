@@ -49,7 +49,8 @@ export default function GalleryCreate() {
   const navigate = useNavigate();
   const {
     clients,
-    createClient
+    createClient,
+    updateClient
   } = useGalleryClients();
   // localStorage galleries removed - only using Supabase now
   const {
@@ -68,6 +69,8 @@ export default function GalleryCreate() {
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [useExistingPassword, setUseExistingPassword] = useState(true);
   const [newPassword, setNewPassword] = useState('');
+  const [passwordDisabled, setPasswordDisabled] = useState(false);
+  const [savePasswordToClient, setSavePasswordToClient] = useState(true);
   const [sessionName, setSessionName] = useState('');
   const [packageName, setPackageName] = useState('');
   const [includedPhotos, setIncludedPhotos] = useState(30);
@@ -130,13 +133,23 @@ export default function GalleryCreate() {
     try {
       // Determine password for private gallery
       let passwordToUse: string | undefined = undefined;
-      if (galleryPermission === 'private') {
+      if (galleryPermission === 'private' && !passwordDisabled) {
         if (useExistingPassword && selectedClient?.galleryPassword) {
           passwordToUse = selectedClient.galleryPassword;
         } else if (newPassword) {
           passwordToUse = newPassword;
+          
+          // Save new password to client if option is checked
+          if (savePasswordToClient && selectedClient) {
+            try {
+              await updateClient(selectedClient.id, { galleryPassword: newPassword });
+            } catch (error) {
+              console.error('Error saving password to client:', error);
+            }
+          }
         }
       }
+      // If passwordDisabled = true, passwordToUse stays undefined (no password protection)
 
       const result = await createSupabaseGallery({
         clienteId: selectedClient?.id || null,
@@ -411,41 +424,99 @@ export default function GalleryCreate() {
                     </div>
                     
                     <div className="pt-2 space-y-3">
-                      <Label className="text-sm">Senha de acesso à galeria *</Label>
+                      <Label className="text-sm">Senha de acesso à galeria</Label>
                       
-                      {/* Only show "Use registered password" if client HAS a password */}
-                      {selectedClient.galleryPassword ? (
+                      {/* Option: Disable password protection */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="passwordDisabled" 
+                          checked={passwordDisabled} 
+                          onCheckedChange={checked => {
+                            setPasswordDisabled(checked as boolean);
+                            if (checked) {
+                              setUseExistingPassword(false);
+                              setNewPassword('');
+                            }
+                          }} 
+                        />
+                        <label htmlFor="passwordDisabled" className="text-sm font-medium leading-none">
+                          Sem proteção por senha
+                        </label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">
+                        Qualquer pessoa com o link poderá acessar a galeria
+                      </p>
+                      
+                      {/* Password options - only show if password is NOT disabled */}
+                      {!passwordDisabled && (
                         <>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
-                            <label htmlFor="useExisting" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                              Usar senha cadastrada
-                            </label>
-                          </div>
-                          
-                          {/* Show password visually when using existing */}
-                          {useExistingPassword && (
-                            <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                              <Lock className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-mono text-sm">{selectedClient.galleryPassword}</span>
+                          {/* Client HAS password registered */}
+                          {selectedClient.galleryPassword ? (
+                            <>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox 
+                                  id="useExisting" 
+                                  checked={useExistingPassword} 
+                                  onCheckedChange={checked => setUseExistingPassword(checked as boolean)} 
+                                />
+                                <label htmlFor="useExisting" className="text-sm font-medium leading-none">
+                                  Usar senha cadastrada
+                                </label>
+                              </div>
+                              
+                              {/* Show password visually when using existing */}
+                              {useExistingPassword && (
+                                <div className="flex items-center gap-2 p-2 bg-muted rounded-md ml-6">
+                                  <Lock className="h-4 w-4 text-muted-foreground" />
+                                  <span className="font-mono text-sm">{selectedClient.galleryPassword}</span>
+                                </div>
+                              )}
+                              
+                              {/* Input for new password when unchecked */}
+                              {!useExistingPassword && (
+                                <div className="space-y-2 ml-6">
+                                  <Input 
+                                    placeholder="Nova senha para esta galeria" 
+                                    value={newPassword} 
+                                    onChange={e => setNewPassword(e.target.value)} 
+                                  />
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                      id="saveToClient" 
+                                      checked={savePasswordToClient} 
+                                      onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} 
+                                    />
+                                    <label htmlFor="saveToClient" className="text-xs text-muted-foreground">
+                                      Salvar esta senha no cadastro do cliente
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            /* Client has NO password registered */
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                Este cliente não possui senha cadastrada
+                              </p>
+                              <Input 
+                                placeholder="Definir senha para a galeria" 
+                                value={newPassword} 
+                                onChange={e => setNewPassword(e.target.value)} 
+                              />
+                              <div className="flex items-center space-x-2">
+                                <Checkbox 
+                                  id="saveToClient" 
+                                  checked={savePasswordToClient} 
+                                  onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} 
+                                />
+                                <label htmlFor="saveToClient" className="text-xs text-muted-foreground">
+                                  Salvar esta senha no cadastro do cliente
+                                </label>
+                              </div>
                             </div>
                           )}
-                          
-                          {/* Input for new password when unchecked */}
-                          {!useExistingPassword && <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />}
                         </>
-                      ) : (
-                        /* Client has NO password - require new password */
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">
-                            Este cliente não possui senha cadastrada
-                          </p>
-                          <Input 
-                            placeholder="Defina uma senha para a galeria" 
-                            value={newPassword} 
-                            onChange={e => setNewPassword(e.target.value)} 
-                          />
-                        </div>
                       )}
                     </div>
                   </div>}

@@ -145,7 +145,7 @@ export interface Client {
   name: string;
   email: string;
   phone?: string;
-  galleryPassword: string;
+  galleryPassword?: string;
   status: ClientGalleryStatus;
   totalGalleries: number;
   createdAt: Date;
