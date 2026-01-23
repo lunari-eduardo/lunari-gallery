@@ -281,13 +281,17 @@ export default function ClientGallery() {
 
   // 6. Mutation for confirming selection via Edge Function
   const confirmMutation = useMutation({
-    mutationFn: async () => {
-      const selectedCount = localPhotos.filter(p => p.isSelected).length;
-      
+    mutationFn: async (pricingData: { selectedCount: number; extraCount: number; valorUnitario: number; valorTotal: number }) => {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/confirm-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ galleryId, selectedCount }),
+        body: JSON.stringify({ 
+          galleryId, 
+          selectedCount: pricingData.selectedCount,
+          extraCount: pricingData.extraCount,
+          valorUnitario: pricingData.valorUnitario,
+          valorTotal: pricingData.valorTotal,
+        }),
       });
       
       if (!response.ok) {
@@ -488,7 +492,20 @@ export default function ClientGallery() {
   };
 
   const handleConfirm = () => {
-    confirmMutation.mutate();
+    const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
+    const currentExtraCount = Math.max(0, currentSelectedCount - gallery.includedPhotos);
+    const { valorUnitario: currentValorUnitario, valorTotal: currentValorTotal } = calcularPrecoProgressivo(
+      currentExtraCount,
+      regrasCongeladas,
+      gallery.extraPhotoPrice
+    );
+    
+    confirmMutation.mutate({
+      selectedCount: currentSelectedCount,
+      extraCount: currentExtraCount,
+      valorUnitario: currentValorUnitario,
+      valorTotal: currentValorTotal,
+    });
   };
 
   // Parse welcome message
