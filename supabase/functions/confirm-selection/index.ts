@@ -93,13 +93,22 @@ Deno.serve(async (req) => {
     }
 
     // 5. Sync with clientes_sessoes if gallery was created from Gestão
-    if (gallery.session_id && extraCount !== undefined) {
+    if (gallery.session_id) {
+      // Normalize valorUnitario if it's in cents
+      const valorNormalizado = (valorUnitario && valorUnitario > 1000) 
+        ? valorUnitario / 100 
+        : (valorUnitario || 0);
+      const totalNormalizado = (valorTotal && valorTotal > 1000) 
+        ? valorTotal / 100 
+        : (valorTotal || 0);
+
       const { error: sessionError } = await supabase
         .from('clientes_sessoes')
         .update({
-          qtd_fotos_extra: extraCount,
-          valor_foto_extra: valorUnitario || 0,
-          valor_total_foto_extra: valorTotal || 0,
+          qtd_fotos_extra: extraCount || 0,
+          valor_foto_extra: valorNormalizado,
+          valor_total_foto_extra: totalNormalizado,
+          status_galeria: 'concluida',
           updated_at: new Date().toISOString(),
         })
         .eq('session_id', gallery.session_id);
@@ -107,7 +116,7 @@ Deno.serve(async (req) => {
       if (sessionError) {
         console.error('Session update error:', sessionError);
       } else {
-        console.log(`Session ${gallery.session_id} updated with extras: ${extraCount} photos, R$ ${valorTotal}`);
+        console.log(`Session ${gallery.session_id} updated: ${extraCount} extras, R$ ${valorNormalizado}/photo, total R$ ${totalNormalizado}, status=concluida`);
       }
     }
 

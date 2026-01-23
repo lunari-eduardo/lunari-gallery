@@ -49,6 +49,18 @@ export interface CalculoPrecoResult {
 }
 
 /**
+ * Normalizes a price value that might be in cents to reals.
+ * If the value is > 1000, it's assumed to be in cents and divided by 100.
+ * This handles Gestão's inconsistent storage of valores.
+ */
+export function normalizarValor(valor: number): number {
+  if (valor > 1000) {
+    return valor / 100;
+  }
+  return valor;
+}
+
+/**
  * Finds the price tier for the given quantity
  */
 function encontrarFaixaPreco(quantidade: number, faixas: FaixaPreco[]): FaixaPreco | null {
@@ -88,10 +100,13 @@ export function calcularPrecoProgressivo(
   regrasCongeladas: RegrasCongeladas | null | undefined,
   valorFotoExtraFixo: number
 ): CalculoPrecoResult {
+  // Normalize fallback value (might be in cents from Gestão)
+  const fallbackNormalizado = normalizarValor(valorFotoExtraFixo);
+
   // Default/fallback result
   const fallbackResult: CalculoPrecoResult = {
-    valorUnitario: valorFotoExtraFixo,
-    valorTotal: quantidadeFotosExtras * valorFotoExtraFixo,
+    valorUnitario: fallbackNormalizado,
+    valorTotal: quantidadeFotosExtras * fallbackNormalizado,
     modeloUsado: 'fixo',
   };
 
@@ -105,7 +120,10 @@ export function calcularPrecoProgressivo(
   }
 
   const regras = regrasCongeladas.precificacaoFotoExtra;
-  const precoBasePacote = regrasCongeladas.pacote?.valorFotoExtra || valorFotoExtraFixo;
+  // Normalize package base price (might be in cents from Gestão)
+  const valorPacoteRaw = regrasCongeladas.pacote?.valorFotoExtra || valorFotoExtraFixo;
+  const precoBasePacote = normalizarValor(valorPacoteRaw);
+  
   let valorUnitario = 0;
   let faixaAtual: FaixaPreco | null = null;
   let modeloUsado: 'fixo' | 'global' | 'categoria' = 'fixo';

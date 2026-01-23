@@ -399,6 +399,7 @@ export type Database = {
           session_id: string
           status: string | null
           status_financeiro: string | null
+          status_galeria: string | null
           updated_at: string | null
           updated_by: string | null
           user_id: string
@@ -430,6 +431,7 @@ export type Database = {
           session_id: string
           status?: string | null
           status_financeiro?: string | null
+          status_galeria?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id: string
@@ -461,6 +463,7 @@ export type Database = {
           session_id?: string
           status?: string | null
           status_financeiro?: string | null
+          status_galeria?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string
