@@ -1,25 +1,40 @@
 import { Gallery } from '@/types/gallery';
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { calcularPrecoProgressivo, RegrasCongeladas, formatFaixaDisplay, getFaixasFromRegras } from '@/lib/pricingUtils';
 
 interface SelectionSummaryProps {
   gallery: Gallery;
   onConfirm?: () => void;
   isClient?: boolean;
   variant?: 'default' | 'bottom-bar';
+  regrasCongeladas?: RegrasCongeladas | null;
 }
 
 export function SelectionSummary({ 
   gallery, 
   onConfirm, 
   isClient = false,
-  variant = 'default'
+  variant = 'default',
+  regrasCongeladas
 }: SelectionSummaryProps) {
-  const { includedPhotos, selectedCount, extraCount, extraPhotoPrice, extraTotal, selectionStatus } = gallery;
-  const isOverLimit = selectedCount > includedPhotos;
+  const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
+  const extraCount = Math.max(0, selectedCount - includedPhotos);
+  const isOverLimit = extraCount > 0;
   const isConfirmed = selectionStatus === 'confirmed';
   const isBlocked = selectionStatus === 'blocked';
+  
+  // Calculate progressive pricing if frozen rules exist
+  const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
+    extraCount,
+    regrasCongeladas,
+    extraPhotoPrice
+  );
+  
+  // Use calculated values
+  const displayUnitPrice = valorUnitario;
+  const displayTotal = valorTotal;
 
   // Bottom bar variant for client gallery
   if (variant === 'bottom-bar') {
@@ -36,7 +51,7 @@ export function SelectionSummary({
             {isOverLimit && (
               <div className="flex items-center gap-2 text-primary">
                 <span className="text-sm font-medium">+{extraCount} extras</span>
-                <span className="text-sm font-bold">R$ {extraTotal.toFixed(2)}</span>
+                <span className="text-sm font-bold">R$ {displayTotal.toFixed(2)}</span>
               </div>
             )}
           </div>
@@ -102,7 +117,7 @@ export function SelectionSummary({
             
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Valor por extra</span>
-              <span className="font-medium">R$ {extraPhotoPrice.toFixed(2)}</span>
+              <span className="font-medium">R$ {displayUnitPrice.toFixed(2)}</span>
             </div>
             
             <div className="h-px bg-border" />
@@ -110,9 +125,17 @@ export function SelectionSummary({
             <div className="flex items-center justify-between">
               <span className="font-medium">Valor adicional</span>
               <span className="text-lg font-bold text-primary">
-                R$ {extraTotal.toFixed(2)}
+                R$ {displayTotal.toFixed(2)}
               </span>
             </div>
+            
+            {/* Show savings indicator when progressive pricing applied */}
+            {economia && economia > 0 && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 text-sm">
+                <TrendingDown className="h-4 w-4 flex-shrink-0" />
+                <span>Economia: R$ {economia.toFixed(2)}</span>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -123,7 +146,7 @@ export function SelectionSummary({
           <p className="text-primary">
             {isClient 
               ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do pacote. O valor adicional será cobrado posteriormente.`
-              : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${extraTotal.toFixed(2)}`
+              : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
             }
           </p>
         </div>

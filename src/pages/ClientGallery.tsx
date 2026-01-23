@@ -796,6 +796,7 @@ export default function ClientGallery() {
         onConfirm={handleStartConfirmation}
         isClient
         variant="bottom-bar"
+        regrasCongeladas={supabaseGallery?.regras_congeladas as RegrasCongeladas | null}
       />
 
       {lightboxIndex !== null && (
