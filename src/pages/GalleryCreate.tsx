@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,8 +28,9 @@ import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
-import { RegrasCongeladas } from '@/lib/pricingUtils';
+import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay } from '@/lib/pricingUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -106,6 +107,9 @@ export default function GalleryCreate() {
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
   const [isLoadingRegras, setIsLoadingRegras] = useState(false);
   const [regrasLoaded, setRegrasLoaded] = useState(false);
+  
+  // Override pricing: when true, user wants to customize prices instead of using regrasCongeladas
+  const [overridePricing, setOverridePricing] = useState(false);
   
   // Supabase galleries hook
   const { createGallery: createSupabaseGallery, updateGallery } = useSupabaseGalleries();
@@ -222,8 +226,11 @@ export default function GalleryCreate() {
           setIncludedPhotos(packageFromGestao.fotosIncluidas);
         }
         
-        // Use package valor_foto_extra if not explicitly provided in URL
-        if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra) {
+        // Only use package valor_foto_extra if:
+        // 1. Not explicitly provided in URL
+        // 2. No frozen rules exist (regrasCongeladas will be the source of truth if present)
+        // When regrasCongeladas exist, pricing comes from there, not package
+        if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra && !regrasCongeladas) {
           setFixedPrice(packageFromGestao.valorFotoExtra);
         }
       }
@@ -306,6 +313,13 @@ export default function GalleryCreate() {
       const clientName = selectedClient?.name || 'Galeria Pública';
       const clientEmail = selectedClient?.email || '';
 
+      // Determine the final extra photo price based on pricing source
+      // When assisted mode with frozen rules and no override, use rules; otherwise use manual input
+      let valorFotoExtraFinal = fixedPrice;
+      if (isAssistedMode && regrasCongeladas && !overridePricing) {
+        valorFotoExtraFinal = regrasCongeladas.pacote?.valorFotoExtra || 0;
+      }
+
       const result = await createSupabaseGallery({
         clienteId: selectedClient?.id || null,
         clienteNome: clientName,
@@ -313,14 +327,15 @@ export default function GalleryCreate() {
         nomeSessao: sessionName || 'Nova Sessão',
         nomePacote: packageName,
         fotosIncluidas: includedPhotos,
-        valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+        valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
         prazoSelecaoDias: customDays,
         permissao: galleryPermission,
         mensagemBoasVindas: welcomeMessage,
         galleryPassword: passwordToUse,
         sessionId: isAssistedMode ? gestaoParams.session_id : null,
         origin: isAssistedMode ? 'gestao' : 'manual',
-        regrasCongeladas: regrasCongeladas, // Pass frozen pricing rules from Gestão
+        // Only pass frozen rules if not overriding
+        regrasCongeladas: (isAssistedMode && regrasCongeladas && !overridePricing) ? regrasCongeladas : null,
       });
       
       if (result?.id) {
@@ -376,7 +391,12 @@ export default function GalleryCreate() {
               },
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
-              valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+              // Use same pricing logic as creation
+              valorFotoExtra: saleMode !== 'no_sale' 
+                ? (isAssistedMode && regrasCongeladas && !overridePricing 
+                    ? regrasCongeladas.pacote?.valorFotoExtra || 0
+                    : fixedPrice)
+                : 0,
             }
           });
           
@@ -824,56 +844,153 @@ export default function GalleryCreate() {
 
               {/* Right Block - Pricing Configuration (conditional) */}
               {saleMode !== 'no_sale' && <div className="space-y-6">
-                  {/* Pricing Model */}
-                  <div className="space-y-4">
-                    <Label className="text-base font-medium">Qual formato de preço?</Label>
-                    <RadioGroup value={pricingModel} onValueChange={v => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
-                      {/* Fixed Price */}
-                      <div>
-                        <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
-                        <Label htmlFor="pricing-fixed" className={cn("flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'fixed' ? "border-primary bg-primary/5" : "border-border")}>
-                          <div className="flex items-center gap-3">
-                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'fixed' ? "bg-primary/20" : "bg-muted")}>
-                              <Tag className={cn("h-4 w-4", pricingModel === 'fixed' ? "text-primary" : "text-muted-foreground")} />
+                  {/* Show frozen rules from Gestão when available and not overriding */}
+                  {isAssistedMode && regrasCongeladas && !overridePricing ? (
+                    <div className="space-y-4">
+                      {/* Loading state */}
+                      {isLoadingRegras ? (
+                        <div className="space-y-3">
+                          <Skeleton className="h-16 w-full" />
+                          <Skeleton className="h-24 w-full" />
+                        </div>
+                      ) : (
+                        <>
+                          {/* Synced pricing banner */}
+                          <div className="p-4 rounded-lg bg-accent/20 border border-accent/50">
+                            <div className="flex items-center gap-2 text-accent-foreground">
+                              <Link2 className="h-5 w-5" />
+                              <span className="font-medium">Preços sincronizados do Gestão</span>
                             </div>
-                            <div>
-                              <p className="font-medium">Preço único por foto</p>
-                              <p className="text-xs text-muted-foreground">
-                                Defina um valor fixo para cada foto
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
-                              <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                              <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={e => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={e => e.stopPropagation()} />
-                            </div>}
-                        </Label>
-                      </div>
-
-                      {/* Packages with Discount */}
-                      <div>
-                        <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
-                        <Label htmlFor="pricing-packages" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'packages' ? "border-primary bg-primary/5" : "border-border")}>
-                          <Badge className="absolute -top-2 right-2 text-xs bg-green-500">
-                            Novo
-                          </Badge>
-                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'packages' ? "bg-primary/20" : "bg-muted")}>
-                            <Package className={cn("h-4 w-4", pricingModel === 'packages' ? "text-primary" : "text-muted-foreground")} />
-                          </div>
-                          <div>
-                            <p className="font-medium">Pacotes com descontos</p>
-                            <p className="text-xs text-muted-foreground">
-                              Descontos progressivos por quantidade
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Os preços de fotos extras estão configurados na sessão original.
                             </p>
                           </div>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
 
-                  {/* Discount Packages Configuration */}
-                  {pricingModel === 'packages' && <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
+                          {/* Rules summary */}
+                          <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
+                            <h4 className="font-medium">Configuração de Preços</h4>
+                            
+                            {/* Pricing model */}
+                            <div className="flex items-center gap-2 text-sm">
+                              <Tag className="h-4 w-4 text-muted-foreground" />
+                              <span>Modelo: {getModeloDisplayName(regrasCongeladas.precificacaoFotoExtra?.modelo || 'fixo')}</span>
+                            </div>
+                            
+                            {/* Price tiers (if progressive) */}
+                            {regrasCongeladas.precificacaoFotoExtra?.modelo !== 'fixo' && getFaixasFromRegras(regrasCongeladas).length > 0 && (
+                              <div className="space-y-2 pt-2 border-t border-border/50">
+                                <Label className="text-xs text-muted-foreground">Faixas de desconto:</Label>
+                                <div className="grid gap-1">
+                                  {getFaixasFromRegras(regrasCongeladas).map((faixa, idx) => (
+                                    <div key={idx} className="flex justify-between text-sm py-1 px-2 rounded bg-background/50">
+                                      <span className="text-muted-foreground">{formatFaixaDisplay(faixa)}</span>
+                                      <span className="font-medium">R$ {faixa.valor.toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Fixed base price (if fixed model or as fallback) */}
+                            {(regrasCongeladas.precificacaoFotoExtra?.modelo === 'fixo' || getFaixasFromRegras(regrasCongeladas).length === 0) && (
+                              <div className="flex justify-between text-sm pt-2 border-t border-border/50">
+                                <span className="text-muted-foreground">Preço por foto extra:</span>
+                                <span className="font-medium">R$ {(regrasCongeladas.pacote?.valorFotoExtra || 0).toFixed(2)}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Customize button */}
+                          <Button 
+                            type="button"
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              setOverridePricing(true);
+                              // Initialize fixedPrice with the frozen value for editing
+                              setFixedPrice(regrasCongeladas.pacote?.valorFotoExtra || 25);
+                            }}
+                            className="text-muted-foreground"
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Personalizar preços para esta galeria
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Override mode banner (when user chose to customize) */}
+                      {isAssistedMode && regrasCongeladas && overridePricing && (
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                          <div className="flex items-center gap-2">
+                            <Pencil className="h-4 w-4 text-destructive" />
+                            <span className="text-sm font-medium text-destructive">Modo personalizado ativo</span>
+                          </div>
+                          <Button 
+                            type="button"
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setOverridePricing(false)}
+                            className="text-muted-foreground h-7"
+                          >
+                            Reverter para Gestão
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Manual Pricing Model selection (default or override mode) */}
+                      <div className="space-y-4">
+                        <Label className="text-base font-medium">Qual formato de preço?</Label>
+                        <RadioGroup value={pricingModel} onValueChange={v => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
+                          {/* Fixed Price */}
+                          <div>
+                            <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
+                            <Label htmlFor="pricing-fixed" className={cn("flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'fixed' ? "border-primary bg-primary/5" : "border-border")}>
+                              <div className="flex items-center gap-3">
+                                <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'fixed' ? "bg-primary/20" : "bg-muted")}>
+                                  <Tag className={cn("h-4 w-4", pricingModel === 'fixed' ? "text-primary" : "text-muted-foreground")} />
+                                </div>
+                                <div>
+                                  <p className="font-medium">Preço único por foto</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Defina um valor fixo para cada foto
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
+                                  <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
+                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={e => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={e => e.stopPropagation()} />
+                                </div>}
+                            </Label>
+                          </div>
+
+                          {/* Packages with Discount */}
+                          <div>
+                            <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
+                            <Label htmlFor="pricing-packages" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'packages' ? "border-primary bg-primary/5" : "border-border")}>
+                              <Badge className="absolute -top-2 right-2 text-xs bg-primary text-primary-foreground">
+                                Novo
+                              </Badge>
+                              <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'packages' ? "bg-primary/20" : "bg-muted")}>
+                                <Package className={cn("h-4 w-4", pricingModel === 'packages' ? "text-primary" : "text-muted-foreground")} />
+                              </div>
+                              <div>
+                                <p className="font-medium">Pacotes com descontos</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Descontos progressivos por quantidade
+                                </p>
+                              </div>
+                            </Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Discount Packages Configuration - only show in manual mode or override */}
+                  {pricingModel === 'packages' && (!isAssistedMode || !regrasCongeladas || overridePricing) && <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <Label className="text-sm font-medium">Configurar faixas</Label>
                         <div className="flex gap-2 flex-wrap">

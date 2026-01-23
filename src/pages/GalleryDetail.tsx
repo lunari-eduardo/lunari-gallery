@@ -384,7 +384,7 @@ export default function GalleryDetail() {
             </div>
 
             <div>
-              <SelectionSummary gallery={galleryForSummary} />
+              <SelectionSummary gallery={galleryForSummary} regrasCongeladas={regrasCongeladas} />
 
               {selectedPhotos.length > 0 && (
                 <Button 
