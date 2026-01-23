@@ -104,6 +104,8 @@ export default function GalleryCreate() {
   
   // Frozen pricing rules from Gestão session (for PRO+Gallery users)
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
+  const [isLoadingRegras, setIsLoadingRegras] = useState(false);
+  const [regrasLoaded, setRegrasLoaded] = useState(false);
   
   // Supabase galleries hook
   const { createGallery: createSupabaseGallery, updateGallery } = useSupabaseGalleries();
@@ -133,9 +135,14 @@ export default function GalleryCreate() {
 
   // Fetch frozen pricing rules from Gestão session (for PRO+Gallery users)
   useEffect(() => {
-    if (!isAssistedMode || !gestaoParams?.session_id) return;
+    // For non-assisted mode, mark as loaded immediately
+    if (!isAssistedMode || !gestaoParams?.session_id) {
+      setRegrasLoaded(true);
+      return;
+    }
 
     const fetchRegrasCongeladas = async () => {
+      setIsLoadingRegras(true);
       try {
         console.log('🔗 Fetching regras_congeladas for session:', gestaoParams.session_id);
         const { data, error } = await supabase
@@ -146,15 +153,15 @@ export default function GalleryCreate() {
 
         if (error) {
           console.error('Error fetching regras_congeladas:', error);
-          return;
-        }
-
-        if (data?.regras_congeladas) {
+        } else if (data?.regras_congeladas) {
           console.log('🔗 Found regras_congeladas:', data.regras_congeladas);
           setRegrasCongeladas(data.regras_congeladas as unknown as RegrasCongeladas);
         }
       } catch (error) {
         console.error('Error fetching session rules:', error);
+      } finally {
+        setIsLoadingRegras(false);
+        setRegrasLoaded(true);
       }
     };
 
@@ -337,6 +344,13 @@ export default function GalleryCreate() {
           setCurrentStep(1);
           return;
         }
+        
+        // For assisted mode, wait for pricing rules to load
+        if (isAssistedMode && !regrasLoaded) {
+          toast.loading('Carregando configurações de preços...', { duration: 2000 });
+          return;
+        }
+        
         await createSupabaseGalleryForUploads();
       }
       setCurrentStep(currentStep + 1);

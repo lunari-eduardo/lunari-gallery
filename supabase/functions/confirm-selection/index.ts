@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
         status_selecao: 'confirmado',
         finalized_at: new Date().toISOString(),
         fotos_selecionadas: selectedCount || 0,
+        valor_extras: valorTotal || 0,
         updated_at: new Date().toISOString(),
       })
       .eq('id', galleryId);
@@ -82,8 +83,8 @@ Deno.serve(async (req) => {
     // 4. Log action in history (user_id can be null for client actions)
     const { error: logError } = await supabase.from('galeria_acoes').insert({
       galeria_id: galleryId,
-      tipo: 'selecao_confirmada',
-      descricao: `Cliente confirmou seleção de ${selectedCount || 0} fotos`,
+      tipo: 'cliente_confirmou',
+      descricao: `Cliente confirmou seleção de ${selectedCount || 0} fotos${extraCount ? ` (${extraCount} extras - R$ ${valorTotal?.toFixed(2) || '0.00'})` : ''}`,
       user_id: null, // Anonymous client action
     });
 
