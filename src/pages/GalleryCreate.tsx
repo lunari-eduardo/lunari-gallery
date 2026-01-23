@@ -71,10 +71,6 @@ export default function GalleryCreate() {
   } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
 
-  // State for manual client name (for users without Gestão integration)
-  const [manualClientName, setManualClientName] = useState('');
-  const [manualClientEmail, setManualClientEmail] = useState('');
-
   // Preset dialog state
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
   const [presetName, setPresetName] = useState('');
@@ -139,9 +135,17 @@ export default function GalleryCreate() {
     if (!isAssistedMode || !gestaoParams || paramsProcessed) return;
 
     // Wait for clients to load if we have a cliente_id
-    if (gestaoParams.cliente_id && isLoadingClients) {
-      console.log('🔗 Waiting for clients to load...');
-      return;
+    // Must wait for BOTH isLoading to be false AND clients array to be populated
+    if (gestaoParams.cliente_id) {
+      if (isLoadingClients) {
+        console.log('🔗 Waiting for clients to load...');
+        return;
+      }
+      // Also wait if clients array is empty (data still fetching after accessLoading finished)
+      if (clients.length === 0) {
+        console.log('🔗 Clients loaded but array is empty, waiting for data...');
+        return;
+      }
     }
     
     // Wait for packages to load if we have a pacote_nome (to lookup fotos_incluidas)
@@ -199,26 +203,16 @@ export default function GalleryCreate() {
       setPricingModel(gestaoParams.modelo_de_preco);
     }
 
-    // Step 4: Find and select client by ID if exists, fallback to manual name
+    // Step 4: Find and select client by ID
     if (gestaoParams.cliente_id) {
       const clientFromGestao = clients.find(c => c.id === gestaoParams.cliente_id);
       if (clientFromGestao) {
         console.log('🔗 Found client:', clientFromGestao.name);
         setSelectedClient(clientFromGestao);
         setUseExistingPassword(!!clientFromGestao.galleryPassword);
-      } else if (gestaoParams.cliente_nome) {
-        // Fallback: client ID not found, use manual name
-        console.log('🔗 Client not found, using manual name:', gestaoParams.cliente_nome);
-        setManualClientName(gestaoParams.cliente_nome);
-        if (gestaoParams.cliente_email) {
-          setManualClientEmail(gestaoParams.cliente_email);
-        }
-      }
-    } else if (gestaoParams.cliente_nome) {
-      // No client_id but has name: use manual fields
-      setManualClientName(gestaoParams.cliente_nome);
-      if (gestaoParams.cliente_email) {
-        setManualClientEmail(gestaoParams.cliente_email);
+      } else {
+        // Client ID not found - user will need to select manually from dropdown
+        console.log('🔗 Client ID not found in database:', gestaoParams.cliente_id);
       }
     }
 
@@ -237,17 +231,10 @@ export default function GalleryCreate() {
   });
   // Create Supabase gallery when entering step 3 (for uploads)
   const createSupabaseGalleryForUploads = async () => {
-    // For public galleries, client is optional
-    // For private galleries: with Gestão integration need selectedClient, without need manual name
-    if (galleryPermission === 'private') {
-      if (hasGestaoIntegration && !selectedClient) {
-        toast.error('Selecione um cliente para galeria privada');
-        return;
-      }
-      if (!hasGestaoIntegration && !manualClientName.trim()) {
-        toast.error('Digite o nome do cliente para galeria privada');
-        return;
-      }
+    // For private galleries, client selection is required (for ALL plans)
+    if (galleryPermission === 'private' && !selectedClient) {
+      toast.error('Selecione um cliente para galeria privada');
+      return;
     }
     if (supabaseGalleryId) return;
     
@@ -273,14 +260,9 @@ export default function GalleryCreate() {
       }
       // If passwordDisabled = true, passwordToUse stays undefined (no password protection)
 
-      // Determine client name - from selected client or manual input
-      const clientName = hasGestaoIntegration 
-        ? (selectedClient?.name || 'Galeria Pública')
-        : (manualClientName.trim() || 'Galeria Pública');
-      
-      const clientEmail = hasGestaoIntegration
-        ? (selectedClient?.email || '')
-        : manualClientEmail.trim();
+      // Client name from selected client (or 'Galeria Pública' if public gallery)
+      const clientName = selectedClient?.name || 'Galeria Pública';
+      const clientEmail = selectedClient?.email || '';
 
       const result = await createSupabaseGallery({
         clienteId: selectedClient?.id || null,
@@ -313,18 +295,11 @@ export default function GalleryCreate() {
     if (currentStep < 5) {
       // When going to step 4 (Fotos), create Supabase gallery first with configurations
       if (currentStep === 3 && !supabaseGalleryId) {
-        // Validate client requirement for private galleries
-        if (galleryPermission === 'private') {
-          if (hasGestaoIntegration && !selectedClient) {
-            toast.error('Selecione um cliente primeiro');
-            setCurrentStep(1);
-            return;
-          }
-          if (!hasGestaoIntegration && !manualClientName.trim()) {
-            toast.error('Digite o nome do cliente');
-            setCurrentStep(1);
-            return;
-          }
+        // Validate client requirement for private galleries (ALL plans)
+        if (galleryPermission === 'private' && !selectedClient) {
+          toast.error('Selecione um cliente primeiro');
+          setCurrentStep(1);
+          return;
         }
         await createSupabaseGalleryForUploads();
       }
@@ -545,55 +520,48 @@ export default function GalleryCreate() {
             {/* Client Section - Only show for private galleries */}
             {galleryPermission === 'private' && (
               <div className="space-y-4">
-                {/* PRO + Gallery: Searchable dropdown for clients */}
-                {hasGestaoIntegration ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 space-y-2">
-                      <Label>Cliente *</Label>
-                      <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />
-                    </div>
-                    <div className="pt-6">
-                      <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Other plans: Simple text input for client */
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="manualClientName">Nome do Cliente *</Label>
-                      <Input 
-                        id="manualClientName"
-                        placeholder="Ex: Maria Silva" 
-                        value={manualClientName} 
-                        onChange={e => setManualClientName(e.target.value)} 
+                {/* Client dropdown - Same for ALL plans (table accessed depends on plan via useGalleryClients) */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label>Cliente *</Label>
+                    {isLoadingClients ? (
+                      <div className="h-10 rounded-md border border-input bg-muted animate-pulse" />
+                    ) : (
+                      <ClientSelect 
+                        clients={clients} 
+                        selectedClient={selectedClient} 
+                        onSelect={handleClientSelect} 
+                        onCreateNew={() => setIsClientModalOpen(true)} 
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="manualClientEmail">Email do Cliente</Label>
-                      <Input 
-                        id="manualClientEmail"
-                        type="email"
-                        placeholder="Ex: maria@email.com" 
-                        value={manualClientEmail} 
-                        onChange={e => setManualClientEmail(e.target.value)} 
-                      />
-                    </div>
+                    )}
                   </div>
-                )}
+                  <div className="pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={() => setIsClientModalOpen(true)}
+                      disabled={isLoadingClients}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-                {/* Password Section - PRO + Gallery with selected client */}
-                {hasGestaoIntegration && selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
+                {/* Password Section - Show for ANY selected client (all plans) */}
+                {selectedClient && (
+                  <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
                     <div className="grid gap-2 md:grid-cols-2 text-sm">
                       <div>
                         <span className="text-muted-foreground">Email: </span>
                         <span className="font-medium">{selectedClient.email}</span>
                       </div>
-                      {selectedClient.phone && <div>
+                      {selectedClient.phone && (
+                        <div>
                           <span className="text-muted-foreground">Telefone: </span>
                           <span className="font-medium">{selectedClient.phone}</span>
-                        </div>}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="pt-2 space-y-3">
@@ -692,45 +660,9 @@ export default function GalleryCreate() {
                         </>
                       )}
                     </div>
-                  </div>}
-
-                {/* Password Section - Simple for users without Gestão integration */}
-                {!hasGestaoIntegration && manualClientName.trim() && (
-                  <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-fade-in">
-                    <Label className="text-sm">Senha de acesso à galeria</Label>
-                    
-                    {/* Option: Disable password protection */}
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="passwordDisabledSimple" 
-                        checked={passwordDisabled} 
-                        onCheckedChange={checked => {
-                          setPasswordDisabled(checked as boolean);
-                          if (checked) {
-                            setNewPassword('');
-                          }
-                        }} 
-                      />
-                      <label htmlFor="passwordDisabledSimple" className="text-sm font-medium leading-none">
-                        Sem proteção por senha
-                      </label>
-                    </div>
-                    <p className="text-xs text-muted-foreground ml-6">
-                      Qualquer pessoa com o link poderá acessar a galeria
-                    </p>
-                    
-                    {/* Simple password input */}
-                    {!passwordDisabled && (
-                      <div className="space-y-2">
-                        <Input 
-                          placeholder="Definir senha para a galeria" 
-                          value={newPassword} 
-                          onChange={e => setNewPassword(e.target.value)} 
-                        />
-                      </div>
-                    )}
                   </div>
                 )}
+
               </div>
             )}
 
