@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -49,35 +49,18 @@ export function Lightbox({
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState('');
   const [touchStart, setTouchStart] = useState<number | null>(null);
+  
+  // Desktop zoom state (no mobile zoom)
   const [zoom, setZoom] = useState(1);
-  
-  // Refs for gesture data (synchronous - available immediately within same frame)
-  const isPinchingRef = useRef(false);
-  const initialPinchDistanceRef = useRef<number | null>(null);
-  const pinchStartZoomRef = useRef(1);
-  
-  // Pan states
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
 
   const currentPhoto = photos[currentIndex];
   
   // Show watermark in fullscreen if watermarkDisplay is 'all' or 'fullscreen'
   const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay !== 'none';
 
-  // Utility functions
+  // Utility function for clamping values
   const clamp = (value: number, min: number, max: number) => 
     Math.min(Math.max(value, min), max);
-
-  const calculateMaxOffset = (currentZoom: number) => {
-    const containerWidth = isMobile ? window.innerWidth - 32 : window.innerWidth - 120;
-    const containerHeight = isMobile ? window.innerHeight - 140 : window.innerHeight - 180;
-    const extraWidth = containerWidth * (currentZoom - 1) / 2;
-    const extraHeight = containerHeight * (currentZoom - 1) / 2;
-    return { x: extraWidth, y: extraHeight };
-  };
 
   const handleDownload = () => {
     if (!currentPhoto || !allowDownload) return;
@@ -93,15 +76,7 @@ export function Lightbox({
     setComment(currentPhoto?.comment || '');
     setShowComment(false);
     setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
   }, [currentIndex, currentPhoto?.comment]);
-
-  // Reset pan when zoom returns to 1
-  useEffect(() => {
-    if (zoom === 1) {
-      setPanOffset({ x: 0, y: 0 });
-    }
-  }, [zoom]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
@@ -122,82 +97,15 @@ export function Lightbox({
     };
   }, [handleKeyDown]);
 
-  const getDistance = (touches: React.TouchList) => {
-    return Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-  };
-
+  // Simple touch handlers for swipe navigation only (no zoom)
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      // Don't initialize pinch here - do it in touchmove
-      // Just stop pan if it's happening
-      setIsPanning(false);
-    } else if (e.touches.length === 1) {
-      if (zoom > 1) {
-        // Start pan
-        setIsPanning(true);
-        setPanStart({ 
-          x: e.touches[0].clientX, 
-          y: e.touches[0].clientY 
-        });
-        setLastPanOffset(panOffset);
-      } else {
-        // Swipe for navigation
-        setTouchStart(e.touches[0].clientX);
-      }
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      
-      // FIRST FRAME WITH 2 FINGERS: Only initialize refs, don't apply zoom
-      if (!isPinchingRef.current) {
-        isPinchingRef.current = true;
-        initialPinchDistanceRef.current = getDistance(e.touches);
-        pinchStartZoomRef.current = zoom;
-        // Don't apply zoom on this frame - just capture references
-        return;
-      }
-      
-      // SUBSEQUENT FRAMES: Calculate and apply zoom using refs (synchronous)
-      if (initialPinchDistanceRef.current !== null) {
-        const currentDistance = getDistance(e.touches);
-        const distanceDelta = currentDistance - initialPinchDistanceRef.current;
-        const sensitivity = 200;
-        const zoomDelta = distanceDelta / sensitivity;
-        const newZoom = clamp(pinchStartZoomRef.current + zoomDelta, 1, 2);
-        setZoom(newZoom);
-      }
-    } else if (e.touches.length === 1 && isPanning && zoom > 1) {
-      e.preventDefault();
-      const deltaX = e.touches[0].clientX - panStart.x;
-      const deltaY = e.touches[0].clientY - panStart.y;
-      const maxOffset = calculateMaxOffset(zoom);
-      
-      setPanOffset({
-        x: clamp(lastPanOffset.x + deltaX, -maxOffset.x, maxOffset.x),
-        y: clamp(lastPanOffset.y + deltaY, -maxOffset.y, maxOffset.y)
-      });
+    if (e.touches.length === 1) {
+      setTouchStart(e.touches[0].clientX);
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    setIsPanning(false);
-    
-    // Finalize pinch when there are no longer 2 fingers - reset refs immediately
-    if (e.touches.length < 2) {
-      isPinchingRef.current = false;
-      initialPinchDistanceRef.current = null;
-      // pinchStartZoomRef will be recaptured on next pinch
-    }
-    
-    // Swipe navigation only when not zoomed
-    if (touchStart !== null && e.changedTouches.length === 1 && zoom === 1) {
+    if (touchStart !== null && e.changedTouches.length === 1) {
       const touchEnd = e.changedTouches[0].clientX;
       const diff = touchStart - touchEnd;
       if (Math.abs(diff) > 50) {
@@ -211,6 +119,7 @@ export function Lightbox({
     }
   };
 
+  // Desktop zoom with mouse wheel
   const handleWheel = (e: React.WheelEvent) => {
     if (!isMobile) {
       e.preventDefault();
@@ -225,7 +134,6 @@ export function Lightbox({
   };
 
   const handleBackgroundClick = (e: React.MouseEvent) => {
-    // Close if clicking directly on the background container (not on image or buttons)
     if (e.target === e.currentTarget) {
       onClose();
     }
@@ -284,7 +192,6 @@ export function Lightbox({
         className="flex-1 flex items-center justify-center p-2 md:p-4 relative overflow-hidden cursor-pointer"
         onClick={handleBackgroundClick}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {/* Navigation Arrows */}
@@ -307,11 +214,7 @@ export function Lightbox({
 
         {/* Image */}
         <div 
-          className={cn(
-            "relative flex items-center justify-center overflow-hidden",
-            zoom > 1 && "cursor-grab",
-            isPanning && "cursor-grabbing"
-          )}
+          className="relative flex items-center justify-center overflow-hidden"
           style={{ 
             width: isMobile ? 'calc(100vw - 32px)' : 'calc(100vw - 120px)',
             height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
@@ -325,14 +228,11 @@ export function Lightbox({
             className="transition-transform duration-200 select-none"
             draggable={false}
             style={{ 
-              maxWidth: zoom === 1 ? '100%' : 'none',
-              maxHeight: zoom === 1 ? '100%' : 'none',
+              maxWidth: '100%',
+              maxHeight: '100%',
               objectFit: 'contain',
-              transform: zoom > 1 
-                ? `scale(${zoom}) translate(${panOffset.x / zoom}px, ${panOffset.y / zoom}px)` 
-                : undefined,
+              transform: !isMobile && zoom > 1 ? `scale(${zoom})` : undefined,
               transformOrigin: 'center center',
-              touchAction: zoom > 1 ? 'none' : 'pan-x',
             }}
           />
         </div>
