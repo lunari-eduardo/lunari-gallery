@@ -61,6 +61,7 @@ export default function GalleryCreate() {
   
   const {
     clients,
+    isLoading: isLoadingClients,
     createClient,
     updateClient
   } = useGalleryClients();
@@ -137,36 +138,77 @@ export default function GalleryCreate() {
     // 2. Params haven't been processed yet
     if (!isAssistedMode || !gestaoParams || paramsProcessed) return;
 
-    // Step 1: Client and Session
+    // Wait for clients to load if we have a cliente_id
+    if (gestaoParams.cliente_id && isLoadingClients) {
+      console.log('🔗 Waiting for clients to load...');
+      return;
+    }
+    
+    // Wait for packages to load if we have a pacote_nome (to lookup fotos_incluidas)
+    if (gestaoParams.pacote_nome && isLoadingPackages) {
+      console.log('🔗 Waiting for packages to load...');
+      return;
+    }
+
+    console.log('🔗 Assisted Mode - Processing params:', gestaoParams);
+    console.log('🔗 Clients available:', clients.length);
+    console.log('🔗 Packages available:', gestaoPackages.length);
+
+    // Step 1: Session name from category
     if (gestaoParams.pacote_categoria) {
       setSessionName(gestaoParams.pacote_categoria);
     }
+    
+    // Step 2: Package name and lookup package data
     if (gestaoParams.pacote_nome) {
       setPackageName(gestaoParams.pacote_nome);
+      
+      // Lookup package to get fotos_incluidas and valor_foto_extra
+      const packageFromGestao = gestaoPackages.find(
+        pkg => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase()
+      );
+      
+      if (packageFromGestao) {
+        console.log('🔗 Found package:', packageFromGestao);
+        
+        // Use package fotos_incluidas if not explicitly provided in URL
+        if (!gestaoParams.fotos_incluidas_no_pacote && packageFromGestao.fotosIncluidas) {
+          setIncludedPhotos(packageFromGestao.fotosIncluidas);
+        }
+        
+        // Use package valor_foto_extra if not explicitly provided in URL
+        if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra) {
+          setFixedPrice(packageFromGestao.valorFotoExtra);
+        }
+      }
     }
+    
+    // Explicit URL values take priority
     if (gestaoParams.fotos_incluidas_no_pacote) {
       setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
     }
+    if (gestaoParams.preco_da_foto_extra) {
+      setFixedPrice(gestaoParams.preco_da_foto_extra);
+    }
 
-    // Step 2: Sale Settings
+    // Step 3: Sale Settings
     if (gestaoParams.modelo_de_cobranca) {
       setSaleMode(gestaoParams.modelo_de_cobranca);
     }
     if (gestaoParams.modelo_de_preco) {
       setPricingModel(gestaoParams.modelo_de_preco);
     }
-    if (gestaoParams.preco_da_foto_extra) {
-      setFixedPrice(gestaoParams.preco_da_foto_extra);
-    }
 
-    // Find and select client by ID if exists, fallback to manual name
-    if (gestaoParams.cliente_id && clients.length > 0) {
+    // Step 4: Find and select client by ID if exists, fallback to manual name
+    if (gestaoParams.cliente_id) {
       const clientFromGestao = clients.find(c => c.id === gestaoParams.cliente_id);
       if (clientFromGestao) {
+        console.log('🔗 Found client:', clientFromGestao.name);
         setSelectedClient(clientFromGestao);
         setUseExistingPassword(!!clientFromGestao.galleryPassword);
       } else if (gestaoParams.cliente_nome) {
         // Fallback: client ID not found, use manual name
+        console.log('🔗 Client not found, using manual name:', gestaoParams.cliente_nome);
         setManualClientName(gestaoParams.cliente_nome);
         if (gestaoParams.cliente_email) {
           setManualClientEmail(gestaoParams.cliente_email);
@@ -181,10 +223,11 @@ export default function GalleryCreate() {
     }
 
     // Mark as processed and clear URL params to prevent re-application
+    console.log('🔗 Marking params as processed and clearing URL');
     markAsProcessed();
     clearParams();
     
-  }, [isAssistedMode, gestaoParams, clients, paramsProcessed, markAsProcessed, clearParams]);
+  }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams]);
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
