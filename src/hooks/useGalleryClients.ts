@@ -24,15 +24,7 @@ interface UseGalleryClientsReturn {
   tableName: 'clientes' | 'gallery_clientes';
 }
 
-// Generate a random 6-character password
-function generatePassword(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+// Password is now optional - never auto-generate
 
 export function useGalleryClients(): UseGalleryClientsReturn {
   const { user } = useAuth();
@@ -52,7 +44,7 @@ export function useGalleryClients(): UseGalleryClientsReturn {
         name: row.nome,
         email: row.email || '',
         phone: row.telefone || row.whatsapp || undefined,
-        galleryPassword: row.gallery_password || generatePassword(),
+        galleryPassword: row.gallery_password || undefined,
         status: (row.gallery_status as ClientGalleryStatus) || 'sem_galeria',
         totalGalleries: row.total_galerias || 0,
         createdAt: new Date(row.created_at),
@@ -65,7 +57,7 @@ export function useGalleryClients(): UseGalleryClientsReturn {
         name: row.nome,
         email: row.email,
         phone: row.telefone || undefined,
-        galleryPassword: row.gallery_password,
+        galleryPassword: row.gallery_password || undefined,
         status: row.status as ClientGalleryStatus,
         totalGalleries: row.total_galerias || 0,
         createdAt: new Date(row.created_at),
@@ -117,7 +109,7 @@ export function useGalleryClients(): UseGalleryClientsReturn {
   const createClient = useCallback(async (data: CreateClientData): Promise<Client> => {
     if (!user) throw new Error('User not authenticated');
 
-    const password = data.galleryPassword || generatePassword();
+    const password = data.galleryPassword || null;
 
     if (hasGestaoIntegration) {
       const { data: newRow, error } = await supabase
