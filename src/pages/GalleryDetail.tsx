@@ -14,6 +14,7 @@ import {
   Loader2,
   Pencil
 } from 'lucide-react';
+import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
@@ -197,6 +198,15 @@ export default function GalleryDetail() {
     });
   }
 
+  // Calculate progressive pricing for summary
+  const regrasCongeladas = supabaseGallery.regrasCongeladas as RegrasCongeladas | null;
+  const extraCount = Math.max(0, supabaseGallery.fotosSelecionadas - supabaseGallery.fotosIncluidas);
+  const { valorUnitario, valorTotal: calculatedExtraTotal, economia } = calcularPrecoProgressivo(
+    extraCount,
+    regrasCongeladas,
+    supabaseGallery.valorFotoExtra
+  );
+
   // Build gallery object for SelectionSummary
   const galleryForSummary: Gallery = {
     id: supabaseGallery.id,
@@ -205,7 +215,7 @@ export default function GalleryDetail() {
     sessionName: supabaseGallery.nomeSessao || 'Sessão',
     packageName: supabaseGallery.nomePacote || '',
     includedPhotos: supabaseGallery.fotosIncluidas,
-    extraPhotoPrice: supabaseGallery.valorFotoExtra,
+    extraPhotoPrice: valorUnitario, // Use calculated progressive price
     saleSettings: {
       mode: 'sale_without_payment',
       pricingModel: 'fixed',
@@ -231,8 +241,8 @@ export default function GalleryDetail() {
     createdAt: supabaseGallery.createdAt,
     updatedAt: supabaseGallery.updatedAt,
     selectedCount: supabaseGallery.fotosSelecionadas,
-    extraCount: Math.max(0, supabaseGallery.fotosSelecionadas - supabaseGallery.fotosIncluidas),
-    extraTotal: supabaseGallery.valorExtras,
+    extraCount,
+    extraTotal: calculatedExtraTotal, // Use calculated total
   };
 
   return (
