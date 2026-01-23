@@ -1,4 +1,19 @@
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
+
+// Gestão integration - parameters received via URL when creating gallery from Gestão
+export interface GestaoSessionParams {
+  session_id?: string;
+  cliente_id?: string;
+  cliente_nome?: string;
+  cliente_email?: string;
+  cliente_telefone?: string;
+  pacote_categoria?: string;  // Maps to session name
+  pacote_nome?: string;       // Maps to package name
+  fotos_incluidas_no_pacote?: number;
+  preco_da_foto_extra?: number;
+  modelo_de_cobranca?: SaleMode;     // 'no_sale' | 'sale_with_payment' | 'sale_without_payment'
+  modelo_de_preco?: PricingModel;    // 'fixed' | 'packages'
+}
 export type SelectionStatus = 'in_progress' | 'confirmed' | 'blocked';
 export type WatermarkType = 'none' | 'standard';
 export type DeadlinePreset = 7 | 10 | 15 | 'custom';

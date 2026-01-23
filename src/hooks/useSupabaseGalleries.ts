@@ -108,6 +108,7 @@ export interface CreateGaleriaData {
   prazoSelecaoDias?: number;
   permissao?: 'public' | 'private';
   galleryPassword?: string;  // Password for private galleries
+  sessionId?: string | null; // Session ID from Gestão system
 }
 
 // Transform database row to Galeria
@@ -242,6 +243,7 @@ export function useSupabaseGalleries() {
           prazo_selecao_dias: data.prazoSelecaoDias || 7,
           permissao: data.permissao || 'private',
           gallery_password: data.galleryPassword || null,
+          session_id: data.sessionId || null, // Session ID from Gestão
           status: 'rascunho',
         }])
         .select()
