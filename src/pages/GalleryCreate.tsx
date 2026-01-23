@@ -53,7 +53,7 @@ export default function GalleryCreate() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasGestaoIntegration, accessLevel } = useGalleryAccess(user);
-  const { gestaoParams, hasGestaoParams, isAssistedMode: hasGestaoSession } = useGestaoParams();
+  const { gestaoParams, hasGestaoParams, isAssistedMode: hasGestaoSession, paramsProcessed, markAsProcessed, clearParams } = useGestaoParams();
   const { packages: gestaoPackages, isLoading: isLoadingPackages } = useGestaoPackages();
   
   // Assisted mode: has Gestão params AND user has integration
@@ -130,8 +130,12 @@ export default function GalleryCreate() {
   }, [settings]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
+  // Only runs once, then clears URL params to prevent re-application
   useEffect(() => {
-    if (!isAssistedMode || !gestaoParams) return;
+    // Only pre-fill if:
+    // 1. In assisted mode (has session_id AND user has Gestão integration)
+    // 2. Params haven't been processed yet
+    if (!isAssistedMode || !gestaoParams || paramsProcessed) return;
 
     // Step 1: Client and Session
     if (gestaoParams.pacote_categoria) {
@@ -155,16 +159,32 @@ export default function GalleryCreate() {
       setFixedPrice(gestaoParams.preco_da_foto_extra);
     }
 
-    // Find and select client by ID if exists
+    // Find and select client by ID if exists, fallback to manual name
     if (gestaoParams.cliente_id && clients.length > 0) {
       const clientFromGestao = clients.find(c => c.id === gestaoParams.cliente_id);
       if (clientFromGestao) {
         setSelectedClient(clientFromGestao);
-        // Use existing password if available
         setUseExistingPassword(!!clientFromGestao.galleryPassword);
+      } else if (gestaoParams.cliente_nome) {
+        // Fallback: client ID not found, use manual name
+        setManualClientName(gestaoParams.cliente_nome);
+        if (gestaoParams.cliente_email) {
+          setManualClientEmail(gestaoParams.cliente_email);
+        }
+      }
+    } else if (gestaoParams.cliente_nome) {
+      // No client_id but has name: use manual fields
+      setManualClientName(gestaoParams.cliente_nome);
+      if (gestaoParams.cliente_email) {
+        setManualClientEmail(gestaoParams.cliente_email);
       }
     }
-  }, [isAssistedMode, gestaoParams, clients]);
+
+    // Mark as processed and clear URL params to prevent re-application
+    markAsProcessed();
+    clearParams();
+    
+  }, [isAssistedMode, gestaoParams, clients, paramsProcessed, markAsProcessed, clearParams]);
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
@@ -232,6 +252,7 @@ export default function GalleryCreate() {
         mensagemBoasVindas: welcomeMessage,
         galleryPassword: passwordToUse,
         sessionId: isAssistedMode ? gestaoParams.session_id : null,
+        origin: isAssistedMode ? 'gestao' : 'manual',
       });
       
       if (result?.id) {

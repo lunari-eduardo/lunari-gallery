@@ -109,6 +109,7 @@ export interface CreateGaleriaData {
   permissao?: 'public' | 'private';
   galleryPassword?: string;  // Password for private galleries
   sessionId?: string | null; // Session ID from Gestão system
+  origin?: 'manual' | 'gestao'; // Track how gallery was created
 }
 
 // Transform database row to Galeria
@@ -244,6 +245,7 @@ export function useSupabaseGalleries() {
           permissao: data.permissao || 'private',
           gallery_password: data.galleryPassword || null,
           session_id: data.sessionId || null, // Session ID from Gestão
+          origin: data.origin || 'manual', // Track creation origin
           status: 'rascunho',
         }])
         .select()
