@@ -20,6 +20,7 @@ export type DeadlinePreset = 7 | 10 | 15 | 'custom';
 export type ImageResizeOption = 1024 | 1920 | 2560;
 export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
 export type GalleryPermission = 'public' | 'private';
+export type GalleryOrigin = 'manual' | 'gestao';
 
 // Tipos para configuração de venda
 export type SaleMode = 'no_sale' | 'sale_with_payment' | 'sale_without_payment';

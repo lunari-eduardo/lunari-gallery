@@ -1120,6 +1120,7 @@ export type Database = {
           nome_pacote: string | null
           nome_sessao: string | null
           orcamento_id: string | null
+          origin: string | null
           permissao: string | null
           prazo_selecao: string | null
           prazo_selecao_dias: number | null
@@ -1155,6 +1156,7 @@ export type Database = {
           nome_pacote?: string | null
           nome_sessao?: string | null
           orcamento_id?: string | null
+          origin?: string | null
           permissao?: string | null
           prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
@@ -1190,6 +1192,7 @@ export type Database = {
           nome_pacote?: string | null
           nome_sessao?: string | null
           orcamento_id?: string | null
+          origin?: string | null
           permissao?: string | null
           prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
