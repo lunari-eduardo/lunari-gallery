@@ -28,6 +28,8 @@ import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
+import { RegrasCongeladas } from '@/lib/pricingUtils';
+import { supabase } from '@/integrations/supabase/client';
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -100,6 +102,9 @@ export default function GalleryCreate() {
   const [isCreatingGallery, setIsCreatingGallery] = useState(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   
+  // Frozen pricing rules from Gestão session (for PRO+Gallery users)
+  const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
+  
   // Supabase galleries hook
   const { createGallery: createSupabaseGallery, updateGallery } = useSupabaseGalleries();
 
@@ -125,6 +130,36 @@ export default function GalleryCreate() {
       }
     }
   }, [settings]);
+
+  // Fetch frozen pricing rules from Gestão session (for PRO+Gallery users)
+  useEffect(() => {
+    if (!isAssistedMode || !gestaoParams?.session_id) return;
+
+    const fetchRegrasCongeladas = async () => {
+      try {
+        console.log('🔗 Fetching regras_congeladas for session:', gestaoParams.session_id);
+        const { data, error } = await supabase
+          .from('clientes_sessoes')
+          .select('regras_congeladas')
+          .eq('session_id', gestaoParams.session_id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching regras_congeladas:', error);
+          return;
+        }
+
+        if (data?.regras_congeladas) {
+          console.log('🔗 Found regras_congeladas:', data.regras_congeladas);
+          setRegrasCongeladas(data.regras_congeladas as unknown as RegrasCongeladas);
+        }
+      } catch (error) {
+        console.error('Error fetching session rules:', error);
+      }
+    };
+
+    fetchRegrasCongeladas();
+  }, [isAssistedMode, gestaoParams?.session_id]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
   // Only runs once, then clears URL params to prevent re-application
@@ -278,6 +313,7 @@ export default function GalleryCreate() {
         galleryPassword: passwordToUse,
         sessionId: isAssistedMode ? gestaoParams.session_id : null,
         origin: isAssistedMode ? 'gestao' : 'manual',
+        regrasCongeladas: regrasCongeladas, // Pass frozen pricing rules from Gestão
       });
       
       if (result?.id) {

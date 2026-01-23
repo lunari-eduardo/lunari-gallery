@@ -26,6 +26,7 @@ import { WatermarkSettings } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
 
 type SelectionStep = 'gallery' | 'review' | 'checkout' | 'confirmed';
 
@@ -437,9 +438,18 @@ export default function ClientGallery() {
   const isExpired = hasDeadline && isPast(gallery.settings.deadline);
   const isBlocked = isExpired || isConfirmed;
 
+  // Get frozen pricing rules from gallery
+  const regrasCongeladas = supabaseGallery?.regras_congeladas as RegrasCongeladas | null;
+
   const selectedCount = localPhotos.filter(p => p.isSelected).length;
   const extraCount = Math.max(0, selectedCount - gallery.includedPhotos);
-  const extraTotal = extraCount * gallery.extraPhotoPrice;
+  
+  // Use progressive pricing calculation
+  const { valorUnitario, valorTotal: extraTotal, economia } = calcularPrecoProgressivo(
+    extraCount,
+    regrasCongeladas,
+    gallery.extraPhotoPrice
+  );
 
   const toggleSelection = (photoId: string) => {
     if (isBlocked) return;
