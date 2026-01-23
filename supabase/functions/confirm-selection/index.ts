@@ -8,6 +8,9 @@ const corsHeaders = {
 interface RequestBody {
   galleryId: string;
   selectedCount: number;
+  extraCount?: number;
+  valorUnitario?: number;
+  valorTotal?: number;
 }
 
 Deno.serve(async (req) => {
@@ -23,7 +26,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, selectedCount } = body;
+    const { galleryId, selectedCount, extraCount, valorUnitario, valorTotal } = body;
 
     // Validate required fields
     if (!galleryId) {
@@ -33,10 +36,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Fetch gallery to validate status
+    // 1. Fetch gallery to validate status and get session_id
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id')
+      .select('id, status, status_selecao, finalized_at, user_id, session_id')
       .eq('id', galleryId)
       .single();
 
@@ -86,7 +89,25 @@ Deno.serve(async (req) => {
 
     if (logError) {
       console.error('Log insert error:', logError);
-      // Don't fail the request, just log the error
+    }
+
+    // 5. Sync with clientes_sessoes if gallery was created from Gestão
+    if (gallery.session_id && extraCount !== undefined) {
+      const { error: sessionError } = await supabase
+        .from('clientes_sessoes')
+        .update({
+          qtd_fotos_extra: extraCount,
+          valor_foto_extra: valorUnitario || 0,
+          valor_total_foto_extra: valorTotal || 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('session_id', gallery.session_id);
+
+      if (sessionError) {
+        console.error('Session update error:', sessionError);
+      } else {
+        console.log(`Session ${gallery.session_id} updated with extras: ${extraCount} photos, R$ ${valorTotal}`);
+      }
     }
 
     console.log(`Gallery ${galleryId} selection confirmed with ${selectedCount} photos`);

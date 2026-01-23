@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { WatermarkSettings } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
+import { RegrasCongeladas } from '@/lib/pricingUtils';
 
 // Types based on database schema
 export interface GaleriaPhoto {
@@ -81,6 +82,8 @@ export interface Galeria {
   // Token and password for client access
   publicToken: string | null;
   galleryPassword: string | null;
+  // Frozen pricing rules from Gestão
+  regrasCongeladas: RegrasCongeladas | null;
   // Relations
   photos?: GaleriaPhoto[];
 }
@@ -110,6 +113,7 @@ export interface CreateGaleriaData {
   galleryPassword?: string;  // Password for private galleries
   sessionId?: string | null; // Session ID from Gestão system
   origin?: 'manual' | 'gestao'; // Track how gallery was created
+  regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Gestão
 }
 
 // Transform database row to Galeria
@@ -146,6 +150,7 @@ function transformGaleria(row: any): Galeria {
     clienteTelefone: row.cliente_telefone || null,
     publicToken: row.public_token || null,
     galleryPassword: row.gallery_password || null,
+    regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
   };
 }
 
@@ -246,6 +251,7 @@ export function useSupabaseGalleries() {
           gallery_password: data.galleryPassword || null,
           session_id: data.sessionId || null, // Session ID from Gestão
           origin: data.origin || 'manual', // Track creation origin
+          regras_congeladas: data.regrasCongeladas ? (data.regrasCongeladas as unknown as Json) : null, // Frozen pricing rules
           status: 'rascunho',
         }])
         .select()

@@ -1126,6 +1126,7 @@ export type Database = {
           prazo_selecao_dias: number | null
           public_token: string | null
           published_at: string | null
+          regras_congeladas: Json | null
           regras_selecao: Json | null
           session_id: string | null
           status: string
@@ -1162,6 +1163,7 @@ export type Database = {
           prazo_selecao_dias?: number | null
           public_token?: string | null
           published_at?: string | null
+          regras_congeladas?: Json | null
           regras_selecao?: Json | null
           session_id?: string | null
           status?: string
@@ -1198,6 +1200,7 @@ export type Database = {
           prazo_selecao_dias?: number | null
           public_token?: string | null
           published_at?: string | null
+          regras_congeladas?: Json | null
           regras_selecao?: Json | null
           session_id?: string | null
           status?: string
