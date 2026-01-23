@@ -10,7 +10,10 @@ import {
   Calendar as CalendarIcon,
   Image,
   Plus,
-  Upload
+  Upload,
+  Eye,
+  EyeOff,
+  Copy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +21,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ClientSelect } from '@/components/ClientSelect';
@@ -25,7 +30,7 @@ import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
@@ -49,6 +54,8 @@ export default function GalleryEdit() {
     updateGallery,
     deleteGallery,
     reopenSelection,
+    fetchGalleryPhotos,
+    getPhotoUrl,
     isLoading: isSupabaseLoading,
     isUpdating,
     isDeleting
@@ -62,6 +69,13 @@ export default function GalleryEdit() {
   } = useGalleryClients();
 
   const gallery = getGallery(id || '');
+
+  // Fetch gallery photos
+  const { data: photos = [], isLoading: isLoadingPhotos } = useQuery({
+    queryKey: ['galeria-fotos', id],
+    queryFn: () => fetchGalleryPhotos(id!),
+    enabled: !!gallery && !!id,
+  });
   
   // Local photo count for immediate UI update
   const [localPhotoCount, setLocalPhotoCount] = useState<number | null>(null);
@@ -79,6 +93,7 @@ export default function GalleryEdit() {
   
   // UI state
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showPhotoUploader, setShowPhotoUploader] = useState(false);
 
   // Initialize form with gallery data
@@ -227,6 +242,13 @@ export default function GalleryEdit() {
     setClienteTelefone(formatPhoneBR(e.target.value));
   };
 
+  const handleCopyPassword = () => {
+    if (gallery.galleryPassword) {
+      navigator.clipboard.writeText(gallery.galleryPassword);
+      toast.success('Senha copiada!');
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -321,6 +343,43 @@ export default function GalleryEdit() {
                     onChange={handlePhoneChange}
                     placeholder="(00) 00000-0000"
                   />
+                </div>
+              </div>
+
+              {/* Gallery Password - Read Only */}
+              <div className="space-y-2">
+                <Label>Senha da Galeria</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      value={gallery.galleryPassword || ''}
+                      readOnly
+                      className="pr-10 bg-muted"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyPassword}
+                    disabled={!gallery.galleryPassword}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
 
@@ -448,10 +507,45 @@ export default function GalleryEdit() {
                 Fotos da Galeria
               </CardTitle>
               <CardDescription>
-                {localPhotoCount ?? gallery.totalFotos} fotos nesta galeria
+                {photos.length || localPhotoCount || gallery.totalFotos} fotos nesta galeria
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Photo List */}
+              {isLoadingPhotos ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : photos.length > 0 ? (
+                <ScrollArea className="max-h-[300px] rounded-md border">
+                  <Table>
+                    <TableBody>
+                      {photos.map((photo) => (
+                        <TableRow key={photo.id}>
+                          <TableCell className="w-14 p-2">
+                            <img
+                              src={getPhotoUrl(photo, gallery, 'thumbnail')}
+                              alt={photo.originalFilename}
+                              className="w-10 h-10 rounded object-cover"
+                            />
+                          </TableCell>
+                          <TableCell className="p-2">
+                            <span className="text-sm truncate block max-w-[200px]">
+                              {photo.originalFilename}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma foto nesta galeria
+                </p>
+              )}
+
+              {/* Upload Button / Uploader */}
               {!showPhotoUploader ? (
                 <Button 
                   variant="outline" 
@@ -479,16 +573,16 @@ export default function GalleryEdit() {
             </CardContent>
           </Card>
 
-          {/* Actions Card */}
-          <Card className="border-destructive/20">
-            <CardHeader>
-              <CardTitle>Ações da Galeria</CardTitle>
-              <CardDescription>
-                Ações que afetam a disponibilidade da galeria
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {canReactivate && (
+          {/* Actions Card - Only show if there are actions available */}
+          {canReactivate && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ações da Galeria</CardTitle>
+                <CardDescription>
+                  Ações que afetam a disponibilidade da galeria
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
                   <div>
                     <p className="font-medium">Reativar Galeria</p>
@@ -502,22 +596,9 @@ export default function GalleryEdit() {
                     onReactivate={handleReactivate}
                   />
                 </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-                <div>
-                  <p className="font-medium text-destructive">Excluir Galeria</p>
-                  <p className="text-sm text-muted-foreground">
-                    Remove permanentemente a galeria e todas as fotos
-                  </p>
-                </div>
-                <DeleteGalleryDialog 
-                  galleryName={gallery.nomeSessao || 'Esta galeria'}
-                  onDelete={handleDelete}
-                />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
