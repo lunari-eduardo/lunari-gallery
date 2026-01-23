@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     // 1. Fetch gallery to validate status
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, prazo_selecao, finalized_at')
+      .select('id, status, status_selecao, prazo_selecao, finalized_at, session_id')
       .eq('id', galleryId)
       .single();
 
@@ -141,6 +141,18 @@ Deno.serve(async (req) => {
         .from('galerias')
         .update({ status: 'selecao_iniciada', updated_at: new Date().toISOString() })
         .eq('id', galleryId);
+      
+      // Update session status if linked
+      if (gallery.session_id) {
+        await supabase
+          .from('clientes_sessoes')
+          .update({ 
+            status_galeria: 'em_selecao', 
+            updated_at: new Date().toISOString() 
+          })
+          .eq('session_id', gallery.session_id);
+        console.log(`Session ${gallery.session_id} status updated to em_selecao`);
+      }
     }
 
     // 9. Log action (user_id is null for anonymous client actions)

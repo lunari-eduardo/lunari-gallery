@@ -110,6 +110,8 @@ serve(async (req) => {
           totalPhotos: gallery.total_fotos,
           settings: gallery.configuracoes,
           permissao: gallery.permissao,
+          // Include frozen pricing rules for progressive pricing
+          regrasCongeladas: gallery.regras_congeladas,
         },
         photos: photos || [],
         studioSettings: settings || null,

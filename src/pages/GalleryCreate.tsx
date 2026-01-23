@@ -137,40 +137,54 @@ export default function GalleryCreate() {
     }
   }, [settings]);
 
-  // Fetch frozen pricing rules from Gestão session (for PRO+Gallery users)
+  // Fetch frozen pricing rules from Gestão session
+  // Now fetches ALWAYS when session_id is present, regardless of hasGestaoIntegration
   useEffect(() => {
-    // For non-assisted mode, mark as loaded immediately
-    if (!isAssistedMode || !gestaoParams?.session_id) {
+    const sessionId = gestaoParams?.session_id;
+    
+    // No session_id = no rules to fetch
+    if (!sessionId) {
       setRegrasLoaded(true);
       return;
     }
 
-    const fetchRegrasCongeladas = async () => {
+    const fetchSessionData = async () => {
       setIsLoadingRegras(true);
       try {
-        console.log('🔗 Fetching regras_congeladas for session:', gestaoParams.session_id);
+        console.log('🔗 Fetching session data for:', sessionId);
         const { data, error } = await supabase
           .from('clientes_sessoes')
-          .select('regras_congeladas')
-          .eq('session_id', gestaoParams.session_id)
+          .select('regras_congeladas, valor_foto_extra')
+          .eq('session_id', sessionId)
           .single();
 
         if (error) {
-          console.error('Error fetching regras_congeladas:', error);
-        } else if (data?.regras_congeladas) {
-          console.log('🔗 Found regras_congeladas:', data.regras_congeladas);
-          setRegrasCongeladas(data.regras_congeladas as unknown as RegrasCongeladas);
+          console.warn('Session not found or error:', error.message);
+        } else {
+          console.log('🔗 Session data found:', data);
+          
+          if (data?.regras_congeladas) {
+            setRegrasCongeladas(data.regras_congeladas as unknown as RegrasCongeladas);
+          }
+          
+          // Use session's valor_foto_extra as fallback (normalized)
+          if (data?.valor_foto_extra && data.valor_foto_extra > 0) {
+            const valorNormalizado = data.valor_foto_extra > 1000 
+              ? data.valor_foto_extra / 100 
+              : data.valor_foto_extra;
+            setFixedPrice(valorNormalizado);
+          }
         }
       } catch (error) {
-        console.error('Error fetching session rules:', error);
+        console.error('Error fetching session data:', error);
       } finally {
         setIsLoadingRegras(false);
         setRegrasLoaded(true);
       }
     };
 
-    fetchRegrasCongeladas();
-  }, [isAssistedMode, gestaoParams?.session_id]);
+    fetchSessionData();
+  }, [gestaoParams?.session_id]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
   // Only runs once, then clears URL params to prevent re-application
@@ -314,10 +328,15 @@ export default function GalleryCreate() {
       const clientEmail = selectedClient?.email || '';
 
       // Determine the final extra photo price based on pricing source
-      // When assisted mode with frozen rules and no override, use rules; otherwise use manual input
+      // When we have frozen rules and no override, use normalized rules value
+      const hasRegras = regrasCongeladas && !overridePricing;
+      const hasSessionId = !!gestaoParams?.session_id;
+      
       let valorFotoExtraFinal = fixedPrice;
-      if (isAssistedMode && regrasCongeladas && !overridePricing) {
-        valorFotoExtraFinal = regrasCongeladas.pacote?.valorFotoExtra || 0;
+      if (hasRegras) {
+        const valorRaw = regrasCongeladas.pacote?.valorFotoExtra || 0;
+        // Normalize if in cents
+        valorFotoExtraFinal = valorRaw > 1000 ? valorRaw / 100 : valorRaw;
       }
 
       const result = await createSupabaseGallery({
@@ -332,10 +351,11 @@ export default function GalleryCreate() {
         permissao: galleryPermission,
         mensagemBoasVindas: welcomeMessage,
         galleryPassword: passwordToUse,
-        sessionId: isAssistedMode ? gestaoParams.session_id : null,
-        origin: isAssistedMode ? 'gestao' : 'manual',
-        // Only pass frozen rules if not overriding
-        regrasCongeladas: (isAssistedMode && regrasCongeladas && !overridePricing) ? regrasCongeladas : null,
+        // Use session_id if present in URL, regardless of integration status
+        sessionId: hasSessionId ? gestaoParams.session_id : null,
+        origin: hasSessionId ? 'gestao' : 'manual',
+        // Pass frozen rules if not overriding
+        regrasCongeladas: hasRegras ? regrasCongeladas : null,
       });
       
       if (result?.id) {
