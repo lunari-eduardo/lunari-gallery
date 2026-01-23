@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,9 +18,13 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal, ClientFormData } from '@/components/ClientModal';
+import { PackageSelect } from '@/components/PackageSelect';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
-// useGalleries removed - now using only Supabase
 import { useSettings } from '@/hooks/useSettings';
+import { useAuth } from '@/hooks/useAuth';
+import { useGalleryAccess } from '@/hooks/useGalleryAccess';
+import { useGestaoParams } from '@/hooks/useGestaoParams';
+import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
@@ -47,17 +51,28 @@ const steps = [{
 }];
 export default function GalleryCreate() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { hasGestaoIntegration, accessLevel } = useGalleryAccess(user);
+  const { gestaoParams, hasGestaoParams, isAssistedMode: hasGestaoSession } = useGestaoParams();
+  const { packages: gestaoPackages, isLoading: isLoadingPackages } = useGestaoPackages();
+  
+  // Assisted mode: has Gestão params AND user has integration
+  const isAssistedMode = hasGestaoSession && hasGestaoIntegration;
+  
   const {
     clients,
     createClient,
     updateClient
   } = useGalleryClients();
-  // localStorage galleries removed - only using Supabase now
   const {
     settings,
     updateSettings
   } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
+
+  // State for manual client name (for users without Gestão integration)
+  const [manualClientName, setManualClientName] = useState('');
+  const [manualClientEmail, setManualClientEmail] = useState('');
 
   // Preset dialog state
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
@@ -113,6 +128,43 @@ export default function GalleryCreate() {
       }
     }
   }, [settings]);
+
+  // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
+  useEffect(() => {
+    if (!isAssistedMode || !gestaoParams) return;
+
+    // Step 1: Client and Session
+    if (gestaoParams.pacote_categoria) {
+      setSessionName(gestaoParams.pacote_categoria);
+    }
+    if (gestaoParams.pacote_nome) {
+      setPackageName(gestaoParams.pacote_nome);
+    }
+    if (gestaoParams.fotos_incluidas_no_pacote) {
+      setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
+    }
+
+    // Step 2: Sale Settings
+    if (gestaoParams.modelo_de_cobranca) {
+      setSaleMode(gestaoParams.modelo_de_cobranca);
+    }
+    if (gestaoParams.modelo_de_preco) {
+      setPricingModel(gestaoParams.modelo_de_preco);
+    }
+    if (gestaoParams.preco_da_foto_extra) {
+      setFixedPrice(gestaoParams.preco_da_foto_extra);
+    }
+
+    // Find and select client by ID if exists
+    if (gestaoParams.cliente_id && clients.length > 0) {
+      const clientFromGestao = clients.find(c => c.id === gestaoParams.cliente_id);
+      if (clientFromGestao) {
+        setSelectedClient(clientFromGestao);
+        // Use existing password if available
+        setUseExistingPassword(!!clientFromGestao.galleryPassword);
+      }
+    }
+  }, [isAssistedMode, gestaoParams, clients]);
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
@@ -123,9 +175,16 @@ export default function GalleryCreate() {
   // Create Supabase gallery when entering step 3 (for uploads)
   const createSupabaseGalleryForUploads = async () => {
     // For public galleries, client is optional
-    if (galleryPermission === 'private' && !selectedClient) {
-      toast.error('Selecione um cliente para galeria privada');
-      return;
+    // For private galleries: with Gestão integration need selectedClient, without need manual name
+    if (galleryPermission === 'private') {
+      if (hasGestaoIntegration && !selectedClient) {
+        toast.error('Selecione um cliente para galeria privada');
+        return;
+      }
+      if (!hasGestaoIntegration && !manualClientName.trim()) {
+        toast.error('Digite o nome do cliente para galeria privada');
+        return;
+      }
     }
     if (supabaseGalleryId) return;
     
@@ -151,10 +210,19 @@ export default function GalleryCreate() {
       }
       // If passwordDisabled = true, passwordToUse stays undefined (no password protection)
 
+      // Determine client name - from selected client or manual input
+      const clientName = hasGestaoIntegration 
+        ? (selectedClient?.name || 'Galeria Pública')
+        : (manualClientName.trim() || 'Galeria Pública');
+      
+      const clientEmail = hasGestaoIntegration
+        ? (selectedClient?.email || '')
+        : manualClientEmail.trim();
+
       const result = await createSupabaseGallery({
         clienteId: selectedClient?.id || null,
-        clienteNome: selectedClient?.name || 'Galeria Pública',
-        clienteEmail: selectedClient?.email || '',
+        clienteNome: clientName,
+        clienteEmail: clientEmail,
         nomeSessao: sessionName || 'Nova Sessão',
         nomePacote: packageName,
         fotosIncluidas: includedPhotos,
@@ -163,6 +231,7 @@ export default function GalleryCreate() {
         permissao: galleryPermission,
         mensagemBoasVindas: welcomeMessage,
         galleryPassword: passwordToUse,
+        sessionId: isAssistedMode ? gestaoParams.session_id : null,
       });
       
       if (result?.id) {
@@ -180,11 +249,18 @@ export default function GalleryCreate() {
     if (currentStep < 5) {
       // When going to step 4 (Fotos), create Supabase gallery first with configurations
       if (currentStep === 3 && !supabaseGalleryId) {
-        // Only require client for private galleries
-        if (galleryPermission === 'private' && !selectedClient) {
-          toast.error('Selecione um cliente primeiro');
-          setCurrentStep(1);
-          return;
+        // Validate client requirement for private galleries
+        if (galleryPermission === 'private') {
+          if (hasGestaoIntegration && !selectedClient) {
+            toast.error('Selecione um cliente primeiro');
+            setCurrentStep(1);
+            return;
+          }
+          if (!hasGestaoIntegration && !manualClientName.trim()) {
+            toast.error('Digite o nome do cliente');
+            setCurrentStep(1);
+            return;
+          }
         }
         await createSupabaseGalleryForUploads();
       }
@@ -357,11 +433,17 @@ export default function GalleryCreate() {
     switch (currentStep) {
       case 1:
         return <div className="space-y-6 animate-fade-in">
-            <div>
-              
+            <div className="flex items-center justify-between">
               <p className="text-muted-foreground text-lg font-serif">
                 Dados do cliente e detalhes da sessão
               </p>
+              {/* Assisted Mode Badge */}
+              {isAssistedMode && (
+                <Badge variant="secondary" className="gap-1.5">
+                  <Link2 className="h-3 w-3" />
+                  Vinculada à sessão do Gestão
+                </Badge>
+              )}
             </div>
 
             {/* Gallery Permission */}
@@ -399,19 +481,46 @@ export default function GalleryCreate() {
             {/* Client Section - Only show for private galleries */}
             {galleryPermission === 'private' && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 space-y-2">
-                    <Label>Cliente *</Label>
-                    <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />
+                {/* PRO + Gallery: Searchable dropdown for clients */}
+                {hasGestaoIntegration ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 space-y-2">
+                      <Label>Cliente *</Label>
+                      <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />
+                    </div>
+                    <div className="pt-6">
+                      <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="pt-6">
-                    <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)}>
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                ) : (
+                  /* Other plans: Simple text input for client */
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="manualClientName">Nome do Cliente *</Label>
+                      <Input 
+                        id="manualClientName"
+                        placeholder="Ex: Maria Silva" 
+                        value={manualClientName} 
+                        onChange={e => setManualClientName(e.target.value)} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manualClientEmail">Email do Cliente</Label>
+                      <Input 
+                        id="manualClientEmail"
+                        type="email"
+                        placeholder="Ex: maria@email.com" 
+                        value={manualClientEmail} 
+                        onChange={e => setManualClientEmail(e.target.value)} 
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
+                {/* Password Section - PRO + Gallery with selected client */}
+                {hasGestaoIntegration && selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
                     <div className="grid gap-2 md:grid-cols-2 text-sm">
                       <div>
                         <span className="text-muted-foreground">Email: </span>
@@ -520,6 +629,44 @@ export default function GalleryCreate() {
                       )}
                     </div>
                   </div>}
+
+                {/* Password Section - Simple for users without Gestão integration */}
+                {!hasGestaoIntegration && manualClientName.trim() && (
+                  <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-fade-in">
+                    <Label className="text-sm">Senha de acesso à galeria</Label>
+                    
+                    {/* Option: Disable password protection */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="passwordDisabledSimple" 
+                        checked={passwordDisabled} 
+                        onCheckedChange={checked => {
+                          setPasswordDisabled(checked as boolean);
+                          if (checked) {
+                            setNewPassword('');
+                          }
+                        }} 
+                      />
+                      <label htmlFor="passwordDisabledSimple" className="text-sm font-medium leading-none">
+                        Sem proteção por senha
+                      </label>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-6">
+                      Qualquer pessoa com o link poderá acessar a galeria
+                    </p>
+                    
+                    {/* Simple password input */}
+                    {!passwordDisabled && (
+                      <div className="space-y-2">
+                        <Input 
+                          placeholder="Definir senha para a galeria" 
+                          value={newPassword} 
+                          onChange={e => setNewPassword(e.target.value)} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -530,7 +677,27 @@ export default function GalleryCreate() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="packageName">Pacote</Label>
-                <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={e => setPackageName(e.target.value)} />
+                {/* PRO + Gallery: Searchable dropdown for packages */}
+                {hasGestaoIntegration && gestaoPackages.length > 0 ? (
+                  <PackageSelect 
+                    packages={gestaoPackages} 
+                    selectedPackage={packageName} 
+                    onSelect={(name, pkg) => {
+                      setPackageName(name);
+                      // Auto-fill included photos and price if available
+                      if (pkg?.fotosIncluidas) {
+                        setIncludedPhotos(pkg.fotosIncluidas);
+                      }
+                      if (pkg?.valorFotoExtra) {
+                        setFixedPrice(pkg.valorFotoExtra);
+                      }
+                    }}
+                    disabled={isLoadingPackages}
+                  />
+                ) : (
+                  /* Other plans or no packages: Simple text input */
+                  <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={e => setPackageName(e.target.value)} />
+                )}
               </div>
             </div>
 

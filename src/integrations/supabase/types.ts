@@ -1625,6 +1625,7 @@ export type Database = {
         Row: {
           categoria_id: string
           created_at: string
+          fotos_incluidas: number
           id: string
           nome: string
           produtos_incluidos: Json
@@ -1636,6 +1637,7 @@ export type Database = {
         Insert: {
           categoria_id: string
           created_at?: string
+          fotos_incluidas?: number
           id?: string
           nome: string
           produtos_incluidos?: Json
@@ -1647,6 +1649,7 @@ export type Database = {
         Update: {
           categoria_id?: string
           created_at?: string
+          fotos_incluidas?: number
           id?: string
           nome?: string
           produtos_incluidos?: Json
