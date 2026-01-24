@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -50,8 +50,23 @@ export function Lightbox({
   const [comment, setComment] = useState('');
   const [touchStart, setTouchStart] = useState<number | null>(null);
   
-  // Desktop zoom state (no mobile zoom)
+  // Desktop zoom state
   const [zoom, setZoom] = useState(1);
+
+  // Mobile pinch-to-zoom refs (synchronous to avoid jumps)
+  const scaleRef = useRef(1);
+  const initialPinchDistanceRef = useRef<number | null>(null);
+  const initialScaleRef = useRef(1);
+  const isPinchingRef = useRef(false);
+  const isFirstPinchFrameRef = useRef(true);
+
+  // Mobile pan refs
+  const positionRef = useRef({ x: 0, y: 0 });
+  const lastTouchRef = useRef({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+
+  // Force re-render for ref-based state
+  const [, forceUpdate] = useState({});
 
   const currentPhoto = photos[currentIndex];
   
@@ -61,6 +76,14 @@ export function Lightbox({
   // Utility function for clamping values
   const clamp = (value: number, min: number, max: number) => 
     Math.min(Math.max(value, min), max);
+
+  // Calculate distance between two touch points
+  const getDistance = (touches: React.TouchList): number => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
   const handleDownload = () => {
     if (!currentPhoto || !allowDownload) return;
@@ -72,10 +95,19 @@ export function Lightbox({
     document.body.removeChild(link);
   };
 
+  // Reset state when changing photos
   useEffect(() => {
+    scaleRef.current = 1;
+    positionRef.current = { x: 0, y: 0 };
+    isPinchingRef.current = false;
+    isPanningRef.current = false;
+    initialPinchDistanceRef.current = null;
+    isFirstPinchFrameRef.current = true;
     setComment(currentPhoto?.comment || '');
     setShowComment(false);
     setZoom(1);
+    setTouchStart(null);
+    forceUpdate({});
   }, [currentIndex, currentPhoto?.comment]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -88,24 +120,118 @@ export function Lightbox({
     }
   }, [currentIndex, photos.length, currentPhoto?.id, disabled, onClose, onNavigate, onSelect]);
 
+  // Block native browser gestures and keyboard handling
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     document.body.style.overflow = 'hidden';
+    
+    // Block native touch gestures on mobile
+    const preventDefaultTouch = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('touchmove', preventDefaultTouch, { passive: false });
+    document.body.style.touchAction = 'none';
+    
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('touchmove', preventDefaultTouch);
       document.body.style.overflow = '';
+      document.body.style.touchAction = '';
     };
   }, [handleKeyDown]);
 
-  // Simple touch handlers for swipe navigation only (no zoom)
+  // Mobile touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      setTouchStart(e.touches[0].clientX);
+    if (e.touches.length === 2) {
+      // Start pinch-to-zoom
+      e.preventDefault();
+      isPinchingRef.current = true;
+      isFirstPinchFrameRef.current = true;
+      initialPinchDistanceRef.current = getDistance(e.touches);
+      initialScaleRef.current = scaleRef.current;
+    } else if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+      
+      if (scaleRef.current > 1) {
+        // Pan mode when zoomed
+        isPanningRef.current = true;
+      } else {
+        // Swipe navigation mode
+        setTouchStart(touch.clientX);
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && isPinchingRef.current) {
+      e.preventDefault();
+      
+      // First frame: only capture reference, no visual change
+      if (isFirstPinchFrameRef.current) {
+        initialPinchDistanceRef.current = getDistance(e.touches);
+        isFirstPinchFrameRef.current = false;
+        return;
+      }
+      
+      const currentDistance = getDistance(e.touches);
+      const initialDistance = initialPinchDistanceRef.current!;
+      
+      // Sensitivity factor (200px = 1x additional zoom)
+      const sensitivity = 200;
+      const delta = (currentDistance - initialDistance) / sensitivity;
+      
+      // Calculate new scale based on INITIAL value of gesture
+      const newScale = clamp(initialScaleRef.current + delta, 1, 2);
+      
+      scaleRef.current = newScale;
+      forceUpdate({});
+    } else if (e.touches.length === 1 && isPanningRef.current && scaleRef.current > 1) {
+      // Pan image when scale > 1
+      e.preventDefault();
+      
+      const touch = e.touches[0];
+      const dx = touch.clientX - lastTouchRef.current.x;
+      const dy = touch.clientY - lastTouchRef.current.y;
+      
+      lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+      
+      // Limit pan to container size
+      const maxPan = (scaleRef.current - 1) * 150;
+      positionRef.current = {
+        x: clamp(positionRef.current.x + dx, -maxPan, maxPan),
+        y: clamp(positionRef.current.y + dy, -maxPan, maxPan),
+      };
+      
+      forceUpdate({});
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStart !== null && e.changedTouches.length === 1) {
+    if (isPinchingRef.current) {
+      isPinchingRef.current = false;
+      initialPinchDistanceRef.current = null;
+      isFirstPinchFrameRef.current = true;
+      
+      // If scale returned to ~1, reset position
+      if (scaleRef.current <= 1.05) {
+        scaleRef.current = 1;
+        positionRef.current = { x: 0, y: 0 };
+        forceUpdate({});
+      }
+      return;
+    }
+    
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      return;
+    }
+    
+    // Swipe navigation (only when scale === 1)
+    if (touchStart !== null && e.changedTouches.length === 1 && scaleRef.current === 1) {
       const touchEnd = e.changedTouches[0].clientX;
       const diff = touchStart - touchEnd;
       if (Math.abs(diff) > 50) {
@@ -140,6 +266,21 @@ export function Lightbox({
   };
 
   if (!currentPhoto) return null;
+
+  // Calculate image transform based on device
+  const getImageTransform = () => {
+    if (isMobile) {
+      const scale = scaleRef.current;
+      const pos = positionRef.current;
+      if (scale === 1 && pos.x === 0 && pos.y === 0) {
+        return undefined;
+      }
+      return `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`;
+    }
+    return zoom > 1 ? `scale(${zoom})` : undefined;
+  };
+
+  const isGestureActive = isPinchingRef.current || isPanningRef.current;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col animate-fade-in">
@@ -191,8 +332,6 @@ export function Lightbox({
       <div 
         className="flex-1 flex items-center justify-center p-2 md:p-4 relative overflow-hidden cursor-pointer"
         onClick={handleBackgroundClick}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         {/* Navigation Arrows */}
         {currentIndex > 0 && (
@@ -212,27 +351,32 @@ export function Lightbox({
           </button>
         )}
 
-        {/* Image */}
+        {/* Image Container */}
         <div 
           className="relative flex items-center justify-center overflow-hidden"
           style={{ 
             width: isMobile ? 'calc(100vw - 32px)' : 'calc(100vw - 120px)',
             height: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
+            touchAction: 'none',
           }}
           onClick={(e) => e.stopPropagation()}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           onWheel={handleWheel}
         >
           <img
             src={currentPhoto.previewUrl}
             alt={currentPhoto.filename}
-            className="transition-transform duration-200 select-none"
+            className="select-none"
             draggable={false}
             style={{ 
               maxWidth: '100%',
               maxHeight: '100%',
               objectFit: 'contain',
-              transform: !isMobile && zoom > 1 ? `scale(${zoom})` : undefined,
+              transform: getImageTransform(),
               transformOrigin: 'center center',
+              transition: isGestureActive ? 'none' : 'transform 0.2s ease-out',
             }}
           />
         </div>
