@@ -2118,6 +2118,30 @@ export type Database = {
           },
         ]
       }
+      system_cache: {
+        Row: {
+          created_at: string
+          expires_at: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       tabelas_precos: {
         Row: {
           categoria_id: string | null

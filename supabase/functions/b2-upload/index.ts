@@ -30,10 +30,10 @@ interface CachedB2Auth {
   expiresAt: number;
 }
 
-// Global cache for B2 authorization (23 hour TTL)
-// This dramatically reduces API calls to B2 under load
+// In-memory cache (fast but lost on cold start)
 let cachedAuth: CachedB2Auth | null = null;
 const CACHE_TTL_MS = 23 * 60 * 60 * 1000; // 23 hours
+const CACHE_KEY = "b2_auth_credentials";
 
 // Authorize with B2
 async function b2Authorize(keyId: string, appKey: string): Promise<B2AuthResponse> {
@@ -72,30 +72,74 @@ async function b2GetUploadUrl(apiUrl: string, authToken: string, bucketId: strin
   return response.json();
 }
 
-// Get cached B2 upload credentials or fetch new ones
+// Get B2 upload credentials with PERSISTENT caching (Supabase table)
 async function getB2UploadCredentials(
+  supabaseAdmin: any,
   keyId: string,
   appKey: string,
-  bucketId: string
+  bucketId: string,
+  requestId: string
 ): Promise<{ auth: B2AuthResponse; uploadUrl: B2UploadUrlResponse }> {
   const now = Date.now();
 
-  // Return cached credentials if still valid
+  // 1. Check memory cache first (fastest path)
   if (cachedAuth && cachedAuth.expiresAt > now) {
-    console.log("[b2-upload] Using cached B2 credentials");
+    console.log(`[${requestId}] Using memory cached B2 credentials`);
     return { auth: cachedAuth.auth, uploadUrl: cachedAuth.uploadUrl };
   }
 
-  // Fetch new credentials
-  console.log("[b2-upload] Fetching new B2 credentials");
-  const startTime = Date.now();
+  // 2. Check persistent cache (survives cold starts)
+  try {
+    const { data: dbCache } = await supabaseAdmin
+      .from("system_cache")
+      .select("value, expires_at")
+      .eq("key", CACHE_KEY)
+      .gt("expires_at", new Date().toISOString())
+      .single();
 
+    if (dbCache?.value) {
+      const cached = dbCache.value as { auth: B2AuthResponse; uploadUrl: B2UploadUrlResponse };
+      console.log(`[${requestId}] Using persistent cached B2 credentials`);
+      
+      // Update memory cache
+      cachedAuth = {
+        ...cached,
+        expiresAt: new Date(dbCache.expires_at as string).getTime(),
+      };
+      
+      return cached;
+    }
+  } catch {
+    // No cache found, continue to fetch fresh
+  }
+
+  // 3. Fetch fresh credentials
+  console.log(`[${requestId}] Fetching fresh B2 credentials...`);
+  const authStart = Date.now();
+  
   const auth = await b2Authorize(keyId, appKey);
   const uploadUrl = await b2GetUploadUrl(auth.apiUrl, auth.authorizationToken, bucketId);
+  
+  console.log(`[${requestId}] B2 auth completed in ${Date.now() - authStart}ms`);
 
-  console.log(`[b2-upload] B2 auth completed in ${Date.now() - startTime}ms`);
+  const expiresAt = new Date(now + CACHE_TTL_MS).toISOString();
 
-  // Cache the credentials
+  // 4. Save to persistent cache
+  try {
+    await supabaseAdmin
+      .from("system_cache")
+      .upsert({
+        key: CACHE_KEY,
+        value: { auth, uploadUrl },
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
+      });
+    console.log(`[${requestId}] B2 credentials persisted for 23 hours`);
+  } catch (err) {
+    console.warn(`[${requestId}] Failed to persist B2 cache:`, err);
+  }
+
+  // 5. Update memory cache
   cachedAuth = {
     auth,
     uploadUrl,
@@ -105,13 +149,32 @@ async function getB2UploadCredentials(
   return { auth, uploadUrl };
 }
 
+// Invalidate cache (called when B2 returns 401/503)
+async function invalidateB2Cache(
+  supabaseAdmin: any,
+  requestId: string
+): Promise<void> {
+  cachedAuth = null;
+  try {
+    await supabaseAdmin
+      .from("system_cache")
+      .delete()
+      .eq("key", CACHE_KEY);
+    console.log(`[${requestId}] B2 cache invalidated`);
+  } catch (err) {
+    console.warn(`[${requestId}] Failed to invalidate B2 cache:`, err);
+  }
+}
+
 // Upload file to B2 with retry logic
 async function b2UploadFile(
+  supabaseAdmin: any,
   uploadUrl: string,
   authToken: string,
   fileName: string,
   fileData: ArrayBuffer,
   contentType: string,
+  requestId: string,
   maxRetries: number = 2
 ): Promise<B2UploadResponse> {
   // Calculate SHA1 hash
@@ -140,8 +203,8 @@ async function b2UploadFile(
         
         // If upload URL expired (401/503), invalidate cache and retry
         if (response.status === 401 || response.status === 503) {
-          console.log(`[b2-upload] Upload URL expired (${response.status}), invalidating cache`);
-          cachedAuth = null;
+          console.log(`[${requestId}] Upload URL expired (${response.status}), invalidating cache`);
+          await invalidateB2Cache(supabaseAdmin, requestId);
           throw new Error(`B2 upload failed (${response.status}): ${error}`);
         }
         
@@ -154,7 +217,7 @@ async function b2UploadFile(
       
       if (attempt <= maxRetries) {
         const delay = Math.pow(2, attempt - 1) * 500; // 500ms, 1000ms
-        console.log(`[b2-upload] Upload attempt ${attempt} failed, retrying in ${delay}ms: ${lastError.message}`);
+        console.log(`[${requestId}] Upload attempt ${attempt} failed, retrying in ${delay}ms: ${lastError.message}`);
         await new Promise(r => setTimeout(r, delay));
       }
     }
@@ -173,12 +236,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log(`[b2-upload][${requestId}] Request started`);
+    console.log(`[${requestId}] Upload request started`);
 
     // Get auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.log(`[b2-upload][${requestId}] Missing authorization header`);
+      console.log(`[${requestId}] Missing authorization header`);
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -194,14 +257,14 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.log(`[b2-upload][${requestId}] Auth validation failed:`, authError?.message);
+      console.log(`[${requestId}] Auth validation failed:`, authError?.message);
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[b2-upload][${requestId}] User authenticated: ${user.id}`);
+    console.log(`[${requestId}] User: ${user.id.slice(0, 8)}`);
 
     // Parse form data
     const formData = await req.formData();
@@ -212,14 +275,14 @@ Deno.serve(async (req) => {
     const height = parseInt(formData.get("height") as string) || 0;
 
     if (!file || !galleryId) {
-      console.log(`[b2-upload][${requestId}] Missing required fields: file=${!!file}, galleryId=${!!galleryId}`);
+      console.log(`[${requestId}] Missing required fields`);
       return new Response(JSON.stringify({ error: "Arquivo e galleryId são obrigatórios" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[b2-upload][${requestId}] Processing: galleryId=${galleryId}, file=${file.name}, size=${file.size}`);
+    console.log(`[${requestId}] File: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
 
     // Verify gallery belongs to user
     const { data: gallery, error: galleryError } = await supabase
@@ -229,7 +292,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (galleryError || !gallery || gallery.user_id !== user.id) {
-      console.log(`[b2-upload][${requestId}] Gallery access denied: error=${galleryError?.message}, match=${gallery?.user_id === user.id}`);
+      console.log(`[${requestId}] Gallery access denied`);
       return new Response(JSON.stringify({ error: "Galeria não encontrada ou sem permissão" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -242,15 +305,21 @@ Deno.serve(async (req) => {
     const b2BucketId = Deno.env.get("B2_BUCKET_ID");
 
     if (!b2KeyId || !b2AppKey || !b2BucketId) {
-      console.error(`[b2-upload][${requestId}] B2 credentials not configured`);
+      console.error(`[${requestId}] B2 credentials not configured`);
       return new Response(JSON.stringify({ error: "Configuração de storage incompleta" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Get cached or new B2 upload credentials
-    const { uploadUrl: uploadUrlData } = await getB2UploadCredentials(b2KeyId, b2AppKey, b2BucketId);
+    // Get B2 credentials (with persistent caching)
+    const { uploadUrl: uploadUrlData } = await getB2UploadCredentials(
+      supabase,
+      b2KeyId,
+      b2AppKey,
+      b2BucketId,
+      requestId
+    );
 
     // Generate unique filename
     const timestamp = Date.now();
@@ -262,18 +331,21 @@ Deno.serve(async (req) => {
     // Read file data
     const fileData = await file.arrayBuffer();
 
-    console.log(`[b2-upload][${requestId}] Uploading to B2: ${storagePath}, ${fileData.byteLength} bytes`);
+    console.log(`[${requestId}] Uploading to B2: ${storagePath}`);
 
     // Upload to B2 with retry logic
     const uploadResult = await b2UploadFile(
+      supabase,
       uploadUrlData.uploadUrl,
       uploadUrlData.authorizationToken,
       storagePath,
       fileData,
-      file.type || "image/jpeg"
+      file.type || "image/jpeg",
+      requestId
     );
 
-    console.log(`[b2-upload][${requestId}] B2 upload complete: ${uploadResult.fileId}`);
+    const uploadDuration = Date.now() - startTime;
+    console.log(`[${requestId}] B2 upload complete in ${uploadDuration}ms: ${uploadResult.fileId}`);
 
     // Save metadata to Supabase
     const { data: photo, error: insertError } = await supabase
@@ -295,14 +367,14 @@ Deno.serve(async (req) => {
       .single();
 
     if (insertError) {
-      console.error(`[b2-upload][${requestId}] Error saving photo metadata:`, insertError);
+      console.error(`[${requestId}] Error saving photo metadata:`, insertError);
       return new Response(JSON.stringify({ error: "Erro ao salvar metadados" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[b2-upload][${requestId}] Photo saved: ${photo.id}`);
+    console.log(`[${requestId}] Photo saved: ${photo.id}`);
 
     // Update gallery photo count atomically via RPC
     const { error: rpcError } = await supabase.rpc('increment_gallery_photo_count', {
@@ -310,12 +382,12 @@ Deno.serve(async (req) => {
     });
 
     if (rpcError) {
-      console.warn(`[b2-upload][${requestId}] Failed to increment photo count (non-critical):`, rpcError.message);
+      console.warn(`[${requestId}] Failed to increment photo count:`, rpcError.message);
       // Non-critical error - don't fail the upload
     }
 
-    const duration = Date.now() - startTime;
-    console.log(`[b2-upload][${requestId}] Complete in ${duration}ms`);
+    const totalDuration = Date.now() - startTime;
+    console.log(`[${requestId}] ✓ Complete in ${totalDuration}ms (upload: ${uploadDuration}ms)`);
 
     return new Response(
       JSON.stringify({
@@ -338,7 +410,7 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error(`[b2-upload][${requestId}] Error after ${duration}ms:`, error);
+    console.error(`[${requestId}] ✗ Error after ${duration}ms:`, error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }),
       {

@@ -279,6 +279,17 @@ export function PhotoUploader({
   const pendingCount = items.filter((i) => i.status === 'pending').length;
   const completedCount = items.filter((i) => i.status === 'done').length;
   const errorCount = items.filter((i) => i.status === 'error').length;
+  const inProgressCount = items.filter((i) => 
+    i.status === 'compressing' || i.status === 'uploading' || i.status === 'saving'
+  ).length;
+
+  // Calculate compression savings
+  const totalOriginalSize = items.reduce((sum, i) => sum + i.file.size, 0);
+  const totalCompressedSize = items
+    .filter((i) => i.result)
+    .reduce((sum, i) => sum + (i.result?.fileSize || 0), 0);
+  const savedBytes = totalOriginalSize - totalCompressedSize;
+  const savedPercent = totalOriginalSize > 0 ? Math.round((savedBytes / totalOriginalSize) * 100) : 0;
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -314,12 +325,25 @@ export function PhotoUploader({
       {/* Upload List */}
       {items.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {completedCount} de {items.length} enviadas
-              {errorCount > 0 && ` • ${errorCount} erro(s)`}
-              {isUploading && pendingCount > 0 && ' • Enviando...'}
-            </p>
+          {/* Progress Summary */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-muted-foreground">
+                {completedCount} de {items.length} enviadas
+                {errorCount > 0 && <span className="text-destructive"> • {errorCount} erro(s)</span>}
+              </p>
+              {isUploading && inProgressCount > 0 && (
+                <span className="flex items-center gap-1.5 text-xs text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {inProgressCount} em andamento
+                </span>
+              )}
+            </div>
+            {completedCount > 0 && savedPercent > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Economia: {formatFileSize(savedBytes)} ({savedPercent}%)
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">

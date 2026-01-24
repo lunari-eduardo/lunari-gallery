@@ -95,6 +95,18 @@ export function Lightbox({
     document.body.removeChild(link);
   };
 
+  // Prefetch adjacent images for instant navigation
+  useEffect(() => {
+    const prefetchIndexes = [currentIndex - 1, currentIndex + 1].filter(
+      (i) => i >= 0 && i < photos.length
+    );
+    
+    prefetchIndexes.forEach((i) => {
+      const img = new Image();
+      img.src = photos[i].previewUrl;
+    });
+  }, [currentIndex, photos]);
+
   // Reset state when changing photos
   useEffect(() => {
     scaleRef.current = 1;
