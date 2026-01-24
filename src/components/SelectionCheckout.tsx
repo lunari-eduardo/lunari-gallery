@@ -1,15 +1,15 @@
-import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt } from 'lucide-react';
+import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Gallery } from '@/types/gallery';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { calculatePhotoPrice } from '@/hooks/useGalleries';
+import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
 
 interface SelectionCheckoutProps {
   gallery: Gallery;
   selectedCount: number;
   extraCount: number;
-  extraTotal: number;
+  regrasCongeladas?: RegrasCongeladas | null;
   onBack: () => void;
   onConfirm: () => void;
 }
@@ -18,6 +18,7 @@ export function SelectionCheckout({
   gallery, 
   selectedCount, 
   extraCount,
+  regrasCongeladas,
   onBack, 
   onConfirm 
 }: SelectionCheckoutProps) {
@@ -26,10 +27,19 @@ export function SelectionCheckout({
   const isNoSale = saleSettings?.mode === 'no_sale';
   const isWithPayment = saleSettings?.mode === 'sale_with_payment';
   
-  // Calculate prices using the new function
-  const priceInfo = saleSettings 
-    ? calculatePhotoPrice(selectedCount, gallery.includedPhotos, saleSettings)
-    : { chargeableCount: extraCount, total: extraCount * gallery.extraPhotoPrice, pricePerPhoto: gallery.extraPhotoPrice };
+  // Calculate prices using progressive pricing
+  const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
+    extraCount,
+    regrasCongeladas,
+    gallery.extraPhotoPrice
+  );
+  
+  // Build priceInfo for template compatibility
+  const priceInfo = {
+    chargeableCount: extraCount,
+    total: valorTotal,
+    pricePerPhoto: valorUnitario,
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -126,6 +136,14 @@ export function SelectionCheckout({
                     R$ {priceInfo.total.toFixed(2)}
                   </p>
                 </div>
+                
+                {/* Savings indicator for progressive pricing */}
+                {economia && economia > 0 && (
+                  <div className="flex items-center gap-2 mt-3 p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm">
+                    <TrendingDown className="h-4 w-4 flex-shrink-0" />
+                    <span>Você economizou R$ {economia.toFixed(2)} com desconto progressivo!</span>
+                  </div>
+                )}
               </div>
             )}
 

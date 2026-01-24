@@ -137,11 +137,11 @@ export default function ClientGallery() {
     queryFn: async () => {
       if (!sessionId) return null;
       
-      // Note: gallery.session_id is the session's 'id' (UUID), not the 'session_id' column
+      // Query by session_id (workflow string), not id (UUID)
       const { data, error } = await supabase
         .from('clientes_sessoes')
         .select('id, regras_congeladas, valor_foto_extra')
-        .eq('id', sessionId)
+        .eq('session_id', sessionId)
         .single();
       
       if (error) {
@@ -637,7 +637,7 @@ export default function ClientGallery() {
         gallery={gallery}
         selectedCount={selectedCount}
         extraCount={extraCount}
-        extraTotal={extraTotal}
+        regrasCongeladas={regrasCongeladas}
         onBack={() => extraCount > 0 ? setCurrentStep('review') : setCurrentStep('gallery')}
         onConfirm={handleConfirm}
       />
@@ -762,7 +762,7 @@ export default function ClientGallery() {
               </span>
               {extraCount > 0 && (
                 <span className="text-sm text-primary font-medium">
-                  +{extraCount} extras (R$ {extraTotal.toFixed(2)})
+                  +{extraCount} extras
                 </span>
               )}
             </div>
@@ -825,7 +825,7 @@ export default function ClientGallery() {
         onConfirm={handleStartConfirmation}
         isClient
         variant="bottom-bar"
-        regrasCongeladas={supabaseGallery?.regras_congeladas as RegrasCongeladas | null}
+        regrasCongeladas={regrasCongeladas}
       />
 
       {lightboxIndex !== null && (
