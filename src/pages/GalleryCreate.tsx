@@ -152,10 +152,11 @@ export default function GalleryCreate() {
       setIsLoadingRegras(true);
       try {
         console.log('🔗 Fetching session data for:', sessionId);
+        // Query by 'id' (UUID) - the session_id param from URL is the session's id, not session_id column
         const { data, error } = await supabase
           .from('clientes_sessoes')
-          .select('regras_congeladas, valor_foto_extra')
-          .eq('session_id', sessionId)
+          .select('id, session_id, regras_congeladas, valor_foto_extra')
+          .eq('id', sessionId)
           .single();
 
         if (error) {

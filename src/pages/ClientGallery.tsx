@@ -128,7 +128,34 @@ export default function ClientGallery() {
   // Get gallery ID for queries
   const galleryId = supabaseGallery?.id || (isLegacyAccess ? identifier : null);
 
-  // 2. Fetch photos from Supabase (for legacy) or use from response (for token)
+  // Get session_id from gallery (for fetching frozen rules from Gestão session)
+  const sessionId = supabaseGallery?.session_id;
+
+  // 2. Fetch frozen pricing rules from Gestão session (if gallery is linked)
+  const { data: sessionRegras } = useQuery({
+    queryKey: ['client-gallery-session-rules', sessionId],
+    queryFn: async () => {
+      if (!sessionId) return null;
+      
+      // Note: gallery.session_id is the session's 'id' (UUID), not the 'session_id' column
+      const { data, error } = await supabase
+        .from('clientes_sessoes')
+        .select('id, regras_congeladas, valor_foto_extra')
+        .eq('id', sessionId)
+        .single();
+      
+      if (error) {
+        console.warn('Session rules fetch error:', error.message);
+        return null;
+      }
+      
+      console.log('📊 Session rules loaded for pricing:', data?.regras_congeladas ? 'yes' : 'no');
+      return data;
+    },
+    enabled: !!sessionId,
+  });
+
+  // 3. Fetch photos from Supabase (for legacy) or use from response (for token)
   const { data: supabasePhotos, isLoading: isLoadingPhotos } = useQuery({
     queryKey: ['client-gallery-photos', galleryId],
     queryFn: async () => {
@@ -442,8 +469,10 @@ export default function ClientGallery() {
   const isExpired = hasDeadline && isPast(gallery.settings.deadline);
   const isBlocked = isExpired || isConfirmed;
 
-  // Get frozen pricing rules from gallery
-  const regrasCongeladas = supabaseGallery?.regras_congeladas as RegrasCongeladas | null;
+  // Get frozen pricing rules - prioritize session rules over gallery rules
+  // Session rules are the source of truth for Gestão-linked galleries
+  const regrasCongeladas = (sessionRegras?.regras_congeladas as unknown as RegrasCongeladas | null) 
+    || (supabaseGallery?.regras_congeladas as unknown as RegrasCongeladas | null);
 
   const selectedCount = localPhotos.filter(p => p.isSelected).length;
   const extraCount = Math.max(0, selectedCount - gallery.includedPhotos);
