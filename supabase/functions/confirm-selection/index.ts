@@ -11,6 +11,7 @@ interface RequestBody {
   extraCount?: number;
   valorUnitario?: number;
   valorTotal?: number;
+  requestPayment?: boolean; // If true, create payment link
 }
 
 // Pricing calculation interfaces (mirrored from pricingUtils.ts)
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, selectedCount, extraCount } = body;
+    const { galleryId, selectedCount, extraCount, requestPayment } = body;
 
     // Validate required fields
     if (!galleryId) {
@@ -155,7 +156,7 @@ Deno.serve(async (req) => {
     // 1. Fetch gallery to validate status and get session_id
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id, session_id, fotos_incluidas, valor_foto_extra')
+      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes')
       .eq('id', galleryId)
       .single();
 
@@ -266,6 +267,87 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Gallery ${galleryId} selection confirmed with ${selectedCount} photos`);
 
+    // 7. Check if payment is required and create payment link
+    let paymentResponse: { checkoutUrl?: string; provedor?: string; cobrancaId?: string } | null = null;
+    
+    // Parse saleSettings from gallery configuracoes
+    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string } } | null;
+    const saleMode = configuracoes?.saleSettings?.mode;
+    const shouldCreatePayment = requestPayment && saleMode === 'sale_with_payment' && valorTotal > 0;
+
+    if (shouldCreatePayment) {
+      console.log(`💳 Creating payment for ${extrasCount} extras, total R$ ${valorTotal}`);
+      
+      // Discover active payment provider
+      const { data: integracao } = await supabase
+        .from('usuarios_integracoes')
+        .select('provedor')
+        .eq('user_id', gallery.user_id)
+        .eq('status', 'ativo')
+        .in('provedor', ['mercadopago', 'infinitepay'])
+        .maybeSingle();
+
+      if (integracao) {
+        const functionName = integracao.provedor === 'infinitepay' 
+          ? 'infinitepay-create-link' 
+          : 'mercadopago-create-link';
+
+        // Normalize session_id to text format
+        let sessionIdTexto = gallery.session_id;
+        if (sessionIdTexto && !sessionIdTexto.startsWith('workflow-') && !sessionIdTexto.startsWith('session_')) {
+          const { data: sessao } = await supabase
+            .from('clientes_sessoes')
+            .select('session_id')
+            .or(`id.eq.${sessionIdTexto},session_id.eq.${sessionIdTexto}`)
+            .maybeSingle();
+          sessionIdTexto = sessao?.session_id || sessionIdTexto;
+        }
+
+        const descricao = `${extrasCount} foto${extrasCount !== 1 ? 's' : ''} extra${extrasCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
+
+        try {
+          const { data: paymentData, error: paymentError } = await supabase.functions.invoke(functionName, {
+            body: {
+              clienteId: gallery.cliente_id,
+              sessionId: sessionIdTexto,
+              valor: valorTotal,
+              descricao,
+            }
+          });
+
+          if (!paymentError && paymentData?.success) {
+            const checkoutUrl = integracao.provedor === 'infinitepay'
+              ? paymentData.checkoutUrl
+              : paymentData.paymentLink;
+            
+            const cobrancaId = integracao.provedor === 'infinitepay'
+              ? paymentData.cobrancaId
+              : paymentData.cobranca?.id;
+
+            paymentResponse = {
+              checkoutUrl,
+              provedor: integracao.provedor,
+              cobrancaId,
+            };
+
+            // Update gallery with pending payment status
+            await supabase
+              .from('galerias')
+              .update({ status_pagamento: 'pendente' })
+              .eq('id', galleryId);
+
+            console.log(`💳 Payment created: ${cobrancaId} via ${integracao.provedor}`);
+          } else {
+            console.error('Payment creation failed:', paymentError || paymentData?.error);
+          }
+        } catch (payErr) {
+          console.error('Payment invocation error:', payErr);
+        }
+      } else {
+        console.log('No payment provider configured for user');
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -274,6 +356,11 @@ Deno.serve(async (req) => {
         valorUnitario,
         valorTotal,
         message: 'Seleção confirmada com sucesso',
+        // Payment fields (only if payment was requested and created)
+        requiresPayment: !!paymentResponse,
+        checkoutUrl: paymentResponse?.checkoutUrl,
+        provedor: paymentResponse?.provedor,
+        cobrancaId: paymentResponse?.cobrancaId,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.b2-upload]
 verify_jwt = false
+
+[functions.gallery-create-payment]
+verify_jwt = false

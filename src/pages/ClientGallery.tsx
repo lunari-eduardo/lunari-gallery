@@ -20,6 +20,7 @@ import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { PasswordScreen } from '@/components/PasswordScreen';
+import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings } from '@/types/gallery';
@@ -28,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
 
-type SelectionStep = 'gallery' | 'review' | 'checkout' | 'confirmed';
+type SelectionStep = 'gallery' | 'review' | 'checkout' | 'payment' | 'confirmed';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 
@@ -52,6 +53,13 @@ export default function ClientGallery() {
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  
+  // Payment state
+  const [paymentInfo, setPaymentInfo] = useState<{
+    checkoutUrl: string;
+    provedor: string;
+    valorTotal: number;
+  } | null>(null);
   
   // Password state
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -217,7 +225,7 @@ export default function ClientGallery() {
       createdAt: new Date(),
       updatedAt: new Date(),
       saleSettings: {
-        mode: 'sale_without_payment',
+        mode: (config?.saleSettings as { mode?: string } | undefined)?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment' || 'sale_without_payment',
         pricingModel: 'fixed',
         chargeType: 'only_extras',
         fixedPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
@@ -311,6 +319,10 @@ export default function ClientGallery() {
   // 6. Mutation for confirming selection via Edge Function
   const confirmMutation = useMutation({
     mutationFn: async (pricingData: { selectedCount: number; extraCount: number; valorUnitario: number; valorTotal: number }) => {
+      // Check if we should request payment (sale_with_payment mode + extras)
+      const saleMode = transformedGallery?.saleSettings?.mode;
+      const shouldRequestPayment = saleMode === 'sale_with_payment' && pricingData.valorTotal > 0;
+      
       const response = await fetch(`${SUPABASE_URL}/functions/v1/confirm-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,6 +332,7 @@ export default function ClientGallery() {
           extraCount: pricingData.extraCount,
           valorUnitario: pricingData.valorUnitario,
           valorTotal: pricingData.valorTotal,
+          requestPayment: shouldRequestPayment,
         }),
       });
       
@@ -330,12 +343,26 @@ export default function ClientGallery() {
       
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsConfirmed(true);
-      setCurrentStep('confirmed');
-      toast.success('Seleção confirmada!', {
-        description: 'O fotógrafo receberá sua seleção.',
-      });
+      
+      // Check if payment is required
+      if (data.requiresPayment && data.checkoutUrl) {
+        setPaymentInfo({
+          checkoutUrl: data.checkoutUrl,
+          provedor: data.provedor || 'pagamento',
+          valorTotal: data.valorTotal || 0,
+        });
+        setCurrentStep('payment');
+        toast.success('Seleção confirmada!', {
+          description: 'Redirecionando para pagamento...',
+        });
+      } else {
+        setCurrentStep('confirmed');
+        toast.success('Seleção confirmada!', {
+          description: 'O fotógrafo receberá sua seleção.',
+        });
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao confirmar seleção');
@@ -636,14 +663,32 @@ export default function ClientGallery() {
 
   // Render Checkout Step
   if (currentStep === 'checkout') {
+    // Check if payment provider is configured (for sale_with_payment mode)
+    const isWithPayment = gallery.saleSettings?.mode === 'sale_with_payment';
+    const hasPaymentProvider = isWithPayment;
+    
     return (
       <SelectionCheckout
         gallery={gallery}
         selectedCount={selectedCount}
         extraCount={extraCount}
         regrasCongeladas={regrasCongeladas}
+        hasPaymentProvider={hasPaymentProvider}
+        isConfirming={confirmMutation.isPending}
         onBack={() => extraCount > 0 ? setCurrentStep('review') : setCurrentStep('gallery')}
         onConfirm={handleConfirm}
+      />
+    );
+  }
+
+  // Render Payment Redirect Step
+  if (currentStep === 'payment' && paymentInfo) {
+    return (
+      <PaymentRedirect
+        checkoutUrl={paymentInfo.checkoutUrl}
+        provedor={paymentInfo.provedor}
+        valorTotal={paymentInfo.valorTotal}
+        onCancel={() => setCurrentStep('confirmed')}
       />
     );
   }

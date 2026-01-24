@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, TrendingDown } from 'lucide-react';
+import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, TrendingDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Gallery } from '@/types/gallery';
 import { format } from 'date-fns';
@@ -10,6 +10,8 @@ interface SelectionCheckoutProps {
   selectedCount: number;
   extraCount: number;
   regrasCongeladas?: RegrasCongeladas | null;
+  hasPaymentProvider?: boolean;
+  isConfirming?: boolean;
   onBack: () => void;
   onConfirm: () => void;
 }
@@ -19,6 +21,8 @@ export function SelectionCheckout({
   selectedCount, 
   extraCount,
   regrasCongeladas,
+  hasPaymentProvider = false,
+  isConfirming = false,
   onBack, 
   onConfirm 
 }: SelectionCheckoutProps) {
@@ -180,7 +184,9 @@ export function SelectionCheckout({
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
                     {isWithPayment 
-                      ? 'O pagamento será processado após a confirmação. (Em breve)'
+                      ? (hasPaymentProvider 
+                          ? 'Você será redirecionado para concluir o pagamento após confirmar.' 
+                          : 'Pagamento online não disponível. O fotógrafo entrará em contato para cobrança.')
                       : `O valor adicional de R$ ${priceInfo.total.toFixed(2)} será cobrado posteriormente pelo fotógrafo.`
                     }
                   </p>
@@ -213,9 +219,22 @@ export function SelectionCheckout({
             size="xl" 
             className="w-full gap-2"
             onClick={onConfirm}
+            disabled={isConfirming}
           >
-            <Check className="h-5 w-5" />
-            Confirmar Seleção Final
+            {isConfirming ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Confirmando...
+              </>
+            ) : (
+              <>
+                <Check className="h-5 w-5" />
+                {isWithPayment && hasPaymentProvider && priceInfo.chargeableCount > 0
+                  ? 'Confirmar e Pagar'
+                  : 'Confirmar Seleção Final'
+                }
+              </>
+            )}
           </Button>
         </div>
       </div>
