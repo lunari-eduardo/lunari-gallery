@@ -143,6 +143,7 @@ Deno.serve(async (req) => {
         .eq('id', galleryId);
       
       // Update session status if linked
+      // Note: gallery.session_id is the session's 'id' (UUID), not the 'session_id' column
       if (gallery.session_id) {
         await supabase
           .from('clientes_sessoes')
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
             status_galeria: 'em_selecao', 
             updated_at: new Date().toISOString() 
           })
-          .eq('session_id', gallery.session_id);
+          .eq('id', gallery.session_id);
         console.log(`Session ${gallery.session_id} status updated to em_selecao`);
       }
     }
