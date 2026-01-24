@@ -152,11 +152,11 @@ export default function GalleryCreate() {
       setIsLoadingRegras(true);
       try {
         console.log('🔗 Fetching session data for:', sessionId);
-        // Query by 'id' (UUID) - the session_id param from URL is the session's id, not session_id column
+        // Query by 'session_id' (workflow string) - the session_id param from URL is the workflow string
         const { data, error } = await supabase
           .from('clientes_sessoes')
           .select('id, session_id, regras_congeladas, valor_foto_extra')
-          .eq('id', sessionId)
+          .eq('session_id', sessionId)
           .single();
 
         if (error) {
@@ -866,7 +866,7 @@ export default function GalleryCreate() {
               {/* Right Block - Pricing Configuration (conditional) */}
               {saleMode !== 'no_sale' && <div className="space-y-6">
                   {/* Show frozen rules from Gestão when available and not overriding */}
-                  {isAssistedMode && regrasCongeladas && !overridePricing ? (
+                  {regrasCongeladas && !overridePricing ? (
                     <div className="space-y-4">
                       {/* Loading state */}
                       {isLoadingRegras ? (
@@ -942,7 +942,7 @@ export default function GalleryCreate() {
                   ) : (
                     <>
                       {/* Override mode banner (when user chose to customize) */}
-                      {isAssistedMode && regrasCongeladas && overridePricing && (
+                      {regrasCongeladas && overridePricing && (
                         <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/30">
                           <div className="flex items-center gap-2">
                             <Pencil className="h-4 w-4 text-destructive" />
