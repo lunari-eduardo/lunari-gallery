@@ -182,11 +182,11 @@ Deno.serve(async (req) => {
 
     if (gallery.session_id) {
       // Fetch session data with frozen rules
-      // Note: gallery.session_id is the session's 'id' (UUID), not the 'session_id' column
+      // Note: gallery.session_id is the workflow string 'session_id' column
       const { data: sessao, error: sessaoError } = await supabase
         .from('clientes_sessoes')
         .select('id, regras_congeladas, valor_foto_extra')
-        .eq('id', gallery.session_id)
+        .eq('session_id', gallery.session_id)
         .single();
 
       if (sessaoError) {
@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
 
     // 6. Sync with clientes_sessoes if gallery was created from Gestão
     if (gallery.session_id) {
-      // Note: gallery.session_id is the session's 'id' (UUID), not the 'session_id' column
+      // Note: gallery.session_id is the workflow string 'session_id' column
       const { error: sessionError } = await supabase
         .from('clientes_sessoes')
         .update({
@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
           status_galeria: 'concluida',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', gallery.session_id);
+        .eq('session_id', gallery.session_id);
 
       if (sessionError) {
         console.error('Session update error:', sessionError);

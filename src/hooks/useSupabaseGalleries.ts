@@ -260,7 +260,7 @@ export function useSupabaseGalleries() {
       if (error) throw error;
       
       // If gallery was created from Gestão session, link it to clientes_sessoes
-      // Note: sessionId from URL is the session's 'id' (UUID), not the 'session_id' column
+      // Note: sessionId from URL is the workflow string 'session_id' column
       if (data.sessionId && result.id) {
         const { error: sessionLinkError } = await supabase
           .from('clientes_sessoes')
@@ -269,7 +269,7 @@ export function useSupabaseGalleries() {
             status_galeria: 'criada',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', data.sessionId);
+          .eq('session_id', data.sessionId);
         
         if (sessionLinkError) {
           console.error('Error linking gallery to session:', sessionLinkError);
@@ -440,7 +440,7 @@ export function useSupabaseGalleries() {
       if (error) throw error;
 
       // If gallery is linked to a session, update status in clientes_sessoes
-      // Note: gallery.sessionId is the session's 'id' (UUID), not the 'session_id' column
+      // Note: gallery.sessionId is the workflow string 'session_id' column
       if (gallery.sessionId) {
         const { error: sessionError } = await supabase
           .from('clientes_sessoes')
@@ -448,7 +448,7 @@ export function useSupabaseGalleries() {
             status_galeria: 'enviada',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', gallery.sessionId);
+          .eq('session_id', gallery.sessionId);
         
         if (sessionError) {
           console.error('Error updating session status:', sessionError);
