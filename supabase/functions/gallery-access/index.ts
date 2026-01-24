@@ -73,7 +73,23 @@ serve(async (req) => {
       }
     }
 
-    // 4. Fetch photos for the gallery
+    // 4. Fetch pricing rules from session (source of truth) if gallery is linked
+    let regrasCongeladas = gallery.regras_congeladas;
+    
+    if (gallery.session_id) {
+      const { data: sessao, error: sessaoError } = await supabase
+        .from("clientes_sessoes")
+        .select("regras_congeladas")
+        .eq("session_id", gallery.session_id)
+        .single();
+      
+      if (!sessaoError && sessao?.regras_congeladas) {
+        regrasCongeladas = sessao.regras_congeladas;
+        console.log("📊 Loaded pricing rules from session:", gallery.session_id);
+      }
+    }
+
+    // 5. Fetch photos for the gallery
     const { data: photos, error: photosError } = await supabase
       .from("galeria_fotos")
       .select("*")
@@ -84,19 +100,20 @@ serve(async (req) => {
       console.error("Error fetching photos:", photosError);
     }
 
-    // 5. Fetch photographer settings (for studio name, logo, etc.)
+    // 6. Fetch photographer settings (for studio name, logo, etc.)
     const { data: settings } = await supabase
       .from("gallery_settings")
       .select("studio_name, studio_logo_url, favicon_url")
       .eq("user_id", gallery.user_id)
       .single();
 
-    // 6. Return gallery data
+    // 7. Return gallery data
     return new Response(
       JSON.stringify({
         success: true,
         gallery: {
           id: gallery.id,
+          sessionId: gallery.session_id,  // Include session_id for client-side
           sessionName: gallery.nome_sessao,
           packageName: gallery.nome_pacote,
           clientName: gallery.cliente_nome,
@@ -110,8 +127,8 @@ serve(async (req) => {
           totalPhotos: gallery.total_fotos,
           settings: gallery.configuracoes,
           permissao: gallery.permissao,
-          // Include frozen pricing rules for progressive pricing
-          regrasCongeladas: gallery.regras_congeladas,
+          // Include frozen pricing rules (from session if available, else gallery)
+          regrasCongeladas,
         },
         photos: photos || [],
         studioSettings: settings || null,
