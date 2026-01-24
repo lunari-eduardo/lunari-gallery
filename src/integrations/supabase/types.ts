@@ -2595,6 +2595,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_gallery_photo_count: {
+        Args: { gallery_id: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
       recompute_session_paid: {
         Args: { p_session_id: string }

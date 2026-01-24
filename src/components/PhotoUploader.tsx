@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, X, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { 
@@ -10,6 +10,12 @@ import {
 } from '@/lib/imageCompression';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { 
+  retryWithBackoff, 
+  getUploadErrorMessage, 
+  getOptimalBatchSize 
+} from '@/lib/retryFetch';
+
 export interface UploadedPhoto {
   id: string;
   filename: string;
@@ -29,6 +35,7 @@ interface PhotoUploadItem {
   progress: number;
   error?: string;
   result?: UploadedPhoto;
+  retryCount?: number;
 }
 
 interface PhotoUploaderProps {
@@ -68,6 +75,7 @@ export function PhotoUploader({
       preview: URL.createObjectURL(file),
       status: 'pending',
       progress: 0,
+      retryCount: 0,
     }));
 
     setItems((prev) => [...prev, ...newItems]);
@@ -103,7 +111,7 @@ export function PhotoUploader({
       const compressed = await compressImage(item.file, compressionOptions);
       updateItem(item.id, { progress: 30 });
 
-      // Step 2: Upload via B2 Edge Function
+      // Step 2: Upload via B2 Edge Function with retry
       updateItem(item.id, { status: 'uploading', progress: 40 });
       
       const { data: { session } } = await supabase.auth.getSession();
@@ -119,20 +127,37 @@ export function PhotoUploader({
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
 
-      // Upload to B2 via Supabase Edge Function
-      const { data, error: uploadError } = await supabase.functions.invoke('b2-upload', {
-        body: formData,
-      });
+      // Upload to B2 via Supabase Edge Function with retry logic
+      const data = await retryWithBackoff(
+        async () => {
+          const { data, error: uploadError } = await supabase.functions.invoke('b2-upload', {
+            body: formData,
+          });
 
-      if (uploadError) {
-        throw new Error(uploadError.message || 'Falha ao enviar foto');
-      }
+          if (uploadError) {
+            throw uploadError;
+          }
 
-      if (!data?.success) {
-        throw new Error(data?.error || 'Falha ao enviar foto');
-      }
+          if (!data?.success) {
+            throw new Error(data?.error || 'Falha ao enviar foto');
+          }
 
-      updateItem(item.id, { status: 'done', progress: 100 });
+          return data;
+        },
+        {
+          maxAttempts: 3,
+          baseDelay: 2000,
+          onRetry: (attempt, error, delay) => {
+            updateItem(item.id, { 
+              progress: 40,
+              error: `Tentativa ${attempt + 1}...` 
+            });
+            console.log(`[PhotoUploader] Retry ${attempt} for ${item.file.name}: ${error.message}`);
+          },
+        }
+      );
+
+      updateItem(item.id, { status: 'done', progress: 100, error: undefined });
 
       return {
         id: data.photo.id,
@@ -145,12 +170,38 @@ export function PhotoUploader({
         height: data.photo.height,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      const message = getUploadErrorMessage(errorObj);
       updateItem(item.id, { status: 'error', error: message });
-      console.error('Upload error:', error);
+      console.error('[PhotoUploader] Upload error:', error);
       return null;
     }
   };
+
+  const retryItem = useCallback(async (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item || item.status !== 'error') return;
+
+    const currentRetryCount = item.retryCount || 0;
+    if (currentRetryCount >= 3) {
+      toast.error('Número máximo de tentativas excedido. Tente novamente mais tarde.');
+      return;
+    }
+
+    updateItem(id, { 
+      status: 'pending', 
+      progress: 0, 
+      error: undefined,
+      retryCount: currentRetryCount + 1,
+    });
+
+    // Trigger upload for this single item
+    const result = await uploadSingleFile(item);
+    if (result) {
+      toast.success(`Foto "${item.file.name}" enviada com sucesso!`);
+      onUploadComplete?.([result]);
+    }
+  }, [items, updateItem, onUploadComplete]);
 
   const startUpload = async () => {
     const pendingItems = items.filter((item) => item.status === 'pending');
@@ -162,8 +213,10 @@ export function PhotoUploader({
 
     const results: UploadedPhoto[] = [];
 
-    // Upload in parallel batches of 3
-    const batchSize = 3;
+    // Dynamic batch size based on connection quality
+    const batchSize = getOptimalBatchSize();
+    console.log(`[PhotoUploader] Using batch size: ${batchSize} for ${pendingItems.length} files`);
+
     for (let i = 0; i < pendingItems.length; i += batchSize) {
       const batch = pendingItems.slice(i, i + batchSize);
       const batchResults = await Promise.all(
@@ -176,9 +229,17 @@ export function PhotoUploader({
     onUploadingChange?.(false);
     uploadTriggeredRef.current = false;
 
+    const errorCount = items.filter(i => i.status === 'error').length;
+
     if (results.length > 0) {
-      toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
+      if (errorCount > 0) {
+        toast.warning(`${results.length} foto(s) enviada(s), ${errorCount} com erro.`);
+      } else {
+        toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
+      }
       onUploadComplete?.(results);
+    } else if (errorCount > 0) {
+      toast.error('Falha ao enviar fotos. Tente novamente.');
     }
 
     // Clear completed items after a delay
@@ -281,9 +342,21 @@ export function PhotoUploader({
                     ) : item.status === 'error' ? (
                       <>
                         <AlertCircle className="h-8 w-8 text-red-400" />
-                        <p className="text-xs text-white mt-1 px-2 text-center">
+                        <p className="text-xs text-white mt-1 px-2 text-center line-clamp-2">
                           {item.error}
                         </p>
+                        {(item.retryCount || 0) < 3 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              retryItem(item.id);
+                            }}
+                            className="mt-2 flex items-center gap-1 text-xs text-white bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition-colors"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Tentar novamente
+                          </button>
+                        )}
                       </>
                     ) : (
                       <>
@@ -299,8 +372,8 @@ export function PhotoUploader({
                   </div>
                 )}
 
-                {/* Remove Button (only for pending) */}
-                {item.status === 'pending' && (
+                {/* Remove Button (only for pending or error) */}
+                {(item.status === 'pending' || item.status === 'error') && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
