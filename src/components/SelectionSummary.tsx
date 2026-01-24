@@ -129,11 +129,11 @@ export function SelectionSummary({
               </span>
             </div>
             
-            {/* Show savings indicator when progressive pricing applied */}
+            {/* Show savings/discount indicator when progressive pricing applied */}
             {economia && economia > 0 && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 text-sm">
                 <TrendingDown className="h-4 w-4 flex-shrink-0" />
-                <span>Economia: R$ {economia.toFixed(2)}</span>
+                <span>Desconto: R$ {economia.toFixed(2)}</span>
               </div>
             )}
           </>
