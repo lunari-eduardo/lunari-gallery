@@ -129,9 +129,10 @@ export default function ClientGallery() {
   const galleryId = supabaseGallery?.id || (isLegacyAccess ? identifier : null);
 
   // Get session_id from gallery (for fetching frozen rules from Gestão session)
-  const sessionId = supabaseGallery?.session_id;
+  // Support both camelCase (from Edge Function) and snake_case (from legacy)
+  const sessionId = supabaseGallery?.sessionId || supabaseGallery?.session_id;
 
-  // 2. Fetch frozen pricing rules from Gestão session (if gallery is linked)
+  // 2. Fetch frozen pricing rules from Gestão session (as fallback if Edge Function didn't load them)
   const { data: sessionRegras } = useQuery({
     queryKey: ['client-gallery-session-rules', sessionId],
     queryFn: async () => {
@@ -152,7 +153,8 @@ export default function ClientGallery() {
       console.log('📊 Session rules loaded for pricing:', data?.regras_congeladas ? 'yes' : 'no');
       return data;
     },
-    enabled: !!sessionId,
+    // Only fetch if we have sessionId AND the gallery-access didn't already provide regras
+    enabled: !!sessionId && !supabaseGallery?.regrasCongeladas,
   });
 
   // 3. Fetch photos from Supabase (for legacy) or use from response (for token)
@@ -469,9 +471,11 @@ export default function ClientGallery() {
   const isExpired = hasDeadline && isPast(gallery.settings.deadline);
   const isBlocked = isExpired || isConfirmed;
 
-  // Get frozen pricing rules - prioritize session rules over gallery rules
-  // Session rules are the source of truth for Gestão-linked galleries
-  const regrasCongeladas = (sessionRegras?.regras_congeladas as unknown as RegrasCongeladas | null) 
+  // Get frozen pricing rules - prioritize rules from Edge Function response (already loaded from session)
+  // Fallback to separate session query, then to gallery rules
+  const regrasCongeladas = 
+    (supabaseGallery?.regrasCongeladas as unknown as RegrasCongeladas | null)
+    || (sessionRegras?.regras_congeladas as unknown as RegrasCongeladas | null) 
     || (supabaseGallery?.regras_congeladas as unknown as RegrasCongeladas | null);
 
   const selectedCount = localPhotos.filter(p => p.isSelected).length;
