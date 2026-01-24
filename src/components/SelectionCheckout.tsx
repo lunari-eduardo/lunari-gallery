@@ -141,7 +141,7 @@ export function SelectionCheckout({
                 {economia && economia > 0 && (
                   <div className="flex items-center gap-2 mt-3 p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm">
                     <TrendingDown className="h-4 w-4 flex-shrink-0" />
-                    <span>Você economizou R$ {economia.toFixed(2)} com desconto progressivo!</span>
+                    <span>Você economizou R$ {economia.toFixed(2)}</span>
                   </div>
                 )}
               </div>
