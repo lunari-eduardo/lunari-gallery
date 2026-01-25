@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { 
   User, 
   Mail, 
@@ -14,13 +15,15 @@ import {
   XCircle,
   AlertCircle,
   Crown,
-  Zap
+  Zap,
+  Images,
+  Infinity
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Account() {
-  const { user } = useAuthContext();
+  const { user, isAdmin } = useAuthContext();
   const { data, isLoading } = usePhotographerAccount();
 
   const getStatusBadge = () => {
@@ -45,6 +48,15 @@ export default function Account() {
   };
 
   const getAccountTypeBadge = () => {
+    if (isAdmin) {
+      return (
+        <Badge className="gap-1 bg-amber-600 hover:bg-amber-700 text-white">
+          <Crown className="h-3 w-3" />
+          Administrador
+        </Badge>
+      );
+    }
+    
     if (!data?.account) return null;
     
     const type = data.account.account_type;
@@ -72,6 +84,9 @@ export default function Account() {
       </div>
     );
   }
+
+  const credits = data?.credits ?? 0;
+  const galleriesPublished = data?.galleriesPublished ?? 0;
 
   return (
     <div className="space-y-6">
@@ -169,21 +184,49 @@ export default function Account() {
           </CardContent>
         </Card>
 
-        {/* Créditos (placeholder para futuro) */}
+        {/* Créditos de Galeria */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Zap className="h-5 w-5" />
               Créditos de Galeria
             </CardTitle>
-            <CardDescription>Uso de recursos da plataforma</CardDescription>
+            <CardDescription>Use créditos para publicar galerias</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-center py-6 text-muted-foreground">
-              <Zap className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p className="text-sm">Sistema de créditos em breve</p>
-              <p className="text-xs mt-1">Acompanhe o uso de galerias e recursos</p>
-            </div>
+          <CardContent className="space-y-4">
+            {isAdmin ? (
+              <div className="text-center py-4">
+                <div className="flex items-center justify-center gap-2 text-4xl font-bold text-primary">
+                  <Infinity className="h-10 w-10" />
+                </div>
+                <p className="text-muted-foreground mt-2">Créditos ilimitados</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Como administrador, você tem acesso ilimitado
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="text-center py-4">
+                  <div className="text-4xl font-bold text-primary">{credits}</div>
+                  <p className="text-muted-foreground">créditos disponíveis</p>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Images className="h-4 w-4" />
+                    Galerias publicadas
+                  </span>
+                  <span className="text-sm font-medium">{galleriesPublished}</span>
+                </div>
+
+                <Button className="w-full" variant="default" disabled>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Comprar Créditos (Em breve)
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -219,7 +262,7 @@ export default function Account() {
                 {data?.hasGestaoIntegration ? (
                   <p className="text-xs mt-1">Configure em Lunari Gestão para receber pagamentos</p>
                 ) : (
-                  <p className="text-xs mt-1">Disponível nos planos Pro e Pro + Gallery</p>
+                  <p className="text-xs mt-1">Disponível no plano Pro + Gallery</p>
                 )}
               </div>
             )}
