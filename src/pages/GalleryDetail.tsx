@@ -216,7 +216,7 @@ export default function GalleryDetail() {
     packageName: supabaseGallery.nomePacote || '',
     includedPhotos: supabaseGallery.fotosIncluidas,
     extraPhotoPrice: valorUnitario, // Use calculated progressive price
-    saleSettings: {
+    saleSettings: (supabaseGallery.configuracoes?.saleSettings as Gallery['saleSettings']) || {
       mode: 'sale_without_payment',
       pricingModel: 'fixed',
       chargeType: 'only_extras',
@@ -445,6 +445,15 @@ export default function GalleryDetail() {
                   <span className="text-muted-foreground">Permissão</span>
                   <span className="font-medium capitalize">
                     {supabaseGallery.permissao === 'public' ? 'Pública' : 'Privada'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Modo de cobrança</span>
+                  <span className="font-medium">
+                    {(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode === 'no_sale' && 'Sem cobrança'}
+                    {(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode === 'sale_with_payment' && 'Pagamento online'}
+                    {(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode === 'sale_without_payment' && 'Cobrança posterior'}
+                    {!(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode && 'Cobrança posterior'}
                   </span>
                 </div>
                 <div className="flex justify-between">

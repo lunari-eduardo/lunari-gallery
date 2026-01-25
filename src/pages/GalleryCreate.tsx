@@ -409,6 +409,8 @@ export default function GalleryCreate() {
                 allowComments: allowComments,
                 allowDownload: allowDownload,
                 allowExtraPhotos: allowExtraPhotos,
+                // Save sale settings for payment flow
+                saleSettings: getSaleSettings(),
               },
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
@@ -829,10 +831,7 @@ export default function GalleryCreate() {
                   {/* Sale with Payment */}
                   <div>
                     <RadioGroupItem value="sale_with_payment" id="sale-payment" className="peer sr-only" />
-                    <Label htmlFor="sale-payment" className={cn("flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", saleMode === 'sale_with_payment' ? "border-primary bg-primary/5" : "border-border")}>
-                      <Badge variant="secondary" className="absolute -top-2 right-2 text-xs">
-                        Em breve
-                      </Badge>
+                    <Label htmlFor="sale-payment" className={cn("flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", saleMode === 'sale_with_payment' ? "border-primary bg-primary/5" : "border-border")}>
                       <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", saleMode === 'sale_with_payment' ? "bg-primary/20" : "bg-muted")}>
                         <CreditCard className={cn("h-5 w-5", saleMode === 'sale_with_payment' ? "text-primary" : "text-muted-foreground")} />
                       </div>
