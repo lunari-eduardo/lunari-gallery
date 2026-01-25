@@ -108,15 +108,19 @@ serve(async (req) => {
       .single();
 
     // 7. Return gallery data
+    const saleSettings = gallery.configuracoes?.saleSettings || null;
+    
     return new Response(
       JSON.stringify({
         success: true,
         gallery: {
           id: gallery.id,
+          userId: gallery.user_id, // Include user_id to check payment provider
           sessionId: gallery.session_id,  // Include session_id for client-side
           sessionName: gallery.nome_sessao,
           packageName: gallery.nome_pacote,
           clientName: gallery.cliente_nome,
+          clienteId: gallery.cliente_id, // Include cliente_id for payment creation
           includedPhotos: gallery.fotos_incluidas,
           extraPhotoPrice: gallery.valor_foto_extra,
           welcomeMessage: gallery.mensagem_boas_vindas,
@@ -129,6 +133,8 @@ serve(async (req) => {
           permissao: gallery.permissao,
           // Include frozen pricing rules (from session if available, else gallery)
           regrasCongeladas,
+          // Include sale settings explicitly for payment flow
+          saleSettings,
         },
         photos: photos || [],
         studioSettings: settings || null,

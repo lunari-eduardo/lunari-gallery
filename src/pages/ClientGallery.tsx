@@ -23,7 +23,7 @@ import { PasswordScreen } from '@/components/PasswordScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
-import { WatermarkSettings } from '@/types/gallery';
+import { WatermarkSettings, DiscountPackage } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -224,13 +224,22 @@ export default function ClientGallery() {
       selectionStatus: (isEdgeFunctionFormat ? supabaseGallery.selectionStatus : supabaseGallery.status_selecao) === 'confirmado' ? 'confirmed' : 'in_progress',
       createdAt: new Date(),
       updatedAt: new Date(),
-      saleSettings: {
-        mode: (config?.saleSettings as { mode?: string } | undefined)?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment' || 'sale_without_payment',
-        pricingModel: 'fixed',
-        chargeType: 'only_extras',
-        fixedPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
-        discountPackages: [],
-      },
+      saleSettings: (() => {
+        // Prioritize explicit saleSettings from Edge Function response
+        const explicitSettings = isEdgeFunctionFormat 
+          ? (supabaseGallery.saleSettings as Record<string, unknown> | null)
+          : null;
+        const configSettings = config?.saleSettings as Record<string, unknown> | null;
+        const rawSettings = explicitSettings || configSettings;
+        
+        return {
+          mode: (rawSettings?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment') || 'sale_without_payment',
+          pricingModel: (rawSettings?.pricingModel as 'fixed' | 'packages') || 'fixed',
+          chargeType: (rawSettings?.chargeType as 'all_selected' | 'only_extras') || 'only_extras',
+          fixedPrice: (rawSettings?.fixedPrice as number) || (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
+          discountPackages: (rawSettings?.discountPackages as DiscountPackage[]) || [],
+        };
+      })(),
       settings: {
         welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || 'Olá {cliente}! Bem-vindo à galeria da sua sessão {sessao}.',
         deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
