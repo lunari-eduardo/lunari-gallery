@@ -15,6 +15,7 @@ import GalleryEdit from "./pages/GalleryEdit";
 import GalleryPreview from "./pages/GalleryPreview";
 import ClientGallery from "./pages/ClientGallery";
 import Settings from "./pages/Settings";
+import Account from "./pages/Account";
 import Auth from "./pages/Auth";
 import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
@@ -74,6 +75,11 @@ const App = () => (
               <Route path="/settings" element={
                 <ProtectedRoute>
                   <Layout><Settings /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/account" element={
+                <ProtectedRoute>
+                  <Layout><Account /></Layout>
                 </ProtectedRoute>
               } />
               
