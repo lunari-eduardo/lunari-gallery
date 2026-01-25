@@ -10,6 +10,7 @@ interface AuthContextType {
   accessLevel: AccessLevel;
   hasGalleryAccess: boolean;
   hasGestaoIntegration: boolean;
+  isAdmin: boolean;
   planName: string | null;
   accessLoading: boolean;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -25,7 +26,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     accessLevel, 
     planName, 
     isLoading: accessLoading,
-    hasGestaoIntegration 
+    hasGestaoIntegration,
+    isAdmin,
   } = useGalleryAccess(user);
 
   const value: AuthContextType = {
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     accessLevel,
     hasGalleryAccess: hasAccess,
     hasGestaoIntegration,
+    isAdmin,
     planName,
     accessLoading,
     signInWithGoogle,

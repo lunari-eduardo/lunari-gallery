@@ -1682,6 +1682,8 @@ export type Database = {
           account_status: Database["public"]["Enums"]["account_status"]
           account_type: Database["public"]["Enums"]["account_type"]
           created_at: string
+          galleries_published_total: number
+          gallery_credits: number
           id: string
           updated_at: string
           user_id: string
@@ -1690,6 +1692,8 @@ export type Database = {
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
           created_at?: string
+          galleries_published_total?: number
+          gallery_credits?: number
           id?: string
           updated_at?: string
           user_id: string
@@ -1698,6 +1702,8 @@ export type Database = {
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
           created_at?: string
+          galleries_published_total?: number
+          gallery_credits?: number
           id?: string
           updated_at?: string
           user_id?: string
@@ -2614,6 +2620,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_gallery_credits: {
+        Args: { _amount: number; _user_id: string }
+        Returns: number
+      }
       add_session_payment: {
         Args: {
           p_data_transacao: string
@@ -2631,6 +2641,7 @@ export type Database = {
         Args: { p_appointment_id: string }
         Returns: Json
       }
+      deduct_gallery_credit: { Args: { _user_id: string }; Returns: boolean }
       delete_appointment_cascade: {
         Args: { p_appointment_id: string; p_keep_payments?: boolean }
         Returns: Json
@@ -2644,6 +2655,8 @@ export type Database = {
           account_id: string
           account_status: Database["public"]["Enums"]["account_status"]
           account_type: Database["public"]["Enums"]["account_type"]
+          galleries_published_total: number
+          gallery_credits: number
           has_gestao_integration: boolean
           is_active: boolean
         }[]
