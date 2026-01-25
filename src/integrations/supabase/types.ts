@@ -1677,6 +1677,33 @@ export type Database = {
           },
         ]
       }
+      photographer_accounts: {
+        Row: {
+          account_status: Database["public"]["Enums"]["account_status"]
+          account_type: Database["public"]["Enums"]["account_type"]
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_status?: Database["public"]["Enums"]["account_status"]
+          account_type?: Database["public"]["Enums"]["account_type"]
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_status?: Database["public"]["Enums"]["account_status"]
+          account_type?: Database["public"]["Enums"]["account_type"]
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       plans: {
         Row: {
           code: string
@@ -2611,6 +2638,16 @@ export type Database = {
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
+      get_photographer_account: {
+        Args: { _user_id: string }
+        Returns: {
+          account_id: string
+          account_status: Database["public"]["Enums"]["account_status"]
+          account_type: Database["public"]["Enums"]["account_type"]
+          has_gestao_integration: boolean
+          is_active: boolean
+        }[]
+      }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
@@ -2630,6 +2667,8 @@ export type Database = {
       }
     }
     Enums: {
+      account_status: "active" | "suspended" | "canceled"
+      account_type: "gallery_solo" | "starter" | "pro" | "pro_gallery"
       app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
@@ -2758,6 +2797,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      account_status: ["active", "suspended", "canceled"],
+      account_type: ["gallery_solo", "starter", "pro", "pro_gallery"],
       app_role: ["admin", "moderator", "user"],
     },
   },
