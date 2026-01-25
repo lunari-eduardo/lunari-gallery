@@ -1,13 +1,6 @@
-import { Globe, Palette, Calendar, Building2, Shield, Lock } from 'lucide-react';
+import { Globe, Calendar, Building2, Shield, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { GlobalSettings, GalleryPermission } from '@/types/gallery';
 
@@ -87,40 +80,6 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
             <Lock className="h-5 w-5 text-muted-foreground" />
           </div>
         </RadioGroup>
-      </div>
-
-      {/* Theme Settings */}
-      <div className="lunari-card p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Palette className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">Aparência do Cliente</h2>
-            <p className="text-sm text-muted-foreground">
-              Tema forçado para visualização do cliente
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Tema do Cliente</Label>
-          <Select
-            value={settings.clientTheme}
-            onValueChange={(value: 'light' | 'dark' | 'system') =>
-              updateSettings({ clientTheme: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="system">Sistema (respeita preferência)</SelectItem>
-              <SelectItem value="light">Claro (forçado)</SelectItem>
-              <SelectItem value="dark">Escuro (forçado)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {/* Default Expiration */}

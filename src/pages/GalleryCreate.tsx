@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +31,7 @@ import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay } from '@/lib/pricingUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ThemePreviewCard } from '@/components/ThemePreviewCard';
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -124,6 +125,10 @@ export default function GalleryCreate() {
   const [allowComments, setAllowComments] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
   const [allowExtraPhotos, setAllowExtraPhotos] = useState(true);
+  
+  // Theme selection for client gallery
+  const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
+  const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
 
   // Initialize from settings
   useEffect(() => {
@@ -133,6 +138,16 @@ export default function GalleryCreate() {
       if (settings.defaultWatermark) {
         setWatermarkType(settings.defaultWatermark.type);
         setWatermarkOpacity(settings.defaultWatermark.opacity || 40);
+      }
+      // Initialize theme selection from settings
+      if (settings.activeThemeId) {
+        setSelectedThemeId(settings.activeThemeId);
+      }
+      // Initialize client mode from settings
+      if (settings.clientTheme === 'dark') {
+        setClientMode('dark');
+      } else {
+        setClientMode('light');
       }
     }
   }, [settings]);
@@ -411,6 +426,9 @@ export default function GalleryCreate() {
                 allowExtraPhotos: allowExtraPhotos,
                 // Save sale settings for payment flow
                 saleSettings: getSaleSettings(),
+                // Theme settings for client gallery
+                themeId: selectedThemeId,
+                clientMode: clientMode,
               },
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
@@ -1324,6 +1342,59 @@ export default function GalleryCreate() {
                     </div>
                   )}
                 </div>
+
+                {/* Theme Selection for Client Gallery */}
+                {settings.customThemes && settings.customThemes.length > 0 && (
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center gap-2">
+                      <Palette className="h-4 w-4 text-primary" />
+                      <h3 className="font-medium text-sm">Aparência da Galeria</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Escolha o tema visual que o cliente verá
+                    </p>
+                    
+                    <div className="grid grid-cols-3 gap-3">
+                      {settings.customThemes.map((theme) => (
+                        <ThemePreviewCard
+                          key={theme.id}
+                          theme={theme}
+                          isSelected={selectedThemeId === theme.id}
+                          onSelect={() => setSelectedThemeId(theme.id)}
+                          clientMode={clientMode}
+                          size="sm"
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Client Mode Toggle */}
+                    <div className="flex items-center gap-3 pt-2">
+                      <Label className="text-sm">Modo padrão:</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={clientMode === 'light' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClientMode('light')}
+                          className="gap-1"
+                        >
+                          <Sun className="h-3.5 w-3.5" />
+                          Claro
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={clientMode === 'dark' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClientMode('dark')}
+                          className="gap-1"
+                        >
+                          <Moon className="h-3.5 w-3.5" />
+                          Escuro
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Client Interactions */}
                 <div className="space-y-3 pt-2">

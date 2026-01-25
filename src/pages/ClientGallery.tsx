@@ -9,7 +9,9 @@ import {
   Check, 
   AlertTriangle, 
   Clock,
-  AlertCircle
+  AlertCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
@@ -53,6 +55,9 @@ export default function ClientGallery() {
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  
+  // Theme state for client gallery
+  const [activeClientMode, setActiveClientMode] = useState<'light' | 'dark'>('light');
   
   // Payment state
   const [paymentInfo, setPaymentInfo] = useState<{
@@ -391,6 +396,13 @@ export default function ClientGallery() {
       }
     }
   }, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
+
+  // Initialize client mode from gallery response
+  useEffect(() => {
+    if (galleryResponse?.clientMode) {
+      setActiveClientMode(galleryResponse.clientMode);
+    }
+  }, [galleryResponse?.clientMode]);
 
 
   const gallery = transformedGallery;
