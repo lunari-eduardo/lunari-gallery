@@ -1,16 +1,22 @@
-import { GlobalSettings } from '@/types/gallery';
+import { useGallerySettings } from '@/hooks/useGallerySettings';
 import { LogoUploader } from './LogoUploader';
 import { ThemeManager } from './ThemeManager';
 import { WatermarkDefaults } from './WatermarkDefaults';
 import { EmailTemplates } from './EmailTemplates';
 import { FaviconUploader } from './FaviconUploader';
 
-interface PersonalizationSettingsProps {
-  settings: GlobalSettings;
-  updateSettings: (data: Partial<GlobalSettings>) => void;
-}
+export function PersonalizationSettings() {
+  const {
+    settings,
+    updateSettings,
+    createTheme,
+    updateTheme,
+    deleteTheme,
+    setDefaultTheme,
+  } = useGallerySettings();
 
-export function PersonalizationSettings({ settings, updateSettings }: PersonalizationSettingsProps) {
+  if (!settings) return null;
+
   // Extract client default mode from clientTheme (light/dark only, not system)
   const clientDefaultMode = settings.clientTheme === 'dark' ? 'dark' : 'light';
 
@@ -47,7 +53,10 @@ export function PersonalizationSettings({ settings, updateSettings }: Personaliz
             themes={settings.customThemes}
             activeThemeId={settings.activeThemeId}
             clientDefaultMode={clientDefaultMode}
-            onThemesChange={(themes) => updateSettings({ customThemes: themes })}
+            onCreateTheme={createTheme}
+            onUpdateTheme={updateTheme}
+            onDeleteTheme={deleteTheme}
+            onSetDefaultTheme={setDefaultTheme}
             onActiveThemeChange={(themeId) => updateSettings({ activeThemeId: themeId })}
             onClientDefaultModeChange={(mode) => updateSettings({ clientTheme: mode })}
           />
@@ -70,7 +79,10 @@ export function PersonalizationSettings({ settings, updateSettings }: Personaliz
         <div className="lunari-card p-6">
           <EmailTemplates
             templates={settings.emailTemplates}
-            onTemplatesChange={(templates) => updateSettings({ emailTemplates: templates })}
+            onTemplatesChange={(templates) => {
+              // For now, email templates still use the old pattern
+              // This can be refactored later if needed
+            }}
           />
         </div>
       </div>

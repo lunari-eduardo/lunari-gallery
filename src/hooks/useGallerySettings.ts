@@ -287,7 +287,12 @@ export function useGallerySettings() {
       if (error) throw error;
     },
     onSuccess: () => {
+      toast.success('Tema criado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao criar tema');
+      console.error('Create theme error:', error);
     },
   });
 
@@ -311,7 +316,12 @@ export function useGallerySettings() {
       if (error) throw error;
     },
     onSuccess: () => {
+      toast.success('Tema atualizado!');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar tema');
+      console.error('Update theme error:', error);
     },
   });
 
@@ -328,7 +338,42 @@ export function useGallerySettings() {
       if (error) throw error;
     },
     onSuccess: () => {
+      toast.success('Tema excluído!');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao excluir tema');
+      console.error('Delete theme error:', error);
+    },
+  });
+
+  // Set theme as default
+  const setDefaultTheme = useMutation({
+    mutationFn: async (themeId: string) => {
+      if (!user?.id) throw new Error('User not authenticated');
+
+      // First, unset all themes as default
+      await supabase
+        .from('gallery_themes')
+        .update({ is_default: false })
+        .eq('user_id', user.id);
+
+      // Then set the selected one as default
+      const { error } = await supabase
+        .from('gallery_themes')
+        .update({ is_default: true })
+        .eq('id', themeId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Tema definido como padrão!');
+      queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao definir tema padrão');
+      console.error('Set default theme error:', error);
     },
   });
 
@@ -419,6 +464,7 @@ export function useGallerySettings() {
     createTheme: createTheme.mutate,
     updateTheme: updateTheme.mutate,
     deleteTheme: deleteTheme.mutate,
+    setDefaultTheme: setDefaultTheme.mutate,
     // Email template operations
     updateEmailTemplate: updateEmailTemplate.mutate,
     // Discount preset operations

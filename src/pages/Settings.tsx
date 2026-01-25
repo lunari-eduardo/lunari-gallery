@@ -33,7 +33,7 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="personalization" className="mt-6">
-          <PersonalizationSettings settings={settings} updateSettings={updateSettings} />
+          <PersonalizationSettings />
         </TabsContent>
       </Tabs>
 
