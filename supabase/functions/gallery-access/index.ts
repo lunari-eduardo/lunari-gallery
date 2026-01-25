@@ -107,7 +107,33 @@ serve(async (req) => {
       .eq("user_id", gallery.user_id)
       .single();
 
-    // 7. Return gallery data
+    // 7. Fetch theme data if configured
+    const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+    const themeId = galleryConfig?.themeId as string | undefined;
+    const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+    
+    let themeData = null;
+    if (themeId) {
+      const { data: theme } = await supabase
+        .from("gallery_themes")
+        .select("*")
+        .eq("id", themeId)
+        .maybeSingle();
+      
+      if (theme) {
+        themeData = {
+          id: theme.id,
+          name: theme.name,
+          primaryColor: theme.primary_color,
+          backgroundColor: theme.background_color,
+          textColor: theme.text_color,
+          accentColor: theme.accent_color,
+        };
+        console.log("🎨 Loaded theme:", theme.name);
+      }
+    }
+
+    // 8. Return gallery data
     const saleSettings = gallery.configuracoes?.saleSettings || null;
     
     return new Response(
@@ -138,6 +164,9 @@ serve(async (req) => {
         },
         photos: photos || [],
         studioSettings: settings || null,
+        // Theme data for client gallery appearance
+        theme: themeData,
+        clientMode: clientMode,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

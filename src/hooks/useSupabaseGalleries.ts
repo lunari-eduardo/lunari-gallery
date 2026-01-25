@@ -46,6 +46,9 @@ export interface GaleriaConfiguracoes {
       pricePerPhoto: number;
     }>;
   };
+  // Theme settings for client gallery
+  themeId?: string;
+  clientMode?: 'light' | 'dark';
 }
 
 export interface Galeria {
