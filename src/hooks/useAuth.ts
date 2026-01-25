@@ -59,8 +59,33 @@ export function useAuth() {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    console.log('🚪 Starting sign out...');
+    
+    // Always clear local state first, regardless of API response
+    // This handles cases where the session is already invalid on the server
+    setUser(null);
+    setSession(null);
+    
+    // Clear any stored auth data
+    localStorage.removeItem('auth_origin');
+    
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.warn('⚠️ Sign out API error (session may already be invalid):', error.message);
+        // Don't return error if it's just "session not found" - we've already cleared local state
+        if (error.message?.includes('session_not_found') || error.status === 403) {
+          console.log('✅ Local session cleared despite server error');
+          return { error: null };
+        }
+      }
+      console.log('✅ Sign out successful');
+      return { error };
+    } catch (err) {
+      console.error('❌ Sign out exception:', err);
+      // Still return success since we've cleared local state
+      return { error: null };
+    }
   };
 
   return {
