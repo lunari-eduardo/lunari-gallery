@@ -14,7 +14,11 @@ interface ThemeManagerProps {
   themes: CustomTheme[];
   activeThemeId?: string;
   clientDefaultMode?: 'light' | 'dark';
-  onThemesChange: (themes: CustomTheme[]) => void;
+  // Mutations específicas
+  onCreateTheme: (theme: Omit<CustomTheme, 'id'>) => void;
+  onUpdateTheme: (theme: CustomTheme) => void;
+  onDeleteTheme: (themeId: string) => void;
+  onSetDefaultTheme: (themeId: string) => void;
   onActiveThemeChange: (themeId: string) => void;
   onClientDefaultModeChange?: (mode: 'light' | 'dark') => void;
 }
@@ -23,7 +27,10 @@ export function ThemeManager({
   themes,
   activeThemeId,
   clientDefaultMode = 'light',
-  onThemesChange,
+  onCreateTheme,
+  onUpdateTheme,
+  onDeleteTheme,
+  onSetDefaultTheme,
   onActiveThemeChange,
   onClientDefaultModeChange,
 }: ThemeManagerProps) {
@@ -45,46 +52,38 @@ export function ThemeManager({
 
   const handleSaveTheme = (themeData: Omit<CustomTheme, 'id'> & { id?: string }) => {
     if (themeData.id) {
-      // Edit existing theme
-      const updated = themes.map((t) =>
-        t.id === themeData.id ? { ...t, ...themeData } : t
-      );
-      onThemesChange(updated);
+      // Edit existing theme - call update mutation
+      onUpdateTheme({
+        id: themeData.id,
+        name: themeData.name,
+        primaryColor: themeData.primaryColor,
+        backgroundColor: themeData.backgroundColor,
+        textColor: themeData.textColor,
+        accentColor: themeData.accentColor,
+        isDefault: themeData.isDefault,
+      });
     } else {
-      // Create new theme
-      const newTheme: CustomTheme = {
-        ...themeData,
-        id: `theme-${Date.now()}`,
+      // Create new theme - call create mutation
+      onCreateTheme({
+        name: themeData.name || 'Novo Tema',
+        primaryColor: themeData.primaryColor,
+        backgroundColor: themeData.backgroundColor,
+        textColor: themeData.textColor,
+        accentColor: themeData.accentColor,
         isDefault: themes.length === 0, // First theme is default
-      };
-      onThemesChange([...themes, newTheme]);
-      // Auto-select if first theme
-      if (themes.length === 0) {
-        onActiveThemeChange(newTheme.id);
-      }
+      });
     }
+    setIsModalOpen(false);
   };
 
   const handleDeleteTheme = (themeId: string) => {
     const theme = themes.find((t) => t.id === themeId);
     if (theme?.isDefault && themes.length > 1) return; // Can't delete default if others exist
-
-    const updated = themes.filter((t) => t.id !== themeId);
-    onThemesChange(updated);
-
-    // If deleted theme was active, switch to default or first available
-    if (activeThemeId === themeId) {
-      const defaultTheme = updated.find((t) => t.isDefault) || updated[0];
-      if (defaultTheme) onActiveThemeChange(defaultTheme.id);
-    }
+    onDeleteTheme(themeId);
   };
 
   const handleSetDefault = (themeId: string) => {
-    const updated = themes.map((t) => ({
-      ...t,
-      isDefault: t.id === themeId,
-    }));
-    onThemesChange(updated);
+    onSetDefaultTheme(themeId);
   };
 
   return (
