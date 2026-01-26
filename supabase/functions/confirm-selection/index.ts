@@ -378,6 +378,7 @@ Deno.serve(async (req) => {
               sessionId: sessionIdTexto,
               valor: valorTotal,
               descricao,
+              userId: gallery.user_id,
             }
           });
 

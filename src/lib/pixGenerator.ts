@@ -33,6 +33,24 @@ function normalizeText(text: string): string {
     .toUpperCase();
 }
 
+// Normalize PIX key - add country code for phone numbers
+function normalizarChavePix(chave: string): string {
+  let chaveLimpa = chave.trim();
+  
+  // If it looks like a phone number (starts with digit), format with country code
+  if (/^[0-9]/.test(chaveLimpa)) {
+    // Remove non-numeric characters
+    chaveLimpa = chaveLimpa.replace(/\D/g, '');
+    
+    // If 10 or 11 digits (Brazilian phone), add +55 country code
+    if (chaveLimpa.length === 10 || chaveLimpa.length === 11) {
+      chaveLimpa = '+55' + chaveLimpa;
+    }
+  }
+  
+  return chaveLimpa;
+}
+
 export interface PixPayloadParams {
   chavePix: string;
   nomeBeneficiario: string;
@@ -52,6 +70,9 @@ export function generatePixPayload({
   cidade = 'SAO PAULO',
   identificador = '***',
 }: PixPayloadParams): string {
+  // Normalize PIX key (add +55 for phone numbers)
+  const chaveNormalizada = normalizarChavePix(chavePix);
+  
   // Format and sanitize inputs
   const nomeFormatado = normalizeText(nomeBeneficiario).substring(0, 25);
   const cidadeFormatada = normalizeText(cidade).substring(0, 15);
@@ -65,7 +86,8 @@ export function generatePixPayload({
   payload += emvField('00', '01');
 
   // 26 - Merchant Account Information (PIX)
-  const pixAccountInfo = emvField('00', 'br.gov.bcb.pix') + emvField('01', chavePix);
+  // GUI must be lowercase: br.gov.bcb.pix
+  const pixAccountInfo = emvField('00', 'br.gov.bcb.pix') + emvField('01', chaveNormalizada);
   payload += emvField('26', pixAccountInfo);
 
   // 52 - Merchant Category Code (0000 = not specified)
