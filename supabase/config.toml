@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.gallery-create-payment]
 verify_jwt = false
+
+[functions.infinitepay-create-link]
+verify_jwt = false

@@ -26,6 +26,7 @@ export type GalleryOrigin = 'manual' | 'gestao';
 export type SaleMode = 'no_sale' | 'sale_with_payment' | 'sale_without_payment';
 export type PricingModel = 'fixed' | 'packages';
 export type ChargeType = 'all_selected' | 'only_extras';
+export type PaymentMethod = 'pix_manual' | 'infinitepay' | 'mercadopago';
 
 export interface DiscountPackage {
   id: string;
@@ -48,6 +49,7 @@ export interface SaleSettings {
   chargeType: ChargeType;
   fixedPrice: number;
   discountPackages: DiscountPackage[];
+  paymentMethod?: PaymentMethod; // Payment method selected for this gallery
 }
 
 export interface WatermarkSettings {
