@@ -29,16 +29,18 @@ import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { PaymentStatusCard } from '@/components/PaymentStatusCard';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function GalleryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
@@ -65,6 +67,37 @@ export default function GalleryDetail() {
     queryKey: ['galeria-fotos', id],
     queryFn: () => fetchGalleryPhotos(id!),
     enabled: !!supabaseGallery && !!id,
+  });
+
+  // Fetch cobranca data for payment status
+  const { data: cobrancaData } = useQuery({
+    queryKey: ['galeria-cobranca', id],
+    queryFn: async () => {
+      const sessionId = supabaseGallery?.sessionId;
+      if (sessionId) {
+        const { data } = await supabase
+          .from('cobrancas')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return data;
+      }
+      // Fallback: try by cliente_id
+      if (supabaseGallery?.clienteId) {
+        const { data } = await supabase
+          .from('cobrancas')
+          .select('*')
+          .eq('cliente_id', supabaseGallery.clienteId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return data;
+      }
+      return null;
+    },
+    enabled: !!supabaseGallery,
   });
 
   // Transform Supabase photos to GalleryPhoto format (uses Cloudinary)
@@ -342,6 +375,9 @@ export default function GalleryDetail() {
               size="sm"
               onClick={async () => {
                 try {
+                  const valorExtras = supabaseGallery.valorExtras || calculatedExtraTotal;
+                  
+                  // Update gallery payment status
                   const { error } = await supabase
                     .from('galerias')
                     .update({ status_pagamento: 'pago' })
@@ -349,11 +385,30 @@ export default function GalleryDetail() {
                   
                   if (error) throw error;
                   
+                  // Update clientes_sessoes.valor_pago if session_id exists
+                  if (supabaseGallery.sessionId) {
+                    const { data: sessao } = await supabase
+                      .from('clientes_sessoes')
+                      .select('valor_pago')
+                      .eq('session_id', supabaseGallery.sessionId)
+                      .maybeSingle();
+                    
+                    if (sessao) {
+                      const novoValorPago = (Number(sessao.valor_pago) || 0) + valorExtras;
+                      await supabase
+                        .from('clientes_sessoes')
+                        .update({ valor_pago: novoValorPago })
+                        .eq('session_id', supabaseGallery.sessionId);
+                    }
+                  }
+                  
                   toast.success('Pagamento confirmado!', {
                     description: 'A galeria foi liberada para o cliente.',
                   });
                   
-                  // Refetch gallery
+                  // Invalidate queries and reload
+                  queryClient.invalidateQueries({ queryKey: ['galerias'] });
+                  queryClient.invalidateQueries({ queryKey: ['galeria-cobranca'] });
                   window.location.reload();
                 } catch (error) {
                   console.error('Error confirming payment:', error);
@@ -436,6 +491,21 @@ export default function GalleryDetail() {
 
             <div>
               <SelectionSummary gallery={galleryForSummary} regrasCongeladas={regrasCongeladas} />
+
+              {/* Payment Status Card in Selection tab */}
+              {supabaseGallery.statusPagamento && supabaseGallery.statusPagamento !== 'sem_vendas' && (
+                <div className="mt-4">
+                  <PaymentStatusCard
+                    status={supabaseGallery.statusPagamento}
+                    provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
+                    valor={supabaseGallery.valorExtras || calculatedExtraTotal}
+                    dataPagamento={cobrancaData?.data_pagamento}
+                    receiptUrl={cobrancaData?.ip_receipt_url}
+                    checkoutUrl={cobrancaData?.ip_checkout_url}
+                    variant="compact"
+                  />
+                </div>
+              )}
 
               {selectedPhotos.length > 0 && (
                 <Button 
@@ -521,6 +591,20 @@ export default function GalleryDetail() {
                 </div>
               </div>
             </div>
+
+            {/* Payment Information Card */}
+            {calculatedExtraTotal > 0 && (
+              <PaymentStatusCard
+                status={supabaseGallery.statusPagamento}
+                provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
+                valor={supabaseGallery.valorExtras || calculatedExtraTotal}
+                valorPago={cobrancaData?.status === 'pago' ? Number(cobrancaData?.valor) || 0 : 0}
+                dataPagamento={cobrancaData?.data_pagamento}
+                receiptUrl={cobrancaData?.ip_receipt_url}
+                variant="full"
+                showPendingAmount={true}
+              />
+            )}
 
             {supabaseGallery.mensagemBoasVindas && (
               <div className="lunari-card p-5 space-y-4 md:col-span-2">
