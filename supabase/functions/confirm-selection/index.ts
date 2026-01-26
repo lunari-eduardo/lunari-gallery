@@ -278,16 +278,50 @@ Deno.serve(async (req) => {
     if (shouldCreatePayment) {
       console.log(`💳 Creating payment for ${extrasCount} extras, total R$ ${valorTotal}`);
       
-      // Discover active payment provider
+      // Discover active payment provider (including pix_manual)
       const { data: integracao } = await supabase
         .from('usuarios_integracoes')
-        .select('provedor')
+        .select('provedor, dados_extras')
         .eq('user_id', gallery.user_id)
         .eq('status', 'ativo')
-        .in('provedor', ['mercadopago', 'infinitepay'])
+        .in('provedor', ['mercadopago', 'infinitepay', 'pix_manual'])
         .maybeSingle();
 
-      if (integracao) {
+      // Handle PIX Manual - no checkout link, just mark as awaiting confirmation
+      if (integracao?.provedor === 'pix_manual') {
+        const pixData = integracao.dados_extras as { chavePix?: string; nomeTitular?: string; tipoChave?: string } | null;
+        
+        await supabase
+          .from('galerias')
+          .update({ 
+            status_pagamento: 'aguardando_confirmacao',
+            configuracoes: {
+              ...gallery.configuracoes,
+              pixDados: pixData
+            }
+          })
+          .eq('id', galleryId);
+
+        console.log(`📱 PIX Manual payment requested for gallery ${galleryId}`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            selectedCount,
+            extraCount: extrasCount,
+            valorUnitario,
+            valorTotal,
+            message: 'Seleção confirmada com sucesso',
+            requiresPayment: true,
+            paymentMethod: 'pix_manual',
+            pixData,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Handle InfinitePay/MercadoPago checkout
+      if (integracao && (integracao.provedor === 'infinitepay' || integracao.provedor === 'mercadopago')) {
         const functionName = integracao.provedor === 'infinitepay' 
           ? 'infinitepay-create-link' 
           : 'mercadopago-create-link';
