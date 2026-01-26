@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Copy, CheckCircle, Clock, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
+import { generatePixPayload } from '@/lib/pixGenerator';
 
 interface PixPaymentScreenProps {
   chavePix: string;
@@ -27,11 +27,15 @@ export function PixPaymentScreen({
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  // Generate PIX payload (simplified - real implementation would use BR Code standard)
-  const pixPayload = `${chavePix}`;
+  // Generate valid PIX EMV payload with value
+  const pixPayload = generatePixPayload({
+    chavePix,
+    nomeBeneficiario: nomeTitular,
+    valor: valorTotal,
+  });
 
   useEffect(() => {
-    // Generate QR Code from PIX key
+    // Generate QR Code from PIX EMV payload
     QRCode.toDataURL(pixPayload, {
       width: 256,
       margin: 2,
@@ -46,9 +50,9 @@ export function PixPaymentScreen({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(chavePix);
+      await navigator.clipboard.writeText(pixPayload);
       setCopied(true);
-      toast.success('Chave PIX copiada!');
+      toast.success('Código PIX copiado!');
       setTimeout(() => setCopied(false), 3000);
     } catch (err) {
       toast.error('Erro ao copiar');
@@ -113,31 +117,39 @@ export function PixPaymentScreen({
           </p>
         </div>
 
-        {/* PIX Key Copy */}
+        {/* PIX Copia e Cola */}
         <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground">
-            {getTipoChaveLabel(tipoChave)}
+            PIX Copia e Cola
           </p>
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
-            <code className="flex-1 text-sm break-all text-left">
-              {chavePix}
-            </code>
+          <div className="relative">
+            <div className="p-3 rounded-lg bg-muted/50 border max-h-24 overflow-y-auto">
+              <code className="text-xs break-all text-left font-mono text-muted-foreground">
+                {pixPayload}
+              </code>
+            </div>
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={handleCopy}
-              className={cn(
-                "shrink-0 transition-colors",
-                copied && "text-green-600"
-              )}
+              className="absolute top-2 right-2"
             >
               {copied ? (
-                <CheckCircle className="h-4 w-4" />
+                <>
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Copiado
+                </>
               ) : (
-                <Copy className="h-4 w-4" />
+                <>
+                  <Copy className="h-4 w-4 mr-1" />
+                  Copiar
+                </>
               )}
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {getTipoChaveLabel(tipoChave)}: {chavePix} • Titular: {nomeTitular}
+          </p>
         </div>
 
         {/* Recipient Info */}
