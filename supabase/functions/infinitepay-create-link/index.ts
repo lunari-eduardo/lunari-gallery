@@ -11,6 +11,33 @@ interface RequestBody {
   valor: number;
   descricao: string;
   userId: string;
+  redirectUrl?: string;
+  webhookUrl?: string;
+}
+
+interface InfinitePayItem {
+  quantity: number;
+  price: number; // in centavos
+  description: string;
+}
+
+interface InfinitePayPayload {
+  handle: string;
+  items: InfinitePayItem[];
+  order_nsu?: string;
+  redirect_url?: string;
+  webhook_url?: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone_number?: string;
+  };
+}
+
+interface InfinitePayResponse {
+  checkout_url?: string;
+  slug?: string;
+  error?: string;
 }
 
 Deno.serve(async (req) => {
@@ -25,10 +52,11 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { clienteId, sessionId, valor, descricao, userId }: RequestBody = await req.json();
+    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl }: RequestBody = await req.json();
 
     // Validate required fields
     if (!clienteId || !valor || !userId) {
+      console.error('Missing required fields:', { clienteId, valor, userId });
       return new Response(
         JSON.stringify({ error: 'clienteId, valor e userId são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -55,20 +83,96 @@ Deno.serve(async (req) => {
     const handle = (integracao?.dados_extras as { handle?: string })?.handle;
 
     if (!handle) {
+      console.error('No InfinitePay handle found for user:', userId);
       return new Response(
         JSON.stringify({ error: 'InfinitePay não configurado para este usuário' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Generate InfinitePay checkout URL
-    // The InfinitePay checkout URL format: https://checkout.infinitepay.io/{handle}?amount={cents}&description={desc}
+    // 2. Generate unique order_nsu for tracking
+    const orderNsu = `gallery-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+    // 3. Convert value to centavos (InfinitePay expects price in centavos)
     const valorCentavos = Math.round(valor * 100);
-    const checkoutUrl = `https://checkout.infinitepay.io/${handle}?amount=${valorCentavos}&description=${encodeURIComponent(descricao)}`;
 
-    console.log(`💳 Generated InfinitePay checkout: ${checkoutUrl}`);
+    // 4. Build InfinitePay payload according to official API docs
+    const infinitePayload: InfinitePayPayload = {
+      handle: handle,
+      items: [
+        {
+          quantity: 1,
+          price: valorCentavos,
+          description: descricao.substring(0, 100), // Limit description length
+        }
+      ],
+      order_nsu: orderNsu,
+    };
 
-    // 3. Create charge record in database
+    // Add optional redirect URL
+    if (redirectUrl) {
+      infinitePayload.redirect_url = redirectUrl;
+    }
+
+    // Add webhook URL for payment notifications
+    if (webhookUrl) {
+      infinitePayload.webhook_url = webhookUrl;
+    } else {
+      // Default webhook URL pointing to our edge function
+      infinitePayload.webhook_url = `${supabaseUrl}/functions/v1/infinitepay-webhook`;
+    }
+
+    console.log(`💳 Calling InfinitePay API with payload:`, JSON.stringify(infinitePayload));
+
+    // 5. Call InfinitePay API to create checkout link
+    const infinitePayResponse = await fetch('https://api.infinitepay.io/invoices/public/checkout/links', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(infinitePayload),
+    });
+
+    const responseText = await infinitePayResponse.text();
+    console.log(`💳 InfinitePay API response status: ${infinitePayResponse.status}`);
+    console.log(`💳 InfinitePay API response body: ${responseText}`);
+
+    if (!infinitePayResponse.ok) {
+      console.error('InfinitePay API error:', responseText);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Erro ao criar link de pagamento InfinitePay',
+          details: responseText 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let infinitePayData: InfinitePayResponse;
+    try {
+      infinitePayData = JSON.parse(responseText);
+    } catch {
+      console.error('Failed to parse InfinitePay response:', responseText);
+      return new Response(
+        JSON.stringify({ error: 'Resposta inválida da InfinitePay' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const checkoutUrl = infinitePayData.checkout_url;
+    const invoiceSlug = infinitePayData.slug;
+
+    if (!checkoutUrl) {
+      console.error('No checkout_url in InfinitePay response:', infinitePayData);
+      return new Response(
+        JSON.stringify({ error: 'InfinitePay não retornou URL de checkout' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`💳 InfinitePay checkout URL generated: ${checkoutUrl}`);
+
+    // 6. Create charge record in database
     const { data: cobranca, error: cobrancaError } = await supabase
       .from('cobrancas')
       .insert({
@@ -81,6 +185,7 @@ Deno.serve(async (req) => {
         provedor: 'infinitepay',
         status: 'pendente',
         ip_checkout_url: checkoutUrl,
+        ip_order_nsu: orderNsu,
       })
       .select('id')
       .single();
@@ -93,13 +198,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`✅ InfinitePay charge created: ${cobranca.id}`);
+    console.log(`✅ InfinitePay charge created: ${cobranca.id} with order_nsu: ${orderNsu}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         checkoutUrl,
         cobrancaId: cobranca.id,
+        orderNsu,
+        invoiceSlug,
         provedor: 'infinitepay',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -107,7 +214,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('InfinitePay create link error:', error);
     return new Response(
-      JSON.stringify({ error: 'Erro interno do servidor' }),
+      JSON.stringify({ error: 'Erro interno do servidor', details: String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
