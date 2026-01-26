@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
         session_id: sessionId || null,
         valor,
         descricao,
-        tipo_cobranca: 'foto_extra',
+        tipo_cobranca: 'link',
         provedor: 'infinitepay',
         status: 'pendente',
         ip_checkout_url: checkoutUrl,
