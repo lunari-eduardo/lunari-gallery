@@ -10,8 +10,6 @@ import {
   AlertTriangle, 
   Clock,
   AlertCircle,
-  Sun,
-  Moon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
@@ -23,6 +21,7 @@ import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { PasswordScreen } from '@/components/PasswordScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
+import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings, DiscountPackage } from '@/types/gallery';
@@ -30,6 +29,33 @@ import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
+
+// Helper to convert HEX to HSL values for CSS variables
+function hexToHsl(hex: string): string | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return null;
+  
+  let r = parseInt(result[1], 16) / 255;
+  let g = parseInt(result[2], 16) / 255;
+  let b = parseInt(result[3], 16) / 255;
+  
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
 
 type SelectionStep = 'gallery' | 'review' | 'checkout' | 'payment' | 'confirmed';
 
@@ -536,6 +562,28 @@ export default function ClientGallery() {
     gallery.extraPhotoPrice
   );
 
+  // Build dynamic CSS variables from custom theme
+  const themeStyles = useMemo(() => {
+    const theme = galleryResponse?.theme;
+    if (!theme) return {};
+    
+    const primaryHsl = hexToHsl(theme.primaryColor);
+    const backgroundHsl = hexToHsl(theme.backgroundColor);
+    const foregroundHsl = hexToHsl(theme.textColor);
+    const accentHsl = hexToHsl(theme.accentColor);
+    
+    return {
+      '--primary': primaryHsl || '26 71% 46%',
+      '--background': backgroundHsl || '40 20% 98%',
+      '--foreground': foregroundHsl || '30 10% 20%',
+      '--accent': accentHsl || '93 19% 46%',
+      '--card': backgroundHsl || '40 20% 98%',
+      '--muted': backgroundHsl ? `${backgroundHsl.split(' ')[0]} 10% 90%` : '40 10% 90%',
+      '--muted-foreground': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 45%` : '30 10% 45%',
+      '--border': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 85%` : '30 10% 85%',
+      '--primary-foreground': '0 0% 100%',
+    } as React.CSSProperties;
+  }, [galleryResponse?.theme]);
   const toggleSelection = (photoId: string) => {
     if (isBlocked) return;
     
@@ -597,9 +645,23 @@ export default function ClientGallery() {
 
   if (showWelcome) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
+      <div 
+        className={cn(
+          "min-h-screen flex flex-col",
+          activeClientMode === 'dark' ? 'dark bg-background text-foreground' : 'bg-background text-foreground'
+        )}
+        style={themeStyles}
+      >
         <header className="flex items-center justify-center p-4 border-b border-border/50">
-          <Logo size="sm" />
+          {galleryResponse?.studioSettings?.studio_logo_url ? (
+            <img 
+              src={galleryResponse.studioSettings.studio_logo_url} 
+              alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
+              className="h-10 max-w-[180px] object-contain"
+            />
+          ) : (
+            <Logo size="sm" variant="gallery" />
+          )}
         </header>
         
         <main className="flex-1 flex items-center justify-center p-6">
@@ -719,23 +781,37 @@ export default function ClientGallery() {
     const confirmedSelectedPhotos = localPhotos.filter(p => p.isSelected);
     
     return (
-      <div className="min-h-screen flex flex-col bg-background">
+      <div 
+        className={cn(
+          "min-h-screen flex flex-col",
+          activeClientMode === 'dark' ? 'dark bg-background text-foreground' : 'bg-background text-foreground'
+        )}
+        style={themeStyles}
+      >
         <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
-          <div className="flex items-center justify-between px-3 py-3">
-            <Logo size="sm" />
-            <div className="text-right">
-              <p className="text-sm font-medium">{gallery.sessionName}</p>
-              <p className="text-xs text-muted-foreground">Seleção confirmada</p>
-            </div>
+          <div className="flex items-center justify-center px-3 py-4">
+            {galleryResponse?.studioSettings?.studio_logo_url ? (
+              <img 
+                src={galleryResponse.studioSettings.studio_logo_url} 
+                alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
+                className="h-10 max-w-[180px] object-contain"
+              />
+            ) : (
+              <Logo size="sm" variant="gallery" />
+            )}
+          </div>
+          <div className="text-center py-2 border-t border-border/30">
+            <p className="text-sm font-medium">{gallery.sessionName}</p>
+            <p className="text-xs text-muted-foreground">Seleção confirmada</p>
           </div>
         </header>
         
         <main className="flex-1 p-4 space-y-6">
           {/* Success Banner */}
-          <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
+          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
-              <Check className="h-5 w-5 text-green-500" />
-              <h2 className="font-display text-lg font-semibold text-green-700 dark:text-green-400">
+              <Check className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-lg font-semibold text-primary">
                 Seleção Confirmada!
               </h2>
             </div>
@@ -764,8 +840,8 @@ export default function ClientGallery() {
                         />
                       </div>
                       {/* Selected indicator */}
-                      <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-md">
-                        <Check className="h-4 w-4 text-white" />
+                      <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-md">
+                        <Check className="h-4 w-4 text-primary-foreground" />
                       </div>
                       {/* Comment indicator */}
                       {photo.comment && (
@@ -803,63 +879,32 @@ export default function ClientGallery() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
-        <div className="flex items-center justify-between px-3 py-3">
-          <Logo size="sm" />
-          
-          <div className="text-right">
-            <p className="text-sm font-medium">{gallery.sessionName}</p>
-            {hasDeadline && (
-              <p className="text-xs text-muted-foreground">
-                {format(gallery.settings.deadline, "dd 'de' MMMM", { locale: ptBR })}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Selection Bar */}
-        <div className={cn(
-          'border-t border-border/50 bg-muted/50 py-2 px-3',
-          isBlocked && 'bg-destructive/10'
-        )}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="text-sm">
-                <span className="font-semibold">{selectedCount}</span>
-                <span className="text-muted-foreground">/{gallery.includedPhotos} selecionadas</span>
-              </span>
-              {extraCount > 0 && (
-                <span className="text-sm text-primary font-medium">
-                  +{extraCount} extras
-                </span>
-              )}
-            </div>
-            
-            {isNearDeadline && !isExpired && (
-              <span className="text-sm text-warning font-medium flex items-center gap-1">
-                <AlertTriangle className="h-4 w-4" />
-                {hoursUntilDeadline}h restantes
-              </span>
-            )}
-
-            {isExpired && (
-              <span className="text-sm text-destructive font-medium flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                Prazo expirado
-              </span>
-            )}
-
-            {isConfirmed && (
-              <span className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-                <Check className="h-4 w-4" />
-                Seleção confirmada
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
+    <div 
+      className={cn(
+        "min-h-screen flex flex-col",
+        activeClientMode === 'dark' ? 'dark bg-background text-foreground' : 'bg-background text-foreground'
+      )}
+      style={themeStyles}
+    >
+      {/* New Header with centered logo */}
+      <ClientGalleryHeader
+        sessionName={gallery.sessionName}
+        totalPhotos={localPhotos.length}
+        deadline={hasDeadline ? gallery.settings.deadline : null}
+        hasDeadline={hasDeadline}
+        hoursUntilDeadline={hoursUntilDeadline}
+        isNearDeadline={isNearDeadline}
+        isExpired={isExpired}
+        isConfirmed={isConfirmed}
+        selectedCount={selectedCount}
+        includedPhotos={gallery.includedPhotos}
+        extraCount={extraCount}
+        studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        contactEmail={null}
+        activeClientMode={activeClientMode}
+        onToggleMode={() => setActiveClientMode(m => m === 'light' ? 'dark' : 'light')}
+      />
 
       {/* Main Content - Full width gallery */}
       <main className="flex-1 px-1 sm:px-2 py-2 pb-20">
