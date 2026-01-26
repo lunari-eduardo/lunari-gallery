@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -6,10 +7,14 @@ import {
   Clock, 
   CheckCircle2, 
   AlertCircle,
-  Banknote
+  Banknote,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface PaymentStatusCardProps {
   status: string | null;
@@ -21,6 +26,9 @@ interface PaymentStatusCardProps {
   checkoutUrl?: string | null;
   variant?: 'compact' | 'full';
   showPendingAmount?: boolean;
+  sessionId?: string;
+  cobrancaId?: string;
+  onStatusUpdated?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle2 }> = {
@@ -46,11 +54,59 @@ export function PaymentStatusCard({
   checkoutUrl,
   variant = 'compact',
   showPendingAmount = false,
+  sessionId,
+  cobrancaId,
+  onStatusUpdated,
 }: PaymentStatusCardProps) {
+  const [isChecking, setIsChecking] = useState(false);
   const statusKey = status || 'sem_vendas';
   const config = statusConfig[statusKey] || statusConfig.sem_vendas;
   const StatusIcon = config.icon;
   const valorPendente = Math.max(0, valor - valorPago);
+
+  const handleCheckPaymentStatus = async (forceUpdate = false) => {
+    if (!sessionId && !cobrancaId) {
+      toast.error('Não foi possível verificar o status');
+      return;
+    }
+    
+    setIsChecking(true);
+    try {
+      const response = await supabase.functions.invoke('check-payment-status', {
+        body: { 
+          sessionId, 
+          cobrancaId,
+          forceUpdate 
+        },
+      });
+      
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      
+      const data = response.data;
+      
+      if (data.status === 'pago') {
+        toast.success('Pagamento confirmado!', {
+          description: data.updated 
+            ? 'Status atualizado com sucesso.' 
+            : 'O pagamento já estava registrado.',
+        });
+        onStatusUpdated?.();
+      } else if (data.status === 'pendente') {
+        toast.info('Pagamento ainda pendente', {
+          description: 'O sistema ainda não recebeu a confirmação do pagamento.',
+        });
+      } else {
+        toast.info(`Status atual: ${data.status}`);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status:', error);
+      toast.error('Erro ao verificar status do pagamento');
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   const getBadgeClasses = () => {
     switch (statusKey) {
@@ -131,6 +187,40 @@ export function PaymentStatusCard({
                 Ir para pagamento
               </a>
             </Button>
+          )}
+
+          {/* Botão de verificação manual para pagamentos pendentes InfinitePay */}
+          {statusKey === 'pendente' && provedor === 'infinitepay' && (sessionId || cobrancaId) && (
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => handleCheckPaymentStatus(false)}
+                disabled={isChecking}
+              >
+                {isChecking ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Verificar Status
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="flex-1"
+                onClick={() => handleCheckPaymentStatus(true)}
+                disabled={isChecking}
+              >
+                {isChecking ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                )}
+                Confirmar Pago
+              </Button>
+            </div>
           )}
         </div>
       </div>

@@ -37,9 +37,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Log raw request for debugging
+    const rawBody = await req.text();
+    console.log('📥 WEBHOOK RAW - Headers:', JSON.stringify(Object.fromEntries(req.headers)));
+    console.log('📥 WEBHOOK RAW - Body:', rawBody);
+    
     // Parse webhook payload
-    const payload: InfinitePayWebhookPayload = await req.json();
-    console.log('📥 InfinitePay webhook received:', JSON.stringify(payload, null, 2));
+    let payload: InfinitePayWebhookPayload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      console.error('❌ Failed to parse webhook body as JSON');
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    console.log('📥 InfinitePay webhook parsed:', JSON.stringify(payload, null, 2));
 
     // Validate required fields
     const orderNsu = payload.order_nsu;

@@ -13,6 +13,7 @@ interface RequestBody {
   userId: string;
   redirectUrl?: string;
   webhookUrl?: string;
+  galleryToken?: string;
 }
 
 interface InfinitePayItem {
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl }: RequestBody = await req.json();
+    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken }: RequestBody = await req.json();
 
     // Validate required fields
     if (!clienteId || !valor || !userId) {
@@ -110,9 +111,15 @@ Deno.serve(async (req) => {
       order_nsu: orderNsu,
     };
 
-    // Add optional redirect URL
+    // Add redirect URL - build from gallery token if available
     if (redirectUrl) {
       infinitePayload.redirect_url = redirectUrl;
+    } else if (galleryToken) {
+      // Build redirect URL to gallery with payment success parameter
+      // Using the production URL pattern
+      const baseUrl = 'https://lunari-gallery.lovable.app';
+      infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
+      console.log(`💳 Redirect URL configurada: ${infinitePayload.redirect_url}`);
     }
 
     // Add webhook URL for payment notifications
@@ -122,6 +129,8 @@ Deno.serve(async (req) => {
       // Default webhook URL pointing to our edge function
       infinitePayload.webhook_url = `${supabaseUrl}/functions/v1/infinitepay-webhook`;
     }
+    
+    console.log(`💳 Webhook URL configurada: ${infinitePayload.webhook_url}`);
 
     console.log(`💳 Calling InfinitePay API with payload:`, JSON.stringify(infinitePayload));
 
