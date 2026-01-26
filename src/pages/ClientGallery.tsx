@@ -278,6 +278,7 @@ export default function ClientGallery() {
           chargeType: (rawSettings?.chargeType as 'all_selected' | 'only_extras') || 'only_extras',
           fixedPrice: (rawSettings?.fixedPrice as number) || (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
           discountPackages: (rawSettings?.discountPackages as DiscountPackage[]) || [],
+          paymentMethod: (rawSettings?.paymentMethod as 'pix_manual' | 'infinitepay' | 'mercadopago' | undefined),
         };
       })(),
       settings: {

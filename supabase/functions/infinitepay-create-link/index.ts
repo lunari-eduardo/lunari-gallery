@@ -35,7 +35,8 @@ interface InfinitePayPayload {
 }
 
 interface InfinitePayResponse {
-  checkout_url?: string;
+  url?: string;           // Campo retornado pela API InfinitePay
+  checkout_url?: string;  // Fallback para compatibilidade
   slug?: string;
   error?: string;
 }
@@ -159,7 +160,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const checkoutUrl = infinitePayData.checkout_url;
+    // Use 'url' (API atual) com fallback para 'checkout_url'
+    const checkoutUrl = infinitePayData.url || infinitePayData.checkout_url;
     const invoiceSlug = infinitePayData.slug;
 
     if (!checkoutUrl) {
