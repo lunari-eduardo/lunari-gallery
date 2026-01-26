@@ -13,18 +13,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
-import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission } from '@/types/gallery';
+import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission, PaymentMethod } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal, ClientFormData } from '@/components/ClientModal';
 import { PackageSelect } from '@/components/PackageSelect';
+import { PaymentMethodSelector } from '@/components/PaymentMethodSelector';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSettings } from '@/hooks/useSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess } from '@/hooks/useGalleryAccess';
 import { useGestaoParams } from '@/hooks/useGestaoParams';
 import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
+import { usePaymentIntegration } from '@/hooks/usePaymentIntegration';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
@@ -97,6 +99,10 @@ export default function GalleryCreate() {
   const [chargeType, setChargeType] = useState<ChargeType>('only_extras');
   const [fixedPrice, setFixedPrice] = useState(25);
   const [discountPackages, setDiscountPackages] = useState<DiscountPackage[]>([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
+  
+  // Payment integration hook
+  const { data: paymentData } = usePaymentIntegration();
 
   // Step 3: Photos
   const [uploadedCount, setUploadedCount] = useState(0);
@@ -301,12 +307,20 @@ export default function GalleryCreate() {
     clearParams();
     
   }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams]);
+  // Initialize payment method with default when data loads
+  useEffect(() => {
+    if (paymentData?.defaultIntegration && !selectedPaymentMethod) {
+      setSelectedPaymentMethod(paymentData.defaultIntegration.provedor as PaymentMethod);
+    }
+  }, [paymentData?.defaultIntegration, selectedPaymentMethod]);
+
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
     chargeType,
     fixedPrice,
-    discountPackages
+    discountPackages,
+    paymentMethod: saleMode === 'sale_with_payment' ? selectedPaymentMethod || undefined : undefined,
   });
   // Create Supabase gallery when entering step 3 (for uploads)
   const createSupabaseGalleryForUploads = async () => {
@@ -878,6 +892,17 @@ export default function GalleryCreate() {
                     </Label>
                   </div>
                 </RadioGroup>
+                
+                {/* Payment Method Selection - Only when sale_with_payment */}
+                {saleMode === 'sale_with_payment' && (
+                  <div className="mt-4 pt-4 border-t border-border/50">
+                    <PaymentMethodSelector
+                      integrations={paymentData?.allActiveIntegrations || []}
+                      selectedMethod={selectedPaymentMethod}
+                      onSelect={(method) => setSelectedPaymentMethod(method as PaymentMethod)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Right Block - Pricing Configuration (conditional) */}
