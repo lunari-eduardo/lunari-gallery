@@ -12,7 +12,9 @@ import {
   Image,
   AlertCircle,
   Loader2,
-  Pencil
+  Pencil,
+  Check,
+  Clock
 } from 'lucide-react';
 import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function GalleryDetail() {
   const { id } = useParams();
@@ -317,6 +320,54 @@ export default function GalleryDetail() {
           />
         </div>
       </div>
+
+      {/* PIX Manual Payment Confirmation Banner */}
+      {supabaseGallery.statusPagamento === 'aguardando_confirmacao' && (
+        <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  Aguardando confirmação de pagamento PIX
+                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Valor: R$ {(supabaseGallery.valorExtras || calculatedExtraTotal).toFixed(2)}
+                </p>
+              </div>
+            </div>
+            
+            <Button 
+              variant="default"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const { error } = await supabase
+                    .from('galerias')
+                    .update({ status_pagamento: 'pago' })
+                    .eq('id', supabaseGallery.id);
+                  
+                  if (error) throw error;
+                  
+                  toast.success('Pagamento confirmado!', {
+                    description: 'A galeria foi liberada para o cliente.',
+                  });
+                  
+                  // Refetch gallery
+                  window.location.reload();
+                } catch (error) {
+                  console.error('Error confirming payment:', error);
+                  toast.error('Erro ao confirmar pagamento');
+                }
+              }}
+              className="shrink-0"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Confirmar Recebimento
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <Tabs defaultValue="selection" className="space-y-6">

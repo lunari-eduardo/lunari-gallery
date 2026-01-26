@@ -271,21 +271,53 @@ Deno.serve(async (req) => {
     let paymentResponse: { checkoutUrl?: string; provedor?: string; cobrancaId?: string } | null = null;
     
     // Parse saleSettings from gallery configuracoes
-    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string } } | null;
+    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string } } | null;
     const saleMode = configuracoes?.saleSettings?.mode;
+    const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod; // Specific method for this gallery
     const shouldCreatePayment = requestPayment && saleMode === 'sale_with_payment' && valorTotal > 0;
 
     if (shouldCreatePayment) {
       console.log(`💳 Creating payment for ${extrasCount} extras, total R$ ${valorTotal}`);
+      console.log(`💳 Configured payment method: ${configuredPaymentMethod || 'default'}`);
       
-      // Discover active payment provider (including pix_manual)
-      const { data: integracao } = await supabase
-        .from('usuarios_integracoes')
-        .select('provedor, dados_extras')
-        .eq('user_id', gallery.user_id)
-        .eq('status', 'ativo')
-        .in('provedor', ['mercadopago', 'infinitepay', 'pix_manual'])
-        .maybeSingle();
+      // Discover payment provider based on gallery config or default
+      let integracao;
+      
+      if (configuredPaymentMethod) {
+        // Use the specific method configured for this gallery
+        const { data } = await supabase
+          .from('usuarios_integracoes')
+          .select('provedor, dados_extras')
+          .eq('user_id', gallery.user_id)
+          .eq('provedor', configuredPaymentMethod)
+          .eq('status', 'ativo')
+          .maybeSingle();
+        integracao = data;
+      } else {
+        // Fallback: use default payment method
+        const { data } = await supabase
+          .from('usuarios_integracoes')
+          .select('provedor, dados_extras')
+          .eq('user_id', gallery.user_id)
+          .eq('is_default', true)
+          .eq('status', 'ativo')
+          .in('provedor', ['mercadopago', 'infinitepay', 'pix_manual'])
+          .maybeSingle();
+        integracao = data;
+        
+        // If no default, get any active one
+        if (!integracao) {
+          const { data: anyActive } = await supabase
+            .from('usuarios_integracoes')
+            .select('provedor, dados_extras')
+            .eq('user_id', gallery.user_id)
+            .eq('status', 'ativo')
+            .in('provedor', ['mercadopago', 'infinitepay', 'pix_manual'])
+            .limit(1)
+            .maybeSingle();
+          integracao = anyActive;
+        }
+      }
 
       // Handle PIX Manual - no checkout link, just mark as awaiting confirmation
       if (integracao?.provedor === 'pix_manual') {

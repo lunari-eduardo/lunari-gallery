@@ -21,6 +21,7 @@ import { SelectionReview } from '@/components/SelectionReview';
 import { SelectionCheckout } from '@/components/SelectionCheckout';
 import { PasswordScreen } from '@/components/PasswordScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
+import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -89,6 +90,14 @@ export default function ClientGallery() {
   const [paymentInfo, setPaymentInfo] = useState<{
     checkoutUrl: string;
     provedor: string;
+    valorTotal: number;
+  } | null>(null);
+  
+  // PIX Manual payment state
+  const [pixPaymentData, setPixPaymentData] = useState<{
+    chavePix: string;
+    nomeTitular: string;
+    tipoChave?: string;
     valorTotal: number;
   } | null>(null);
   
@@ -386,7 +395,22 @@ export default function ClientGallery() {
     onSuccess: (data) => {
       setIsConfirmed(true);
       
-      // Check if payment is required
+      // PIX Manual - show internal payment screen
+      if (data.requiresPayment && data.paymentMethod === 'pix_manual' && data.pixData) {
+        setPixPaymentData({
+          chavePix: data.pixData.chavePix || '',
+          nomeTitular: data.pixData.nomeTitular || '',
+          tipoChave: data.pixData.tipoChave,
+          valorTotal: data.valorTotal || 0,
+        });
+        setCurrentStep('payment');
+        toast.success('Seleção confirmada!', {
+          description: 'Complete o pagamento via PIX para liberar suas fotos.',
+        });
+        return;
+      }
+      
+      // Checkout externo (InfinitePay/MercadoPago) - redirect
       if (data.requiresPayment && data.checkoutUrl) {
         setPaymentInfo({
           checkoutUrl: data.checkoutUrl,
@@ -397,12 +421,14 @@ export default function ClientGallery() {
         toast.success('Seleção confirmada!', {
           description: 'Redirecionando para pagamento...',
         });
-      } else {
-        setCurrentStep('confirmed');
-        toast.success('Seleção confirmada!', {
-          description: 'O fotógrafo receberá sua seleção.',
-        });
+        return;
       }
+      
+      // Sem pagamento
+      setCurrentStep('confirmed');
+      toast.success('Seleção confirmada com sucesso!', {
+        description: 'O fotógrafo receberá sua seleção.',
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao confirmar seleção');
@@ -764,7 +790,21 @@ export default function ClientGallery() {
     );
   }
 
-  // Render Payment Redirect Step
+  // Render Payment Step - PIX Manual (internal)
+  if (currentStep === 'payment' && pixPaymentData) {
+    return (
+      <PixPaymentScreen
+        chavePix={pixPaymentData.chavePix}
+        nomeTitular={pixPaymentData.nomeTitular}
+        tipoChave={pixPaymentData.tipoChave}
+        valorTotal={pixPaymentData.valorTotal}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+      />
+    );
+  }
+
+  // Render Payment Redirect Step - Checkout externo (InfinitePay/MercadoPago)
   if (currentStep === 'payment' && paymentInfo) {
     return (
       <PaymentRedirect
