@@ -502,7 +502,13 @@ export default function GalleryDetail() {
                     dataPagamento={cobrancaData?.data_pagamento}
                     receiptUrl={cobrancaData?.ip_receipt_url}
                     checkoutUrl={cobrancaData?.ip_checkout_url}
+                    sessionId={supabaseGallery.sessionId || undefined}
+                    cobrancaId={cobrancaData?.id}
                     variant="compact"
+                    onStatusUpdated={() => {
+                      queryClient.invalidateQueries({ queryKey: ['galerias'] });
+                      queryClient.invalidateQueries({ queryKey: ['galeria-cobranca'] });
+                    }}
                   />
                 </div>
               )}
@@ -601,8 +607,14 @@ export default function GalleryDetail() {
                 valorPago={cobrancaData?.status === 'pago' ? Number(cobrancaData?.valor) || 0 : 0}
                 dataPagamento={cobrancaData?.data_pagamento}
                 receiptUrl={cobrancaData?.ip_receipt_url}
+                sessionId={supabaseGallery.sessionId || undefined}
+                cobrancaId={cobrancaData?.id}
                 variant="full"
                 showPendingAmount={true}
+                onStatusUpdated={() => {
+                  queryClient.invalidateQueries({ queryKey: ['galerias'] });
+                  queryClient.invalidateQueries({ queryKey: ['galeria-cobranca'] });
+                }}
               />
             )}
 
