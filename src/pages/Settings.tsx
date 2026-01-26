@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSettings } from '@/hooks/useSettings';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { PersonalizationSettings } from '@/components/settings/PersonalizationSettings';
+import { PaymentSettings } from '@/components/settings/PaymentSettings';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -23,9 +24,10 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-3 max-w-lg">
           <TabsTrigger value="general">Geral</TabsTrigger>
           <TabsTrigger value="personalization">Personalização</TabsTrigger>
+          <TabsTrigger value="payment">Pagamentos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="mt-6">
@@ -34,6 +36,10 @@ export default function Settings() {
 
         <TabsContent value="personalization" className="mt-6">
           <PersonalizationSettings />
+        </TabsContent>
+
+        <TabsContent value="payment" className="mt-6">
+          <PaymentSettings />
         </TabsContent>
       </Tabs>
 
