@@ -430,9 +430,31 @@ export default function ClientGallery() {
     }
   }, [galleryResponse?.clientMode]);
 
-
   const gallery = transformedGallery;
   const isLoading = isLoadingGallery || isLoadingPhotos;
+
+  // Build dynamic CSS variables from custom theme - MUST be before early returns
+  const themeStyles = useMemo(() => {
+    const theme = galleryResponse?.theme;
+    if (!theme) return {};
+    
+    const primaryHsl = hexToHsl(theme.primaryColor);
+    const backgroundHsl = hexToHsl(theme.backgroundColor);
+    const foregroundHsl = hexToHsl(theme.textColor);
+    const accentHsl = hexToHsl(theme.accentColor);
+    
+    return {
+      '--primary': primaryHsl || '26 71% 46%',
+      '--background': backgroundHsl || '40 20% 98%',
+      '--foreground': foregroundHsl || '30 10% 20%',
+      '--accent': accentHsl || '93 19% 46%',
+      '--card': backgroundHsl || '40 20% 98%',
+      '--muted': backgroundHsl ? `${backgroundHsl.split(' ')[0]} 10% 90%` : '40 10% 90%',
+      '--muted-foreground': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 45%` : '30 10% 45%',
+      '--border': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 85%` : '30 10% 85%',
+      '--primary-foreground': '0 0% 100%',
+    } as React.CSSProperties;
+  }, [galleryResponse?.theme]);
 
   // Loading state
   if (isLoading) {
@@ -562,28 +584,6 @@ export default function ClientGallery() {
     gallery.extraPhotoPrice
   );
 
-  // Build dynamic CSS variables from custom theme
-  const themeStyles = useMemo(() => {
-    const theme = galleryResponse?.theme;
-    if (!theme) return {};
-    
-    const primaryHsl = hexToHsl(theme.primaryColor);
-    const backgroundHsl = hexToHsl(theme.backgroundColor);
-    const foregroundHsl = hexToHsl(theme.textColor);
-    const accentHsl = hexToHsl(theme.accentColor);
-    
-    return {
-      '--primary': primaryHsl || '26 71% 46%',
-      '--background': backgroundHsl || '40 20% 98%',
-      '--foreground': foregroundHsl || '30 10% 20%',
-      '--accent': accentHsl || '93 19% 46%',
-      '--card': backgroundHsl || '40 20% 98%',
-      '--muted': backgroundHsl ? `${backgroundHsl.split(' ')[0]} 10% 90%` : '40 10% 90%',
-      '--muted-foreground': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 45%` : '30 10% 45%',
-      '--border': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 85%` : '30 10% 85%',
-      '--primary-foreground': '0 0% 100%',
-    } as React.CSSProperties;
-  }, [galleryResponse?.theme]);
   const toggleSelection = (photoId: string) => {
     if (isBlocked) return;
     
