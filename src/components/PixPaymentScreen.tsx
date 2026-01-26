@@ -8,6 +8,7 @@ import QRCode from 'qrcode';
 interface PixPaymentScreenProps {
   chavePix: string;
   nomeTitular: string;
+  tipoChave?: string;
   valorTotal: number;
   studioName?: string;
   studioLogoUrl?: string;
@@ -17,6 +18,7 @@ interface PixPaymentScreenProps {
 export function PixPaymentScreen({
   chavePix,
   nomeTitular,
+  tipoChave,
   valorTotal,
   studioName,
   studioLogoUrl,
@@ -50,6 +52,17 @@ export function PixPaymentScreen({
       setTimeout(() => setCopied(false), 3000);
     } catch (err) {
       toast.error('Erro ao copiar');
+    }
+  };
+
+  const getTipoChaveLabel = (tipo?: string) => {
+    switch (tipo) {
+      case 'cpf': return 'CPF';
+      case 'cnpj': return 'CNPJ';
+      case 'email': return 'E-mail';
+      case 'telefone': return 'Telefone';
+      case 'aleatoria': return 'Chave Aleatória';
+      default: return 'Chave PIX';
     }
   };
 
@@ -95,7 +108,7 @@ export function PixPaymentScreen({
         {/* Value */}
         <div className="lunari-card p-4">
           <p className="text-sm text-muted-foreground mb-1">Valor do pagamento</p>
-          <p className="font-display text-3xl font-bold text-primary">
+          <p className="font-display text-3xl font-bold text-green-600 dark:text-green-400">
             R$ {valorTotal.toFixed(2)}
           </p>
         </div>
@@ -103,7 +116,7 @@ export function PixPaymentScreen({
         {/* PIX Key Copy */}
         <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground">
-            Chave PIX
+            {getTipoChaveLabel(tipoChave)}
           </p>
           <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
             <code className="flex-1 text-sm break-all text-left">

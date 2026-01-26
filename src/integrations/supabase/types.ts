@@ -2485,6 +2485,7 @@ export type Database = {
           dados_extras: Json | null
           expira_em: string | null
           id: string
+          is_default: boolean | null
           mp_public_key: string | null
           mp_user_id: string | null
           provedor: string
@@ -2500,6 +2501,7 @@ export type Database = {
           dados_extras?: Json | null
           expira_em?: string | null
           id?: string
+          is_default?: boolean | null
           mp_public_key?: string | null
           mp_user_id?: string | null
           provedor: string
@@ -2515,6 +2517,7 @@ export type Database = {
           dados_extras?: Json | null
           expira_em?: string | null
           id?: string
+          is_default?: boolean | null
           mp_public_key?: string | null
           mp_user_id?: string | null
           provedor?: string

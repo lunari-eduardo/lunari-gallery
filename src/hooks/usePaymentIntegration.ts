@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import type { Json } from '@/integrations/supabase/types';
 
 export type PaymentProvider = 'pix_manual' | 'infinitepay' | 'mercadopago';
-export type PixKeyType = 'cpf' | 'email' | 'telefone' | 'aleatoria';
+export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
 
 export interface PixManualData {
   chavePix: string;
@@ -21,12 +21,14 @@ export interface PaymentIntegration {
   id: string;
   provedor: PaymentProvider;
   status: 'ativo' | 'inativo';
+  isDefault: boolean;
   dadosExtras: PixManualData | InfinitePayData | null;
   conectadoEm: string | null;
 }
 
 export interface PaymentIntegrationData {
-  activeIntegration: PaymentIntegration | null;
+  defaultIntegration: PaymentIntegration | null;
+  allActiveIntegrations: PaymentIntegration[];
   allIntegrations: PaymentIntegration[];
   hasPayment: boolean;
   isPixManual: boolean;
@@ -48,7 +50,8 @@ export function usePaymentIntegration() {
     queryFn: async (): Promise<PaymentIntegrationData> => {
       if (!user) {
         return {
-          activeIntegration: null,
+          defaultIntegration: null,
+          allActiveIntegrations: [],
           allIntegrations: [],
           hasPayment: false,
           isPixManual: false,
@@ -60,7 +63,7 @@ export function usePaymentIntegration() {
       // Fetch all payment integrations for the user
       const { data: integrations, error } = await supabase
         .from('usuarios_integracoes')
-        .select('id, provedor, status, dados_extras, conectado_em')
+        .select('id, provedor, status, dados_extras, conectado_em, is_default')
         .eq('user_id', user.id)
         .in('provedor', ['pix_manual', 'infinitepay', 'mercadopago'])
         .order('created_at', { ascending: false });
@@ -76,20 +79,23 @@ export function usePaymentIntegration() {
           id: i.id,
           provedor: i.provedor as PaymentProvider,
           status: i.status as 'ativo' | 'inativo',
+          isDefault: i.is_default || false,
           dadosExtras: extras as unknown as PixManualData | InfinitePayData | null,
           conectadoEm: i.conectado_em,
         };
       });
 
-      const activeIntegration = mappedIntegrations.find((i) => i.status === 'ativo') || null;
+      const activeIntegrations = mappedIntegrations.filter((i) => i.status === 'ativo');
+      const defaultIntegration = activeIntegrations.find((i) => i.isDefault) || activeIntegrations[0] || null;
 
       return {
-        activeIntegration,
+        defaultIntegration,
+        allActiveIntegrations: activeIntegrations,
         allIntegrations: mappedIntegrations,
-        hasPayment: !!activeIntegration,
-        isPixManual: activeIntegration?.provedor === 'pix_manual',
-        isInfinitePay: activeIntegration?.provedor === 'infinitepay',
-        isMercadoPago: activeIntegration?.provedor === 'mercadopago',
+        hasPayment: activeIntegrations.length > 0,
+        isPixManual: activeIntegrations.some((i) => i.provedor === 'pix_manual'),
+        isInfinitePay: activeIntegrations.some((i) => i.provedor === 'infinitepay'),
+        isMercadoPago: activeIntegrations.some((i) => i.provedor === 'mercadopago'),
       };
     },
     enabled: !!user,
@@ -98,15 +104,10 @@ export function usePaymentIntegration() {
 
   // Mutation to save PIX Manual configuration
   const savePixManual = useMutation({
-    mutationFn: async (data: PixManualData) => {
+    mutationFn: async (data: PixManualData & { setAsDefault?: boolean }) => {
       if (!user) throw new Error('User not authenticated');
 
-      // First, deactivate all other payment integrations
-      await supabase
-        .from('usuarios_integracoes')
-        .update({ status: 'inativo' })
-        .eq('user_id', user.id)
-        .in('provedor', ['pix_manual', 'infinitepay', 'mercadopago']);
+      const { setAsDefault = true, ...pixData } = data;
 
       // Check if PIX manual already exists for this user
       const { data: existing } = await supabase
@@ -122,7 +123,8 @@ export function usePaymentIntegration() {
           .from('usuarios_integracoes')
           .update({
             status: 'ativo',
-            dados_extras: toJsonData(data),
+            dados_extras: toJsonData(pixData),
+            is_default: setAsDefault,
             conectado_em: new Date().toISOString(),
           })
           .eq('id', existing.id);
@@ -136,11 +138,22 @@ export function usePaymentIntegration() {
             user_id: user.id,
             provedor: 'pix_manual',
             status: 'ativo',
-            dados_extras: toJsonData(data),
+            dados_extras: toJsonData(pixData),
+            is_default: setAsDefault,
             conectado_em: new Date().toISOString(),
           }]);
 
         if (error) throw error;
+      }
+
+      // If setting as default, remove default from others
+      if (setAsDefault) {
+        await supabase
+          .from('usuarios_integracoes')
+          .update({ is_default: false })
+          .eq('user_id', user.id)
+          .neq('provedor', 'pix_manual')
+          .in('provedor', ['infinitepay', 'mercadopago']);
       }
     },
     onSuccess: () => {
@@ -156,15 +169,10 @@ export function usePaymentIntegration() {
 
   // Mutation to save InfinitePay configuration
   const saveInfinitePay = useMutation({
-    mutationFn: async (data: InfinitePayData) => {
+    mutationFn: async (data: InfinitePayData & { setAsDefault?: boolean }) => {
       if (!user) throw new Error('User not authenticated');
 
-      // Deactivate all other payment integrations
-      await supabase
-        .from('usuarios_integracoes')
-        .update({ status: 'inativo' })
-        .eq('user_id', user.id)
-        .in('provedor', ['pix_manual', 'infinitepay', 'mercadopago']);
+      const { setAsDefault = true, ...ipData } = data;
 
       // Check if InfinitePay already exists for this user
       const { data: existing } = await supabase
@@ -180,7 +188,8 @@ export function usePaymentIntegration() {
           .from('usuarios_integracoes')
           .update({
             status: 'ativo',
-            dados_extras: toJsonData(data),
+            dados_extras: toJsonData(ipData),
+            is_default: setAsDefault,
             conectado_em: new Date().toISOString(),
           })
           .eq('id', existing.id);
@@ -194,11 +203,22 @@ export function usePaymentIntegration() {
             user_id: user.id,
             provedor: 'infinitepay',
             status: 'ativo',
-            dados_extras: toJsonData(data),
+            dados_extras: toJsonData(ipData),
+            is_default: setAsDefault,
             conectado_em: new Date().toISOString(),
           }]);
 
         if (error) throw error;
+      }
+
+      // If setting as default, remove default from others
+      if (setAsDefault) {
+        await supabase
+          .from('usuarios_integracoes')
+          .update({ is_default: false })
+          .eq('user_id', user.id)
+          .neq('provedor', 'infinitepay')
+          .in('provedor', ['pix_manual', 'mercadopago']);
       }
     },
     onSuccess: () => {
@@ -212,16 +232,46 @@ export function usePaymentIntegration() {
     },
   });
 
-  // Mutation to deactivate all payment methods
-  const deactivateAll = useMutation({
-    mutationFn: async () => {
+  // Mutation to set a specific integration as default
+  const setAsDefault = useMutation({
+    mutationFn: async (integrationId: string) => {
+      if (!user) throw new Error('User not authenticated');
+
+      // Remove default from all payment integrations
+      await supabase
+        .from('usuarios_integracoes')
+        .update({ is_default: false })
+        .eq('user_id', user.id)
+        .in('provedor', ['pix_manual', 'infinitepay', 'mercadopago']);
+
+      // Set the new default
+      const { error } = await supabase
+        .from('usuarios_integracoes')
+        .update({ is_default: true, status: 'ativo' })
+        .eq('id', integrationId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
+      toast.success('Método de pagamento padrão atualizado!');
+    },
+    onError: (error) => {
+      console.error('Error setting default:', error);
+      toast.error('Erro ao definir método padrão');
+    },
+  });
+
+  // Mutation to deactivate a specific payment method
+  const deactivate = useMutation({
+    mutationFn: async (provedor: PaymentProvider) => {
       if (!user) throw new Error('User not authenticated');
 
       const { error } = await supabase
         .from('usuarios_integracoes')
-        .update({ status: 'inativo' })
+        .update({ status: 'inativo', is_default: false })
         .eq('user_id', user.id)
-        .in('provedor', ['pix_manual', 'infinitepay', 'mercadopago']);
+        .eq('provedor', provedor);
 
       if (error) throw error;
     },
@@ -240,7 +290,8 @@ export function usePaymentIntegration() {
     ...query,
     savePixManual,
     saveInfinitePay,
-    deactivateAll,
+    setAsDefault,
+    deactivate,
   };
 }
 
@@ -258,6 +309,7 @@ export function getProviderLabel(provider: PaymentProvider): string {
 export function getPixKeyTypeLabel(type: PixKeyType): string {
   const labels: Record<PixKeyType, string> = {
     cpf: 'CPF',
+    cnpj: 'CNPJ',
     email: 'E-mail',
     telefone: 'Telefone',
     aleatoria: 'Chave Aleatória',
