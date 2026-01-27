@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -14,7 +14,8 @@ import {
   Loader2,
   Pencil,
   Check,
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,9 @@ import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+
+// Polling interval for pending payments (30 seconds)
+const PAYMENT_POLL_INTERVAL = 30000;
 
 export default function GalleryDetail() {
   const { id } = useParams();
@@ -70,7 +74,7 @@ export default function GalleryDetail() {
   });
 
   // Fetch cobranca data for payment status
-  const { data: cobrancaData } = useQuery({
+  const { data: cobrancaData, refetch: refetchCobranca } = useQuery({
     queryKey: ['galeria-cobranca', id],
     queryFn: async () => {
       const sessionId = supabaseGallery?.sessionId;
@@ -99,6 +103,65 @@ export default function GalleryDetail() {
     },
     enabled: !!supabaseGallery,
   });
+
+  // Check payment status via edge function
+  const checkPaymentStatus = useCallback(async () => {
+    if (!cobrancaData?.id) return;
+    
+    try {
+      console.log('[Polling] Checking payment status for cobranca:', cobrancaData.id);
+      
+      const { data, error } = await supabase.functions.invoke('check-payment-status', {
+        body: { 
+          cobrancaId: cobrancaData.id,
+          forceUpdate: false 
+        }
+      });
+      
+      if (error) {
+        console.error('[Polling] Error checking payment:', error);
+        return;
+      }
+      
+      if (data?.status === 'pago' && cobrancaData.status !== 'pago') {
+        console.log('[Polling] Payment confirmed! Refreshing data...');
+        toast.success('Pagamento confirmado!', {
+          description: 'O status foi atualizado automaticamente.',
+        });
+        
+        // Refresh all relevant queries
+        queryClient.invalidateQueries({ queryKey: ['galerias'] });
+        queryClient.invalidateQueries({ queryKey: ['galeria-cobranca'] });
+        refetchCobranca();
+      }
+    } catch (err) {
+      console.error('[Polling] Exception:', err);
+    }
+  }, [cobrancaData?.id, cobrancaData?.status, queryClient, refetchCobranca]);
+
+  // Automatic polling for pending InfinitePay/MercadoPago payments
+  useEffect(() => {
+    const isPendingExternalPayment = 
+      cobrancaData?.status === 'pendente' && 
+      (cobrancaData?.provedor === 'infinitepay' || cobrancaData?.provedor === 'mercadopago');
+    
+    if (!isPendingExternalPayment) {
+      return;
+    }
+    
+    console.log('[Polling] Starting automatic payment status polling every 30s');
+    
+    // Check immediately once
+    checkPaymentStatus();
+    
+    // Then set up interval
+    const interval = setInterval(checkPaymentStatus, PAYMENT_POLL_INTERVAL);
+    
+    return () => {
+      console.log('[Polling] Stopping automatic payment status polling');
+      clearInterval(interval);
+    };
+  }, [cobrancaData?.status, cobrancaData?.provedor, checkPaymentStatus]);
 
   // Transform Supabase photos to GalleryPhoto format (uses Cloudinary)
   const transformedPhotos: GalleryPhoto[] = useMemo(() => {
