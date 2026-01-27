@@ -599,26 +599,26 @@ export default function GalleryDetail() {
             <div>
               <SelectionSummary gallery={galleryForSummary} regrasCongeladas={regrasCongeladas} />
 
-              {/* Payment Status Card in Selection tab */}
+              {/* Payment Status Card in Selection tab - use aggregated totals */}
               {supabaseGallery.statusPagamento && supabaseGallery.statusPagamento !== 'sem_vendas' && (
                 <div className="mt-4">
                   <PaymentStatusCard
                     status={supabaseGallery.statusPagamento}
-                    provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
-                    valor={supabaseGallery.valorExtras || calculatedExtraTotal}
-                    dataPagamento={cobrancaData?.data_pagamento}
-                    receiptUrl={cobrancaData?.ip_receipt_url}
+                    provedor={cobrancasPagas[0]?.provedor || cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
+                    valor={supabaseGallery.valorTotalVendido || supabaseGallery.valorExtras || calculatedExtraTotal}
+                    dataPagamento={cobrancasPagas[0]?.data_pagamento || cobrancaData?.data_pagamento}
+                    receiptUrl={cobrancasPagas[0]?.ip_receipt_url || cobrancaData?.ip_receipt_url}
                     checkoutUrl={cobrancaData?.ip_checkout_url}
                     sessionId={supabaseGallery.sessionId || undefined}
                     cobrancaId={cobrancaData?.id}
                     variant="compact"
-                onStatusUpdated={() => {
-                  queryClient.invalidateQueries({ queryKey: ['galerias'] });
-                  queryClient.invalidateQueries({ queryKey: ['galeria-cobrancas-pagas'] });
-                  queryClient.invalidateQueries({ queryKey: ['galeria-cobranca-pendente'] });
-                  refetchCobrancas();
-                  refetchCobranca();
-                }}
+                    onStatusUpdated={() => {
+                      queryClient.invalidateQueries({ queryKey: ['galerias'] });
+                      queryClient.invalidateQueries({ queryKey: ['galeria-cobrancas-pagas'] });
+                      queryClient.invalidateQueries({ queryKey: ['galeria-cobranca-pendente'] });
+                      refetchCobrancas();
+                      refetchCobranca();
+                    }}
                   />
                 </div>
               )}
