@@ -1,184 +1,270 @@
 
 
-# Plano de Execução: Adequação ao Contrato Oficial InfinitePay
+# Plano de Correção: Retorno de Pagamento InfinitePay
 
-## Resumo
+## Diagnóstico
 
-Implementar as correções obrigatórias nas Edge Functions para cumprir 100% do Contrato Oficial de Cobranças InfinitePay.
+### Problemas Encontrados
 
----
+| # | Problema | Localização | Impacto |
+|---|----------|-------------|---------|
+| 1 | Endpoint de verificação incorreto | `check-payment-status/index.ts` L29 | API não encontra pagamento |
+| 2 | Não captura parâmetros do redirect | `ClientGallery.tsx` L458-476 | Perde dados cruciais |
+| 3 | Usa OAuth ao invés de endpoint público | `check-payment-status/index.ts` L16-59 | Falha sem credenciais |
+| 4 | Falta handle para verificação | `check-payment-status/index.ts` | Impossibilita consulta pública |
 
-## Alterações Detalhadas
+### Como Deveria Funcionar (Documentação InfinitePay)
 
-### 1. `infinitepay-webhook/index.ts` - LOG IMEDIATO (Regra 3.1.2)
+**URL de Retorno**:
+```
+https://seusite.com/galeria?payment=success&receipt_url=...&order_nsu=...&slug=...&capture_method=...&transaction_nsu=...
+```
 
-**Problema Atual (L56-80):** O log só acontece após o parsing do JSON. Se o parsing falhar, o payload bruto pode ser perdido antes do registro.
+**Endpoint de Verificação (Público, sem OAuth)**:
+```typescript
+POST https://api.infinitepay.io/invoices/public/checkout/payment_check
+{
+  "handle": "@fotografo",
+  "order_nsu": "gallery-123-abc",
+  "transaction_nsu": "uuid-da-transacao",
+  "slug": "codigo-fatura"
+}
+```
 
-**Correção:** Mover o log para IMEDIATAMENTE após ler o body, ANTES de qualquer processamento.
-
-```text
-ANTES:
-  L57: rawBody = await req.text();
-  L62-80: try { parse } catch { log erro }
-  L88-94: log com payload parseado
-
-DEPOIS:
-  L57: rawBody = await req.text();
-  L58: LOG IMEDIATO (payload bruto + headers)
-  L63+: try { parse + atualiza log } catch { atualiza log para erro }
+**Resposta**:
+```json
+{
+  "success": true,
+  "paid": true,
+  "amount": 1500,
+  "paid_amount": 1510,
+  "capture_method": "pix"
+}
 ```
 
 ---
 
-### 2. `infinitepay-webhook/index.ts` - ORDEM DE BUSCA (Regra 3.1.4)
+## Correções Necessárias
 
-**Problema Atual (L120-125):** Busca apenas por `ip_order_nsu`, não faz fallback para `id`.
+### 1. `ClientGallery.tsx` - Capturar Parâmetros do Redirect
 
-**Correção:** Implementar busca em duas etapas conforme contrato:
-1. Buscar por `ip_order_nsu = order_nsu`
-2. Se não encontrar, buscar por `id = order_nsu` (fallback UUID)
+**Linhas afetadas**: 455-501
 
-```text
-ANTES (L120-125):
-  const { data: cobranca } = await supabase
-    .from('cobrancas')
-    .eq('ip_order_nsu', orderNsu)
-    .maybeSingle();
+**Antes**:
+```typescript
+const params = new URLSearchParams(window.location.search);
+const paymentStatus = params.get('payment');
 
-DEPOIS:
-  // PASSO 1: Buscar por ip_order_nsu
-  let cobranca = null;
-  const { data: cobrancaByNsu } = await supabase
-    .from('cobrancas')
-    .eq('ip_order_nsu', orderNsu)
-    .maybeSingle();
-  
-  cobranca = cobrancaByNsu;
-  
-  // PASSO 2: Fallback por id (UUID)
-  if (!cobranca) {
-    const { data: cobrancaById } = await supabase
-      .from('cobrancas')
-      .eq('id', orderNsu)
-      .maybeSingle();
-    cobranca = cobrancaById;
-  }
+if (paymentStatus === 'success' && galleryId) {
+  // Chama check-payment-status só com sessionId
+  body: JSON.stringify({ 
+    sessionId: sessionId,
+    forceUpdate: true 
+  }),
+}
+```
+
+**Depois**:
+```typescript
+const params = new URLSearchParams(window.location.search);
+const paymentStatus = params.get('payment');
+
+// Capturar TODOS os parâmetros que InfinitePay envia no redirect
+const orderNsu = params.get('order_nsu');
+const transactionNsu = params.get('transaction_nsu');
+const slug = params.get('slug');
+const receiptUrl = params.get('receipt_url');
+const captureMethod = params.get('capture_method');
+
+if (paymentStatus === 'success' && galleryId) {
+  // Passar parâmetros para verificação
+  body: JSON.stringify({ 
+    sessionId: sessionId,
+    orderNsu: orderNsu,           // Novo
+    transactionNsu: transactionNsu, // Novo  
+    slug: slug,                   // Novo
+    receiptUrl: receiptUrl,       // Novo
+    forceUpdate: true 
+  }),
+}
 ```
 
 ---
 
-### 3. `check-payment-status/index.ts` - ORDEM DE BUSCA (Regra 3.1.4)
+### 2. `check-payment-status/index.ts` - Usar Endpoint Público Correto
 
-**Problema Atual (L91-92):** Quando recebe `orderNsu`, busca apenas por `ip_order_nsu`.
+**Linhas afetadas**: 8-59
 
-**Correção:** Aplicar mesma lógica de busca dupla do webhook.
+**Adicionar novos parâmetros na interface**:
+```typescript
+interface RequestBody {
+  cobrancaId?: string;
+  orderNsu?: string;
+  sessionId?: string;
+  forceUpdate?: boolean;
+  // Novos parâmetros do redirect InfinitePay
+  transactionNsu?: string;
+  slug?: string;
+  receiptUrl?: string;
+}
+```
 
-```text
-ANTES (L91-92):
-  } else if (orderNsu) {
-    query = query.eq('ip_order_nsu', orderNsu);
+**Substituir função de verificação para usar endpoint PÚBLICO**:
+```typescript
+async function checkInfinitePayStatusPublic(
+  supabase: any,
+  userId: string,
+  orderNsu: string,
+  transactionNsu?: string,
+  slug?: string
+): Promise<{ status: 'paid' | 'pending' | 'error'; receiptUrl?: string }> {
+  
+  // Buscar handle do fotógrafo
+  const { data: integracao } = await supabase
+    .from('usuarios_integracoes')
+    .select('dados_extras')
+    .eq('user_id', userId)
+    .eq('provedor', 'infinitepay')
+    .eq('status', 'ativo')
+    .maybeSingle();
+
+  const handle = integracao?.dados_extras?.handle;
+  
+  if (!handle) {
+    console.log('⚠️ Handle InfinitePay não encontrado');
+    return { status: 'error' };
   }
 
-DEPOIS:
-  } else if (orderNsu) {
-    // Busca primária por ip_order_nsu
-    const { data: cobrancaByNsu } = await supabase
-      .from('cobrancas')
-      .eq('ip_order_nsu', orderNsu)
-      .maybeSingle();
+  try {
+    console.log('🔍 Consultando status via endpoint público InfinitePay');
     
-    if (cobrancaByNsu) {
-      cobranca = cobrancaByNsu;
-    } else {
-      // Fallback por id (UUID)
-      const { data: cobrancaById } = await supabase
-        .from('cobrancas')
-        .eq('id', orderNsu)
-        .maybeSingle();
-      cobranca = cobrancaById;
+    // ENDPOINT CORRETO: Público, não requer OAuth
+    const response = await fetch('https://api.infinitepay.io/invoices/public/checkout/payment_check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        handle: handle,
+        order_nsu: orderNsu,
+        transaction_nsu: transactionNsu,
+        slug: slug,
+      }),
+    });
+
+    if (!response.ok) {
+      console.log('⚠️ Erro na consulta:', response.status);
+      return { status: 'error' };
     }
-    // Pular query principal
+
+    const data = await response.json();
+    console.log('📊 Resposta InfinitePay:', JSON.stringify(data));
+
+    if (data.success && data.paid) {
+      return { status: 'paid', receiptUrl: data.receipt_url };
+    }
+
+    return { status: 'pending' };
+  } catch (error) {
+    console.error('❌ Erro ao consultar InfinitePay:', error);
+    return { status: 'error' };
   }
+}
 ```
+
+---
+
+### 3. Atualizar Lógica de Verificação com Dados do Redirect
+
+**Quando o cliente retorna do checkout com os parâmetros da InfinitePay**:
+1. Se `transactionNsu` e `slug` estão presentes → usar endpoint público para confirmar
+2. Se confirmado → atualizar `cobrancas` com `ip_transaction_nsu` e `ip_receipt_url`
+3. Atualizar galeria e sessão
 
 ---
 
 ## Arquivos a Modificar
 
-| # | Arquivo | Alteração | Linhas Afetadas |
-|---|---------|-----------|-----------------|
-| 1 | `supabase/functions/infinitepay-webhook/index.ts` | Log imediato antes do parsing | L56-100 |
-| 2 | `supabase/functions/infinitepay-webhook/index.ts` | Busca dupla (ip_order_nsu → id) | L120-160 |
-| 3 | `supabase/functions/check-payment-status/index.ts` | Busca dupla com fallback | L86-117 |
+| Arquivo | Alteração | Prioridade |
+|---------|-----------|------------|
+| `src/pages/ClientGallery.tsx` | Capturar parâmetros do redirect | Alta |
+| `supabase/functions/check-payment-status/index.ts` | Usar endpoint público correto | Alta |
 
 ---
 
-## Fluxo de Busca Corrigido
+## Fluxo Corrigido
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ ORDEM DE BUSCA (Conforme Contrato 3.1.4)                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Recebe order_nsu do payload                                 │
-│     │                                                           │
-│     ▼                                                           │
-│  2. PASSO 1: Buscar por ip_order_nsu = order_nsu                │
-│     │                                                           │
-│     ├─► Encontrou? ──► Processar cobrança                       │
-│     │                                                           │
-│     └─► Não encontrou?                                          │
-│         │                                                       │
-│         ▼                                                       │
-│  3. PASSO 2: Buscar por id = order_nsu (fallback UUID)          │
-│     │                                                           │
-│     ├─► Encontrou? ──► Processar cobrança                       │
-│     │                                                           │
-│     └─► Não encontrou? ──► Logar como 'ignored' + Retornar 200  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│ FLUXO DE RETORNO DE PAGAMENTO (Corrigido)                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. Cliente finaliza pagamento na InfinitePay                       │
+│     │                                                               │
+│     ▼                                                               │
+│  2. InfinitePay redireciona para:                                   │
+│     /g/{token}?payment=success                                      │
+│              &order_nsu=gallery-123                                 │
+│              &transaction_nsu=abc-def                               │
+│              &slug=fatura-xyz                                       │
+│              &receipt_url=https://...                               │
+│              &capture_method=pix                                    │
+│     │                                                               │
+│     ▼                                                               │
+│  3. ClientGallery.tsx captura TODOS os parâmetros                   │
+│     │                                                               │
+│     ▼                                                               │
+│  4. Chama check-payment-status com:                                 │
+│     { orderNsu, transactionNsu, slug, receiptUrl, forceUpdate }     │
+│     │                                                               │
+│     ▼                                                               │
+│  5. check-payment-status:                                           │
+│     ├─► Busca cobrança por order_nsu                                │
+│     ├─► Busca handle do fotógrafo                                   │
+│     └─► POST /invoices/public/checkout/payment_check                │
+│         │                                                           │
+│         ├─► paid: true → Atualiza banco + retorna sucesso           │
+│         └─► paid: false → Retorna pendente                          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Compatibilidade Garantida Pós-Implementação
+## Compatibilidade
 
-| Cenário | Comportamento Esperado |
-|---------|------------------------|
-| Gallery envia `gallery-123-abc` | Encontra por `ip_order_nsu` |
-| Gestão envia UUID diretamente | Encontra por `id` (fallback) |
-| Gestão envia `gestao-123-xyz` | Encontra por `ip_order_nsu` |
-| Webhook recebe JSON inválido | Loga payload bruto antes de falhar |
-
----
-
-## Validações Obrigatórias Pós-Deploy
-
-1. **Pagamento com order_nsu = gallery-***
-   - Criar cobrança no Gallery
-   - Simular webhook com `order_nsu: "gallery-..."` 
-   - Verificar se encontra por `ip_order_nsu`
-
-2. **Pagamento com order_nsu = UUID**
-   - Criar cobrança no Gestão (usando UUID)
-   - Simular webhook com `order_nsu: "{uuid}"`
-   - Verificar se encontra por `id` (fallback)
-
-3. **Falha de webhook com recuperação**
-   - Enviar JSON inválido ao webhook
-   - Verificar se `webhook_logs` registrou o payload bruto
-   - Confirmar que nenhum dado foi perdido
+| Cenário | Comportamento |
+|---------|---------------|
+| Webhook funciona | Pagamento já confirmado antes do redirect |
+| Webhook falha + redirect com parâmetros | Verifica via endpoint público |
+| Redirect sem parâmetros (fallback) | Usa forceUpdate se necessário |
+| Fotógrafo verifica manualmente | Polling via cobrancaId funciona |
 
 ---
 
-## Conformidade com Contrato
+## Sem Necessidade de Secrets
 
-| Regra | Status Atual | Status Após |
-|-------|--------------|-------------|
-| 1.1 - UUID é identidade interna | ✅ Conforme | ✅ Conforme |
-| 2.1 - ip_order_nsu é correlação externa | ✅ Conforme | ✅ Conforme |
-| 3.1.2 - Log antes de qualquer processamento | ❌ Violado | ✅ Conforme |
-| 3.1.4 - Ordem de busca fixa | ❌ Violado | ✅ Conforme |
-| 4.2 - Fallbacks obrigatórios | ✅ Conforme | ✅ Conforme |
-| 5.2 - Compatibilidade retroativa | ✅ Conforme | ✅ Conforme |
+O endpoint `POST /invoices/public/checkout/payment_check` é **público** e não requer OAuth!
+- Não precisa de `INFINITEPAY_CLIENT_ID`
+- Não precisa de `INFINITEPAY_CLIENT_SECRET`
+- Só precisa do `handle` do fotógrafo (já está no banco)
+
+---
+
+## Validações Pós-Deploy
+
+1. **Teste com redirect completo**:
+   - Criar cobrança
+   - Pagar via InfinitePay
+   - Verificar se retorno captura todos os parâmetros
+   - Verificar se status é atualizado para "pago"
+
+2. **Teste sem parâmetros (fallback)**:
+   - Simular redirect só com `?payment=success`
+   - Verificar se forceUpdate funciona como backup
+
+3. **Logs esperados**:
+   ```
+   🔍 Consultando status via endpoint público InfinitePay
+   📊 Resposta InfinitePay: {"success": true, "paid": true, ...}
+   ✅ Pagamento confirmado via endpoint público
+   ```
 
