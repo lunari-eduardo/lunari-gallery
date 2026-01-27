@@ -49,11 +49,16 @@ function normalizarValor(valor: number): number {
 }
 
 // Calculate progressive pricing based on frozen rules
+// Updated to support cumulative tier lookup
 function calcularPrecoProgressivo(
   quantidadeFotosExtras: number,
   regrasCongeladas: RegrasCongeladas | null | undefined,
-  valorFotoExtraFixo: number
+  valorFotoExtraFixo: number,
+  quantidadeParaFaixa?: number // NEW: Optional - total accumulated extras for tier lookup
 ): { valorUnitario: number; valorTotal: number } {
+  // Use quantidadeParaFaixa for tier lookup, or fallback to quantity to charge
+  const qtdParaBuscarFaixa = quantidadeParaFaixa ?? quantidadeFotosExtras;
+  
   // No extras = no charge
   if (quantidadeFotosExtras <= 0) {
     return { valorUnitario: 0, valorTotal: 0 };
@@ -105,10 +110,10 @@ function calcularPrecoProgressivo(
     };
   }
 
-  // Find matching tier
+  // Find matching tier using cumulative total (qtdParaBuscarFaixa)
   const faixaAtual = tabela.faixas.find((faixa) => {
-    const dentroDaFaixa = quantidadeFotosExtras >= faixa.min;
-    const dentroDoMaximo = faixa.max === null || quantidadeFotosExtras <= faixa.max;
+    const dentroDaFaixa = qtdParaBuscarFaixa >= faixa.min;
+    const dentroDoMaximo = faixa.max === null || qtdParaBuscarFaixa <= faixa.max;
     return dentroDaFaixa && dentroDoMaximo;
   });
 
@@ -116,7 +121,7 @@ function calcularPrecoProgressivo(
     const valorUnitario = normalizarValor(faixaAtual.valor);
     return {
       valorUnitario,
-      valorTotal: valorUnitario * quantidadeFotosExtras,
+      valorTotal: valorUnitario * quantidadeFotosExtras, // Charge only extras to bill
     };
   }
 
@@ -156,7 +161,7 @@ Deno.serve(async (req) => {
     // 1. Fetch gallery to validate status and get session_id + extras already paid
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas')
+      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas, valor_total_vendido')
       .eq('id', galleryId)
       .single();
 
@@ -194,6 +199,10 @@ Deno.serve(async (req) => {
     const extrasCount = extraCount ?? extrasNecessarias;
     
     console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}`);
+    
+    // NEW: Total accumulated extras for tier lookup (previously paid + new to charge)
+    const totalExtrasAcumuladas = extrasPagasTotal + extrasACobrar;
+    console.log(`📊 Cumulative tier lookup: totalAcumuladas=${totalExtrasAcumuladas}`);
 
     if (gallery.session_id) {
       // Fetch session data with frozen rules
@@ -208,16 +217,21 @@ Deno.serve(async (req) => {
       }
 
       if (sessao) {
-        console.log('📊 Session found, calculating progressive pricing...');
+        console.log('📊 Session found, calculating progressive pricing with cumulative tier...');
         const regras = sessao.regras_congeladas as RegrasCongeladas | null;
         const fallbackPrice = sessao.valor_foto_extra || gallery.valor_foto_extra || 0;
 
-        // Use extrasACobrar for billing (respects credit system)
-        const resultado = calcularPrecoProgressivo(extrasACobrar, regras, fallbackPrice);
+        // Use extrasACobrar for billing, totalExtrasAcumuladas for tier lookup
+        const resultado = calcularPrecoProgressivo(
+          extrasACobrar, 
+          regras, 
+          fallbackPrice,
+          totalExtrasAcumuladas // NEW: Use cumulative total for tier lookup
+        );
         valorUnitario = resultado.valorUnitario;
         valorTotal = resultado.valorTotal;
 
-        console.log(`📊 Pricing calculated: ${extrasACobrar} extras a cobrar × R$ ${valorUnitario} = R$ ${valorTotal}`);
+        console.log(`📊 Pricing calculated: ${extrasACobrar} extras a cobrar × R$ ${valorUnitario} = R$ ${valorTotal} (tier based on ${totalExtrasAcumuladas} total)`);
       }
     } else {
       // No session = use gallery's fixed price with credit system
@@ -441,13 +455,18 @@ Deno.serve(async (req) => {
     }
 
     // 8. Sync with clientes_sessoes if gallery was created from Gestão
+    // Use CUMULATIVE values for session to maintain accurate totals
     if (gallery.session_id) {
+      // Calculate cumulative totals for session record
+      const novoQtdFotosExtra = (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar;
+      const novoValorTotalFotoExtra = (gallery.valor_total_vendido || 0) + valorTotal;
+      
       const { error: sessionError } = await supabase
         .from('clientes_sessoes')
         .update({
-          qtd_fotos_extra: extrasCount,
-          valor_foto_extra: valorUnitario,
-          valor_total_foto_extra: valorTotal,
+          qtd_fotos_extra: novoQtdFotosExtra, // CUMULATIVE: total extras across all cycles
+          valor_foto_extra: valorUnitario, // Last unit price used
+          valor_total_foto_extra: novoValorTotalFotoExtra, // CUMULATIVE: total value across all cycles
           status_galeria: 'concluida',
           updated_at: new Date().toISOString(),
         })
@@ -456,7 +475,7 @@ Deno.serve(async (req) => {
       if (sessionError) {
         console.error('Session update error:', sessionError);
       } else {
-        console.log(`✅ Session ${gallery.session_id} updated: ${extrasCount} extras, R$ ${valorUnitario}/photo, total R$ ${valorTotal}, status=concluida`);
+        console.log(`✅ Session ${gallery.session_id} updated: ${novoQtdFotosExtra} cumulative extras, R$ ${valorUnitario}/photo, total R$ ${novoValorTotalFotoExtra}, status=concluida`);
       }
     }
 

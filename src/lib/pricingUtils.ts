@@ -113,11 +113,24 @@ function encontrarValorNaFaixa(quantidade: number, faixas: FaixaPreco[]): number
  * @param valorFotoExtraFixo - Fallback fixed price per photo
  * @returns Calculation result with unit price, total, and savings
  */
+/**
+ * Calculates the price for extra photos using progressive pricing rules
+ * 
+ * @param quantidadeFotosExtras - Number of photos to charge in this cycle
+ * @param regrasCongeladas - Frozen pricing rules from Gestão (or null)
+ * @param valorFotoExtraFixo - Fallback fixed price per photo
+ * @param quantidadeParaFaixa - Optional: total accumulated extras for tier calculation (if not provided, uses quantidadeFotosExtras)
+ * @returns Calculation result with unit price, total, and savings
+ */
 export function calcularPrecoProgressivo(
   quantidadeFotosExtras: number,
   regrasCongeladas: RegrasCongeladas | null | undefined,
-  valorFotoExtraFixo: number
+  valorFotoExtraFixo: number,
+  quantidadeParaFaixa?: number // NEW: Optional - for cumulative tier lookup
 ): CalculoPrecoResult {
+  // Use quantidadeParaFaixa for tier lookup, or fallback to quantity to charge
+  const qtdParaBuscarFaixa = quantidadeParaFaixa ?? quantidadeFotosExtras;
+  
   // Normalize fallback value (might be in cents from Gestão)
   const fallbackNormalizado = normalizarValor(valorFotoExtraFixo);
 
@@ -154,7 +167,8 @@ export function calcularPrecoProgressivo(
       
     case 'global':
       if (regras.tabelaGlobal?.faixas) {
-        faixaAtual = encontrarFaixaPreco(quantidadeFotosExtras, regras.tabelaGlobal.faixas);
+        // Use qtdParaBuscarFaixa for tier lookup (cumulative total)
+        faixaAtual = encontrarFaixaPreco(qtdParaBuscarFaixa, regras.tabelaGlobal.faixas);
         valorUnitario = faixaAtual?.valor || precoBasePacote;
         modeloUsado = 'global';
       } else {
@@ -168,7 +182,8 @@ export function calcularPrecoProgressivo(
         valorUnitario = precoBasePacote;
         modeloUsado = 'fixo';
       } else if (regras.tabelaCategoria?.faixas) {
-        faixaAtual = encontrarFaixaPreco(quantidadeFotosExtras, regras.tabelaCategoria.faixas);
+        // Use qtdParaBuscarFaixa for tier lookup (cumulative total)
+        faixaAtual = encontrarFaixaPreco(qtdParaBuscarFaixa, regras.tabelaCategoria.faixas);
         valorUnitario = faixaAtual?.valor || precoBasePacote;
         modeloUsado = 'categoria';
       } else {

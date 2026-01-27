@@ -685,11 +685,17 @@ export default function ClientGallery() {
   // For display purposes, use total extras needed
   const extraCount = extrasNecessarias;
   
-  // Use progressive pricing calculation with extrasACobrar for billing
+  // Total accumulated extras for tier lookup (previously paid + new to charge)
+  const totalExtrasAcumuladas = extrasPagasTotal + extrasACobrar;
+  
+  // Use progressive pricing calculation with:
+  // - extrasACobrar: quantity to charge in this cycle
+  // - totalExtrasAcumuladas: for finding the correct discount tier
   const { valorUnitario, valorTotal: extraTotal, economia } = calcularPrecoProgressivo(
-    extrasACobrar, // Use extras to charge, not total extras
+    extrasACobrar, // Quantity to charge
     regrasCongeladas,
-    gallery.extraPhotoPrice
+    gallery.extraPhotoPrice,
+    totalExtrasAcumuladas // Use cumulative total for tier lookup
   );
 
   const toggleSelection = (photoId: string) => {
@@ -730,10 +736,14 @@ export default function ClientGallery() {
     const currentExtrasNecessarias = Math.max(0, currentSelectedCount - gallery.includedPhotos);
     const currentExtrasACobrar = Math.max(0, currentExtrasNecessarias - extrasPagasTotal);
     
+    // Total accumulated extras for tier lookup (previously paid + new to charge)
+    const currentTotalAcumuladas = extrasPagasTotal + currentExtrasACobrar;
+    
     const { valorUnitario: currentValorUnitario, valorTotal: currentValorTotal } = calcularPrecoProgressivo(
-      currentExtrasACobrar, // Use extras to charge for billing
+      currentExtrasACobrar, // Quantity to charge for billing
       regrasCongeladas,
-      gallery.extraPhotoPrice
+      gallery.extraPhotoPrice,
+      currentTotalAcumuladas // Use cumulative total for tier lookup
     );
     
     confirmMutation.mutate({
