@@ -31,6 +31,7 @@ import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { PaymentStatusCard } from '@/components/PaymentStatusCard';
+import { PaymentHistoryCard } from '@/components/PaymentHistoryCard';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
@@ -73,11 +74,64 @@ export default function GalleryDetail() {
     enabled: !!supabaseGallery && !!id,
   });
 
-  // Fetch cobranca data for payment status
+  // Fetch ALL paid cobrancas for payment history
+  const { data: cobrancasPagas = [], refetch: refetchCobrancas } = useQuery({
+    queryKey: ['galeria-cobrancas-pagas', id],
+    queryFn: async () => {
+      const results: any[] = [];
+      
+      // Fetch by galeria_id
+      if (id) {
+        const { data: byGaleria } = await supabase
+          .from('cobrancas')
+          .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
+          .eq('galeria_id', id)
+          .eq('status', 'pago')
+          .order('created_at', { ascending: false });
+        if (byGaleria) results.push(...byGaleria);
+      }
+      
+      // Also fetch by session_id if available
+      const sessionId = supabaseGallery?.sessionId;
+      if (sessionId) {
+        const { data: bySession } = await supabase
+          .from('cobrancas')
+          .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
+          .eq('session_id', sessionId)
+          .eq('status', 'pago')
+          .order('created_at', { ascending: false });
+        if (bySession) results.push(...bySession);
+      }
+      
+      // Deduplicate by id
+      const uniqueMap = new Map();
+      results.forEach(r => uniqueMap.set(r.id, r));
+      return Array.from(uniqueMap.values()).sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    },
+    enabled: !!supabaseGallery,
+  });
+
+  // Fetch latest pending cobranca for payment status actions
   const { data: cobrancaData, refetch: refetchCobranca } = useQuery({
-    queryKey: ['galeria-cobranca', id],
+    queryKey: ['galeria-cobranca-pendente', id],
     queryFn: async () => {
       const sessionId = supabaseGallery?.sessionId;
+      
+      // First try by galeria_id
+      if (id) {
+        const { data } = await supabase
+          .from('cobrancas')
+          .select('*')
+          .eq('galeria_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) return data;
+      }
+      
+      // Fallback to session_id
       if (sessionId) {
         const { data } = await supabase
           .from('cobrancas')
@@ -88,17 +142,7 @@ export default function GalleryDetail() {
           .maybeSingle();
         return data;
       }
-      // Fallback: try by cliente_id
-      if (supabaseGallery?.clienteId) {
-        const { data } = await supabase
-          .from('cobrancas')
-          .select('*')
-          .eq('cliente_id', supabaseGallery.clienteId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        return data;
-      }
+      
       return null;
     },
     enabled: !!supabaseGallery,
@@ -568,10 +612,13 @@ export default function GalleryDetail() {
                     sessionId={supabaseGallery.sessionId || undefined}
                     cobrancaId={cobrancaData?.id}
                     variant="compact"
-                    onStatusUpdated={() => {
-                      queryClient.invalidateQueries({ queryKey: ['galerias'] });
-                      queryClient.invalidateQueries({ queryKey: ['galeria-cobranca'] });
-                    }}
+                onStatusUpdated={() => {
+                  queryClient.invalidateQueries({ queryKey: ['galerias'] });
+                  queryClient.invalidateQueries({ queryKey: ['galeria-cobrancas-pagas'] });
+                  queryClient.invalidateQueries({ queryKey: ['galeria-cobranca-pendente'] });
+                  refetchCobrancas();
+                  refetchCobranca();
+                }}
                   />
                 </div>
               )}
@@ -661,22 +708,34 @@ export default function GalleryDetail() {
               </div>
             </div>
 
-            {/* Payment Information Card */}
-            {calculatedExtraTotal > 0 && (
+            {/* Payment History Card - shows all transactions */}
+            {cobrancasPagas.length > 0 && (
+              <PaymentHistoryCard
+                cobrancas={cobrancasPagas}
+                valorTotalPago={supabaseGallery.valorTotalVendido || 0}
+                totalFotosExtrasVendidas={supabaseGallery.totalFotosExtrasVendidas || 0}
+              />
+            )}
+
+            {/* Current Payment Status - for pending payments and actions */}
+            {calculatedExtraTotal > 0 && cobrancaData && cobrancaData.status !== 'pago' && (
               <PaymentStatusCard
-                status={supabaseGallery.statusPagamento}
+                status={cobrancaData.status}
                 provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
-                valor={supabaseGallery.valorExtras || calculatedExtraTotal}
-                valorPago={cobrancaData?.status === 'pago' ? Number(cobrancaData?.valor) || 0 : 0}
+                valor={Number(cobrancaData.valor) || 0}
                 dataPagamento={cobrancaData?.data_pagamento}
                 receiptUrl={cobrancaData?.ip_receipt_url}
+                checkoutUrl={cobrancaData?.ip_checkout_url}
                 sessionId={supabaseGallery.sessionId || undefined}
                 cobrancaId={cobrancaData?.id}
                 variant="full"
                 showPendingAmount={true}
                 onStatusUpdated={() => {
                   queryClient.invalidateQueries({ queryKey: ['galerias'] });
-                  queryClient.invalidateQueries({ queryKey: ['galeria-cobranca'] });
+                  queryClient.invalidateQueries({ queryKey: ['galeria-cobrancas-pagas'] });
+                  queryClient.invalidateQueries({ queryKey: ['galeria-cobranca-pendente'] });
+                  refetchCobrancas();
+                  refetchCobranca();
                 }}
               />
             )}

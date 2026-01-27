@@ -76,6 +76,8 @@ export interface Galeria {
   totalFotos: number;
   fotosSelecionadas: number;
   valorExtras: number;
+  valorTotalVendido: number;
+  totalFotosExtrasVendidas: number;
   statusSelecao: string;
   prazoSelecao: Date | null;
   enviadoEm: Date | null;
@@ -145,6 +147,8 @@ function transformGaleria(row: any): Galeria {
     totalFotos: row.total_fotos || 0,
     fotosSelecionadas: row.fotos_selecionadas || 0,
     valorExtras: row.valor_extras || 0,
+    valorTotalVendido: row.valor_total_vendido || 0,
+    totalFotosExtrasVendidas: row.total_fotos_extras_vendidas || 0,
     statusSelecao: row.status_selecao || 'em_andamento',
     prazoSelecao: row.prazo_selecao ? new Date(row.prazo_selecao) : null,
     enviadoEm: row.enviado_em ? new Date(row.enviado_em) : null,
