@@ -42,6 +42,7 @@ Deno.serve(async (req: Request) => {
   let rawBody = '';
   let payload: InfinitePayWebhookPayload | null = null;
   let orderNsu: string | null = null;
+  let initialLogId: string | null = null;
 
   try {
     // Only accept POST requests
@@ -53,10 +54,33 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Read raw body for logging
+    // Read raw body
     rawBody = await req.text();
+    
+    // ============================================================
+    // REGRA 3.1.2: LOG IMEDIATO - Antes de qualquer processamento
+    // ============================================================
     console.log('📥 WEBHOOK RECEIVED - Headers:', JSON.stringify(headersObject));
     console.log('📥 WEBHOOK RECEIVED - Body:', rawBody);
+    
+    const { data: initialLog, error: initialLogError } = await supabase
+      .from('webhook_logs')
+      .insert({
+        provedor: 'infinitepay',
+        payload: { raw: rawBody },
+        headers: headersObject,
+        status: 'received_raw',
+        order_nsu: null,
+      })
+      .select('id')
+      .single();
+
+    if (initialLogError) {
+      console.error('⚠️ Falha ao registrar log inicial:', initialLogError.message);
+    } else {
+      initialLogId = initialLog?.id;
+      console.log('📝 Log inicial registrado:', initialLogId);
+    }
     
     // Parse webhook payload
     try {
@@ -64,14 +88,16 @@ Deno.serve(async (req: Request) => {
     } catch {
       console.error('❌ Failed to parse webhook body as JSON');
       
-      // Log failed parse attempt
-      await supabase.from('webhook_logs').insert({
-        provedor: 'infinitepay',
-        payload: { raw: rawBody },
-        headers: headersObject,
-        status: 'parse_error',
-        error_message: 'Invalid JSON body',
-      });
+      // Update initial log with parse error status
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({
+            status: 'parse_error',
+            error_message: 'Invalid JSON body',
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', initialLogId);
+      }
       
       return new Response(
         JSON.stringify({ error: 'Invalid JSON body' }),
@@ -84,32 +110,31 @@ Deno.serve(async (req: Request) => {
     // Extract order_nsu for tracking
     orderNsu = payload?.order_nsu || null;
 
-    // Log webhook receipt immediately (before processing)
-    const { error: logError } = await supabase.from('webhook_logs').insert({
-      provedor: 'infinitepay',
-      payload: payload,
-      headers: headersObject,
-      status: 'received',
-      order_nsu: orderNsu,
-    });
-
-    if (logError) {
-      console.error('⚠️ Failed to log webhook:', logError.message);
-    } else {
-      console.log('📝 Webhook logged to webhook_logs table');
+    // Update initial log with parsed payload and order_nsu
+    if (initialLogId) {
+      await supabase.from('webhook_logs')
+        .update({
+          payload: payload,
+          order_nsu: orderNsu,
+          status: 'received',
+        })
+        .eq('id', initialLogId);
+      console.log('📝 Log atualizado com payload parseado');
     }
 
     // Validate required fields
     if (!orderNsu) {
       console.error('❌ Missing order_nsu in webhook payload');
       
-      await supabase.from('webhook_logs')
-        .update({ 
-          status: 'error', 
-          error_message: 'Missing order_nsu',
-          processed_at: new Date().toISOString()
-        })
-        .eq('order_nsu', orderNsu || 'unknown');
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({ 
+            status: 'error', 
+            error_message: 'Missing order_nsu',
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', initialLogId);
+      }
       
       return new Response(
         JSON.stringify({ error: 'Missing order_nsu' }),
@@ -117,23 +142,64 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Find the charge by order_nsu
-    const { data: cobranca, error: cobrancaError } = await supabase
+    // ============================================================
+    // REGRA 3.1.4: ORDEM DE BUSCA FIXA
+    // 1º: Buscar por ip_order_nsu = order_nsu
+    // 2º: Fallback por id = order_nsu (UUID)
+    // ============================================================
+    
+    let cobranca = null;
+    let cobrancaError = null;
+    let foundBy: 'ip_order_nsu' | 'id' | null = null;
+
+    // PASSO 1: Buscar por ip_order_nsu
+    console.log('🔍 PASSO 1: Buscando cobrança por ip_order_nsu:', orderNsu);
+    const { data: cobrancaByNsu, error: nsuError } = await supabase
       .from('cobrancas')
       .select('*')
       .eq('ip_order_nsu', orderNsu)
       .maybeSingle();
 
+    if (nsuError) {
+      console.error('❌ Error fetching cobranca by ip_order_nsu:', nsuError);
+      cobrancaError = nsuError;
+    } else if (cobrancaByNsu) {
+      cobranca = cobrancaByNsu;
+      foundBy = 'ip_order_nsu';
+      console.log('✅ Cobrança encontrada por ip_order_nsu');
+    }
+
+    // PASSO 2: Fallback - Buscar por id (UUID)
+    if (!cobranca && !cobrancaError) {
+      console.log('🔄 PASSO 2: Cobrança não encontrada por ip_order_nsu, tentando por id (UUID)...');
+      const { data: cobrancaById, error: idError } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('id', orderNsu)
+        .maybeSingle();
+
+      if (idError) {
+        console.error('❌ Error fetching cobranca by id:', idError);
+        cobrancaError = idError;
+      } else if (cobrancaById) {
+        cobranca = cobrancaById;
+        foundBy = 'id';
+        console.log('✅ Cobrança encontrada por id (UUID)');
+      }
+    }
+
     if (cobrancaError) {
       console.error('❌ Error fetching cobranca:', cobrancaError);
       
-      await supabase.from('webhook_logs')
-        .update({ 
-          status: 'error', 
-          error_message: `DB error: ${cobrancaError.message}`,
-          processed_at: new Date().toISOString()
-        })
-        .eq('order_nsu', orderNsu);
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({ 
+            status: 'error', 
+            error_message: `DB error: ${cobrancaError.message}`,
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', initialLogId);
+      }
       
       return new Response(
         JSON.stringify({ error: 'Database error', details: cobrancaError.message }),
@@ -142,15 +208,17 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!cobranca) {
-      console.warn('⚠️ Cobranca not found for order_nsu:', orderNsu);
+      console.warn('⚠️ Cobrança não encontrada para order_nsu:', orderNsu);
       
-      await supabase.from('webhook_logs')
-        .update({ 
-          status: 'ignored', 
-          error_message: 'Cobranca not found',
-          processed_at: new Date().toISOString()
-        })
-        .eq('order_nsu', orderNsu);
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({ 
+            status: 'ignored', 
+            error_message: 'Cobranca not found (searched by ip_order_nsu and id)',
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', initialLogId);
+      }
       
       // Return 200 to prevent InfinitePay from retrying for non-existent orders
       return new Response(
@@ -159,16 +227,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(`💳 Cobrança encontrada por ${foundBy}:`, cobranca.id);
+
     // Check if already processed
     if (cobranca.status === 'pago') {
       console.log('ℹ️ Payment already processed for order_nsu:', orderNsu);
       
-      await supabase.from('webhook_logs')
-        .update({ 
-          status: 'already_processed', 
-          processed_at: new Date().toISOString()
-        })
-        .eq('order_nsu', orderNsu);
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({ 
+            status: 'already_processed', 
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', initialLogId);
+      }
       
       return new Response(
         JSON.stringify({ success: true, message: 'Already processed' }),
@@ -192,13 +264,15 @@ Deno.serve(async (req: Request) => {
     if (updateCobrancaError) {
       console.error('❌ Error updating cobranca:', updateCobrancaError);
       
-      await supabase.from('webhook_logs')
-        .update({ 
-          status: 'error', 
-          error_message: `Cobranca update failed: ${updateCobrancaError.message}`,
-          processed_at: new Date().toISOString()
-        })
-        .eq('order_nsu', orderNsu);
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({ 
+            status: 'error', 
+            error_message: `Cobranca update failed: ${updateCobrancaError.message}`,
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', initialLogId);
+      }
       
       return new Response(
         JSON.stringify({ error: 'Failed to update cobranca', details: updateCobrancaError.message }),
@@ -261,17 +335,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update webhook log to success
-    await supabase.from('webhook_logs')
-      .update({ 
-        status: 'processed', 
-        processed_at: new Date().toISOString()
-      })
-      .eq('order_nsu', orderNsu);
+    if (initialLogId) {
+      await supabase.from('webhook_logs')
+        .update({ 
+          status: 'processed', 
+          processed_at: new Date().toISOString()
+        })
+        .eq('id', initialLogId);
+    }
 
-    console.log('🎉 Webhook processed successfully for order_nsu:', orderNsu);
+    console.log('🎉 Webhook processed successfully for order_nsu:', orderNsu, `(found by ${foundBy})`);
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Payment processed' }),
+      JSON.stringify({ success: true, message: 'Payment processed', foundBy }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -279,16 +355,26 @@ Deno.serve(async (req: Request) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('❌ Webhook error:', error);
     
-    // Try to log the error
+    // Try to update existing log or create new one
     try {
-      await supabase.from('webhook_logs').insert({
-        provedor: 'infinitepay',
-        payload: payload || { raw: rawBody },
-        headers: headersObject,
-        status: 'exception',
-        order_nsu: orderNsu,
-        error_message: errorMessage,
-      });
+      if (initialLogId) {
+        await supabase.from('webhook_logs')
+          .update({
+            status: 'exception',
+            error_message: errorMessage,
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', initialLogId);
+      } else {
+        await supabase.from('webhook_logs').insert({
+          provedor: 'infinitepay',
+          payload: payload || { raw: rawBody },
+          headers: headersObject,
+          status: 'exception',
+          order_nsu: orderNsu,
+          error_message: errorMessage,
+        });
+      }
     } catch (logErr) {
       console.error('❌ Failed to log exception:', logErr);
     }

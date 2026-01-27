@@ -58,6 +58,56 @@ async function checkInfinitePayStatus(orderNsu: string): Promise<'paid' | 'pendi
   }
 }
 
+// ============================================================
+// REGRA 3.1.4: ORDEM DE BUSCA FIXA
+// 1º: Buscar por ip_order_nsu = order_nsu
+// 2º: Fallback por id = order_nsu (UUID)
+// ============================================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function findCobrancaByOrderNsu(supabase: any, orderNsu: string) {
+  let cobranca = null;
+  let error = null;
+  let foundBy: 'ip_order_nsu' | 'id' | null = null;
+
+  // PASSO 1: Buscar por ip_order_nsu
+  console.log('🔍 PASSO 1: Buscando cobrança por ip_order_nsu:', orderNsu);
+  const { data: cobrancaByNsu, error: nsuError } = await supabase
+    .from('cobrancas')
+    .select('*')
+    .eq('ip_order_nsu', orderNsu)
+    .maybeSingle();
+
+  if (nsuError) {
+    console.error('❌ Erro ao buscar por ip_order_nsu:', nsuError);
+    error = nsuError;
+  } else if (cobrancaByNsu) {
+    cobranca = cobrancaByNsu;
+    foundBy = 'ip_order_nsu';
+    console.log('✅ Cobrança encontrada por ip_order_nsu');
+  }
+
+  // PASSO 2: Fallback - Buscar por id (UUID)
+  if (!cobranca && !error) {
+    console.log('🔄 PASSO 2: Cobrança não encontrada por ip_order_nsu, tentando por id (UUID)...');
+    const { data: cobrancaById, error: idError } = await supabase
+      .from('cobrancas')
+      .select('*')
+      .eq('id', orderNsu)
+      .maybeSingle();
+
+    if (idError) {
+      console.error('❌ Erro ao buscar por id:', idError);
+      error = idError;
+    } else if (cobrancaById) {
+      cobranca = cobrancaById;
+      foundBy = 'id';
+      console.log('✅ Cobrança encontrada por id (UUID)');
+    }
+  }
+
+  return { cobranca, error, foundBy };
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -75,31 +125,49 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabase = createClient(supabaseUrl, supabaseServiceKey) as any;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
     const { cobrancaId, orderNsu, sessionId, forceUpdate } = body;
 
     console.log('🔍 Verificando status de pagamento:', { cobrancaId, orderNsu, sessionId, forceUpdate });
 
-    // Find the charge
-    let query = supabase.from('cobrancas').select('*');
-    
+    let cobranca = null;
+    let cobrancaError = null;
+    let foundBy: 'ip_order_nsu' | 'id' | 'cobrancaId' | 'sessionId' | null = null;
+
+    // Find the charge based on provided parameters
     if (cobrancaId) {
-      query = query.eq('id', cobrancaId);
+      // Direct lookup by internal UUID
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('id', cobrancaId)
+        .maybeSingle();
+      cobranca = data;
+      cobrancaError = error;
+      if (cobranca) foundBy = 'cobrancaId';
     } else if (orderNsu) {
-      query = query.eq('ip_order_nsu', orderNsu);
+      // Use the contract-compliant dual search
+      const result = await findCobrancaByOrderNsu(supabase, orderNsu);
+      cobranca = result.cobranca;
+      cobrancaError = result.error;
+      foundBy = result.foundBy;
     } else if (sessionId) {
-      query = query.eq('session_id', sessionId);
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('session_id', sessionId)
+        .maybeSingle();
+      cobranca = data;
+      cobrancaError = error;
+      if (cobranca) foundBy = 'sessionId';
     } else {
       return new Response(
         JSON.stringify({ error: 'Informe cobrancaId, orderNsu ou sessionId' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const { data: cobranca, error: cobrancaError } = await query.maybeSingle();
 
     if (cobrancaError) {
       console.error('❌ Erro ao buscar cobrança:', cobrancaError);
@@ -121,7 +189,8 @@ Deno.serve(async (req: Request) => {
       status: cobranca.status, 
       provedor: cobranca.provedor,
       valor: cobranca.valor,
-      ip_order_nsu: cobranca.ip_order_nsu
+      ip_order_nsu: cobranca.ip_order_nsu,
+      foundBy
     });
 
     // Helper function to update payment to paid
@@ -188,6 +257,7 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           found: true,
           status: 'pago',
+          foundBy,
           cobranca: {
             id: cobranca.id,
             status: cobranca.status,
@@ -219,6 +289,7 @@ Deno.serve(async (req: Request) => {
               status: 'pago',
               updated: true,
               source: 'infinitepay_api',
+              foundBy,
               message: 'Pagamento confirmado via API InfinitePay',
               cobranca: {
                 id: cobranca.id,
@@ -254,6 +325,7 @@ Deno.serve(async (req: Request) => {
           status: 'pago',
           updated: true,
           source: 'force_update',
+          foundBy,
           message: 'Pagamento confirmado via redirect',
           cobranca: {
             id: cobranca.id,
@@ -272,6 +344,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         found: true,
         status: cobranca.status,
+        foundBy,
         cobranca: {
           id: cobranca.id,
           status: cobranca.status,
