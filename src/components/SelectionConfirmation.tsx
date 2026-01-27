@@ -11,6 +11,8 @@ interface SelectionConfirmationProps {
   photos: GalleryPhoto[];
   selectedCount: number;
   extraCount: number;
+  extrasACobrar: number; // NEW: extras to charge after credit deduction
+  extrasPagasAnteriormente: number; // NEW: extras already paid from previous purchases
   regrasCongeladas?: RegrasCongeladas | null;
   hasPaymentProvider?: boolean;
   isConfirming?: boolean;
@@ -23,6 +25,8 @@ export function SelectionConfirmation({
   photos,
   selectedCount, 
   extraCount,
+  extrasACobrar,
+  extrasPagasAnteriormente,
   regrasCongeladas,
   hasPaymentProvider = false,
   isConfirming = false,
@@ -37,16 +41,16 @@ export function SelectionConfirmation({
   // Get selected photos
   const selectedPhotos = photos.filter(p => p.isSelected);
   
-  // Calculate prices using progressive pricing
+  // Calculate prices using progressive pricing based on extras TO CHARGE (respects credit system)
   const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
-    extraCount,
+    extrasACobrar, // Use extras to charge, not total extras
     regrasCongeladas,
     gallery.extraPhotoPrice
   );
   
-  // Build priceInfo for template compatibility
+  // Build priceInfo for template compatibility - use extrasACobrar
   const priceInfo = {
-    chargeableCount: extraCount,
+    chargeableCount: extrasACobrar,
     total: valorTotal,
     pricePerPhoto: valorUnitario,
   };
@@ -164,15 +168,26 @@ export function SelectionConfirmation({
                 <span className="text-muted-foreground">Fotos incluídas no pacote</span>
                 <span className="font-medium">{gallery.includedPhotos}</span>
               </div>
+              
+              {/* NEW: Extras already paid from previous purchases */}
+              {extrasPagasAnteriormente > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Fotos extras já pagas</span>
+                  <span className="font-medium text-green-600 dark:text-green-400">+{extrasPagasAnteriormente}</span>
+                </div>
+              )}
+              
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Fotos selecionadas</span>
                 <span className="font-medium">{selectedCount}</span>
               </div>
+              
+              {/* Show extras to charge (after credit deduction) */}
               {!isNoSale && priceInfo.chargeableCount > 0 && (
                 <>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {saleSettings?.chargeType === 'all_selected' ? 'Fotos cobradas' : 'Fotos extras'}
+                      {saleSettings?.chargeType === 'all_selected' ? 'Fotos cobradas' : 'Fotos extras a cobrar'}
                     </span>
                     <span className="font-medium text-primary">{priceInfo.chargeableCount}</span>
                   </div>
@@ -216,10 +231,18 @@ export function SelectionConfirmation({
                   <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
                   <div>
                     <p className="font-medium text-green-600 dark:text-green-400">
-                      {isNoSale ? 'Seleção concluída' : 'Seleção dentro do pacote'}
+                      {isNoSale 
+                        ? 'Seleção concluída' 
+                        : extrasPagasAnteriormente > 0 && extraCount > 0
+                          ? 'Seleção dentro do crédito' 
+                          : 'Seleção dentro do pacote'}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {isNoSale ? 'Sua seleção foi registrada' : 'Sem valor adicional a cobrar'}
+                      {isNoSale 
+                        ? 'Sua seleção foi registrada' 
+                        : extrasPagasAnteriormente > 0 && extraCount > 0
+                          ? `Você já tem ${extrasPagasAnteriormente} fotos extras pagas. Sem valor adicional a cobrar.`
+                          : 'Sem valor adicional a cobrar'}
                     </p>
                   </div>
                 </div>

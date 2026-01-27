@@ -153,10 +153,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Fetch gallery to validate status and get session_id
+    // 1. Fetch gallery to validate status and get session_id + extras already paid
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token')
+      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas')
       .eq('id', galleryId)
       .single();
 
@@ -177,9 +177,23 @@ Deno.serve(async (req) => {
     }
 
     // 3. Calculate progressive pricing from session rules (if linked to Gestão)
+    // Apply the formula: extras_a_cobrar = max(0, extras_necessarias - extras_pagas_total)
     let valorUnitario = 0;
     let valorTotal = 0;
-    const extrasCount = extraCount || Math.max(0, (selectedCount || 0) - (gallery.fotos_incluidas || 0));
+    
+    // Calculate extras needed based on selection vs included photos
+    const extrasNecessarias = Math.max(0, (selectedCount || 0) - (gallery.fotos_incluidas || 0));
+    
+    // Get previously paid extras from gallery record
+    const extrasPagasTotal = gallery.total_fotos_extras_vendidas || 0;
+    
+    // Calculate only the extras that need to be charged (credit system)
+    const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
+    
+    // For response/display, use extrasNecessarias; for billing, use extrasACobrar
+    const extrasCount = extraCount ?? extrasNecessarias;
+    
+    console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}`);
 
     if (gallery.session_id) {
       // Fetch session data with frozen rules
@@ -198,23 +212,25 @@ Deno.serve(async (req) => {
         const regras = sessao.regras_congeladas as RegrasCongeladas | null;
         const fallbackPrice = sessao.valor_foto_extra || gallery.valor_foto_extra || 0;
 
-        const resultado = calcularPrecoProgressivo(extrasCount, regras, fallbackPrice);
+        // Use extrasACobrar for billing (respects credit system)
+        const resultado = calcularPrecoProgressivo(extrasACobrar, regras, fallbackPrice);
         valorUnitario = resultado.valorUnitario;
         valorTotal = resultado.valorTotal;
 
-        console.log(`📊 Pricing calculated: ${extrasCount} extras × R$ ${valorUnitario} = R$ ${valorTotal}`);
+        console.log(`📊 Pricing calculated: ${extrasACobrar} extras a cobrar × R$ ${valorUnitario} = R$ ${valorTotal}`);
       }
     } else {
-      // No session = use gallery's fixed price
+      // No session = use gallery's fixed price with credit system
       valorUnitario = gallery.valor_foto_extra || 0;
-      valorTotal = valorUnitario * extrasCount;
+      valorTotal = valorUnitario * extrasACobrar;
     }
 
     // 4. Parse sale settings to determine if payment is required
     const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string } } | null;
     const saleMode = configuracoes?.saleSettings?.mode;
     const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod;
-    const shouldCreatePayment = requestPayment && saleMode === 'sale_with_payment' && valorTotal > 0;
+    // Only create payment if there are extras to charge (respects credit system)
+    const shouldCreatePayment = requestPayment && saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
     console.log(`💰 Payment check: mode=${saleMode}, valorTotal=${valorTotal}, shouldCreate=${shouldCreatePayment}`);
 
@@ -293,7 +309,7 @@ Deno.serve(async (req) => {
           sessionIdTexto = sessao?.session_id || sessionIdTexto;
         }
 
-        const descricao = `${extrasCount} foto${extrasCount !== 1 ? 's' : ''} extra${extrasCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
+        const descricao = `${extrasACobrar} foto${extrasACobrar !== 1 ? 's' : ''} extra${extrasACobrar !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
 
         try {
           console.log(`💳 Invoking ${functionName}...`);
@@ -306,6 +322,8 @@ Deno.serve(async (req) => {
               descricao,
               userId: gallery.user_id,
               galleryToken: gallery.public_token, // For redirect URL
+              galeriaId: galleryId, // Pass gallery ID for linking
+              qtdFotos: extrasACobrar, // Pass quantity for credit tracking
             }
           });
 

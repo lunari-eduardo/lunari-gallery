@@ -282,8 +282,40 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ Cobranca updated to paid');
 
-    // Update gallery payment status if session_id exists
-    if (cobranca.session_id) {
+    // CREDIT SYSTEM: Increment total_fotos_extras_vendidas on gallery if galeria_id exists
+    if (cobranca.galeria_id && cobranca.qtd_fotos) {
+      const { data: galeria, error: galeriaExtrasError } = await supabase
+        .from('galerias')
+        .select('id, total_fotos_extras_vendidas, valor_total_vendido')
+        .eq('id', cobranca.galeria_id)
+        .maybeSingle();
+
+      if (galeriaExtrasError) {
+        console.error('❌ Error fetching galeria for extras update:', galeriaExtrasError);
+      } else if (galeria) {
+        const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
+        const extrasNovas = cobranca.qtd_fotos || 0;
+        const valorAtual = Number(galeria.valor_total_vendido) || 0;
+        const valorCobranca = Number(cobranca.valor) || 0;
+
+        const { error: updateExtrasError } = await supabase
+          .from('galerias')
+          .update({
+            total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+            valor_total_vendido: valorAtual + valorCobranca,
+            status_pagamento: 'pago',
+          })
+          .eq('id', cobranca.galeria_id);
+
+        if (updateExtrasError) {
+          console.error('❌ Error updating galeria extras:', updateExtrasError);
+        } else {
+          console.log(`✅ Galeria extras updated: ${extrasAtuais} + ${extrasNovas} = ${extrasAtuais + extrasNovas}`);
+        }
+      }
+    }
+    // Fallback: Update gallery payment status if session_id exists (legacy flow)
+    else if (cobranca.session_id) {
       // Find gallery by session_id
       const { data: galeria, error: galeriaError } = await supabase
         .from('galerias')
@@ -306,8 +338,10 @@ Deno.serve(async (req: Request) => {
           console.log('✅ Galeria payment status updated to pago');
         }
       }
+    }
 
-      // Update clientes_sessoes.valor_pago
+    // Update clientes_sessoes.valor_pago if session_id exists
+    if (cobranca.session_id) {
       const { data: sessao, error: sessaoError } = await supabase
         .from('clientes_sessoes')
         .select('valor_pago')

@@ -574,6 +574,7 @@ export type Database = {
           created_at: string | null
           data_pagamento: string | null
           descricao: string | null
+          galeria_id: string | null
           id: string
           ip_checkout_url: string | null
           ip_order_nsu: string | null
@@ -587,6 +588,7 @@ export type Database = {
           mp_qr_code: string | null
           mp_qr_code_base64: string | null
           provedor: string | null
+          qtd_fotos: number | null
           session_id: string | null
           status: string | null
           tipo_cobranca: string
@@ -599,6 +601,7 @@ export type Database = {
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
+          galeria_id?: string | null
           id?: string
           ip_checkout_url?: string | null
           ip_order_nsu?: string | null
@@ -612,6 +615,7 @@ export type Database = {
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
           provedor?: string | null
+          qtd_fotos?: number | null
           session_id?: string | null
           status?: string | null
           tipo_cobranca: string
@@ -624,6 +628,7 @@ export type Database = {
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
+          galeria_id?: string | null
           id?: string
           ip_checkout_url?: string | null
           ip_order_nsu?: string | null
@@ -637,6 +642,7 @@ export type Database = {
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
           provedor?: string | null
+          qtd_fotos?: number | null
           session_id?: string | null
           status?: string | null
           tipo_cobranca?: string
@@ -650,6 +656,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
             referencedColumns: ["id"]
           },
         ]
