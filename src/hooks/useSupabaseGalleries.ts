@@ -341,7 +341,14 @@ export function useSupabaseGalleries() {
   // Delete gallery mutation
   const deleteGalleryMutation = useMutation({
     mutationFn: async (id: string) => {
-      // First delete photos from B2
+      // First, fetch gallery to get session_id before deletion
+      const { data: gallery } = await supabase
+        .from('galerias')
+        .select('session_id')
+        .eq('id', id)
+        .maybeSingle();
+
+      // Delete photos from B2
       const { data: photos } = await supabase
         .from('galeria_fotos')
         .select('id')
@@ -364,6 +371,24 @@ export function useSupabaseGalleries() {
               }),
             }
           );
+        }
+      }
+
+      // Update clientes_sessoes: mark as deleted but preserve payment history
+      if (gallery?.session_id) {
+        const { error: sessionError } = await supabase
+          .from('clientes_sessoes')
+          .update({
+            status_galeria: 'excluida',
+            galeria_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('session_id', gallery.session_id);
+
+        if (sessionError) {
+          console.error('Error updating session after gallery delete:', sessionError);
+        } else {
+          console.log('✅ Session updated: status_galeria = excluida, galeria_id = null');
         }
       }
 
