@@ -100,6 +100,9 @@ export default function ClientGallery() {
     valorTotal: number;
   } | null>(null);
   
+  // Payment return detection state
+  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
+  
   // Password state
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | undefined>();
@@ -448,6 +451,54 @@ export default function ClientGallery() {
       }
     }
   }, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
+
+  // LAYER 2: Detect payment return via redirect URL (?payment=success)
+  // This is the most reliable detection method when webhooks fail
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    
+    if (paymentStatus === 'success' && galleryId && !isProcessingPaymentReturn) {
+      setIsProcessingPaymentReturn(true);
+      
+      const confirmPaymentReturn = async () => {
+        try {
+          console.log('🔄 Detectado retorno de pagamento - confirmando automaticamente...');
+          
+          // Call check-payment-status with forceUpdate to mark as paid
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              sessionId: sessionId,
+              forceUpdate: true 
+            }),
+          });
+          
+          const result = await response.json();
+          console.log('✅ Resultado confirmação pagamento:', result);
+          
+          if (result.status === 'pago' || result.updated) {
+            toast.success('Pagamento confirmado!', {
+              description: 'Sua seleção foi finalizada com sucesso.',
+            });
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            
+            // Clean URL params without reload
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao confirmar pagamento:', error);
+        } finally {
+          setIsProcessingPaymentReturn(false);
+        }
+      };
+      
+      confirmPaymentReturn();
+    }
+  }, [galleryId, sessionId, isProcessingPaymentReturn]);
 
   // Initialize client mode from gallery response
   useEffect(() => {
