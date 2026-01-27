@@ -20,18 +20,21 @@ export type Database = {
           created_by: string | null
           email: string
           note: string | null
+          plan_code: string | null
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           email: string
           note?: string | null
+          plan_code?: string | null
         }
         Update: {
           created_at?: string
           created_by?: string | null
           email?: string
           note?: string | null
+          plan_code?: string | null
         }
         Relationships: []
       }
@@ -683,6 +686,7 @@ export type Database = {
           cor: string
           created_at: string
           id: string
+          is_system_status: boolean | null
           nome: string
           ordem: number
           updated_at: string
@@ -692,6 +696,7 @@ export type Database = {
           cor: string
           created_at?: string
           id?: string
+          is_system_status?: boolean | null
           nome: string
           ordem: number
           updated_at?: string
@@ -701,6 +706,7 @@ export type Database = {
           cor?: string
           created_at?: string
           id?: string
+          is_system_status?: boolean | null
           nome?: string
           ordem?: number
           updated_at?: string
