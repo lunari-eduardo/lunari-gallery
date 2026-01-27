@@ -10,51 +10,90 @@ interface RequestBody {
   orderNsu?: string;
   sessionId?: string;
   forceUpdate?: boolean;
+  // InfinitePay redirect parameters for public API verification
+  transactionNsu?: string;
+  slug?: string;
+  receiptUrl?: string;
 }
 
-// LAYER 3: Query InfinitePay API to check real payment status
-async function checkInfinitePayStatus(orderNsu: string): Promise<'paid' | 'pending' | 'error'> {
-  const clientId = Deno.env.get('INFINITEPAY_CLIENT_ID');
-  const clientSecret = Deno.env.get('INFINITEPAY_CLIENT_SECRET');
-  
-  if (!clientId || !clientSecret) {
-    console.log('⚠️ InfinitePay credentials not configured, skipping API check');
-    return 'error';
-  }
+// ============================================================
+// VERIFICAÇÃO VIA ENDPOINT PÚBLICO INFINITEPAY
+// Não requer OAuth - usa apenas o handle do fotógrafo
+// POST https://api.infinitepay.io/invoices/public/checkout/payment_check
+// ============================================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function checkInfinitePayStatusPublic(
+  supabase: any,
+  userId: string,
+  orderNsu: string,
+  transactionNsu?: string,
+  slug?: string
+): Promise<{ status: 'paid' | 'pending' | 'error'; receiptUrl?: string; paidAmount?: number }> {
   
   try {
-    console.log('🔍 Consultando status na API InfinitePay para order_nsu:', orderNsu);
+    // Buscar handle do fotógrafo na tabela usuarios_integracoes
+    console.log('🔍 Buscando handle InfinitePay para user_id:', userId);
     
-    // InfinitePay Orders API endpoint
-    const response = await fetch(`https://api.infinitepay.io/v2/orders/${orderNsu}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-        'Content-Type': 'application/json',
-      },
+    const { data: integracao, error: integracaoError } = await supabase
+      .from('usuarios_integracoes')
+      .select('dados_extras')
+      .eq('user_id', userId)
+      .eq('provedor', 'infinitepay')
+      .eq('status', 'ativo')
+      .maybeSingle();
+    
+    if (integracaoError) {
+      console.error('❌ Erro ao buscar integração:', integracaoError);
+      return { status: 'error' };
+    }
+    
+    const handle = integracao?.dados_extras?.handle;
+    
+    if (!handle) {
+      console.log('⚠️ Handle InfinitePay não encontrado para o fotógrafo');
+      return { status: 'error' };
+    }
+    
+    console.log('🔍 Consultando status via endpoint PÚBLICO InfinitePay');
+    console.log('📋 Parâmetros:', { handle, orderNsu, transactionNsu, slug });
+    
+    // ENDPOINT CORRETO: Público, não requer OAuth
+    const response = await fetch('https://api.infinitepay.io/invoices/public/checkout/payment_check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        handle: handle,
+        order_nsu: orderNsu,
+        transaction_nsu: transactionNsu,
+        slug: slug,
+      }),
     });
     
     if (!response.ok) {
       const errorText = await response.text();
       console.log('⚠️ InfinitePay API retornou erro:', response.status, errorText);
-      return 'error';
+      return { status: 'error' };
     }
     
     const data = await response.json();
     console.log('📊 Resposta InfinitePay:', JSON.stringify(data));
     
-    // Check if payment is confirmed
-    const status = data.status?.toLowerCase() || '';
-    if (status === 'paid' || status === 'approved' || status === 'confirmed' || status === 'completed') {
-      console.log('✅ Pagamento CONFIRMADO na InfinitePay');
-      return 'paid';
+    // Verificar se pagamento foi confirmado
+    if (data.success && data.paid) {
+      console.log('✅ Pagamento CONFIRMADO via endpoint público');
+      return { 
+        status: 'paid', 
+        receiptUrl: data.receipt_url,
+        paidAmount: data.paid_amount,
+      };
     }
     
-    console.log('⏳ Pagamento ainda PENDENTE na InfinitePay:', status);
-    return 'pending';
+    console.log('⏳ Pagamento ainda PENDENTE na InfinitePay');
+    return { status: 'pending' };
+    
   } catch (error) {
     console.error('❌ Erro ao consultar InfinitePay API:', error);
-    return 'error';
+    return { status: 'error' };
   }
 }
 
@@ -128,9 +167,14 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { cobrancaId, orderNsu, sessionId, forceUpdate } = body;
+    const { cobrancaId, orderNsu, sessionId, forceUpdate, transactionNsu, slug, receiptUrl } = body;
 
-    console.log('🔍 Verificando status de pagamento:', { cobrancaId, orderNsu, sessionId, forceUpdate });
+    console.log('🔍 Verificando status de pagamento:', { 
+      cobrancaId, orderNsu, sessionId, forceUpdate,
+      hasTransactionNsu: !!transactionNsu,
+      hasSlug: !!slug,
+      hasReceiptUrl: !!receiptUrl,
+    });
 
     let cobranca = null;
     let cobrancaError = null;
@@ -271,15 +315,37 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // LAYER 3: If pending and InfinitePay, check real status via API
+    // LAYER 3: If pending and InfinitePay, check real status via public API
+    // Priority: Use redirect parameters (transactionNsu, slug) if available
     if (cobranca.status === 'pendente' && cobranca.provedor === 'infinitepay' && cobranca.ip_order_nsu) {
-      console.log('🔄 Status pendente - verificando na API InfinitePay...');
+      console.log('🔄 Status pendente - verificando na API pública InfinitePay...');
       
-      const ipStatus = await checkInfinitePayStatus(cobranca.ip_order_nsu);
+      const ipResult = await checkInfinitePayStatusPublic(
+        supabase,
+        cobranca.user_id,
+        cobranca.ip_order_nsu,
+        transactionNsu,
+        slug
+      );
       
-      if (ipStatus === 'paid') {
-        console.log('💰 InfinitePay confirmou pagamento - atualizando banco...');
+      if (ipResult.status === 'paid') {
+        console.log('💰 InfinitePay confirmou pagamento via API pública - atualizando banco...');
         
+        // Update cobranca with transaction_nsu and receipt_url if available
+        const updateData: Record<string, unknown> = {
+          status: 'pago',
+          data_pagamento: new Date().toISOString(),
+        };
+        
+        if (transactionNsu) updateData.ip_transaction_nsu = transactionNsu;
+        if (receiptUrl || ipResult.receiptUrl) updateData.ip_receipt_url = receiptUrl || ipResult.receiptUrl;
+        
+        await supabase
+          .from('cobrancas')
+          .update(updateData)
+          .eq('id', cobranca.id);
+        
+        // Also update gallery and session
         const updateResult = await updateToPaid();
         
         if (updateResult.success) {
@@ -288,15 +354,16 @@ Deno.serve(async (req: Request) => {
               found: true,
               status: 'pago',
               updated: true,
-              source: 'infinitepay_api',
+              source: 'infinitepay_public_api',
               foundBy,
-              message: 'Pagamento confirmado via API InfinitePay',
+              message: 'Pagamento confirmado via API pública InfinitePay',
               cobranca: {
                 id: cobranca.id,
                 status: 'pago',
                 valor: cobranca.valor,
                 provedor: cobranca.provedor,
                 dataPagamento: new Date().toISOString(),
+                receiptUrl: receiptUrl || ipResult.receiptUrl,
               },
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -309,6 +376,21 @@ Deno.serve(async (req: Request) => {
     // This is useful for redirect detection (LAYER 2) when client returns from checkout
     if (forceUpdate && cobranca.status === 'pendente') {
       console.log('⚡ Forçando atualização para pago (forceUpdate=true)');
+
+      // Save transaction data from redirect if available
+      if (transactionNsu || receiptUrl) {
+        const updateData: Record<string, unknown> = {};
+        if (transactionNsu) updateData.ip_transaction_nsu = transactionNsu;
+        if (receiptUrl) updateData.ip_receipt_url = receiptUrl;
+        
+        if (Object.keys(updateData).length > 0) {
+          await supabase
+            .from('cobrancas')
+            .update(updateData)
+            .eq('id', cobranca.id);
+          console.log('📝 Dados do redirect salvos:', updateData);
+        }
+      }
 
       const updateResult = await updateToPaid();
       
@@ -333,6 +415,7 @@ Deno.serve(async (req: Request) => {
             valor: cobranca.valor,
             provedor: cobranca.provedor,
             dataPagamento: new Date().toISOString(),
+            receiptUrl: receiptUrl,
           },
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
