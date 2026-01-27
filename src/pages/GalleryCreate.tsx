@@ -119,7 +119,7 @@ export default function GalleryCreate() {
   const [overridePricing, setOverridePricing] = useState(false);
   
   // Supabase galleries hook
-  const { createGallery: createSupabaseGallery, updateGallery } = useSupabaseGalleries();
+  const { createGallery: createSupabaseGallery, updateGallery, sendGallery: sendSupabaseGallery } = useSupabaseGalleries();
 
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
@@ -420,7 +420,7 @@ export default function GalleryCreate() {
       }
       setCurrentStep(currentStep + 1);
     } else {
-      // Final step - save all configurations and navigate to the gallery
+      // Final step - save all configurations, publish automatically, and navigate to the gallery
       if (supabaseGalleryId) {
         try {
           // Update gallery with all settings from Step 4
@@ -455,8 +455,11 @@ export default function GalleryCreate() {
             }
           });
           
-          toast.success('Galeria criada com sucesso!', {
-            description: 'Você pode enviar o link para o cliente agora.'
+          // Auto-publish gallery so it's ready to be shared
+          await sendSupabaseGallery(supabaseGalleryId);
+          
+          toast.success('Galeria criada e publicada!', {
+            description: 'Agora você pode compartilhar o link com o cliente.'
           });
           navigate(`/gallery/${supabaseGalleryId}`);
         } catch (error) {

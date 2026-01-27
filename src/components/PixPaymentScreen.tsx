@@ -13,6 +13,7 @@ interface PixPaymentScreenProps {
   studioName?: string;
   studioLogoUrl?: string;
   onBack?: () => void;
+  onPaymentConfirmed?: () => void;
 }
 
 export function PixPaymentScreen({
@@ -23,6 +24,7 @@ export function PixPaymentScreen({
   studioName,
   studioLogoUrl,
   onBack,
+  onPaymentConfirmed,
 }: PixPaymentScreenProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -172,6 +174,18 @@ export function PixPaymentScreen({
             </div>
           </div>
         </div>
+
+        {/* Payment Confirmed Button */}
+        {onPaymentConfirmed && (
+          <Button
+            variant="terracotta"
+            onClick={onPaymentConfirmed}
+            className="w-full"
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Já realizei o pagamento
+          </Button>
+        )}
 
         {/* Back button */}
         {onBack && (

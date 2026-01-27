@@ -40,13 +40,11 @@ export function SendGalleryModal({
   onOpenChange,
   gallery,
   settings,
-  onSendGallery,
 }: SendGalleryModalProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
-  const [isSending, setIsSending] = useState(false);
 
-  // Build the client link
+  // Build the client link - gallery should always be published now
   const clientLink = gallery.publicToken
     ? `${window.location.origin}/g/${gallery.publicToken}`
     : null;
@@ -118,19 +116,30 @@ export function SendGalleryModal({
     window.open(url, '_blank');
   };
 
-  const handleSendAndShare = async () => {
-    if (onSendGallery) {
-      setIsSending(true);
-      try {
-        await onSendGallery();
-      } finally {
-        setIsSending(false);
-      }
-    }
-  };
-
-  const needsToSend = !gallery.publicToken;
   const formattedPhone = formatPhoneDisplay(gallery.clienteTelefone);
+
+  // If gallery is not published yet, show a simple message
+  if (!clientLink) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                <Link className="h-5 w-5 text-muted-foreground" />
+              </div>
+              Aguardando Publicação
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-6">
+            <p className="text-muted-foreground">
+              Esta galeria ainda não foi publicada. Finalize a criação da galeria para gerar o link de compartilhamento.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -144,150 +153,125 @@ export function SendGalleryModal({
           </DialogTitle>
         </DialogHeader>
 
-        {needsToSend ? (
-          <div className="space-y-6 py-4">
-            <div className="rounded-lg border border-dashed border-border p-6 text-center space-y-4">
-              <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mx-auto">
-                <Link className="h-6 w-6 text-muted-foreground" />
+        <div className="space-y-6">
+          {/* Client Info Card */}
+          <div className="rounded-xl border border-border bg-muted/30 p-5">
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <User className="h-6 w-6 text-primary" />
               </div>
-              <div>
-                <h3 className="font-medium mb-1">Galeria não publicada</h3>
-                <p className="text-sm text-muted-foreground">
-                  Publique a galeria para gerar o link de compartilhamento
-                </p>
-              </div>
-              <Button 
-                onClick={handleSendAndShare} 
-                disabled={isSending}
-                variant="terracotta"
-                size="lg"
-                className="w-full max-w-xs"
-              >
-                {isSending ? 'Publicando...' : 'Publicar Galeria'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Client Info Card */}
-            <div className="rounded-xl border border-border bg-muted/30 p-5">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <User className="h-6 w-6 text-primary" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div>
+                  <h3 className="font-semibold text-lg truncate">
+                    {gallery.clienteNome || 'Cliente'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {gallery.nomeSessao || 'Sessão de Fotos'}
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div>
-                    <h3 className="font-semibold text-lg truncate">
-                      {gallery.clienteNome || 'Cliente'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {gallery.nomeSessao || 'Sessão de Fotos'}
-                    </p>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                    {formattedPhone && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-4 w-4" />
-                        <span>{formattedPhone}</span>
-                      </div>
-                    )}
-                    {gallery.prazoSelecao && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>Até {format(gallery.prazoSelecao, "dd 'de' MMM", { locale: ptBR })}</span>
-                      </div>
-                    )}
-                    {gallery.permissao === 'private' && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Lock className="h-4 w-4" />
-                        <span>Protegida por senha</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Link Section */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Link className="h-4 w-4" />
-                Link da Galeria
-              </label>
-              <div className="flex gap-2">
-                <div className="flex-1 rounded-lg border border-border bg-background px-4 py-3 text-sm font-mono truncate">
-                  {clientLink}
-                </div>
-                <Button
-                  onClick={handleCopyLink}
-                  variant="outline"
-                  size="icon"
-                  className="h-12 w-12 flex-shrink-0"
-                >
-                  {isLinkCopied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
+                
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                  {formattedPhone && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{formattedPhone}</span>
+                    </div>
                   )}
-                </Button>
+                  {gallery.prazoSelecao && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>Até {format(gallery.prazoSelecao, "dd 'de' MMM", { locale: ptBR })}</span>
+                    </div>
+                  )}
+                  {gallery.permissao === 'private' && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Lock className="h-4 w-4" />
+                      <span>Protegida por senha</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          </div>
 
-            <Separator />
-
-            {/* Message Preview */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Mensagem para o cliente</label>
-              <div className="rounded-lg border border-border bg-muted/30 p-4 max-h-[200px] overflow-y-auto">
-                <p className="text-sm whitespace-pre-line leading-relaxed">
-                  {fullMessage}
-                </p>
+          {/* Link Section */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium flex items-center gap-2">
+              <Link className="h-4 w-4" />
+              Link da Galeria
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1 rounded-lg border border-border bg-background px-4 py-3 text-sm font-mono truncate">
+                {clientLink}
               </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="grid gap-3 pt-2">
               <Button
-                onClick={handleCopyMessage}
+                onClick={handleCopyLink}
                 variant="outline"
-                size="lg"
-                className="w-full justify-center gap-2 h-12"
+                size="icon"
+                className="h-12 w-12 flex-shrink-0"
               >
-                {isCopied ? (
-                  <Check className="h-5 w-5 text-green-500" />
+                {isLinkCopied ? (
+                  <Check className="h-4 w-4 text-green-500" />
                 ) : (
-                  <Copy className="h-5 w-5" />
+                  <Copy className="h-4 w-4" />
                 )}
-                {isCopied ? 'Mensagem Copiada!' : 'Copiar Mensagem Completa'}
-              </Button>
-
-              <Button
-                onClick={handleWhatsApp}
-                variant="terracotta"
-                size="lg"
-                className="w-full justify-center gap-2 h-12"
-              >
-                <MessageCircle className="h-5 w-5" />
-                <span>Enviar no WhatsApp</span>
-                {formattedPhone && (
-                  <span className="text-sm opacity-80">→ {formattedPhone}</span>
-                )}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full justify-center gap-2 h-12 opacity-50 cursor-not-allowed"
-                disabled
-              >
-                <Mail className="h-5 w-5" />
-                Enviar por Email
-                <span className="text-xs bg-muted px-2 py-0.5 rounded">Em breve</span>
               </Button>
             </div>
           </div>
-        )}
+
+          <Separator />
+
+          {/* Message Preview */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Mensagem para o cliente</label>
+            <div className="rounded-lg border border-border bg-muted/30 p-4 max-h-[200px] overflow-y-auto">
+              <p className="text-sm whitespace-pre-line leading-relaxed">
+                {fullMessage}
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="grid gap-3 pt-2">
+            <Button
+              onClick={handleCopyMessage}
+              variant="outline"
+              size="lg"
+              className="w-full justify-center gap-2 h-12"
+            >
+              {isCopied ? (
+                <Check className="h-5 w-5 text-green-500" />
+              ) : (
+                <Copy className="h-5 w-5" />
+              )}
+              {isCopied ? 'Mensagem Copiada!' : 'Copiar Mensagem Completa'}
+            </Button>
+
+            <Button
+              onClick={handleWhatsApp}
+              variant="terracotta"
+              size="lg"
+              className="w-full justify-center gap-2 h-12"
+            >
+              <MessageCircle className="h-5 w-5" />
+              <span>Enviar no WhatsApp</span>
+              {formattedPhone && (
+                <span className="text-sm opacity-80">→ {formattedPhone}</span>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full justify-center gap-2 h-12 opacity-50 cursor-not-allowed"
+              disabled
+            >
+              <Mail className="h-5 w-5" />
+              Enviar por Email
+              <span className="text-xs bg-muted px-2 py-0.5 rounded">Em breve</span>
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

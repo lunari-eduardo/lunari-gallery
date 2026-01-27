@@ -1,12 +1,14 @@
-import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, TrendingDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, TrendingDown, Loader2, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Gallery } from '@/types/gallery';
+import { Gallery, GalleryPhoto } from '@/types/gallery';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
+import { cn } from '@/lib/utils';
 
-interface SelectionCheckoutProps {
+interface SelectionConfirmationProps {
   gallery: Gallery;
+  photos: GalleryPhoto[];
   selectedCount: number;
   extraCount: number;
   regrasCongeladas?: RegrasCongeladas | null;
@@ -16,8 +18,9 @@ interface SelectionCheckoutProps {
   onConfirm: () => void;
 }
 
-export function SelectionCheckout({ 
-  gallery, 
+export function SelectionConfirmation({ 
+  gallery,
+  photos,
   selectedCount, 
   extraCount,
   regrasCongeladas,
@@ -25,11 +28,14 @@ export function SelectionCheckout({
   isConfirming = false,
   onBack, 
   onConfirm 
-}: SelectionCheckoutProps) {
+}: SelectionConfirmationProps) {
   const currentDate = new Date();
   const { saleSettings } = gallery;
   const isNoSale = saleSettings?.mode === 'no_sale';
   const isWithPayment = saleSettings?.mode === 'sale_with_payment';
+  
+  // Get selected photos
+  const selectedPhotos = photos.filter(p => p.isSelected);
   
   // Calculate prices using progressive pricing
   const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
@@ -67,14 +73,64 @@ export function SelectionCheckout({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-4 py-6 pb-28">
-        <div className="max-w-md mx-auto space-y-6">
+      <main className="flex-1 px-4 py-6 pb-28 overflow-y-auto">
+        <div className="max-w-2xl mx-auto space-y-6">
+          
+          {/* Selected Photos Section */}
+          <div className="lunari-card overflow-hidden">
+            <div className="bg-primary/10 p-4 flex items-center gap-3 border-b border-border/50">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <Image className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-display font-semibold">Fotos Selecionadas</h3>
+                <p className="text-sm text-muted-foreground">
+                  {selectedCount} fotos • {gallery.includedPhotos} incluídas
+                  {extraCount > 0 && <span className="text-primary font-medium"> • {extraCount} extras</span>}
+                </p>
+              </div>
+            </div>
+            
+            {/* Photos Grid - Scrollable */}
+            <div className="p-3 max-h-[280px] overflow-y-auto">
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
+                {selectedPhotos.map((photo, index) => (
+                  <div 
+                    key={photo.id} 
+                    className={cn(
+                      "relative aspect-square overflow-hidden rounded-md",
+                      index >= gallery.includedPhotos && "ring-2 ring-primary ring-inset"
+                    )}
+                  >
+                    <img
+                      src={photo.thumbnailUrl}
+                      alt={photo.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                      <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    </div>
+                    {/* Extra badge */}
+                    {index >= gallery.includedPhotos && (
+                      <div className="absolute top-0.5 right-0.5 bg-primary text-primary-foreground text-[10px] px-1 rounded">
+                        Extra
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Selection Summary Card */}
           <div className="lunari-card overflow-hidden">
             {/* Card Header */}
-            <div className="bg-primary/10 p-4 flex items-center gap-3 border-b border-border/50">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Camera className="h-5 w-5 text-primary" />
+            <div className="bg-muted/50 p-4 flex items-center gap-3 border-b border-border/50">
+              <div className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center">
+                <Camera className="h-5 w-5 text-foreground" />
               </div>
               <div>
                 <h3 className="font-display font-semibold">Resumo da Seleção</h3>
@@ -94,10 +150,12 @@ export function SelectionCheckout({
                 <span className="text-muted-foreground">Sessão</span>
                 <span className="font-medium">{gallery.sessionName}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Pacote</span>
-                <span className="font-medium">{gallery.packageName}</span>
-              </div>
+              {gallery.packageName && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Pacote</span>
+                  <span className="font-medium">{gallery.packageName}</span>
+                </div>
+              )}
             </div>
 
             {/* Photo Breakdown */}

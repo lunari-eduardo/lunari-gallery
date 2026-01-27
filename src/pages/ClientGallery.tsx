@@ -17,8 +17,7 @@ import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
-import { SelectionReview } from '@/components/SelectionReview';
-import { SelectionCheckout } from '@/components/SelectionCheckout';
+import { SelectionConfirmation } from '@/components/SelectionConfirmation';
 import { PasswordScreen } from '@/components/PasswordScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
@@ -58,7 +57,7 @@ function hexToHsl(hex: string): string | null {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-type SelectionStep = 'gallery' | 'review' | 'checkout' | 'payment' | 'confirmed';
+type SelectionStep = 'gallery' | 'confirmation' | 'payment' | 'confirmed';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 
@@ -640,11 +639,8 @@ export default function ClientGallery() {
   };
 
   const handleStartConfirmation = () => {
-    if (extraCount > 0) {
-      setCurrentStep('review');
-    } else {
-      setCurrentStep('checkout');
-    }
+    // Go directly to unified confirmation screen (skips separate review step)
+    setCurrentStep('confirmation');
   };
 
   const handleConfirm = () => {
@@ -759,33 +755,22 @@ export default function ClientGallery() {
     );
   }
 
-  // Render Review Step
-  if (currentStep === 'review') {
-    return (
-      <SelectionReview
-        photos={localPhotos}
-        includedPhotos={gallery.includedPhotos}
-        onBack={() => setCurrentStep('gallery')}
-        onContinue={() => setCurrentStep('checkout')}
-      />
-    );
-  }
-
-  // Render Checkout Step
-  if (currentStep === 'checkout') {
+  // Render Unified Confirmation Step (combines Review + Checkout)
+  if (currentStep === 'confirmation') {
     // Check if payment provider is configured (for sale_with_payment mode)
     const isWithPayment = gallery.saleSettings?.mode === 'sale_with_payment';
     const hasPaymentProvider = isWithPayment;
     
     return (
-      <SelectionCheckout
+      <SelectionConfirmation
         gallery={gallery}
+        photos={localPhotos}
         selectedCount={selectedCount}
         extraCount={extraCount}
         regrasCongeladas={regrasCongeladas}
         hasPaymentProvider={hasPaymentProvider}
         isConfirming={confirmMutation.isPending}
-        onBack={() => extraCount > 0 ? setCurrentStep('review') : setCurrentStep('gallery')}
+        onBack={() => setCurrentStep('gallery')}
         onConfirm={handleConfirm}
       />
     );
@@ -801,6 +786,13 @@ export default function ClientGallery() {
         valorTotal={pixPaymentData.valorTotal}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+        onPaymentConfirmed={() => {
+          // Client indicates they've paid - go to confirmed step
+          setCurrentStep('confirmed');
+          toast.success('Obrigado!', {
+            description: 'Aguarde a confirmação do pagamento pelo fotógrafo.',
+          });
+        }}
       />
     );
   }
