@@ -1,362 +1,217 @@
 
+# Plano de Correção: Histórico de Pagamentos na Galeria
 
-# Plano de Adequação: Lógica de Seleção e Cobrança de Fotos Extras
+## Diagnóstico
 
-## Diagnóstico da Implementação Atual
+### Problema Identificado
 
-### ✅ O que JÁ existe e funciona
+A galeria mostra apenas o **último pagamento** em vez de todo o histórico de transações.
 
-| Campo | Tabela | Uso Atual |
-|-------|--------|-----------|
-| `fotos_incluidas` | galerias | Fotos inclusas no pacote |
-| `valor_foto_extra` | galerias | Preço por foto extra |
-| `total_fotos_extras_vendidas` | galerias | **Existe mas NÃO é usado corretamente** |
-| `valor_total_vendido` | galerias | Valor acumulado de vendas |
-| `valor_pago` | clientes_sessoes | Valor financeiro pago |
+| Dado | Banco de Dados | Tela Atual |
+|------|----------------|------------|
+| Pagamentos realizados | 2 (R$ 5 + R$ 5) | Apenas 1 (R$ 5) |
+| Valor total pago | R$ 10 | R$ 5 |
+| Comprovantes | 2 links | 1 link |
 
-### ❌ Problemas Identificados
-
-| # | Problema | Localização | Impacto |
-|---|----------|-------------|---------|
-| 1 | `total_fotos_extras_vendidas` existe mas **nunca é incrementado** | confirm-selection, webhooks | Pagamentos duplicados |
-| 2 | Cálculo de extras não desconta `extras_pagas_total` | confirm-selection L182 | Cliente paga 2x pela mesma quantidade |
-| 3 | Reativação não considera extras já pagas | useSupabaseGalleries | Cobrança incorreta |
-| 4 | UI não mostra extras já pagas anteriormente | SelectionConfirmation | UX confusa |
-| 5 | Webhook só incrementa valor (R$), não quantidade | infinitepay-webhook | Descompasso |
-
-### Fórmula Atual (INCORRETA)
+### Causa Raiz
 
 ```typescript
-// L182 - confirm-selection/index.ts
-const extrasCount = Math.max(0, selectedCount - gallery.fotos_incluidas);
-// PROBLEMA: Não subtrai extras já pagas!
+// GalleryDetail.tsx L86-88
+.order('created_at', { ascending: false })
+.limit(1)  // ← PROBLEMA: Só busca o último
+.maybeSingle();
 ```
 
-### Fórmula Correta (Regra de Produto)
+### Dados Corretos no Banco
 
-```typescript
-extras_necessarias = total_fotos_selecionadas - fotos_inclusas_no_pacote
-extras_a_cobrar = Math.max(0, extras_necessarias - extras_pagas_total)
-```
+A tabela `galerias` já possui os campos corretos:
+- `total_fotos_extras_vendidas: 2` ✅
+- `valor_total_vendido: 10` ✅
+
+A tabela `cobrancas` tem todos os registros:
+- `da8daab8...` - R$ 5.00, 1 foto, pago 19:24
+- `a271b642...` - R$ 5.00, 1 foto, pago 19:46
 
 ---
 
-## Alterações Necessárias
+## Solução Proposta
 
-### 1. Edge Function `confirm-selection/index.ts`
+### 1. Buscar TODOS os pagamentos (não apenas o último)
 
-**Objetivo**: Implementar fórmula correta de cobrança
+**Arquivo**: `src/pages/GalleryDetail.tsx`
 
-**Alterações**:
-
-1. Buscar `total_fotos_extras_vendidas` da galeria (L159)
-2. Calcular `extras_a_cobrar` corretamente (L182)
-3. Não impedir seleção se `extras_a_cobrar = 0` (mesmo com extras > inclusas)
+Alterar a query para buscar todos os pagamentos da galeria/sessão:
 
 ```typescript
-// Buscar (já existe na query L157-160, só adicionar campo)
-.select('id, status, ..., total_fotos_extras_vendidas')
-
-// Calcular (L182)
-const extrasNecessarias = Math.max(0, (selectedCount || 0) - (gallery.fotos_incluidas || 0));
-const extrasPagasTotal = gallery.total_fotos_extras_vendidas || 0;
-const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
-
-// Usar extrasACobrar para cobrança, mas salvar extrasNecessarias para controle
-```
-
----
-
-### 2. Edge Function `infinitepay-webhook/index.ts`
-
-**Objetivo**: Incrementar quantidade de extras pagas ao confirmar pagamento
-
-**Alterações**:
-
-1. Buscar `qtd_fotos_extra` da cobrança (precisa salvar na criação)
-2. Incrementar `total_fotos_extras_vendidas` na galeria
-
-```typescript
-// Após confirmar pagamento (L275+)
-if (cobranca.galeria_id) {
-  const { data: galeria } = await supabase
-    .from('galerias')
-    .select('total_fotos_extras_vendidas')
-    .eq('id', cobranca.galeria_id)
-    .maybeSingle();
-
-  if (galeria) {
-    const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
-    const extrasNovas = cobranca.qtd_fotos || 0; // Precisa salvar na criação
+const { data: cobrancasData, refetch: refetchCobrancas } = useQuery({
+  queryKey: ['galeria-cobrancas', id],
+  queryFn: async () => {
+    // Buscar por galeria_id OU session_id
+    const queries = [];
     
-    await supabase
-      .from('galerias')
-      .update({ 
-        total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
-        valor_total_vendido: (galeria.valor_total_vendido || 0) + cobranca.valor
-      })
-      .eq('id', cobranca.galeria_id);
-  }
-}
-```
-
----
-
-### 3. Edge Function `check-payment-status/index.ts`
-
-**Objetivo**: Mesma lógica do webhook para verificação manual
-
-**Alterações**: Replicar incremento de `total_fotos_extras_vendidas`
-
----
-
-### 4. Tabela `cobrancas` - Novo campo
-
-**Objetivo**: Rastrear quantidade de fotos da cobrança
-
-**Migração**:
-
-```sql
-ALTER TABLE cobrancas 
-ADD COLUMN IF NOT EXISTS qtd_fotos integer DEFAULT 0;
-
-COMMENT ON COLUMN cobrancas.qtd_fotos IS 'Quantidade de fotos extras cobradas nesta transação';
-```
-
----
-
-### 5. Edge Function `infinitepay-create-link/index.ts`
-
-**Objetivo**: Salvar quantidade de fotos na cobrança
-
-**Alteração**: Adicionar `qtd_fotos` ao criar cobrança
-
-```typescript
-// Ao criar cobrança
-.insert({
-  ...dadosExistentes,
-  qtd_fotos: body.qtdFotos || 0, // Novo parâmetro
-})
-```
-
----
-
-### 6. Edge Function `confirm-selection/index.ts` - Chamada de pagamento
-
-**Objetivo**: Passar quantidade de fotos para criação de link
-
-**Alteração**:
-
-```typescript
-// L301-310
-const { data: paymentData, error: paymentError } = await supabase.functions.invoke(functionName, {
-  body: {
-    ...dadosExistentes,
-    qtdFotos: extrasACobrar, // NOVO: quantidade a cobrar
-  }
+    if (supabaseGallery?.id) {
+      queries.push(
+        supabase
+          .from('cobrancas')
+          .select('*')
+          .eq('galeria_id', supabaseGallery.id)
+          .eq('status', 'pago')
+          .order('created_at', { ascending: false })
+      );
+    }
+    
+    if (supabaseGallery?.sessionId) {
+      queries.push(
+        supabase
+          .from('cobrancas')
+          .select('*')
+          .eq('session_id', supabaseGallery.sessionId)
+          .eq('status', 'pago')
+          .order('created_at', { ascending: false })
+      );
+    }
+    
+    // Combinar e deduplicar resultados
+    // ...
+    return cobrancasPagas;
+  },
+  enabled: !!supabaseGallery,
 });
 ```
 
----
+### 2. Criar componente de Histórico de Pagamentos
 
-### 7. Componente `SelectionConfirmation.tsx`
+**Novo arquivo**: `src/components/PaymentHistoryCard.tsx`
 
-**Objetivo**: Mostrar extras já pagas na UI
+Exibir lista de pagamentos com:
+- Total acumulado no topo
+- Lista de transações individuais
+- Link para comprovante de cada uma
 
-**Props adicionais**:
+```
+┌────────────────────────────────────────────┐
+│ 💳 Histórico de Pagamentos                 │
+├────────────────────────────────────────────┤
+│ Total pago                      R$ 10.00   │
+│ Transações                            2    │
+├────────────────────────────────────────────┤
+│                                            │
+│ ┌────────────────────────────────────────┐ │
+│ │ 27/01/2026 às 19:46                    │ │
+│ │ 1 foto extra • R$ 5.00                 │ │
+│ │ InfinitePay • [Ver comprovante]        │ │
+│ └────────────────────────────────────────┘ │
+│                                            │
+│ ┌────────────────────────────────────────┐ │
+│ │ 27/01/2026 às 19:24                    │ │
+│ │ 1 foto extra • R$ 5.00                 │ │
+│ │ InfinitePay • [Ver comprovante]        │ │
+│ └────────────────────────────────────────┘ │
+│                                            │
+└────────────────────────────────────────────┘
+```
+
+### 3. Atualizar GalleryDetail para usar dados agregados
+
+**Arquivo**: `src/pages/GalleryDetail.tsx`
+
+- Usar `valor_total_vendido` da galeria para exibir valor pago total
+- Renderizar `PaymentHistoryCard` com lista de cobrancas
+- Manter `PaymentStatusCard` para status atual e ações
+
+### 4. Ajustar valorPago no PaymentStatusCard
+
+O `valorPago` deve vir de `galerias.valor_total_vendido` (fonte da verdade), não da última cobrança:
 
 ```typescript
-interface SelectionConfirmationProps {
-  // ... existentes
-  extrasPagasAnteriormente?: number; // NOVO
+<PaymentStatusCard
+  ...
+  valorPago={supabaseGallery.valorTotalVendido || 0}  // Usar campo correto
+  ...
+/>
+```
+
+---
+
+## Arquivos a Modificar/Criar
+
+| # | Arquivo | Alteração |
+|---|---------|-----------|
+| 1 | `src/components/PaymentHistoryCard.tsx` | **CRIAR**: Componente de histórico |
+| 2 | `src/pages/GalleryDetail.tsx` | Buscar todas cobrancas, usar valor_total_vendido |
+| 3 | `src/hooks/useSupabaseGalleries.ts` | Garantir que `valorTotalVendido` está no tipo |
+
+---
+
+## Detalhes Técnicos
+
+### Interface do novo componente
+
+```typescript
+interface PaymentHistoryCardProps {
+  cobrancas: Array<{
+    id: string;
+    valor: number;
+    qtd_fotos: number;
+    provedor: string;
+    data_pagamento: string;
+    ip_receipt_url?: string;
+  }>;
+  valorTotalPago: number;
 }
 ```
 
-**UI atualizada**:
+### Query atualizada em GalleryDetail
 
 ```typescript
-{/* Photo Breakdown */}
-<div className="p-4 border-b border-border/50 space-y-3">
-  <div className="flex justify-between text-sm">
-    <span className="text-muted-foreground">Fotos incluídas no pacote</span>
-    <span className="font-medium">{gallery.includedPhotos}</span>
-  </div>
-  
-  {/* NOVO: Extras já pagas */}
-  {extrasPagasAnteriormente > 0 && (
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">Fotos extras já pagas</span>
-      <span className="font-medium text-green-600">+{extrasPagasAnteriormente}</span>
-    </div>
-  )}
-  
-  <div className="flex justify-between text-sm">
-    <span className="text-muted-foreground">Fotos selecionadas</span>
-    <span className="font-medium">{selectedCount}</span>
-  </div>
-  
-  {/* Extras a cobrar (não mais extraCount simples) */}
-  {extrasACobrar > 0 && (
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">Fotos extras a cobrar</span>
-      <span className="font-medium text-primary">{extrasACobrar}</span>
-    </div>
-  )}
-</div>
+// Buscar TODAS as cobrancas pagas desta galeria
+const { data: cobrancasPagas = [] } = useQuery({
+  queryKey: ['galeria-cobrancas-pagas', id],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('cobrancas')
+      .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, created_at')
+      .or(`galeria_id.eq.${id},session_id.eq.${supabaseGallery?.sessionId}`)
+      .eq('status', 'pago')
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+  enabled: !!supabaseGallery,
+});
+```
+
+### Uso no template
+
+```tsx
+{/* Na aba Seleção ou Detalhes */}
+{cobrancasPagas.length > 0 && (
+  <PaymentHistoryCard
+    cobrancas={cobrancasPagas}
+    valorTotalPago={supabaseGallery.valorTotalVendido}
+  />
+)}
 ```
 
 ---
 
-### 8. Componente `ClientGallery.tsx`
+## Comportamento Final Esperado
 
-**Objetivo**: Calcular `extrasACobrar` corretamente
-
-**Alterações**:
-
-1. Buscar `total_fotos_extras_vendidas` do supabaseGallery
-2. Calcular `extrasACobrar` com fórmula correta
-3. Passar para `SelectionConfirmation`
-
-```typescript
-// L676-677 - Cálculo atual
-const selectedCount = localPhotos.filter(p => p.isSelected).length;
-const extrasNecessarias = Math.max(0, selectedCount - gallery.includedPhotos);
-
-// NOVO: Considerar extras já pagas
-const extrasPagasTotal = supabaseGallery?.total_fotos_extras_vendidas || 0;
-const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
-
-// Usar extrasACobrar para cálculo de preço
-const { valorUnitario, valorTotal: extraTotal } = calcularPrecoProgressivo(
-  extrasACobrar, // Agora é extrasACobrar, não extraCount
-  regrasCongeladas,
-  gallery.extraPhotoPrice
-);
-```
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| 1º pagamento | Mostra 1 transação | Mostra 1 transação |
+| 2º pagamento (após reativação) | Sobrescreve, mostra só a última | Lista 2 transações |
+| Valor pago | R$ 5 (última) | R$ 10 (soma total) |
+| Comprovantes | 1 link | 2 links (um por transação) |
 
 ---
 
-### 9. Hook `useSupabaseGalleries.ts` - Reativação
+## Resumo da Seção de Pagamentos (Nova UI)
 
-**Objetivo**: Não zerar `total_fotos_extras_vendidas` ao reativar
+### Aba "Seleção"
+- **Resumo da Seleção** (existente)
+- **Status do Pagamento** (simplificado - status atual + ações)
 
-**Verificação**: Confirmar que `reopenSelectionMutation` NÃO reseta esse campo.
-
-```typescript
-// L523-533 - Verificar que NÃO inclui:
-// total_fotos_extras_vendidas: 0  ← NÃO FAZER ISSO
-```
-
----
-
-### 10. Edge Function `gallery-access/index.ts`
-
-**Objetivo**: Retornar `total_fotos_extras_vendidas` para o cliente
-
-**Alteração**: Incluir na resposta
-
-```typescript
-// Na resposta
-return {
-  ...dadosExistentes,
-  extrasPagasTotal: galeria.total_fotos_extras_vendidas || 0,
-}
-```
-
----
-
-## Fluxo de Cobrança Corrigido
-
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│ FLUXO DE SELEÇÃO E COBRANÇA (Corrigido)                                 │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  DADOS FIXOS DA GALERIA:                                                │
-│  ├── fotos_incluidas = 10                                               │
-│  ├── valor_foto_extra = R$ 25,00                                        │
-│  └── total_fotos_extras_vendidas = 0 (inicialmente)                     │
-│                                                                         │
-│  CICLO 1: Primeira Seleção                                              │
-│  ├── Cliente seleciona 15 fotos                                         │
-│  ├── extras_necessarias = 15 - 10 = 5                                   │
-│  ├── extras_a_cobrar = max(5 - 0, 0) = 5                                │
-│  ├── Valor cobrado = 5 × R$ 25 = R$ 125                                 │
-│  └── Após pagamento: total_fotos_extras_vendidas = 5                    │
-│                                                                         │
-│  CICLO 2: Reativação pelo Fotógrafo                                     │
-│  ├── Cliente pode trocar QUALQUER foto livremente                       │
-│  ├── total_fotos_extras_vendidas = 5 (mantido)                          │
-│  └── Seleção anterior não é "carrinho" bloqueado                        │
-│                                                                         │
-│  CENÁRIO 2A: Cliente seleciona 13 fotos (menos que antes)               │
-│  ├── extras_necessarias = 13 - 10 = 3                                   │
-│  ├── extras_a_cobrar = max(3 - 5, 0) = 0 ← JÁ TEM CRÉDITO               │
-│  └── Valor cobrado = R$ 0                                               │
-│                                                                         │
-│  CENÁRIO 2B: Cliente seleciona 18 fotos (mais que antes)                │
-│  ├── extras_necessarias = 18 - 10 = 8                                   │
-│  ├── extras_a_cobrar = max(8 - 5, 0) = 3 ← SÓ COBRA DIFERENÇA           │
-│  ├── Valor cobrado = 3 × R$ 25 = R$ 75                                  │
-│  └── Após pagamento: total_fotos_extras_vendidas = 8                    │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Arquivos a Modificar
-
-| # | Arquivo | Alteração | Prioridade |
-|---|---------|-----------|------------|
-| 1 | `supabase/functions/confirm-selection/index.ts` | Fórmula correta + passar qtdFotos | Alta |
-| 2 | `supabase/functions/infinitepay-webhook/index.ts` | Incrementar total_fotos_extras_vendidas | Alta |
-| 3 | `supabase/functions/check-payment-status/index.ts` | Mesma lógica do webhook | Alta |
-| 4 | `supabase/functions/infinitepay-create-link/index.ts` | Salvar qtd_fotos | Alta |
-| 5 | `supabase/functions/gallery-access/index.ts` | Retornar extrasPagasTotal | Média |
-| 6 | `src/pages/ClientGallery.tsx` | Calcular extrasACobrar | Média |
-| 7 | `src/components/SelectionConfirmation.tsx` | Exibir extras já pagas | Média |
-| 8 | **Migração SQL** | Adicionar coluna qtd_fotos em cobrancas | Alta |
-
----
-
-## Migração de Banco de Dados
-
-```sql
--- Adicionar campo para rastrear quantidade de fotos por cobrança
-ALTER TABLE cobrancas 
-ADD COLUMN IF NOT EXISTS qtd_fotos integer DEFAULT 0;
-
--- Adicionar campo para vincular cobrança à galeria
-ALTER TABLE cobrancas 
-ADD COLUMN IF NOT EXISTS galeria_id uuid REFERENCES galerias(id);
-
--- Comentários para documentação
-COMMENT ON COLUMN cobrancas.qtd_fotos IS 'Quantidade de fotos extras cobradas nesta transação';
-COMMENT ON COLUMN cobrancas.galeria_id IS 'Galeria associada a esta cobrança (se aplicável)';
-```
-
----
-
-## Validações Pós-Implementação
-
-| # | Cenário de Teste | Resultado Esperado |
-|---|------------------|-------------------|
-| 1 | Primeira seleção com 5 extras | Cobrar R$ 125 (5 × R$ 25) |
-| 2 | Após pagamento, verificar total_fotos_extras_vendidas | Deve ser 5 |
-| 3 | Reativar e selecionar 3 extras | Cobrar R$ 0 (já pagou 5) |
-| 4 | Reativar e selecionar 8 extras | Cobrar R$ 75 (3 novas × R$ 25) |
-| 5 | UI mostra "5 extras já pagas" | Visível no checkout |
-| 6 | Trocar fotos livremente na reativação | Permitido sem bloqueio |
-
----
-
-## Garantias Finais
-
-| Regra de Produto | Implementação |
-|------------------|---------------|
-| Cliente nunca paga 2x pela mesma quantidade | `extrasACobrar = max(necessarias - pagas, 0)` |
-| Fotógrafo tem controle previsível | `total_fotos_extras_vendidas` sempre incrementa |
-| Sistema escalável | Funciona com N reativações |
-| Lógica independente de foto específica | Baseado em quantidade, não em IDs |
-
+### Aba "Detalhes"  
+- **Histórico de Pagamentos** (NOVO)
+  - Total pago (soma de todas cobrancas)
+  - Lista de transações com data, valor, provedor e comprovante
