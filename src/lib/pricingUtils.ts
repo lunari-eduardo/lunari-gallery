@@ -52,11 +52,29 @@ export interface CalculoPrecoResult {
  * Normalizes a price value that might be in cents to reals.
  * If the value is > 1000, it's assumed to be in cents and divided by 100.
  * This handles Gestão's inconsistent storage of valores.
+ * 
+ * GUARD: Values between 0.01 and 1000 are assumed to already be in reals.
+ * Values > 1000 are assumed to be in cents and will be converted.
+ * This prevents double normalization that could cause incorrect pricing.
  */
-export function normalizarValor(valor: number): number {
+export function normalizarValor(valor: number, forceSkip = false): number {
+  // Guard: If explicitly skipping normalization
+  if (forceSkip) {
+    return valor;
+  }
+  
+  // Guard: Values <= 0 return as-is
+  if (valor <= 0) {
+    return valor;
+  }
+  
+  // Values > 1000 are assumed to be in cents (e.g., 2500 = R$ 25,00)
+  // Values between 0.01 and 1000 are assumed to be already in reals
   if (valor > 1000) {
+    console.log(`[pricingUtils] Normalizing cents to reals: ${valor} → ${valor / 100}`);
     return valor / 100;
   }
+  
   return valor;
 }
 

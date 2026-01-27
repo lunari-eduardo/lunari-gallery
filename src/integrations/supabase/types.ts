@@ -2561,6 +2561,42 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          headers: Json | null
+          id: string
+          order_nsu: string | null
+          payload: Json | null
+          processed_at: string | null
+          provedor: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          headers?: Json | null
+          id?: string
+          order_nsu?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          provedor: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          headers?: Json | null
+          id?: string
+          order_nsu?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          provedor?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       crescimento_mensal: {
