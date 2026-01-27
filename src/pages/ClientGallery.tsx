@@ -76,7 +76,11 @@ export default function ClientGallery() {
   const identifier = token || id;
   const isLegacyAccess = identifier ? isUUID(identifier) : false;
   
-  const [showWelcome, setShowWelcome] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(() => {
+    // Se retornando de pagamento, pular tela de boas-vindas
+    const params = new URLSearchParams(window.location.search);
+    return params.get('payment') !== 'success';
+  });
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
@@ -467,6 +471,7 @@ export default function ClientGallery() {
     
     if (paymentStatus === 'success' && galleryId && !isProcessingPaymentReturn) {
       setIsProcessingPaymentReturn(true);
+      setShowWelcome(false); // Garantir que welcome não apareça
       
       const confirmPaymentReturn = async () => {
         try {
@@ -931,7 +936,7 @@ export default function ClientGallery() {
               <MasonryGrid>
                 {confirmedSelectedPhotos.map((photo, index) => (
                   <MasonryItem key={photo.id}>
-                    <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(localPhotos.findIndex(p => p.id === photo.id))}>
+                    <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(index)}>
                       <div className="aspect-square overflow-hidden rounded-lg">
                         <img 
                           src={photo.thumbnailUrl} 
@@ -962,17 +967,19 @@ export default function ClientGallery() {
           )}
         </main>
 
-        {/* Lightbox for confirmed view */}
+        {/* Lightbox for confirmed view - only selected photos */}
         {lightboxIndex !== null && (
           <Lightbox
-            photos={localPhotos}
+            photos={confirmedSelectedPhotos}
             currentIndex={lightboxIndex}
-            onClose={() => setLightboxIndex(null)}
-            onNavigate={setLightboxIndex}
-            onSelect={() => {}} // No selection in read-only mode
+            watermark={gallery.settings.watermark}
             watermarkDisplay={gallery.settings.watermarkDisplay}
             allowComments={false}
+            allowDownload={gallery.settings.allowDownload}
             disabled={true}
+            onClose={() => setLightboxIndex(null)}
+            onNavigate={setLightboxIndex}
+            onSelect={() => {}}
           />
         )}
       </div>
