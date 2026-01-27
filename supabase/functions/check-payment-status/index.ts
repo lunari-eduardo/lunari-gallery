@@ -256,8 +256,33 @@ Deno.serve(async (req: Request) => {
       }
       console.log('✅ Cobrança atualizada para pago');
 
-      // 2. Update gallery payment status if session_id exists
-      if (cobranca.session_id) {
+      // 2. CREDIT SYSTEM: Increment total_fotos_extras_vendidas if galeria_id exists
+      if (cobranca.galeria_id && cobranca.qtd_fotos) {
+        const { data: galeria } = await supabase
+          .from('galerias')
+          .select('id, total_fotos_extras_vendidas, valor_total_vendido')
+          .eq('id', cobranca.galeria_id)
+          .maybeSingle();
+
+        if (galeria) {
+          const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
+          const extrasNovas = cobranca.qtd_fotos || 0;
+          const valorAtual = Number(galeria.valor_total_vendido) || 0;
+          const valorCobranca = Number(cobranca.valor) || 0;
+
+          await supabase
+            .from('galerias')
+            .update({
+              total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+              valor_total_vendido: valorAtual + valorCobranca,
+              status_pagamento: 'pago',
+            })
+            .eq('id', cobranca.galeria_id);
+          console.log(`✅ Galeria extras atualizado: ${extrasAtuais} + ${extrasNovas} = ${extrasAtuais + extrasNovas}`);
+        }
+      }
+      // Fallback: Update gallery payment status if session_id exists
+      else if (cobranca.session_id) {
         const { data: galeria } = await supabase
           .from('galerias')
           .select('id')
@@ -271,8 +296,10 @@ Deno.serve(async (req: Request) => {
             .eq('id', galeria.id);
           console.log('✅ Galeria atualizada para pago');
         }
+      }
 
-        // 3. Update clientes_sessoes.valor_pago (increment)
+      // 3. Update clientes_sessoes.valor_pago (increment) if session_id exists
+      if (cobranca.session_id) {
         const { data: sessao } = await supabase
           .from('clientes_sessoes')
           .select('valor_pago')

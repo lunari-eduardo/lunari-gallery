@@ -14,6 +14,8 @@ interface RequestBody {
   redirectUrl?: string;
   webhookUrl?: string;
   galleryToken?: string;
+  galeriaId?: string; // Gallery ID for linking charge to gallery
+  qtdFotos?: number; // Quantity of extra photos being charged
 }
 
 interface InfinitePayItem {
@@ -54,7 +56,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken }: RequestBody = await req.json();
+    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, qtdFotos }: RequestBody = await req.json();
 
     // Validate required fields
     if (!clienteId || !valor || !userId) {
@@ -183,7 +185,7 @@ Deno.serve(async (req) => {
 
     console.log(`💳 InfinitePay checkout URL generated: ${checkoutUrl}`);
 
-    // 6. Create charge record in database
+    // 6. Create charge record in database with gallery link and photo quantity
     const { data: cobranca, error: cobrancaError } = await supabase
       .from('cobrancas')
       .insert({
@@ -197,6 +199,8 @@ Deno.serve(async (req) => {
         status: 'pendente',
         ip_checkout_url: checkoutUrl,
         ip_order_nsu: orderNsu,
+        galeria_id: galeriaId || null, // Link charge to gallery
+        qtd_fotos: qtdFotos || 0, // Store quantity for credit tracking
       })
       .select('id')
       .single();

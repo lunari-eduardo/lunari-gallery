@@ -161,6 +161,8 @@ serve(async (req) => {
           regrasCongeladas,
           // Include sale settings explicitly for payment flow
           saleSettings,
+          // Include extras already paid for credit system
+          extrasPagasTotal: gallery.total_fotos_extras_vendidas || 0,
         },
         photos: photos || [],
         studioSettings: settings || null,

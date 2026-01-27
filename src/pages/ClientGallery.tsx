@@ -674,11 +674,20 @@ export default function ClientGallery() {
     || (supabaseGallery?.regras_congeladas as unknown as RegrasCongeladas | null);
 
   const selectedCount = localPhotos.filter(p => p.isSelected).length;
-  const extraCount = Math.max(0, selectedCount - gallery.includedPhotos);
+  const extrasNecessarias = Math.max(0, selectedCount - gallery.includedPhotos);
   
-  // Use progressive pricing calculation
+  // Credit system: Get extras already paid from Edge Function response
+  const extrasPagasTotal = supabaseGallery?.extrasPagasTotal || supabaseGallery?.total_fotos_extras_vendidas || 0;
+  
+  // Calculate extras to charge (respects credit system)
+  const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
+  
+  // For display purposes, use total extras needed
+  const extraCount = extrasNecessarias;
+  
+  // Use progressive pricing calculation with extrasACobrar for billing
   const { valorUnitario, valorTotal: extraTotal, economia } = calcularPrecoProgressivo(
-    extraCount,
+    extrasACobrar, // Use extras to charge, not total extras
     regrasCongeladas,
     gallery.extraPhotoPrice
   );
@@ -718,16 +727,18 @@ export default function ClientGallery() {
 
   const handleConfirm = () => {
     const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
-    const currentExtraCount = Math.max(0, currentSelectedCount - gallery.includedPhotos);
+    const currentExtrasNecessarias = Math.max(0, currentSelectedCount - gallery.includedPhotos);
+    const currentExtrasACobrar = Math.max(0, currentExtrasNecessarias - extrasPagasTotal);
+    
     const { valorUnitario: currentValorUnitario, valorTotal: currentValorTotal } = calcularPrecoProgressivo(
-      currentExtraCount,
+      currentExtrasACobrar, // Use extras to charge for billing
       regrasCongeladas,
       gallery.extraPhotoPrice
     );
     
     confirmMutation.mutate({
       selectedCount: currentSelectedCount,
-      extraCount: currentExtraCount,
+      extraCount: currentExtrasACobrar, // Pass extras to charge
       valorUnitario: currentValorUnitario,
       valorTotal: currentValorTotal,
     });
@@ -840,6 +851,8 @@ export default function ClientGallery() {
         photos={localPhotos}
         selectedCount={selectedCount}
         extraCount={extraCount}
+        extrasACobrar={extrasACobrar}
+        extrasPagasAnteriormente={extrasPagasTotal}
         regrasCongeladas={regrasCongeladas}
         hasPaymentProvider={hasPaymentProvider}
         isConfirming={confirmMutation.isPending}
