@@ -10,6 +10,8 @@ interface SelectionSummaryProps {
   isClient?: boolean;
   variant?: 'default' | 'bottom-bar';
   regrasCongeladas?: RegrasCongeladas | null;
+  extrasPagasTotal?: number; // Previously paid extras for cumulative tier calculation
+  extrasACobrar?: number; // Extras to charge in this cycle
 }
 
 export function SelectionSummary({ 
@@ -17,7 +19,9 @@ export function SelectionSummary({
   onConfirm, 
   isClient = false,
   variant = 'default',
-  regrasCongeladas
+  regrasCongeladas,
+  extrasPagasTotal = 0,
+  extrasACobrar: extrasACobrarProp
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
@@ -25,11 +29,18 @@ export function SelectionSummary({
   const isConfirmed = selectionStatus === 'confirmed';
   const isBlocked = selectionStatus === 'blocked';
   
-  // Calculate progressive pricing if frozen rules exist
+  // Use provided extrasACobrar or calculate from total extras
+  const extrasACobrar = extrasACobrarProp ?? Math.max(0, extraCount - extrasPagasTotal);
+  
+  // Total accumulated extras for tier lookup (previously paid + new to charge)
+  const totalExtrasAcumuladas = extrasPagasTotal + extrasACobrar;
+  
+  // Calculate progressive pricing with cumulative tier lookup
   const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
-    extraCount,
+    extrasACobrar, // Quantity to charge
     regrasCongeladas,
-    extraPhotoPrice
+    extraPhotoPrice,
+    totalExtrasAcumuladas // Use cumulative total for tier lookup
   );
   
   // Use calculated values
