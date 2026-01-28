@@ -163,6 +163,8 @@ serve(async (req) => {
           saleSettings,
           // Include extras already paid for credit system
           extrasPagasTotal: gallery.total_fotos_extras_vendidas || 0,
+          // Include amount already paid for credit calculation
+          valorTotalVendido: gallery.valor_total_vendido || 0,
         },
         photos: photos || [],
         studioSettings: settings || null,

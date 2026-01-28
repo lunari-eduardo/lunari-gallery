@@ -685,8 +685,8 @@ export default function ClientGallery() {
   // For display purposes, use total extras needed
   const extraCount = extrasNecessarias;
   
-  // Get already paid amount for credit calculation
-  const valorJaPago = supabaseGallery?.valor_total_vendido || 0;
+  // Get already paid amount for credit calculation (camelCase from Edge Function response)
+  const valorJaPago = supabaseGallery?.valorTotalVendido || supabaseGallery?.valor_total_vendido || 0;
   
   // Use credit-based progressive pricing calculation:
   // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
