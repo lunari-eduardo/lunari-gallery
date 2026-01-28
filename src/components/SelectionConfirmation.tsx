@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Gallery, GalleryPhoto } from '@/types/gallery';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
+import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { cn } from '@/lib/utils';
 
 interface SelectionConfirmationProps {
@@ -11,8 +11,9 @@ interface SelectionConfirmationProps {
   photos: GalleryPhoto[];
   selectedCount: number;
   extraCount: number;
-  extrasACobrar: number; // NEW: extras to charge after credit deduction
-  extrasPagasAnteriormente: number; // NEW: extras already paid from previous purchases
+  extrasACobrar: number; // extras to charge after credit deduction
+  extrasPagasAnteriormente: number; // extras already paid from previous purchases
+  valorJaPago: number; // total amount already paid (R$)
   regrasCongeladas?: RegrasCongeladas | null;
   hasPaymentProvider?: boolean;
   isConfirming?: boolean;
@@ -27,6 +28,7 @@ export function SelectionConfirmation({
   extraCount,
   extrasACobrar,
   extrasPagasAnteriormente,
+  valorJaPago,
   regrasCongeladas,
   hasPaymentProvider = false,
   isConfirming = false,
@@ -41,18 +43,22 @@ export function SelectionConfirmation({
   // Get selected photos
   const selectedPhotos = photos.filter(p => p.isSelected);
   
-  // Calculate prices using progressive pricing based on extras TO CHARGE (respects credit system)
-  const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
-    extrasACobrar, // Use extras to charge, not total extras
+  // Calculate prices using progressive pricing with credit system
+  const { valorUnitario, valorACobrar, valorTotalIdeal, economia, totalExtras } = calcularPrecoProgressivoComCredito(
+    extrasACobrar,              // New extras in this cycle
+    extrasPagasAnteriormente,   // Previously paid extras count
+    valorJaPago,                // Previously paid amount (R$)
     regrasCongeladas,
     gallery.extraPhotoPrice
   );
   
-  // Build priceInfo for template compatibility - use extrasACobrar
+  // Build priceInfo for template compatibility - use credit-adjusted values
   const priceInfo = {
     chargeableCount: extrasACobrar,
-    total: valorTotal,
+    total: valorACobrar,         // Use credit-adjusted amount
     pricePerPhoto: valorUnitario,
+    valorTotalIdeal,
+    totalExtras,
   };
 
   return (
@@ -205,14 +211,34 @@ export function SelectionConfirmation({
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-semibold text-lg">Valor Adicional</p>
-                    <p className="text-sm text-muted-foreground">
-                      {priceInfo.chargeableCount} fotos × R$ {priceInfo.pricePerPhoto.toFixed(2)}
-                    </p>
+                    {valorJaPago > 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {totalExtras} fotos × R$ {priceInfo.pricePerPhoto.toFixed(2)} - R$ {valorJaPago.toFixed(2)} já pago
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {priceInfo.chargeableCount} fotos × R$ {priceInfo.pricePerPhoto.toFixed(2)}
+                      </p>
+                    )}
                   </div>
                   <p className="font-display text-2xl font-bold text-primary">
                     R$ {priceInfo.total.toFixed(2)}
                   </p>
                 </div>
+                
+                {/* Breakdown when there's prior payment */}
+                {valorJaPago > 0 && (
+                  <div className="mt-3 pt-3 border-t border-border/50 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Valor total ({totalExtras} fotos)</span>
+                      <span className="font-medium">R$ {priceInfo.valorTotalIdeal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Já pago anteriormente</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">- R$ {valorJaPago.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
                 
                 {/* Savings indicator for progressive pricing */}
                 {economia && economia > 0 && (

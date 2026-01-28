@@ -868,6 +868,7 @@ export default function ClientGallery() {
         extraCount={extraCount}
         extrasACobrar={extrasACobrar}
         extrasPagasAnteriormente={extrasPagasTotal}
+        valorJaPago={valorJaPago}
         regrasCongeladas={regrasCongeladas}
         hasPaymentProvider={hasPaymentProvider}
         isConfirming={confirmMutation.isPending}
