@@ -1,133 +1,121 @@
 
-# Plano: Correção do SelectionConfirmation para usar Sistema de Crédito
+# Plano: Correção Completa do Sistema de Crédito para Fotos Extras
 
-## Diagnóstico do Problema
+## Problema Identificado
 
-A tela do fotógrafo (`GalleryDetail.tsx`) está mostrando os valores corretos porque usa `calcularPrecoProgressivoComCredito`. Porém, a tela do cliente (`SelectionConfirmation.tsx`) ainda usa a função antiga `calcularPrecoProgressivo`, resultando em:
+O cálculo de precificação progressiva na tela do cliente (`SelectionConfirmation`) está mostrando **R$ 9,00** quando deveria mostrar **R$ 4,00**.
 
-| Componente | Função Usada | Valor Calculado |
-|------------|--------------|-----------------|
-| GalleryDetail.tsx (fotógrafo) | `calcularPrecoProgressivoComCredito` | R$ 4,00 ✅ |
-| SelectionConfirmation.tsx (cliente) | `calcularPrecoProgressivo` | R$ 10,00 ❌ |
+### Análise da Imagem
 
-### Problema Específico no Código
+| Campo | Valor na Tela |
+|-------|---------------|
+| Fotos incluídas no pacote | 1 |
+| Fotos extras já pagas | +1 |
+| Fotos selecionadas | 4 |
+| Fotos extras a cobrar | 2 |
+| Valor por foto | R$ 3,00 |
+| **Valor Adicional (ERRADO)** | R$ 9,00 |
 
-```typescript
-// SelectionConfirmation.tsx - Linha 45-49 (INCORRETO)
-const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
-  extrasACobrar,           // Usa apenas novas extras
-  regrasCongeladas,
-  gallery.extraPhotoPrice
-);
-// Resultado: 2 fotos × R$ 5,00 = R$ 10,00 (ERRADO)
+### Cálculo Correto
+
+```text
+Total de extras = 4 - 1 = 3 fotos extras
+Extras já pagas = 1
+Extras a cobrar = 3 - 1 = 2 ✅
+
+Valor já pago (1 foto na faixa 1-2) = R$ 5,00
+Faixa atual (3 extras) = R$ 3,00/foto
+Valor total ideal = 3 × R$ 3,00 = R$ 9,00
+Valor a cobrar = R$ 9,00 - R$ 5,00 = R$ 4,00 ✅
 ```
 
-**Falta:**
-1. O import da função `calcularPrecoProgressivoComCredito`
-2. A prop `valorJaPago` (valor já pago anteriormente)
-3. A chamada correta da nova função com sistema de crédito
+**O problema é que `valorJaPago` está chegando como `0` no frontend**, fazendo com que o cálculo seja:
+- `R$ 9,00 - R$ 0,00 = R$ 9,00` ❌
 
 ---
 
-## Solução
+## Causa Raiz: `valor_total_vendido` Não Está na Resposta da Edge Function
 
-### Alterações em `SelectionConfirmation.tsx`
-
-#### 1. Adicionar nova prop `valorJaPago`
+### Edge Function `gallery-access` (Linha 165)
 
 ```typescript
-interface SelectionConfirmationProps {
-  // ... props existentes
-  valorJaPago: number; // NOVO: Valor já pago anteriormente (R$)
+// ATUAL - Faltando valor_total_vendido!
+{
+  extrasPagasTotal: gallery.total_fotos_extras_vendidas || 0,
+  // ❌ FALTA: valorTotalVendido: gallery.valor_total_vendido || 0,
 }
 ```
 
-#### 2. Trocar import e usar função correta
+A Edge Function busca `total_fotos_extras_vendidas` e retorna como `extrasPagasTotal`, mas **não retorna** `valor_total_vendido`. 
+
+### Frontend `ClientGallery.tsx` (Linha 689)
 
 ```typescript
-// ANTES
-import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
-
-// DEPOIS
-import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
+// ATUAL - Procura propriedade que não existe!
+const valorJaPago = supabaseGallery?.valor_total_vendido || 0;
+// Resultado: valorJaPago = 0 sempre!
 ```
 
-#### 3. Atualizar cálculo para usar sistema de crédito
-
-```typescript
-// ANTES (linha 45-49)
-const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
-  extrasACobrar,
-  regrasCongeladas,
-  gallery.extraPhotoPrice
-);
-
-// DEPOIS
-const { 
-  valorUnitario, 
-  valorACobrar,      // Valor a cobrar com crédito descontado
-  valorTotalIdeal,   // Valor total ideal (sem crédito)
-  economia,
-  totalExtras 
-} = calcularPrecoProgressivoComCredito(
-  extrasACobrar,              // Novas extras neste ciclo
-  extrasPagasAnteriormente,   // Extras já pagas
-  valorJaPago,                // Valor já pago (R$)
-  regrasCongeladas,
-  gallery.extraPhotoPrice
-);
-```
-
-#### 4. Atualizar priceInfo para usar valores corretos
-
-```typescript
-const priceInfo = {
-  chargeableCount: extrasACobrar,
-  total: valorACobrar,         // Usar valorACobrar (com crédito)
-  pricePerPhoto: valorUnitario,
-  valorTotalIdeal,             // Para exibir breakdown
-  valorJaPago,                 // Para exibir breakdown
-  totalExtras,                 // Total acumulado
-};
-```
-
-### Alterações em `ClientGallery.tsx`
-
-Passar a nova prop `valorJaPago`:
-
-```typescript
-<SelectionConfirmation
-  gallery={gallery}
-  photos={localPhotos}
-  selectedCount={selectedCount}
-  extraCount={extraCount}
-  extrasACobrar={extrasACobrar}
-  extrasPagasAnteriormente={extrasPagasTotal}
-  valorJaPago={valorJaPago}   // NOVO: Passar valor já pago
-  regrasCongeladas={regrasCongeladas}
-  // ... outras props
-/>
-```
+O frontend procura por `valor_total_vendido` que não foi enviado pela Edge Function.
 
 ---
 
-## UI Atualizada (Opcional)
+## Problemas Encontrados (3 no total)
 
-Mostrar breakdown detalhado quando houver valor já pago:
+### Problema 1: Edge Function `gallery-access` não retorna `valor_total_vendido`
+
+| Arquivo | Linha | Problema |
+|---------|-------|----------|
+| `supabase/functions/gallery-access/index.ts` | 165 | Falta `valorTotalVendido` na resposta |
+
+### Problema 2: Frontend procura campo com nome errado
+
+| Arquivo | Linha | Problema |
+|---------|-------|----------|
+| `src/pages/ClientGallery.tsx` | 689 | Procura `valor_total_vendido` (snake_case) mas Edge Function usa camelCase |
+
+### Problema 3: `SelectionSummary` (bottom-bar variant) não usa lógica de crédito
+
+| Arquivo | Linha | Problema |
+|---------|-------|----------|
+| `src/components/SelectionSummary.tsx` | 51-96 | Variant `bottom-bar` mostra `extraCount` em vez de `totalExtras` para contagem |
+
+---
+
+## Solução Proposta
+
+### Correção 1: Adicionar `valorTotalVendido` na Edge Function `gallery-access`
 
 ```typescript
-{valorJaPago > 0 && (
-  <>
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">Valor total ({totalExtras} fotos)</span>
-      <span className="font-medium">R$ {valorTotalIdeal.toFixed(2)}</span>
-    </div>
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">Já pago</span>
-      <span className="font-medium text-muted-foreground">-R$ {valorJaPago.toFixed(2)}</span>
-    </div>
-  </>
-)}
+// supabase/functions/gallery-access/index.ts - Linha 165
+{
+  // ... existente
+  extrasPagasTotal: gallery.total_fotos_extras_vendidas || 0,
+  // NOVO: Incluir valor já pago
+  valorTotalVendido: gallery.valor_total_vendido || 0,
+}
+```
+
+### Correção 2: Frontend usar nome correto do campo
+
+```typescript
+// src/pages/ClientGallery.tsx - Linha 689
+// ANTES:
+const valorJaPago = supabaseGallery?.valor_total_vendido || 0;
+
+// DEPOIS:
+const valorJaPago = supabaseGallery?.valorTotalVendido || supabaseGallery?.valor_total_vendido || 0;
+```
+
+### Correção 3: SelectionSummary bottom-bar mostrar contagem correta
+
+```typescript
+// src/components/SelectionSummary.tsx - Linha 64
+// ANTES:
+<span className="text-sm font-medium">+{extraCount} extras</span>
+
+// DEPOIS:
+<span className="text-sm font-medium">+{totalExtras} extras</span>
 ```
 
 ---
@@ -136,19 +124,75 @@ Mostrar breakdown detalhado quando houver valor já pago:
 
 | # | Arquivo | Alteração |
 |---|---------|-----------|
-| 1 | `src/components/SelectionConfirmation.tsx` | Adicionar prop `valorJaPago`, trocar para `calcularPrecoProgressivoComCredito`, atualizar exibição |
-| 2 | `src/pages/ClientGallery.tsx` | Passar prop `valorJaPago` |
+| 1 | `supabase/functions/gallery-access/index.ts` | Adicionar `valorTotalVendido` na resposta |
+| 2 | `src/pages/ClientGallery.tsx` | Usar `valorTotalVendido` (camelCase) |
+| 3 | `src/components/SelectionSummary.tsx` | Corrigir bottom-bar para usar `totalExtras` |
 
 ---
 
-## Resultado Esperado
+## Fluxo Corrigido
 
-### Cenário: 3 extras totais, 1 já paga (R$ 5), 2 novas a cobrar
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ CENÁRIO: 1 foto paga (R$ 5), cliente seleciona +2 = 3 extras totais │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ 1. Edge Function gallery-access:                                    │
+│    ├── Busca: gallery.total_fotos_extras_vendidas = 1               │
+│    ├── Busca: gallery.valor_total_vendido = 5                       │
+│    └── Retorna: { extrasPagasTotal: 1, valorTotalVendido: 5 }  ✅   │
+│                                                                     │
+│ 2. Frontend ClientGallery.tsx:                                      │
+│    ├── extrasPagasTotal = supabaseGallery.extrasPagasTotal = 1      │
+│    ├── valorJaPago = supabaseGallery.valorTotalVendido = 5  ✅      │
+│    └── Passa para SelectionConfirmation                             │
+│                                                                     │
+│ 3. SelectionConfirmation.tsx:                                       │
+│    ├── extrasACobrar = 2 (novas)                                    │
+│    ├── extrasPagasAnteriormente = 1                                 │
+│    ├── valorJaPago = 5                                              │
+│    ├── totalExtras = 1 + 2 = 3                                      │
+│    ├── valorUnitario (faixa 3) = R$ 3,00                            │
+│    ├── valorTotalIdeal = 3 × R$ 3,00 = R$ 9,00                      │
+│    ├── valorACobrar = R$ 9,00 - R$ 5,00 = R$ 4,00  ✅               │
+│    └── Exibe: "Valor Adicional: R$ 4,00"                            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-| Campo | Antes (Incorreto) | Depois (Correto) |
-|-------|-------------------|------------------|
-| Valor por foto | R$ 5,00 | R$ 3,00 |
-| Cálculo | 2 × R$ 5 | (3 × R$ 3) - R$ 5 |
-| Valor Adicional | R$ 10,00 | R$ 4,00 |
+---
 
-A tela do cliente agora mostrará o mesmo valor que a tela do fotógrafo: **R$ 4,00**
+## Verificação de Consistência
+
+Após as correções, os valores exibidos serão:
+
+| Campo | Valor |
+|-------|-------|
+| Fotos incluídas no pacote | 1 |
+| Fotos extras já pagas | +1 |
+| Fotos selecionadas | 4 |
+| Fotos extras a cobrar | 2 |
+| Valor por foto | R$ 3,00 |
+| **Valor total (3 fotos)** | R$ 9,00 |
+| **Já pago anteriormente** | -R$ 5,00 |
+| **Valor Adicional (CORRETO)** | **R$ 4,00** ✅ |
+
+---
+
+## Resumo das Alterações
+
+1. **Edge Function `gallery-access`**: Adicionar `valorTotalVendido: gallery.valor_total_vendido || 0`
+2. **ClientGallery.tsx**: Usar `valorTotalVendido` (camelCase) para pegar valor da resposta
+3. **SelectionSummary.tsx**: Ajustar bottom-bar para exibir `totalExtras` corretamente
+
+---
+
+## Impacto
+
+- **Modo PIX Manual**: Corrigido
+- **Modo InfinitePay**: Corrigido  
+- **Modo MercadoPago**: Corrigido
+- **Modo Sem Venda**: Não afetado (não cobra extras)
+- **Modo Cobrança Posterior**: Corrigido (exibe valor correto)
+
+Todas as formas de pagamento usarão o sistema de crédito corretamente após as alterações.
