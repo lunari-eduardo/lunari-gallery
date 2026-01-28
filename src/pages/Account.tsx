@@ -1,5 +1,6 @@
 import { useAuthContext } from '@/contexts/AuthContext';
 import { usePhotographerAccount, getAccountTypeLabel, getAccountStatusLabel } from '@/hooks/usePhotographerAccount';
+import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -17,7 +18,8 @@ import {
   Crown,
   Zap,
   Images,
-  Infinity
+  Infinity,
+  Camera
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -25,6 +27,7 @@ import { ptBR } from 'date-fns/locale';
 export default function Account() {
   const { user, isAdmin } = useAuthContext();
   const { data, isLoading } = usePhotographerAccount();
+  const { photoCredits, isLoading: isLoadingCredits } = usePhotoCredits();
 
   const getStatusBadge = () => {
     if (!data?.account) return null;
@@ -50,7 +53,7 @@ export default function Account() {
   const getAccountTypeBadge = () => {
     if (isAdmin) {
       return (
-        <Badge className="gap-1 bg-amber-600 hover:bg-amber-700 text-white">
+        <Badge variant="default" className="gap-1">
           <Crown className="h-3 w-3" />
           Administrador
         </Badge>
@@ -184,14 +187,14 @@ export default function Account() {
           </CardContent>
         </Card>
 
-        {/* Créditos de Galeria */}
+        {/* Créditos de Foto */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              Créditos de Galeria
+              <Camera className="h-5 w-5" />
+              Créditos de Foto
             </CardTitle>
-            <CardDescription>Use créditos para publicar galerias</CardDescription>
+            <CardDescription>1 foto = 1 crédito ao enviar</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isAdmin ? (
@@ -207,8 +210,43 @@ export default function Account() {
             ) : (
               <>
                 <div className="text-center py-4">
-                  <div className="text-4xl font-bold text-primary">{credits}</div>
+                  <div className="text-4xl font-bold text-primary">
+                    {isLoadingCredits ? '...' : photoCredits}
+                  </div>
                   <p className="text-muted-foreground">créditos disponíveis</p>
+                </div>
+
+                <Button className="w-full" variant="default" disabled>
+                  <Camera className="h-4 w-4 mr-2" />
+                  Comprar Créditos (Em breve)
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Créditos de Galeria (legado) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Créditos de Galeria
+            </CardTitle>
+            <CardDescription>Créditos para publicar galerias</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isAdmin ? (
+              <div className="text-center py-4">
+                <div className="flex items-center justify-center gap-2 text-4xl font-bold text-primary">
+                  <Infinity className="h-10 w-10" />
+                </div>
+                <p className="text-muted-foreground mt-2">Créditos ilimitados</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-center py-4">
+                  <div className="text-4xl font-bold text-primary">{credits}</div>
+                  <p className="text-muted-foreground">créditos de galeria</p>
                 </div>
 
                 <Separator />
@@ -220,11 +258,6 @@ export default function Account() {
                   </span>
                   <span className="text-sm font-medium">{galleriesPublished}</span>
                 </div>
-
-                <Button className="w-full" variant="default" disabled>
-                  <Zap className="h-4 w-4 mr-2" />
-                  Comprar Créditos (Em breve)
-                </Button>
               </>
             )}
           </CardContent>

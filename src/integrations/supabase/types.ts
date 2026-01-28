@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_credit_grants: {
+        Row: {
+          amount: number
+          granted_at: string
+          granted_by: string
+          id: string
+          ledger_id: string | null
+          reason: string | null
+          target_email: string
+          target_user_id: string
+        }
+        Insert: {
+          amount: number
+          granted_at?: string
+          granted_by: string
+          id?: string
+          ledger_id?: string | null
+          reason?: string | null
+          target_email: string
+          target_user_id: string
+        }
+        Update: {
+          amount?: number
+          granted_at?: string
+          granted_by?: string
+          id?: string
+          ledger_id?: string | null
+          reason?: string | null
+          target_email?: string
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_credit_grants_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "credit_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       allowed_emails: {
         Row: {
           created_at: string
@@ -403,6 +444,7 @@ export type Database = {
           status: string | null
           status_financeiro: string | null
           status_galeria: string | null
+          status_pagamento_fotos_extra: string | null
           updated_at: string | null
           updated_by: string | null
           user_id: string
@@ -435,6 +477,7 @@ export type Database = {
           status?: string | null
           status_financeiro?: string | null
           status_galeria?: string | null
+          status_pagamento_fotos_extra?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id: string
@@ -467,6 +510,7 @@ export type Database = {
           status?: string | null
           status_financeiro?: string | null
           status_galeria?: string | null
+          status_pagamento_fotos_extra?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string
@@ -663,6 +707,60 @@ export type Database = {
             columns: ["galeria_id"]
             isOneToOne: false
             referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          gallery_id: string | null
+          id: string
+          metadata: Json | null
+          operation_type: string
+          photo_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          gallery_id?: string | null
+          id?: string
+          metadata?: Json | null
+          operation_type: string
+          photo_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          gallery_id?: string | null
+          id?: string
+          metadata?: Json | null
+          operation_type?: string
+          photo_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_ledger_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_ledger_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "galeria_fotos"
             referencedColumns: ["id"]
           },
         ]
@@ -1704,6 +1802,7 @@ export type Database = {
           galleries_published_total: number
           gallery_credits: number
           id: string
+          photo_credits: number
           updated_at: string
           user_id: string
         }
@@ -1714,6 +1813,7 @@ export type Database = {
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
+          photo_credits?: number
           updated_at?: string
           user_id: string
         }
@@ -1724,6 +1824,7 @@ export type Database = {
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
+          photo_credits?: number
           updated_at?: string
           user_id?: string
         }
@@ -2691,9 +2792,17 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_grant_credits: {
+        Args: { _amount: number; _reason?: string; _target_user_id: string }
+        Returns: string
+      }
       calculate_manual_products_total: {
         Args: { produtos: Json }
         Returns: number
+      }
+      consume_photo_credits: {
+        Args: { _gallery_id: string; _photo_count?: number; _user_id: string }
+        Returns: boolean
       }
       create_session_from_appointment: {
         Args: { p_appointment_id: string }
@@ -2707,6 +2816,7 @@ export type Database = {
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
+      get_photo_credit_balance: { Args: { _user_id: string }; Returns: number }
       get_photographer_account: {
         Args: { _user_id: string }
         Returns: {
@@ -2735,6 +2845,15 @@ export type Database = {
       recompute_session_paid: {
         Args: { p_session_id: string }
         Returns: undefined
+      }
+      record_photo_credit_usage: {
+        Args: {
+          _description?: string
+          _gallery_id: string
+          _photo_id: string
+          _user_id: string
+        }
+        Returns: string
       }
     }
     Enums: {

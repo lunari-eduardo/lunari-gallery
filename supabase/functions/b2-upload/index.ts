@@ -299,6 +299,50 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Check if user is admin (bypass credit check)
+    const { data: isAdmin } = await supabase.rpc('has_role', {
+      _user_id: user.id,
+      _role: 'admin'
+    });
+
+    if (!isAdmin) {
+      // Try to consume 1 credit atomically
+      const { data: creditConsumed, error: creditError } = await supabase.rpc(
+        'consume_photo_credits',
+        {
+          _user_id: user.id,
+          _gallery_id: galleryId,
+          _photo_count: 1
+        }
+      );
+
+      if (creditError) {
+        console.error(`[${requestId}] Credit check error:`, creditError);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Erro ao verificar créditos',
+            code: 'CREDIT_CHECK_ERROR'
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!creditConsumed) {
+        console.log(`[${requestId}] Insufficient credits for user ${user.id}`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Créditos insuficientes. Compre mais créditos para continuar.',
+            code: 'INSUFFICIENT_CREDITS'
+          }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`[${requestId}] Credit consumed for user ${user.id}`);
+    } else {
+      console.log(`[${requestId}] Admin bypass - no credit consumed`);
+    }
+
     // Get B2 credentials
     const b2KeyId = Deno.env.get("B2_APPLICATION_KEY_ID");
     const b2AppKey = Deno.env.get("B2_APPLICATION_KEY");
@@ -384,6 +428,20 @@ Deno.serve(async (req) => {
     if (rpcError) {
       console.warn(`[${requestId}] Failed to increment photo count:`, rpcError.message);
       // Non-critical error - don't fail the upload
+    }
+
+    // Record credit usage in ledger (non-blocking, for audit trail)
+    if (!isAdmin) {
+      supabase.rpc('record_photo_credit_usage', {
+        _user_id: user.id,
+        _gallery_id: galleryId,
+        _photo_id: photo.id,
+        _description: `Upload: ${file.name}`
+      }).then(({ error: ledgerError }) => {
+        if (ledgerError) {
+          console.warn(`[${requestId}] Failed to record credit usage:`, ledgerError.message);
+        }
+      });
     }
 
     const totalDuration = Date.now() - startTime;
