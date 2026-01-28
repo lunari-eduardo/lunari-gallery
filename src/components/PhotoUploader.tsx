@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw, Coins, AlertTriangle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { 
   compressImage, 
@@ -15,6 +16,7 @@ import {
   getUploadErrorMessage, 
   getOptimalBatchSize 
 } from '@/lib/retryFetch';
+import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 
 export interface UploadedPhoto {
   id: string;
@@ -60,6 +62,9 @@ export function PhotoUploader({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTriggeredRef = useRef(false);
+  
+  // Photo credits hook
+  const { photoCredits, isAdmin, canUpload, refetch: refetchCredits } = usePhotoCredits();
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -67,6 +72,12 @@ export function PhotoUploader({
     
     if (validFiles.length !== fileArray.length) {
       toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
+    }
+
+    // Check credits BEFORE adding files (except for admins)
+    if (!isAdmin && !canUpload(validFiles.length)) {
+      toast.error(`Créditos insuficientes. Você tem ${photoCredits} créditos e está tentando enviar ${validFiles.length} fotos.`);
+      return;
     }
 
     const newItems: PhotoUploadItem[] = validFiles.map((file) => ({
@@ -79,7 +90,7 @@ export function PhotoUploader({
     }));
 
     setItems((prev) => [...prev, ...newItems]);
-  }, []);
+  }, [isAdmin, canUpload, photoCredits]);
 
   const removeItem = useCallback((id: string) => {
     setItems((prev) => {
@@ -139,6 +150,10 @@ export function PhotoUploader({
           }
 
           if (!data?.success) {
+            // Handle insufficient credits error specifically
+            if (data?.code === 'INSUFFICIENT_CREDITS') {
+              throw new Error('Créditos insuficientes');
+            }
             throw new Error(data?.error || 'Falha ao enviar foto');
           }
 
@@ -158,6 +173,9 @@ export function PhotoUploader({
       );
 
       updateItem(item.id, { status: 'done', progress: 100, error: undefined });
+      
+      // Refetch credits after successful upload
+      refetchCredits();
 
       return {
         id: data.photo.id,
@@ -293,14 +311,34 @@ export function PhotoUploader({
 
   return (
     <div className={cn('space-y-4', className)}>
+      {/* Credit Warning */}
+      {!isAdmin && photoCredits < 10 && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <span className="text-sm text-warning">
+            {photoCredits === 0 
+              ? 'Você não tem créditos. Compre mais para enviar fotos.'
+              : `Você tem apenas ${photoCredits} créditos restantes.`
+            }
+          </span>
+          <Button variant="outline" size="sm" className="ml-auto shrink-0" disabled>
+            <Coins className="h-3 w-3 mr-1" />
+            Comprar
+          </Button>
+        </div>
+      )}
+
       {/* Drop Zone */}
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isAdmin && photoCredits === 0 ? null : fileInputRef.current?.click()}
         className={cn(
-          'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+          'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
+          !isAdmin && photoCredits === 0 
+            ? 'border-muted-foreground/10 bg-muted/50 cursor-not-allowed opacity-60'
+            : 'cursor-pointer',
           isDragging
             ? 'border-primary bg-primary/5'
             : 'border-muted-foreground/25 hover:border-primary/50'
@@ -311,6 +349,12 @@ export function PhotoUploader({
         <p className="text-sm text-muted-foreground mt-1">
           ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto
         </p>
+        {!isAdmin && (
+          <p className="text-xs text-muted-foreground mt-2 flex items-center justify-center gap-1">
+            <Coins className="h-3 w-3" />
+            {photoCredits} créditos disponíveis (1 foto = 1 crédito)
+          </p>
+        )}
       </div>
 
       <input
