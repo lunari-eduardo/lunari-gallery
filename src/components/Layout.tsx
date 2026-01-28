@@ -8,7 +8,8 @@ import {
   X,
   Users,
   User,
-  LogOut
+  LogOut,
+  Camera
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
@@ -119,6 +120,12 @@ export function Layout({ children }: LayoutProps) {
                   <Link to="/account" className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
                     Minha Conta
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/credits" className="cursor-pointer">
+                    <Camera className="mr-2 h-4 w-4" />
+                    Créditos
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

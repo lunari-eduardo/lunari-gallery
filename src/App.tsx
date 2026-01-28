@@ -16,6 +16,7 @@ import GalleryPreview from "./pages/GalleryPreview";
 import ClientGallery from "./pages/ClientGallery";
 import Settings from "./pages/Settings";
 import Account from "./pages/Account";
+import Credits from "./pages/Credits";
 import Admin from "./pages/Admin";
 import Auth from "./pages/Auth";
 import AccessDenied from "./pages/AccessDenied";
@@ -81,6 +82,11 @@ const App = () => (
               <Route path="/account" element={
                 <ProtectedRoute>
                   <Layout><Account /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/credits" element={
+                <ProtectedRoute>
+                  <Layout><Credits /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/admin" element={
