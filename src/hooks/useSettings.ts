@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGallerySettings } from './useGallerySettings';
 import { GlobalSettings } from '@/types/gallery';
 import { mockGlobalSettings } from '@/data/mockData';
@@ -19,14 +19,18 @@ export function useSettings(): UseSettingsReturn {
     updateSettings: updateDbSettings,
   } = useGallerySettings();
 
-  // Initialize settings if user has none
+  // Ref to prevent multiple initialization calls (race condition fix)
+  const hasInitialized = useRef(false);
+
+  // Initialize settings if user has none - runs only once
   useEffect(() => {
-    if (!isLoading && dbSettings && 
+    if (!isLoading && dbSettings && !hasInitialized.current &&
         dbSettings.customThemes.length === 0 && 
         dbSettings.emailTemplates.length === 0) {
+      hasInitialized.current = true;
       initializeSettings.mutate();
     }
-  }, [isLoading, dbSettings, initializeSettings]);
+  }, [isLoading, dbSettings]); // Removed initializeSettings from deps to prevent re-runs
 
   // Use database settings or fallback to mock
   const settings: GlobalSettings = dbSettings || mockGlobalSettings;
