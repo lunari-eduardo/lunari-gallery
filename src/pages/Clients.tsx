@@ -32,7 +32,7 @@ import { Client, ClientGalleryStatus } from '@/types/gallery';
 import { toast } from 'sonner';
 
 export default function Clients() {
-  const { clients, isLoading, createClient, updateClient, hasGestaoIntegration } = useGalleryClients();
+  const { clients, isLoading, createClient, updateClient } = useGalleryClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -103,9 +103,6 @@ export default function Clients() {
           <h1 className="font-display text-3xl font-bold tracking-tight">Clientes</h1>
           <p className="text-muted-foreground mt-1">
             Gerencie os clientes das suas galerias
-            {hasGestaoIntegration && (
-              <Badge variant="outline" className="ml-2">Integrado</Badge>
-            )}
           </p>
         </div>
         <Button onClick={() => { setEditingClient(null); setIsModalOpen(true); }}>
