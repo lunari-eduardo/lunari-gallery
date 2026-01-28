@@ -48,90 +48,111 @@ function normalizarValor(valor: number): number {
   return valor;
 }
 
-// Calculate progressive pricing based on frozen rules
-// Updated to support cumulative tier lookup
-function calcularPrecoProgressivo(
-  quantidadeFotosExtras: number,
+// Calculate progressive pricing with CREDIT SYSTEM
+// Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
+// This ensures the client pays the same total regardless of number of selection cycles
+function calcularPrecoProgressivoComCredito(
+  extrasNovas: number,           // New extras selected in this cycle
+  extrasPagasTotal: number,       // Extras already paid from previous cycles (quantity)
+  valorJaPago: number,            // Total amount already paid for extras (R$)
   regrasCongeladas: RegrasCongeladas | null | undefined,
-  valorFotoExtraFixo: number,
-  quantidadeParaFaixa?: number // NEW: Optional - total accumulated extras for tier lookup
-): { valorUnitario: number; valorTotal: number } {
-  // Use quantidadeParaFaixa for tier lookup, or fallback to quantity to charge
-  const qtdParaBuscarFaixa = quantidadeParaFaixa ?? quantidadeFotosExtras;
+  valorFotoExtraFixo: number
+): { valorUnitario: number; valorACobrar: number; valorTotalIdeal: number; totalExtras: number } {
+  // Calculate total accumulated extras
+  const totalExtras = extrasPagasTotal + extrasNovas;
   
-  // No extras = no charge
-  if (quantidadeFotosExtras <= 0) {
-    return { valorUnitario: 0, valorTotal: 0 };
-  }
-
   // Normalize fallback value
   const fallbackValue = normalizarValor(valorFotoExtraFixo);
+  
+  // No extras = no charge
+  if (extrasNovas <= 0 || totalExtras <= 0) {
+    return {
+      valorUnitario: 0,
+      valorACobrar: 0,
+      valorTotalIdeal: valorJaPago,
+      totalExtras: extrasPagasTotal,
+    };
+  }
 
-  // No frozen rules = use fixed price
+  // Get base package price
+  const valorPacoteRaw = regrasCongeladas?.pacote?.valorFotoExtra || valorFotoExtraFixo;
+  const precoBasePacote = normalizarValor(valorPacoteRaw);
+
+  // No frozen rules = use fixed price with credit system
   if (!regrasCongeladas) {
+    const valorTotalIdeal = totalExtras * fallbackValue;
+    const valorACobrar = Math.max(0, valorTotalIdeal - valorJaPago);
     return {
       valorUnitario: fallbackValue,
-      valorTotal: fallbackValue * quantidadeFotosExtras,
+      valorACobrar,
+      valorTotalIdeal,
+      totalExtras,
     };
   }
 
   const precificacao = regrasCongeladas.precificacaoFotoExtra;
   const modelo = precificacao?.modelo || regrasCongeladas.modelo || 'fixo';
+  
+  let valorUnitario = precoBasePacote;
 
   // Fixed model
   if (modelo === 'fixo') {
-    const valorFixo = normalizarValor(
+    valorUnitario = normalizarValor(
       precificacao?.valorFixo ||
         regrasCongeladas.pacote?.valorFotoExtra ||
         valorFotoExtraFixo
     );
-    return {
-      valorUnitario: valorFixo,
-      valorTotal: valorFixo * quantidadeFotosExtras,
-    };
   }
-
   // Progressive model (global or category)
-  let tabela: TabelaPrecos | undefined;
+  else {
+    let tabela: TabelaPrecos | undefined;
 
-  if (modelo === 'categoria' && precificacao?.tabelaCategoria) {
-    tabela = precificacao.tabelaCategoria;
-  } else if (precificacao?.tabelaGlobal) {
-    tabela = precificacao.tabelaGlobal;
+    if (modelo === 'categoria' && precificacao?.tabelaCategoria) {
+      tabela = precificacao.tabelaCategoria;
+    } else if (precificacao?.tabelaGlobal) {
+      tabela = precificacao.tabelaGlobal;
+    }
+
+    if (tabela && tabela.faixas && tabela.faixas.length > 0) {
+      // Find matching tier using TOTAL accumulated extras
+      const faixaAtual = tabela.faixas.find((faixa) => {
+        const dentroDaFaixa = totalExtras >= faixa.min;
+        const dentroDoMaximo = faixa.max === null || totalExtras <= faixa.max;
+        return dentroDaFaixa && dentroDoMaximo;
+      });
+
+      // If no tier found, try the highest tier (for quantities beyond all ranges)
+      if (faixaAtual) {
+        valorUnitario = normalizarValor(faixaAtual.valor);
+      } else {
+        // Use highest tier for quantities beyond defined ranges
+        const faixasOrdenadas = [...tabela.faixas].sort((a, b) => b.min - a.min);
+        if (faixasOrdenadas.length > 0) {
+          valorUnitario = normalizarValor(faixasOrdenadas[0].valor);
+        }
+      }
+    }
   }
 
-  if (!tabela || !tabela.faixas || tabela.faixas.length === 0) {
-    const valorPacote = normalizarValor(
-      regrasCongeladas.pacote?.valorFotoExtra || valorFotoExtraFixo
-    );
-    return {
-      valorUnitario: valorPacote,
-      valorTotal: valorPacote * quantidadeFotosExtras,
-    };
+  // Ensure we have a valid price
+  if (!valorUnitario || valorUnitario <= 0) {
+    valorUnitario = fallbackValue;
   }
 
-  // Find matching tier using cumulative total (qtdParaBuscarFaixa)
-  const faixaAtual = tabela.faixas.find((faixa) => {
-    const dentroDaFaixa = qtdParaBuscarFaixa >= faixa.min;
-    const dentroDoMaximo = faixa.max === null || qtdParaBuscarFaixa <= faixa.max;
-    return dentroDaFaixa && dentroDoMaximo;
-  });
+  // CREDIT SYSTEM FORMULA:
+  // 1. Calculate what the total WOULD cost if bought all at once
+  const valorTotalIdeal = totalExtras * valorUnitario;
+  
+  // 2. Subtract what was already paid
+  const valorACobrar = Math.max(0, valorTotalIdeal - valorJaPago);
 
-  if (faixaAtual) {
-    const valorUnitario = normalizarValor(faixaAtual.valor);
-    return {
-      valorUnitario,
-      valorTotal: valorUnitario * quantidadeFotosExtras, // Charge only extras to bill
-    };
-  }
+  console.log(`📊 Credit-based pricing: totalExtras=${totalExtras}, valorUnitario=${valorUnitario}, valorTotalIdeal=${valorTotalIdeal}, valorJaPago=${valorJaPago}, valorACobrar=${valorACobrar}`);
 
-  // If no tier found, use package price
-  const valorPadrao = normalizarValor(
-    regrasCongeladas.pacote?.valorFotoExtra || valorFotoExtraFixo
-  );
   return {
-    valorUnitario: valorPadrao,
-    valorTotal: valorPadrao * quantidadeFotosExtras,
+    valorUnitario,
+    valorACobrar,
+    valorTotalIdeal,
+    totalExtras,
   };
 }
 
@@ -181,8 +202,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Calculate progressive pricing from session rules (if linked to Gestão)
-    // Apply the formula: extras_a_cobrar = max(0, extras_necessarias - extras_pagas_total)
+    // 3. Calculate progressive pricing using CREDIT SYSTEM
+    // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
     let valorUnitario = 0;
     let valorTotal = 0;
     
@@ -191,18 +212,15 @@ Deno.serve(async (req) => {
     
     // Get previously paid extras from gallery record
     const extrasPagasTotal = gallery.total_fotos_extras_vendidas || 0;
+    const valorJaPago = gallery.valor_total_vendido || 0;
     
-    // Calculate only the extras that need to be charged (credit system)
+    // Calculate only the extras that need to be charged (quantity not yet paid)
     const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
     
-    // For response/display, use extrasNecessarias; for billing, use extrasACobrar
+    // For response/display, use extrasNecessarias
     const extrasCount = extraCount ?? extrasNecessarias;
     
-    console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}`);
-    
-    // NEW: Total accumulated extras for tier lookup (previously paid + new to charge)
-    const totalExtrasAcumuladas = extrasPagasTotal + extrasACobrar;
-    console.log(`📊 Cumulative tier lookup: totalAcumuladas=${totalExtrasAcumuladas}`);
+    console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}`);
 
     if (gallery.session_id) {
       // Fetch session data with frozen rules
@@ -217,26 +235,31 @@ Deno.serve(async (req) => {
       }
 
       if (sessao) {
-        console.log('📊 Session found, calculating progressive pricing with cumulative tier...');
+        console.log('📊 Session found, calculating with credit system...');
         const regras = sessao.regras_congeladas as RegrasCongeladas | null;
         const fallbackPrice = sessao.valor_foto_extra || gallery.valor_foto_extra || 0;
 
-        // Use extrasACobrar for billing, totalExtrasAcumuladas for tier lookup
-        const resultado = calcularPrecoProgressivo(
-          extrasACobrar, 
+        // Use credit system formula
+        const resultado = calcularPrecoProgressivoComCredito(
+          extrasACobrar,     // New extras in this cycle
+          extrasPagasTotal,  // Previously paid quantity
+          valorJaPago,       // Previously paid amount R$
           regras, 
-          fallbackPrice,
-          totalExtrasAcumuladas // NEW: Use cumulative total for tier lookup
+          fallbackPrice
         );
         valorUnitario = resultado.valorUnitario;
-        valorTotal = resultado.valorTotal;
+        valorTotal = resultado.valorACobrar; // THIS IS THE KEY CHANGE: use valorACobrar, not valorTotal
 
-        console.log(`📊 Pricing calculated: ${extrasACobrar} extras a cobrar × R$ ${valorUnitario} = R$ ${valorTotal} (tier based on ${totalExtrasAcumuladas} total)`);
+        console.log(`📊 Credit-based pricing: valorTotalIdeal=R$${resultado.valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
       }
     } else {
       // No session = use gallery's fixed price with credit system
       valorUnitario = gallery.valor_foto_extra || 0;
-      valorTotal = valorUnitario * extrasACobrar;
+      const totalExtras = extrasPagasTotal + extrasACobrar;
+      const valorTotalIdeal = totalExtras * valorUnitario;
+      valorTotal = Math.max(0, valorTotalIdeal - valorJaPago);
+      
+      console.log(`📊 No session - fixed price credit system: totalExtras=${totalExtras}, valorTotalIdeal=R$${valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
     }
 
     // 4. Parse sale settings to determine if payment is required

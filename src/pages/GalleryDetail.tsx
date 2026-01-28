@@ -17,7 +17,7 @@ import {
   Clock,
   RefreshCw
 } from 'lucide-react';
-import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
+import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
@@ -341,11 +341,17 @@ export default function GalleryDetail() {
     });
   }
 
-  // Calculate progressive pricing for summary
+  // Calculate progressive pricing for summary using credit system
   const regrasCongeladas = supabaseGallery.regrasCongeladas as RegrasCongeladas | null;
-  const extraCount = Math.max(0, supabaseGallery.fotosSelecionadas - supabaseGallery.fotosIncluidas);
-  const { valorUnitario, valorTotal: calculatedExtraTotal, economia } = calcularPrecoProgressivo(
-    extraCount,
+  const extrasNecessarias = Math.max(0, supabaseGallery.fotosSelecionadas - supabaseGallery.fotosIncluidas);
+  const extrasPagasTotal = supabaseGallery.totalFotosExtrasVendidas || 0;
+  const valorJaPago = supabaseGallery.valorTotalVendido || 0;
+  const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
+  
+  const { valorUnitario, valorACobrar: calculatedExtraTotal, economia } = calcularPrecoProgressivoComCredito(
+    extrasACobrar,
+    extrasPagasTotal,
+    valorJaPago,
     regrasCongeladas,
     supabaseGallery.valorFotoExtra
   );
@@ -384,7 +390,7 @@ export default function GalleryDetail() {
     createdAt: supabaseGallery.createdAt,
     updatedAt: supabaseGallery.updatedAt,
     selectedCount: supabaseGallery.fotosSelecionadas,
-    extraCount,
+    extraCount: extrasNecessarias,
     extraTotal: calculatedExtraTotal, // Use calculated total
   };
 
@@ -597,7 +603,13 @@ export default function GalleryDetail() {
             </div>
 
             <div>
-              <SelectionSummary gallery={galleryForSummary} regrasCongeladas={regrasCongeladas} />
+              <SelectionSummary 
+                gallery={galleryForSummary} 
+                regrasCongeladas={regrasCongeladas}
+                extrasPagasTotal={extrasPagasTotal}
+                extrasACobrar={extrasACobrar}
+                valorJaPago={valorJaPago}
+              />
 
               {/* Payment Status Card in Selection tab - use aggregated totals */}
               {supabaseGallery.statusPagamento && supabaseGallery.statusPagamento !== 'sem_vendas' && (
