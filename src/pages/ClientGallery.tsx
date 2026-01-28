@@ -28,7 +28,7 @@ import { WatermarkSettings, DiscountPackage } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { calcularPrecoProgressivo, RegrasCongeladas } from '@/lib/pricingUtils';
+import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
@@ -685,17 +685,23 @@ export default function ClientGallery() {
   // For display purposes, use total extras needed
   const extraCount = extrasNecessarias;
   
-  // Total accumulated extras for tier lookup (previously paid + new to charge)
-  const totalExtrasAcumuladas = extrasPagasTotal + extrasACobrar;
+  // Get already paid amount for credit calculation
+  const valorJaPago = supabaseGallery?.valor_total_vendido || 0;
   
-  // Use progressive pricing calculation with:
-  // - extrasACobrar: quantity to charge in this cycle
-  // - totalExtrasAcumuladas: for finding the correct discount tier
-  const { valorUnitario, valorTotal: extraTotal, economia } = calcularPrecoProgressivo(
-    extrasACobrar, // Quantity to charge
+  // Use credit-based progressive pricing calculation:
+  // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
+  const { 
+    valorUnitario, 
+    valorACobrar: extraTotal, 
+    valorTotalIdeal,
+    economia,
+    totalExtras: totalExtrasAcumuladas 
+  } = calcularPrecoProgressivoComCredito(
+    extrasACobrar,      // New extras in this cycle
+    extrasPagasTotal,   // Previously paid quantity
+    valorJaPago,        // Previously paid amount R$
     regrasCongeladas,
-    gallery.extraPhotoPrice,
-    totalExtrasAcumuladas // Use cumulative total for tier lookup
+    gallery.extraPhotoPrice
   );
 
   const toggleSelection = (photoId: string) => {
@@ -736,21 +742,20 @@ export default function ClientGallery() {
     const currentExtrasNecessarias = Math.max(0, currentSelectedCount - gallery.includedPhotos);
     const currentExtrasACobrar = Math.max(0, currentExtrasNecessarias - extrasPagasTotal);
     
-    // Total accumulated extras for tier lookup (previously paid + new to charge)
-    const currentTotalAcumuladas = extrasPagasTotal + currentExtrasACobrar;
-    
-    const { valorUnitario: currentValorUnitario, valorTotal: currentValorTotal } = calcularPrecoProgressivo(
-      currentExtrasACobrar, // Quantity to charge for billing
+    // Use credit-based pricing
+    const resultado = calcularPrecoProgressivoComCredito(
+      currentExtrasACobrar,    // New extras in this cycle
+      extrasPagasTotal,        // Previously paid quantity
+      valorJaPago,             // Previously paid amount R$
       regrasCongeladas,
-      gallery.extraPhotoPrice,
-      currentTotalAcumuladas // Use cumulative total for tier lookup
+      gallery.extraPhotoPrice
     );
     
     confirmMutation.mutate({
       selectedCount: currentSelectedCount,
       extraCount: currentExtrasACobrar, // Pass extras to charge
-      valorUnitario: currentValorUnitario,
-      valorTotal: currentValorTotal,
+      valorUnitario: resultado.valorUnitario,
+      valorTotal: resultado.valorACobrar, // Use credit-adjusted amount
     });
   };
 
@@ -1072,6 +1077,9 @@ export default function ClientGallery() {
         isClient
         variant="bottom-bar"
         regrasCongeladas={regrasCongeladas}
+        extrasPagasTotal={extrasPagasTotal}
+        extrasACobrar={extrasACobrar}
+        valorJaPago={valorJaPago}
       />
 
       {lightboxIndex !== null && (

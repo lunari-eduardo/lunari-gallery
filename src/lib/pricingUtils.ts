@@ -80,8 +80,9 @@ export function normalizarValor(valor: number, forceSkip = false): number {
 
 /**
  * Finds the price tier for the given quantity
+ * Exported for use in Edge Functions as well
  */
-function encontrarFaixaPreco(quantidade: number, faixas: FaixaPreco[]): FaixaPreco | null {
+export function encontrarFaixaPreco(quantidade: number, faixas: FaixaPreco[]): FaixaPreco | null {
   if (!faixas?.length || quantidade <= 0) return null;
   
   // Sort by min ascending
@@ -211,6 +212,132 @@ export function calcularPrecoProgressivo(
     valorTotal,
     faixaAtual: faixaAtual || undefined,
     economia: economia > 0 ? economia : undefined,
+    modeloUsado,
+  };
+}
+
+/**
+ * Result type for credit-based progressive pricing
+ */
+export interface CalculoPrecoComCreditoResult {
+  valorUnitario: number;          // Unit price from the tier
+  valorACobrar: number;           // Amount to charge this cycle
+  valorTotalIdeal: number;        // What total would cost if bought at once
+  economia: number;               // Savings vs base price
+  totalExtras: number;            // Total accumulated extras
+  faixaAtual?: FaixaPreco;        // Current price tier
+  modeloUsado: 'fixo' | 'global' | 'categoria';
+}
+
+/**
+ * Calculates progressive pricing with credit system
+ * 
+ * Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
+ * 
+ * This ensures the client always pays the same total regardless of how many
+ * selection cycles they go through.
+ * 
+ * @param extrasNovas - New extras selected in this cycle
+ * @param extrasPagasTotal - Extras already paid from previous cycles (quantity)
+ * @param valorJaPago - Total amount already paid for extras (R$)
+ * @param regrasCongeladas - Frozen pricing rules from Gestão (or null)
+ * @param valorFotoExtraFixo - Fallback fixed price per photo
+ * @returns Calculation result with amount to charge and breakdown
+ */
+export function calcularPrecoProgressivoComCredito(
+  extrasNovas: number,
+  extrasPagasTotal: number,
+  valorJaPago: number,
+  regrasCongeladas: RegrasCongeladas | null | undefined,
+  valorFotoExtraFixo: number
+): CalculoPrecoComCreditoResult {
+  // Calculate total accumulated extras
+  const totalExtras = extrasPagasTotal + extrasNovas;
+  
+  // Normalize fallback value
+  const fallbackNormalizado = normalizarValor(valorFotoExtraFixo);
+  
+  // Default result for no new extras
+  if (extrasNovas <= 0 || totalExtras <= 0) {
+    return {
+      valorUnitario: 0,
+      valorACobrar: 0,
+      valorTotalIdeal: valorJaPago,
+      economia: 0,
+      totalExtras: extrasPagasTotal,
+      modeloUsado: 'fixo',
+    };
+  }
+  
+  // Find the tier based on TOTAL accumulated extras (not just new ones)
+  let valorUnitario = fallbackNormalizado;
+  let faixaAtual: FaixaPreco | null = null;
+  let modeloUsado: 'fixo' | 'global' | 'categoria' = 'fixo';
+  
+  // Get base price for savings calculation
+  const valorPacoteRaw = regrasCongeladas?.pacote?.valorFotoExtra || valorFotoExtraFixo;
+  const precoBasePacote = normalizarValor(valorPacoteRaw);
+  
+  if (regrasCongeladas?.precificacaoFotoExtra) {
+    const regras = regrasCongeladas.precificacaoFotoExtra;
+    
+    switch (regras.modelo) {
+      case 'fixo':
+        valorUnitario = precoBasePacote;
+        modeloUsado = 'fixo';
+        break;
+        
+      case 'global':
+        if (regras.tabelaGlobal?.faixas) {
+          faixaAtual = encontrarFaixaPreco(totalExtras, regras.tabelaGlobal.faixas);
+          valorUnitario = faixaAtual?.valor ? normalizarValor(faixaAtual.valor) : precoBasePacote;
+          modeloUsado = 'global';
+        } else {
+          valorUnitario = precoBasePacote;
+        }
+        break;
+        
+      case 'categoria':
+        if (regras.tabelaCategoria?.usar_valor_fixo_pacote) {
+          valorUnitario = precoBasePacote;
+          modeloUsado = 'fixo';
+        } else if (regras.tabelaCategoria?.faixas) {
+          faixaAtual = encontrarFaixaPreco(totalExtras, regras.tabelaCategoria.faixas);
+          valorUnitario = faixaAtual?.valor ? normalizarValor(faixaAtual.valor) : precoBasePacote;
+          modeloUsado = 'categoria';
+        } else {
+          valorUnitario = precoBasePacote;
+        }
+        break;
+        
+      default:
+        valorUnitario = fallbackNormalizado;
+    }
+  }
+  
+  // Ensure we have a valid price
+  if (!valorUnitario || valorUnitario <= 0) {
+    valorUnitario = fallbackNormalizado;
+  }
+  
+  // Calculate what the total WOULD cost if bought all at once
+  const valorTotalIdeal = totalExtras * valorUnitario;
+  
+  // Subtract what was already paid (credit system)
+  // This ensures client pays same total regardless of number of selection cycles
+  const valorACobrar = Math.max(0, valorTotalIdeal - valorJaPago);
+  
+  // Calculate savings compared to base price (first tier)
+  const valorSemDesconto = totalExtras * precoBasePacote;
+  const economia = Math.max(0, valorSemDesconto - valorTotalIdeal);
+  
+  return {
+    valorUnitario,
+    valorACobrar,
+    valorTotalIdeal,
+    economia,
+    totalExtras,
+    faixaAtual: faixaAtual || undefined,
     modeloUsado,
   };
 }

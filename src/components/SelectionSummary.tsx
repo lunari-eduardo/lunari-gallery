@@ -2,7 +2,7 @@ import { Gallery } from '@/types/gallery';
 import { Check, AlertCircle, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { calcularPrecoProgressivo, RegrasCongeladas, formatFaixaDisplay, getFaixasFromRegras } from '@/lib/pricingUtils';
+import { calcularPrecoProgressivoComCredito, RegrasCongeladas, formatFaixaDisplay, getFaixasFromRegras } from '@/lib/pricingUtils';
 
 interface SelectionSummaryProps {
   gallery: Gallery;
@@ -10,8 +10,9 @@ interface SelectionSummaryProps {
   isClient?: boolean;
   variant?: 'default' | 'bottom-bar';
   regrasCongeladas?: RegrasCongeladas | null;
-  extrasPagasTotal?: number; // Previously paid extras for cumulative tier calculation
-  extrasACobrar?: number; // Extras to charge in this cycle
+  extrasPagasTotal?: number; // Previously paid extras (quantity)
+  extrasACobrar?: number; // Extras to charge in this cycle (quantity)
+  valorJaPago?: number; // Previously paid amount (R$)
 }
 
 export function SelectionSummary({ 
@@ -21,7 +22,8 @@ export function SelectionSummary({
   variant = 'default',
   regrasCongeladas,
   extrasPagasTotal = 0,
-  extrasACobrar: extrasACobrarProp
+  extrasACobrar: extrasACobrarProp,
+  valorJaPago = 0
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
@@ -32,20 +34,18 @@ export function SelectionSummary({
   // Use provided extrasACobrar or calculate from total extras
   const extrasACobrar = extrasACobrarProp ?? Math.max(0, extraCount - extrasPagasTotal);
   
-  // Total accumulated extras for tier lookup (previously paid + new to charge)
-  const totalExtrasAcumuladas = extrasPagasTotal + extrasACobrar;
-  
-  // Calculate progressive pricing with cumulative tier lookup
-  const { valorUnitario, valorTotal, economia } = calcularPrecoProgressivo(
-    extrasACobrar, // Quantity to charge
+  // Calculate pricing using credit system
+  const { valorUnitario, valorACobrar, valorTotalIdeal, economia, totalExtras } = calcularPrecoProgressivoComCredito(
+    extrasACobrar,      // New extras in this cycle
+    extrasPagasTotal,   // Previously paid quantity
+    valorJaPago,        // Previously paid amount R$
     regrasCongeladas,
-    extraPhotoPrice,
-    totalExtrasAcumuladas // Use cumulative total for tier lookup
+    extraPhotoPrice
   );
   
   // Use calculated values
   const displayUnitPrice = valorUnitario;
-  const displayTotal = valorTotal;
+  const displayTotal = valorACobrar; // Use credit-adjusted amount
 
   // Bottom bar variant for client gallery
   if (variant === 'bottom-bar') {
@@ -122,9 +122,25 @@ export function SelectionSummary({
             <div className="h-px bg-border" />
             
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Fotos extras</span>
-              <span className="font-medium text-primary">+{extraCount}</span>
+              <span className="text-muted-foreground">Fotos extras totais</span>
+              <span className="font-medium text-primary">+{totalExtras}</span>
             </div>
+            
+            {/* Show previously paid extras */}
+            {extrasPagasTotal > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Extras já pagas</span>
+                <span className="font-medium text-muted-foreground">-{extrasPagasTotal}</span>
+              </div>
+            )}
+            
+            {/* Show new extras to pay */}
+            {extrasACobrar > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Extras a pagar</span>
+                <span className="font-medium text-primary">+{extrasACobrar}</span>
+              </div>
+            )}
             
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Valor por extra</span>
@@ -133,8 +149,22 @@ export function SelectionSummary({
             
             <div className="h-px bg-border" />
             
+            {/* Show credit breakdown when there are previously paid amounts */}
+            {valorJaPago > 0 && valorTotalIdeal > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Valor total ({totalExtras} fotos)</span>
+                  <span className="font-medium">R$ {valorTotalIdeal.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Já pago</span>
+                  <span className="font-medium text-muted-foreground">-R$ {valorJaPago.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+            
             <div className="flex items-center justify-between">
-              <span className="font-medium">Valor adicional</span>
+              <span className="font-medium">Valor a pagar</span>
               <span className="text-lg font-bold text-primary">
                 R$ {displayTotal.toFixed(2)}
               </span>
@@ -142,9 +172,9 @@ export function SelectionSummary({
             
             {/* Show savings/discount indicator when progressive pricing applied */}
             {economia && economia > 0 && (
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 text-sm">
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-accent/20 text-accent-foreground text-sm">
                 <TrendingDown className="h-4 w-4 flex-shrink-0" />
-                <span>Desconto: R$ {economia.toFixed(2)}</span>
+                <span>Economia: R$ {economia.toFixed(2)}</span>
               </div>
             )}
           </>
