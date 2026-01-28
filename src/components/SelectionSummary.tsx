@@ -61,7 +61,7 @@ export function SelectionSummary({
             
             {isOverLimit && (
               <div className="flex items-center gap-2 text-primary">
-                <span className="text-sm font-medium">+{extraCount} extras</span>
+                <span className="text-sm font-medium">+{totalExtras} extras</span>
                 <span className="text-sm font-bold">R$ {displayTotal.toFixed(2)}</span>
               </div>
             )}
