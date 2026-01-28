@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess, AccessLevel } from '@/hooks/useGalleryAccess';
@@ -29,6 +29,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasGestaoIntegration,
     isAdmin,
   } = useGalleryAccess(user);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('📊 AuthContext state:', {
+      user: user?.email,
+      loading,
+      accessLoading,
+      accessLevel,
+      hasAccess,
+    });
+  }, [user, loading, accessLoading, accessLevel, hasAccess]);
 
   const value: AuthContextType = {
     user,
