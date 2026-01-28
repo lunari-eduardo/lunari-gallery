@@ -1344,45 +1344,6 @@ export type Database = {
           },
         ]
       }
-      gallery_clientes: {
-        Row: {
-          created_at: string
-          email: string
-          gallery_password: string
-          id: string
-          nome: string
-          status: string
-          telefone: string | null
-          total_galerias: number | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          gallery_password: string
-          id?: string
-          nome: string
-          status?: string
-          telefone?: string | null
-          total_galerias?: number | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          gallery_password?: string
-          id?: string
-          nome?: string
-          status?: string
-          telefone?: string | null
-          total_galerias?: number | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       gallery_discount_presets: {
         Row: {
           created_at: string | null
