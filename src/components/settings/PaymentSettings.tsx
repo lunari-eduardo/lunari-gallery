@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Smartphone, Zap } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Smartphone, Zap, Link2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -11,14 +13,20 @@ import {
   usePaymentIntegration, 
   PixManualData, 
   InfinitePayData,
+  MercadoPagoData,
   PixKeyType,
   PaymentProvider,
   getProviderLabel,
   getPixKeyTypeLabel,
 } from '@/hooks/usePaymentIntegration';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export function PaymentSettings() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   const { 
     data, 
     isLoading, 
@@ -26,11 +34,16 @@ export function PaymentSettings() {
     saveInfinitePay, 
     setAsDefault,
     deactivate,
+    connectMercadoPago,
+    updateMercadoPagoSettings,
+    getMercadoPagoOAuthUrl,
+    mpAppId,
   } = usePaymentIntegration();
 
   // Form visibility states
   const [showPixForm, setShowPixForm] = useState(false);
   const [showIpForm, setShowIpForm] = useState(false);
+  const [showMpSettings, setShowMpSettings] = useState(false);
   
   // PIX Manual fields
   const [chavePix, setChavePix] = useState('');
@@ -39,6 +52,29 @@ export function PaymentSettings() {
 
   // InfinitePay fields
   const [handle, setHandle] = useState('');
+
+  // Mercado Pago settings
+  const [mpHabilitarPix, setMpHabilitarPix] = useState(true);
+  const [mpHabilitarCartao, setMpHabilitarCartao] = useState(true);
+  const [mpMaxParcelas, setMpMaxParcelas] = useState('12');
+  const [mpAbsorverTaxa, setMpAbsorverTaxa] = useState(false);
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const isCallback = params.get('mp_callback');
+    const code = params.get('code');
+    
+    if (isCallback && code) {
+      const redirectUri = `${window.location.origin}/settings?mp_callback=true`;
+      connectMercadoPago.mutate({ code, redirect_uri: redirectUri }, {
+        onSettled: () => {
+          // Clean URL after processing
+          navigate('/settings', { replace: true });
+        },
+      });
+    }
+  }, [location.search, connectMercadoPago, navigate]);
 
   // Load existing data when available
   useEffect(() => {
@@ -56,6 +92,15 @@ export function PaymentSettings() {
         const ipData = ipIntegration.dadosExtras as InfinitePayData;
         setHandle(ipData.handle || '');
       }
+
+      const mpIntegration = data.allIntegrations.find(i => i.provedor === 'mercadopago');
+      if (mpIntegration?.dadosExtras) {
+        const mpData = mpIntegration.dadosExtras as MercadoPagoData;
+        setMpHabilitarPix(mpData.habilitarPix ?? true);
+        setMpHabilitarCartao(mpData.habilitarCartao ?? true);
+        setMpMaxParcelas(String(mpData.maxParcelas ?? 12));
+        setMpAbsorverTaxa(mpData.absorverTaxa ?? false);
+      }
     }
   }, [data?.allIntegrations]);
 
@@ -66,7 +111,7 @@ export function PaymentSettings() {
       chavePix: chavePix.trim(),
       tipoChave,
       nomeTitular: nomeTitular.trim(),
-      setAsDefault: !data?.hasPayment, // Only set as default if no other method
+      setAsDefault: !data?.hasPayment,
     });
     setShowPixForm(false);
   };
@@ -79,6 +124,23 @@ export function PaymentSettings() {
       setAsDefault: !data?.hasPayment,
     });
     setShowIpForm(false);
+  };
+
+  const handleConnectMercadoPago = () => {
+    const url = getMercadoPagoOAuthUrl();
+    if (url) {
+      window.location.href = url;
+    }
+  };
+
+  const handleSaveMpSettings = async () => {
+    await updateMercadoPagoSettings.mutateAsync({
+      habilitarPix: mpHabilitarPix,
+      habilitarCartao: mpHabilitarCartao,
+      maxParcelas: parseInt(mpMaxParcelas),
+      absorverTaxa: mpAbsorverTaxa,
+    });
+    setShowMpSettings(false);
   };
 
   const getProviderIcon = (provedor: PaymentProvider) => {
@@ -97,16 +159,20 @@ export function PaymentSettings() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || connectMercadoPago.isPending) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        {connectMercadoPago.isPending && (
+          <p className="text-sm text-muted-foreground">Conectando Mercado Pago...</p>
+        )}
       </div>
     );
   }
 
   const pixIntegration = data?.allIntegrations.find(i => i.provedor === 'pix_manual');
   const ipIntegration = data?.allIntegrations.find(i => i.provedor === 'infinitepay');
+  const mpIntegration = data?.allIntegrations.find(i => i.provedor === 'mercadopago');
 
   return (
     <div className="space-y-6">
@@ -148,6 +214,7 @@ export function PaymentSettings() {
                     <p className="text-sm text-muted-foreground">
                       {integration.provedor === 'pix_manual' && (integration.dadosExtras as PixManualData)?.nomeTitular}
                       {integration.provedor === 'infinitepay' && `@${(integration.dadosExtras as InfinitePayData)?.handle}`}
+                      {integration.provedor === 'mercadopago' && integration.mpUserId && `ID: ${integration.mpUserId}`}
                     </p>
                   </div>
                 </div>
@@ -170,6 +237,7 @@ export function PaymentSettings() {
                     onClick={() => {
                       if (integration.provedor === 'pix_manual') setShowPixForm(true);
                       if (integration.provedor === 'infinitepay') setShowIpForm(true);
+                      if (integration.provedor === 'mercadopago') setShowMpSettings(true);
                     }}
                   >
                     <Edit2 className="h-4 w-4" />
@@ -197,6 +265,194 @@ export function PaymentSettings() {
           </CardContent>
         </Card>
       )}
+
+      {/* Mercado Pago OAuth */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-blue-600" />
+            Mercado Pago
+          </CardTitle>
+          <CardDescription>
+            Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {showMpSettings && mpIntegration ? (
+            <div className="space-y-6">
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-green-700 dark:text-green-300">
+                      Conta conectada
+                    </p>
+                    <p className="text-green-600 dark:text-green-400 mt-1">
+                      O dinheiro vai direto para sua conta Mercado Pago.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium">Métodos de Pagamento</h4>
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>PIX</Label>
+                    <p className="text-sm text-muted-foreground">Pagamento instantâneo</p>
+                  </div>
+                  <Switch
+                    checked={mpHabilitarPix}
+                    onCheckedChange={setMpHabilitarPix}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Cartão de Crédito</Label>
+                    <p className="text-sm text-muted-foreground">Parcelamento disponível</p>
+                  </div>
+                  <Switch
+                    checked={mpHabilitarCartao}
+                    onCheckedChange={setMpHabilitarCartao}
+                  />
+                </div>
+              </div>
+
+              {mpHabilitarCartao && (
+                <div className="space-y-4 pt-2 border-t">
+                  <h4 className="font-medium">Parcelamento</h4>
+                  
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Máximo de parcelas</Label>
+                      <Select value={mpMaxParcelas} onValueChange={setMpMaxParcelas}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">À vista</SelectItem>
+                          <SelectItem value="3">Até 3x</SelectItem>
+                          <SelectItem value="6">Até 6x</SelectItem>
+                          <SelectItem value="12">Até 12x</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Taxas de parcelamento</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={mpAbsorverTaxa}
+                          onCheckedChange={setMpAbsorverTaxa}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {mpAbsorverTaxa ? 'Eu absorvo a taxa' : 'Cliente paga juros'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveMpSettings}
+                  disabled={updateMercadoPagoSettings.isPending}
+                >
+                  {updateMercadoPagoSettings.isPending ? 'Salvando...' : 'Salvar Configurações'}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowMpSettings(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : mpIntegration && mpIntegration.status === 'ativo' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
+                    <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Conta Conectada</p>
+                    <p className="text-sm text-muted-foreground">
+                      {mpIntegration.conectadoEm && `Conectado em ${format(new Date(mpIntegration.conectadoEm), "dd/MM/yyyy", { locale: ptBR })}`}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowMpSettings(true)}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Configurar
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {(mpIntegration.dadosExtras as MercadoPagoData)?.habilitarPix && (
+                  <Badge variant="secondary">PIX</Badge>
+                )}
+                {(mpIntegration.dadosExtras as MercadoPagoData)?.habilitarCartao && (
+                  <Badge variant="secondary">
+                    Cartão até {(mpIntegration.dadosExtras as MercadoPagoData)?.maxParcelas || 12}x
+                  </Badge>
+                )}
+              </div>
+            </div>
+          ) : mpIntegration && mpIntegration.status === 'erro_autenticacao' ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-red-700 dark:text-red-300">
+                    Reconexão necessária
+                  </p>
+                  <p className="text-red-600 dark:text-red-400 mt-1">
+                    Sua autorização expirou. Por favor, reconecte sua conta.
+                  </p>
+                </div>
+              </div>
+              <Button onClick={handleConnectMercadoPago} disabled={!mpAppId}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reconectar Mercado Pago
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-green-700 dark:text-green-300">
+                      Confirmação automática
+                    </p>
+                    <p className="text-green-600 dark:text-green-400 mt-1">
+                      O sistema libera a galeria automaticamente após o pagamento.
+                      O dinheiro vai diretamente para sua conta.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {!mpAppId ? (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Integração Mercado Pago não está disponível no momento.
+                  </p>
+                </div>
+              ) : (
+                <Button onClick={handleConnectMercadoPago}>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Conectar Mercado Pago
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Separator />
 
       {/* Add PIX Manual */}
       <Card>
