@@ -1,216 +1,158 @@
+# Mercado Pago Checkout Transparente - Implementação Concluída
 
-# Plano: Atualização de Domínios para Produção Lunari
-
-## Resumo Executivo
-
-Os projetos foram publicados em novos domínios padronizados:
-- **Gestão**: `https://app.lunarihub.com`
-- **Gallery**: `https://gallery.lunarihub.com` (com suporte a subdomínios `*.gallery.lunarihub.com`)
-
-Este plano cobre todas as atualizações necessárias para garantir compatibilidade com os novos domínios enquanto mantém temporariamente os domínios antigos funcionando.
+## Status: ✅ IMPLEMENTADO
 
 ---
 
-## Análise de Impacto
+## Resumo
 
-### URLs Hardcoded Encontradas
-
-| Arquivo | Linha | URL Atual | Nova URL |
-|---------|-------|-----------|----------|
-| `supabase/functions/infinitepay-create-link/index.ts` | 122 | `https://lunari-gallery.lovable.app` | `https://gallery.lunarihub.com` |
-| `src/pages/AccessDenied.tsx` | 19 | `https://app.lunari.com.br/settings` | `https://app.lunarihub.com/settings` |
-
-### URLs Dinâmicas (Funcionam Automaticamente)
-
-Os seguintes pontos usam `window.location.origin` e funcionarão automaticamente:
-- `src/components/SendGalleryModal.tsx:49` - Link do cliente
-- `src/pages/GalleryDetail.tsx:266` - Link do cliente
-- `src/pages/GalleryEdit.tsx:595` - Link de reativação
-- `src/hooks/useAuth.ts:40` - Redirect OAuth
-
-### Configurações CORS (OK - Wildcard)
-
-Todas as Edge Functions usam `Access-Control-Allow-Origin: '*'`, o que aceita qualquer origem:
-- `infinitepay-create-link`
-- `infinitepay-webhook`
-- `check-payment-status`
-- `confirm-selection`
-- `gallery-access`
-- `gallery-create-payment`
-- `b2-upload`
-- `delete-photos`
-- `client-selection`
+Sistema de compra de créditos via Mercado Pago Checkout Transparente implementado com:
+- **PIX**: QR Code e Copia e Cola
+- **Cartão de Crédito**: Pagamento à vista via tokenização segura
+- **Webhook Global**: Confirmação automática
+- **Polling**: Fallback para detecção de pagamento
 
 ---
 
-## Alterações Necessárias
+## Pacotes de Créditos
 
-### 1. Edge Function: InfinitePay Create Link
-
-**Problema**: URL de redirect hardcoded para domínio antigo.
-
-**Arquivo**: `supabase/functions/infinitepay-create-link/index.ts`
-
-**Antes**:
-```typescript
-const baseUrl = 'https://lunari-gallery.lovable.app';
-infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
-```
-
-**Depois**:
-```typescript
-// Support both old and new domains during transition
-// Primary domain is now gallery.lunarihub.com
-const baseUrl = 'https://gallery.lunarihub.com';
-infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
-```
-
-### 2. Frontend: AccessDenied Upgrade Link
-
-**Problema**: Link de upgrade aponta para domínio antigo do Gestão.
-
-**Arquivo**: `src/pages/AccessDenied.tsx`
-
-**Antes**:
-```typescript
-window.open('https://app.lunari.com.br/settings', '_blank');
-```
-
-**Depois**:
-```typescript
-window.open('https://app.lunarihub.com/settings', '_blank');
-```
+| Créditos | Preço   | Nome       |
+|----------|---------|------------|
+| 2.000    | R$ 19   | Starter    |
+| 5.000    | R$ 39   | Basic      |
+| 10.000   | R$ 69   | Pro        |
+| 20.000   | R$ 99   | Enterprise |
 
 ---
 
-## Configurações Externas Necessárias
+## Arquivos Criados
 
-### 3. Supabase Auth - Redirect URLs
+### Banco de Dados
+- `gallery_credit_packages` - Pacotes disponíveis para compra
+- `credit_purchases` - Histórico de compras
+- `purchase_credits()` - RPC para adicionar créditos atomicamente
 
-No painel Supabase (`Authentication > URL Configuration`), adicionar aos Redirect URLs:
+### Edge Functions
+| Função | Descrição |
+|--------|-----------|
+| `mercadopago-credits-payment` | Cria pagamento PIX ou Cartão |
+| `mercadopago-webhook` | Processa notificações do MP |
+| `mercadopago-check-payment` | Polling de status |
+| `mercadopago-public-key` | Retorna public key para frontend |
 
-```
-https://app.lunarihub.com
-https://app.lunarihub.com/**
-https://gallery.lunarihub.com
-https://gallery.lunarihub.com/**
-```
-
-**Manter temporariamente** (durante transição):
-```
-https://lunari-gallery.lovable.app
-https://lunari-gallery.lovable.app/**
-```
-
-### 4. Google Cloud Console - OAuth
-
-No Google Cloud Console, adicionar **Authorized redirect URIs**:
-
-```
-https://tlnjspsywycbudhewsfv.supabase.co/auth/v1/callback
-```
-
-E **Authorized JavaScript origins**:
-```
-https://app.lunarihub.com
-https://gallery.lunarihub.com
-```
-
-### 5. InfinitePay - Webhook URL
-
-A URL de webhook já é construída dinamicamente usando `SUPABASE_URL`:
-```typescript
-infinitePayload.webhook_url = `${supabaseUrl}/functions/v1/infinitepay-webhook`;
-// Resulta em: https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/infinitepay-webhook
-```
-
-**Nenhuma alteração necessária** - webhooks sempre apontam para o Supabase, não para o frontend.
+### Frontend
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/hooks/useCreditPackages.ts` | Hook de pacotes e pagamentos |
+| `src/components/credits/CreditPackageCard.tsx` | Card de pacote |
+| `src/components/credits/CreditCheckoutModal.tsx` | Modal de checkout |
+| `src/components/credits/PixPaymentDisplay.tsx` | Exibição QR Code PIX |
+| `src/components/credits/CardPaymentForm.tsx` | Formulário de cartão |
+| `src/pages/Credits.tsx` | Página de créditos atualizada |
 
 ---
 
-## Diagrama de Fluxo Atualizado
+## Configuração Necessária
+
+### 1. Secrets Configurados ✅
+- `MERCADOPAGO_ACCESS_TOKEN` - Token de acesso (produção)
+- `MERCADOPAGO_PUBLIC_KEY` - Chave pública (produção)
+
+### 2. Webhook no Painel Mercado Pago ⚠️ PENDENTE
+
+1. Acesse: https://www.mercadopago.com.br/developers/panel
+2. Selecione sua aplicação
+3. Vá em **Webhooks** → **Configurar notificações**
+4. Configure:
+   - **URL**: `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/mercadopago-webhook`
+   - **Eventos**: Marque APENAS:
+     - `payment.created`
+     - `payment.updated`
+   - **Modo**: Produção
+5. Salvar
+
+### 3. Configurações NÃO Utilizadas (Confirmação)
+
+| Configuração | Status |
+|--------------|--------|
+| `back_urls` | ❌ NÃO USAR - checkout interno |
+| `notification_url` por pagamento | ❌ NÃO USAR - webhook global |
+| Redirect após pagamento | ❌ NÃO USAR - apenas polling |
+
+---
+
+## Fluxo de Pagamento
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       FLUXO DE PAGAMENTO INFINITEPAY                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Cliente finaliza seleção                                                │
-│     └── gallery.lunarihub.com/g/{token}                                     │
-│                                                                             │
-│  2. confirm-selection → infinitepay-create-link                             │
-│     └── redirect_url: gallery.lunarihub.com/g/{token}?payment=success       │
-│     └── webhook_url: tlnjspsywycbudhewsfv.supabase.co/functions/v1/...      │
-│                                                                             │
-│  3. Cliente paga na InfinitePay                                             │
-│                                                                             │
-│  4A. Webhook InfinitePay → Supabase Edge Function                           │
-│      └── infinitepay-webhook processa e atualiza DB                         │
-│                                                                             │
-│  4B. Redirect → Cliente volta para Gallery                                  │
-│      └── gallery.lunarihub.com/g/{token}?payment=success                    │
-│      └── ClientGallery.tsx captura parâmetros e verifica status             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     FLUXO DE COMPRA DE CRÉDITOS                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. Usuário acessa /credits e escolhe pacote                                 │
+│     └── Clica no card do pacote desejado                                     │
+│                                                                              │
+│  2. Modal de checkout abre com tabs PIX/Cartão                               │
+│                                                                              │
+│  3A. PIX:                                                                    │
+│      └── Clica "Gerar PIX"                                                   │
+│      └── mercadopago-credits-payment cria pagamento                          │
+│      └── Exibe QR Code + Copia e Cola                                        │
+│      └── Polling automático a cada 5s                                        │
+│                                                                              │
+│  3B. Cartão:                                                                 │
+│      └── Preenche dados do cartão                                            │
+│      └── MercadoPago.js tokeniza (dados seguros)                             │
+│      └── mercadopago-credits-payment processa                                │
+│      └── Se approved: créditos adicionados imediatamente                     │
+│                                                                              │
+│  4. Confirmação via Webhook (PIX) ou Polling                                 │
+│     └── mercadopago-webhook recebe payment.updated                           │
+│     └── Chama RPC purchase_credits                                           │
+│     └── Atualiza photographer_accounts e credit_ledger                       │
+│                                                                              │
+│  5. Polling detecta aprovação → Modal mostra sucesso                         │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Arquivos a Modificar
+## Segurança
 
-| # | Arquivo | Alteração | Prioridade |
-|---|---------|-----------|------------|
-| 1 | `supabase/functions/infinitepay-create-link/index.ts` | Atualizar baseUrl para novo domínio | Alta |
-| 2 | `src/pages/AccessDenied.tsx` | Atualizar link de upgrade para novo Gestão | Média |
-
----
-
-## Configurações Manuais (Supabase Dashboard)
-
-| # | Local | Ação |
-|---|-------|------|
-| 1 | Supabase Auth > URL Configuration | Adicionar novos domínios aos Redirect URLs |
-| 2 | Google Cloud Console > OAuth | Adicionar novos domínios às origins autorizadas |
+| Camada | Proteção |
+|--------|----------|
+| Access Token | Apenas em Supabase Secrets (backend) |
+| Public Key | Via Edge Function (não hardcoded) |
+| Cartão | Tokenizado via MercadoPago.js (dados nunca chegam ao servidor) |
+| Webhook | Logs imediatos + verificação via API |
+| RLS | Usuários só veem próprias compras |
+| Idempotência | Verificação de status antes de processar |
 
 ---
 
-## Compatibilidade Durante Transição
+## Testes
 
-### O que continuará funcionando automaticamente:
-
-| Funcionalidade | Motivo |
-|----------------|--------|
-| Webhooks InfinitePay | Apontam para Supabase, não frontend |
-| CORS em Edge Functions | Wildcard `*` aceita qualquer origem |
-| Links dinâmicos do frontend | Usam `window.location.origin` |
-| Autenticação Google | Redirect é dinâmico |
-
-### O que precisa de atenção:
-
-| Funcionalidade | Ação Necessária |
-|----------------|-----------------|
-| Redirect após pagamento InfinitePay | Atualizar código + usuários acessando via domínio antigo serão redirecionados para novo domínio |
-| Link de upgrade em AccessDenied | Atualizar código |
-| Supabase Redirect URLs | Configurar no dashboard |
+Para testar em produção com uso interno:
+1. Use o menor pacote (R$ 19 - 2.000 créditos)
+2. Teste PIX com sua conta bancária pessoal
+3. Teste cartão de crédito pessoal
+4. Verifique se créditos aparecem na página /credits
+5. Confira o histórico de compras
 
 ---
 
-## Plano de Rollback
+## Troubleshooting
 
-Caso necessário reverter:
-1. Alterar `baseUrl` de volta para `https://lunari-gallery.lovable.app`
-2. Alterar link de upgrade de volta para `https://app.lunari.com.br/settings`
-3. Manter URLs antigas no Supabase Auth
+### Pagamento não confirmado
+1. Verifique logs da Edge Function: https://supabase.com/dashboard/project/tlnjspsywycbudhewsfv/functions/mercadopago-webhook/logs
+2. Clique em "Já paguei, verificar status" no modal PIX
+3. Confira webhook_logs no banco de dados
 
----
+### Cartão rejeitado
+1. Verifique se os dados estão corretos
+2. Confira se o cartão tem limite disponível
+3. Tente outro cartão
 
-## Resumo das Alterações de Código
-
-**Total de arquivos a modificar**: 2
-
-1. **infinitepay-create-link**: Linha 122 - Trocar domínio de redirect
-2. **AccessDenied.tsx**: Linha 19 - Trocar link do Gestão
-
-**Configurações externas**: 
-- Supabase Dashboard (Redirect URLs)
-- Google Cloud Console (OAuth origins) - se aplicável
+### Public Key não carrega
+1. Verifique se o secret MERCADOPAGO_PUBLIC_KEY está configurado
+2. Teste a edge function: `curl https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/mercadopago-public-key`
