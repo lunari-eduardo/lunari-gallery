@@ -765,6 +765,81 @@ export type Database = {
           },
         ]
       }
+      credit_purchases: {
+        Row: {
+          created_at: string
+          credits_amount: number
+          id: string
+          ledger_id: string | null
+          metadata: Json | null
+          mp_payment_id: string | null
+          mp_status: string
+          package_id: string | null
+          paid_at: string | null
+          payment_method: string
+          pix_copia_cola: string | null
+          pix_expiration: string | null
+          pix_qr_code: string | null
+          pix_qr_code_base64: string | null
+          price_cents: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_amount: number
+          id?: string
+          ledger_id?: string | null
+          metadata?: Json | null
+          mp_payment_id?: string | null
+          mp_status?: string
+          package_id?: string | null
+          paid_at?: string | null
+          payment_method: string
+          pix_copia_cola?: string | null
+          pix_expiration?: string | null
+          pix_qr_code?: string | null
+          pix_qr_code_base64?: string | null
+          price_cents: number
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_amount?: number
+          id?: string
+          ledger_id?: string | null
+          metadata?: Json | null
+          mp_payment_id?: string | null
+          mp_status?: string
+          package_id?: string | null
+          paid_at?: string | null
+          payment_method?: string
+          pix_copia_cola?: string | null
+          pix_expiration?: string | null
+          pix_qr_code?: string | null
+          pix_qr_code_base64?: string | null
+          price_cents?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_purchases_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "credit_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_purchases_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_credit_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_time_slots: {
         Row: {
           created_at: string | null
@@ -1343,6 +1418,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gallery_credit_packages: {
+        Row: {
+          active: boolean
+          created_at: string
+          credits: number
+          description: string | null
+          id: string
+          name: string
+          price_cents: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          credits: number
+          description?: string | null
+          id?: string
+          name: string
+          price_cents: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          credits?: number
+          description?: string | null
+          id?: string
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       gallery_discount_presets: {
         Row: {
@@ -2803,6 +2914,15 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      purchase_credits: {
+        Args: {
+          _amount: number
+          _description?: string
+          _purchase_id: string
+          _user_id: string
+        }
+        Returns: string
+      }
       recompute_session_paid: {
         Args: { p_session_id: string }
         Returns: undefined
