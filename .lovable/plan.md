@@ -1,119 +1,216 @@
 
-# Plano: Correção da Multiplicação de Templates de E-mail
+# Plano: Atualização de Domínios para Produção Lunari
 
-## Diagnóstico
+## Resumo Executivo
 
-### Problema Identificado
+Os projetos foram publicados em novos domínios padronizados:
+- **Gestão**: `https://app.lunarihub.com`
+- **Gallery**: `https://gallery.lunarihub.com` (com suporte a subdomínios `*.gallery.lunarihub.com`)
 
-A tabela `gallery_email_templates` contém **1.217 registros duplicados** quando deveria ter apenas ~3 por usuário.
-
-| Usuário | Templates "Galeria Enviada" | Templates Esperados |
-|---------|---------------------------|---------------------|
-| eduardo22diehl | **454** | 1 |
-| 7b41aa6d... | **279** | 1 |
-| admin (db0ca3d8) | 2 | 1 |
-
-### Causa Raiz: Race Condition no useEffect
-
-```typescript
-// src/hooks/useSettings.ts - BUG
-useEffect(() => {
-  if (!isLoading && dbSettings && 
-      dbSettings.customThemes.length === 0 && 
-      dbSettings.emailTemplates.length === 0) {
-    initializeSettings.mutate();  // Chamado múltiplas vezes!
-  }
-}, [isLoading, dbSettings, initializeSettings]);  // ← initializeSettings muda a cada render!
-```
-
-O objeto `initializeSettings` retornado por `useMutation` é recriado a cada render, fazendo o `useEffect` disparar repetidamente.
-
-### Problema Secundário: Falta de Constraint
-
-A tabela não possui constraint `UNIQUE(user_id, type)`, permitindo inserções duplicadas.
+Este plano cobre todas as atualizações necessárias para garantir compatibilidade com os novos domínios enquanto mantém temporariamente os domínios antigos funcionando.
 
 ---
 
-## Solução
+## Análise de Impacto
 
-### Etapa 1: Corrigir useSettings.ts
+### URLs Hardcoded Encontradas
 
-Usar `useRef` para evitar chamadas múltiplas de inicialização:
+| Arquivo | Linha | URL Atual | Nova URL |
+|---------|-------|-----------|----------|
+| `supabase/functions/infinitepay-create-link/index.ts` | 122 | `https://lunari-gallery.lovable.app` | `https://gallery.lunarihub.com` |
+| `src/pages/AccessDenied.tsx` | 19 | `https://app.lunari.com.br/settings` | `https://app.lunarihub.com/settings` |
 
+### URLs Dinâmicas (Funcionam Automaticamente)
+
+Os seguintes pontos usam `window.location.origin` e funcionarão automaticamente:
+- `src/components/SendGalleryModal.tsx:49` - Link do cliente
+- `src/pages/GalleryDetail.tsx:266` - Link do cliente
+- `src/pages/GalleryEdit.tsx:595` - Link de reativação
+- `src/hooks/useAuth.ts:40` - Redirect OAuth
+
+### Configurações CORS (OK - Wildcard)
+
+Todas as Edge Functions usam `Access-Control-Allow-Origin: '*'`, o que aceita qualquer origem:
+- `infinitepay-create-link`
+- `infinitepay-webhook`
+- `check-payment-status`
+- `confirm-selection`
+- `gallery-access`
+- `gallery-create-payment`
+- `b2-upload`
+- `delete-photos`
+- `client-selection`
+
+---
+
+## Alterações Necessárias
+
+### 1. Edge Function: InfinitePay Create Link
+
+**Problema**: URL de redirect hardcoded para domínio antigo.
+
+**Arquivo**: `supabase/functions/infinitepay-create-link/index.ts`
+
+**Antes**:
 ```typescript
-// src/hooks/useSettings.ts - CORRIGIDO
-import { useEffect, useRef } from 'react';
-
-export function useSettings(): UseSettingsReturn {
-  const { settings: dbSettings, isLoading, initializeSettings, ... } = useGallerySettings();
-  
-  // Ref para evitar múltiplas inicializações
-  const hasInitialized = useRef(false);
-
-  useEffect(() => {
-    // Só inicializa uma vez, quando dados estão prontos e vazios
-    if (!isLoading && dbSettings && !hasInitialized.current &&
-        dbSettings.customThemes.length === 0 && 
-        dbSettings.emailTemplates.length === 0) {
-      hasInitialized.current = true;  // Marca como inicializado
-      initializeSettings.mutate();
-    }
-  }, [isLoading, dbSettings]);  // Remover initializeSettings da dependência
-  
-  // ...
-}
+const baseUrl = 'https://lunari-gallery.lovable.app';
+infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
 ```
 
-### Etapa 2: Migração SQL
+**Depois**:
+```typescript
+// Support both old and new domains during transition
+// Primary domain is now gallery.lunarihub.com
+const baseUrl = 'https://gallery.lunarihub.com';
+infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
+```
 
-1. **Limpar duplicatas** - Manter apenas 1 template por (user_id, type)
-2. **Adicionar constraint** - `UNIQUE(user_id, type)`
+### 2. Frontend: AccessDenied Upgrade Link
 
-```sql
--- 1. Criar tabela temporária com registros únicos
-CREATE TEMP TABLE unique_templates AS
-SELECT DISTINCT ON (user_id, type) *
-FROM gallery_email_templates
-ORDER BY user_id, type, created_at;
+**Problema**: Link de upgrade aponta para domínio antigo do Gestão.
 
--- 2. Limpar tabela original
-DELETE FROM gallery_email_templates;
+**Arquivo**: `src/pages/AccessDenied.tsx`
 
--- 3. Re-inserir registros únicos
-INSERT INTO gallery_email_templates 
-SELECT * FROM unique_templates;
+**Antes**:
+```typescript
+window.open('https://app.lunari.com.br/settings', '_blank');
+```
 
--- 4. Adicionar constraint para prevenir futuros duplicados
-ALTER TABLE gallery_email_templates 
-ADD CONSTRAINT unique_user_template_type UNIQUE (user_id, type);
+**Depois**:
+```typescript
+window.open('https://app.lunarihub.com/settings', '_blank');
+```
 
--- 5. Limpar tabela temporária
-DROP TABLE unique_templates;
+---
+
+## Configurações Externas Necessárias
+
+### 3. Supabase Auth - Redirect URLs
+
+No painel Supabase (`Authentication > URL Configuration`), adicionar aos Redirect URLs:
+
+```
+https://app.lunarihub.com
+https://app.lunarihub.com/**
+https://gallery.lunarihub.com
+https://gallery.lunarihub.com/**
+```
+
+**Manter temporariamente** (durante transição):
+```
+https://lunari-gallery.lovable.app
+https://lunari-gallery.lovable.app/**
+```
+
+### 4. Google Cloud Console - OAuth
+
+No Google Cloud Console, adicionar **Authorized redirect URIs**:
+
+```
+https://tlnjspsywycbudhewsfv.supabase.co/auth/v1/callback
+```
+
+E **Authorized JavaScript origins**:
+```
+https://app.lunarihub.com
+https://gallery.lunarihub.com
+```
+
+### 5. InfinitePay - Webhook URL
+
+A URL de webhook já é construída dinamicamente usando `SUPABASE_URL`:
+```typescript
+infinitePayload.webhook_url = `${supabaseUrl}/functions/v1/infinitepay-webhook`;
+// Resulta em: https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/infinitepay-webhook
+```
+
+**Nenhuma alteração necessária** - webhooks sempre apontam para o Supabase, não para o frontend.
+
+---
+
+## Diagrama de Fluxo Atualizado
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       FLUXO DE PAGAMENTO INFINITEPAY                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Cliente finaliza seleção                                                │
+│     └── gallery.lunarihub.com/g/{token}                                     │
+│                                                                             │
+│  2. confirm-selection → infinitepay-create-link                             │
+│     └── redirect_url: gallery.lunarihub.com/g/{token}?payment=success       │
+│     └── webhook_url: tlnjspsywycbudhewsfv.supabase.co/functions/v1/...      │
+│                                                                             │
+│  3. Cliente paga na InfinitePay                                             │
+│                                                                             │
+│  4A. Webhook InfinitePay → Supabase Edge Function                           │
+│      └── infinitepay-webhook processa e atualiza DB                         │
+│                                                                             │
+│  4B. Redirect → Cliente volta para Gallery                                  │
+│      └── gallery.lunarihub.com/g/{token}?payment=success                    │
+│      └── ClientGallery.tsx captura parâmetros e verifica status             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| # | Arquivo | Alteração |
-|---|---------|-----------|
-| 1 | `src/hooks/useSettings.ts` | Adicionar `useRef` para controle de inicialização |
-| 2 | Migração SQL | Limpar duplicatas + adicionar constraint UNIQUE |
+| # | Arquivo | Alteração | Prioridade |
+|---|---------|-----------|------------|
+| 1 | `supabase/functions/infinitepay-create-link/index.ts` | Atualizar baseUrl para novo domínio | Alta |
+| 2 | `src/pages/AccessDenied.tsx` | Atualizar link de upgrade para novo Gestão | Média |
 
 ---
 
-## Resultado Esperado
+## Configurações Manuais (Supabase Dashboard)
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Total de templates | 1.217 | ~15 (3 por usuário) |
-| Duplicatas possíveis | Ilimitadas | 0 (constraint) |
-| Chamadas de init | Múltiplas | 1 vez |
+| # | Local | Ação |
+|---|-------|------|
+| 1 | Supabase Auth > URL Configuration | Adicionar novos domínios aos Redirect URLs |
+| 2 | Google Cloud Console > OAuth | Adicionar novos domínios às origins autorizadas |
 
 ---
 
-## Impacto
+## Compatibilidade Durante Transição
 
-- **Usuários**: Verão apenas 3 templates conforme esperado
-- **Performance**: Queries mais rápidas (menos dados)
-- **Segurança**: Constraint previne futuros duplicados
+### O que continuará funcionando automaticamente:
+
+| Funcionalidade | Motivo |
+|----------------|--------|
+| Webhooks InfinitePay | Apontam para Supabase, não frontend |
+| CORS em Edge Functions | Wildcard `*` aceita qualquer origem |
+| Links dinâmicos do frontend | Usam `window.location.origin` |
+| Autenticação Google | Redirect é dinâmico |
+
+### O que precisa de atenção:
+
+| Funcionalidade | Ação Necessária |
+|----------------|-----------------|
+| Redirect após pagamento InfinitePay | Atualizar código + usuários acessando via domínio antigo serão redirecionados para novo domínio |
+| Link de upgrade em AccessDenied | Atualizar código |
+| Supabase Redirect URLs | Configurar no dashboard |
+
+---
+
+## Plano de Rollback
+
+Caso necessário reverter:
+1. Alterar `baseUrl` de volta para `https://lunari-gallery.lovable.app`
+2. Alterar link de upgrade de volta para `https://app.lunari.com.br/settings`
+3. Manter URLs antigas no Supabase Auth
+
+---
+
+## Resumo das Alterações de Código
+
+**Total de arquivos a modificar**: 2
+
+1. **infinitepay-create-link**: Linha 122 - Trocar domínio de redirect
+2. **AccessDenied.tsx**: Linha 19 - Trocar link do Gestão
+
+**Configurações externas**: 
+- Supabase Dashboard (Redirect URLs)
+- Google Cloud Console (OAuth origins) - se aplicável
