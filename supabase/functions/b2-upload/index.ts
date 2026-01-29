@@ -430,19 +430,8 @@ Deno.serve(async (req) => {
       // Non-critical error - don't fail the upload
     }
 
-    // Record credit usage in ledger (non-blocking, for audit trail)
-    if (!isAdmin) {
-      supabase.rpc('record_photo_credit_usage', {
-        _user_id: user.id,
-        _gallery_id: galleryId,
-        _photo_id: photo.id,
-        _description: `Upload: ${file.name}`
-      }).then(({ error: ledgerError }) => {
-        if (ledgerError) {
-          console.warn(`[${requestId}] Failed to record credit usage:`, ledgerError.message);
-        }
-      });
-    }
+    // Credit consumption is tracked via aggregate counter in photographer_accounts
+    // No per-photo ledger entries needed - consume_photo_credits RPC handles everything
 
     const totalDuration = Date.now() - startTime;
     console.log(`[${requestId}] ✓ Complete in ${totalDuration}ms (upload: ${uploadDuration}ms)`);

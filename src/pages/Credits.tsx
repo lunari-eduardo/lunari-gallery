@@ -3,7 +3,6 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Camera, Infinity, ShoppingCart, History, CheckCircle2 } from 'lucide-react';
@@ -14,7 +13,7 @@ import { ptBR } from 'date-fns/locale';
 
 export default function Credits() {
   const { isAdmin } = useAuthContext();
-  const { photoCredits, isLoading: isLoadingCredits, history, isLoadingHistory, refetch } = usePhotoCredits();
+  const { photoCredits, isLoading: isLoadingCredits, refetch } = usePhotoCredits();
   const { packages, purchases, isLoadingPackages } = useCreditPackages();
   
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
@@ -162,43 +161,6 @@ export default function Credits() {
                          purchase.status === 'rejected' ? 'Rejeitado' : purchase.status}
                       </Badge>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Histórico de Uso */}
-      {!isAdmin && history && history.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Camera className="h-5 w-5" />
-            <h2 className="text-xl font-semibold">Histórico de Uso</h2>
-          </div>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {history.slice(0, 10).map((entry) => (
-                  <div 
-                    key={entry.id}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <div>
-                      <p className="text-sm">
-                        {entry.description || entry.operation_type}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(entry.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                      </p>
-                    </div>
-                    <span className={`font-mono font-medium ${
-                      entry.amount > 0 ? 'text-primary' : 'text-destructive'
-                    }`}>
-                      {entry.amount > 0 ? '+' : ''}{entry.amount}
-                    </span>
                   </div>
                 ))}
               </div>
