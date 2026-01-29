@@ -38,3 +38,12 @@ verify_jwt = false
 
 [functions.mercadopago-public-key]
 verify_jwt = false
+
+[functions.mercadopago-oauth]
+verify_jwt = false
+
+[functions.mercadopago-create-link]
+verify_jwt = false
+
+[functions.mercadopago-refresh-token]
+verify_jwt = false
