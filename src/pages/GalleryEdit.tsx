@@ -247,8 +247,6 @@ export default function GalleryEdit() {
   };
 
   const handleDeletePhoto = async (photoId: string) => {
-    if (!confirm('Excluir esta foto permanentemente?')) return;
-    
     await deletePhoto({ galleryId: gallery.id, photoId });
     setLocalPhotoCount(prev => Math.max(0, (prev || 1) - 1));
   };
@@ -535,7 +533,7 @@ export default function GalleryEdit() {
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : photos.length > 0 ? (
-                <ScrollArea className="max-h-[450px] rounded-md border">
+                <ScrollArea className="h-[450px] rounded-md border">
                   <Table>
                     <TableBody>
                       {photos.map((photo) => (
