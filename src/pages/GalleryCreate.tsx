@@ -481,6 +481,96 @@ export default function GalleryCreate() {
     }
   };
   
+  // Save draft function - can be called at any step
+  const handleSaveDraft = async () => {
+    try {
+      // Determine password for private gallery
+      let passwordToUse: string | undefined = undefined;
+      if (galleryPermission === 'private' && !passwordDisabled && selectedClient) {
+        if (useExistingPassword && selectedClient?.galleryPassword) {
+          passwordToUse = selectedClient.galleryPassword;
+        } else if (newPassword) {
+          passwordToUse = newPassword;
+        }
+      }
+
+      if (supabaseGalleryId) {
+        // Update existing gallery
+        await updateGallery({
+          id: supabaseGalleryId,
+          data: {
+            nomeSessao: sessionName || 'Rascunho',
+            nomePacote: packageName || undefined,
+            clienteNome: selectedClient?.name,
+            clienteEmail: selectedClient?.email,
+            fotosIncluidas: includedPhotos,
+            valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+            prazoSelecaoDias: customDays,
+            permissao: galleryPermission,
+            mensagemBoasVindas: welcomeMessage,
+            configuracoes: {
+              watermark: {
+                type: watermarkType,
+                opacity: watermarkOpacity,
+                position: 'center',
+              },
+              watermarkDisplay: watermarkDisplay,
+              imageResizeOption: imageResizeOption,
+              allowComments: allowComments,
+              allowDownload: allowDownload,
+              allowExtraPhotos: allowExtraPhotos,
+              saleSettings: getSaleSettings(),
+              themeId: selectedThemeId,
+              clientMode: clientMode,
+            },
+          }
+        });
+        toast.success('Rascunho salvo!');
+        navigate('/');
+      } else {
+        // Create new gallery as draft
+        const result = await createSupabaseGallery({
+          clienteId: selectedClient?.id || null,
+          clienteNome: selectedClient?.name || undefined,
+          clienteEmail: selectedClient?.email || undefined,
+          nomeSessao: sessionName || 'Rascunho',
+          nomePacote: packageName || undefined,
+          fotosIncluidas: includedPhotos,
+          valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+          prazoSelecaoDias: customDays,
+          permissao: galleryPermission,
+          mensagemBoasVindas: welcomeMessage,
+          galleryPassword: passwordToUse,
+          sessionId: gestaoParams?.session_id || null,
+          origin: gestaoParams?.session_id ? 'gestao' : 'manual',
+          configuracoes: {
+            watermark: {
+              type: watermarkType,
+              opacity: watermarkOpacity,
+              position: 'center',
+            },
+            watermarkDisplay: watermarkDisplay,
+            imageResizeOption: imageResizeOption,
+            allowComments: allowComments,
+            allowDownload: allowDownload,
+            allowExtraPhotos: allowExtraPhotos,
+            saleSettings: getSaleSettings(),
+            themeId: selectedThemeId,
+            clientMode: clientMode,
+          },
+        });
+        
+        if (result?.id) {
+          toast.success('Rascunho salvo!');
+          navigate('/');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      toast.error('Erro ao salvar rascunho');
+    }
+  };
+  
   const handlePhotoUploadComplete = (photos: UploadedPhoto[]) => {
     setUploadedPhotos(prev => [...prev, ...photos]);
     setUploadedCount(prev => prev + photos.length);
@@ -1619,15 +1709,25 @@ export default function GalleryCreate() {
 
       {/* Fixed Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border z-40">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center gap-2">
           <Button variant="outline" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             {currentStep === 1 ? 'Cancelar' : 'Voltar'}
           </Button>
-          <Button variant="terracotta" onClick={handleNext}>
-            {currentStep === 5 ? 'Criar Galeria' : 'Próximo'}
-            {currentStep < 5 && <ArrowRight className="h-4 w-4 ml-2" />}
-          </Button>
+          
+          <div className="flex items-center gap-2">
+            {/* Save Draft button - always available */}
+            <Button variant="outline" onClick={handleSaveDraft}>
+              <Save className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Salvar Rascunho</span>
+              <span className="sm:hidden">Salvar</span>
+            </Button>
+            
+            <Button variant="terracotta" onClick={handleNext}>
+              {currentStep === 5 ? 'Criar Galeria' : 'Próximo'}
+              {currentStep < 5 && <ArrowRight className="h-4 w-4 ml-2" />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>;

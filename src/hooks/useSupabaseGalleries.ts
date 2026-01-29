@@ -114,6 +114,7 @@ export interface CreateGaleriaData {
   mensagemBoasVindas?: string;
   configuracoes?: GaleriaConfiguracoes;
   prazoSelecaoDias?: number;
+  prazoSelecao?: Date;  // Direct deadline date (for edit page)
   permissao?: 'public' | 'private';
   galleryPassword?: string;  // Password for private galleries
   sessionId?: string | null; // Session ID from Gestão system
@@ -320,6 +321,7 @@ export function useSupabaseGalleries() {
       if (data.mensagemBoasVindas !== undefined) updateData.mensagem_boas_vindas = data.mensagemBoasVindas;
       if (data.configuracoes !== undefined) updateData.configuracoes = data.configuracoes;
       if (data.prazoSelecaoDias !== undefined) updateData.prazo_selecao_dias = data.prazoSelecaoDias;
+      if (data.prazoSelecao !== undefined) updateData.prazo_selecao = data.prazoSelecao.toISOString();
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
 
       const { error } = await supabase

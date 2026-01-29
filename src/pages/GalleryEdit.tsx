@@ -208,6 +208,7 @@ export default function GalleryEdit() {
           nomePacote: nomePacote || undefined,
           fotosIncluidas,
           valorFotoExtra,
+          prazoSelecao,  // Now saving the deadline
         }
       });
       toast.success('Galeria atualizada!');
@@ -216,10 +217,10 @@ export default function GalleryEdit() {
     }
   };
 
-  const handleExtendDeadline = async (days: number) => {
+  const handleExtendDeadline = (days: number) => {
     const newDeadline = addDays(prazoSelecao || new Date(), days);
     setPrazoSelecao(newDeadline);
-    toast.success(`Prazo estendido em ${days} dias!`);
+    // No toast here - user needs to save to persist
   };
 
   const handleDelete = async () => {
@@ -267,10 +268,24 @@ export default function GalleryEdit() {
           </div>
         </div>
         
-        <DeleteGalleryDialog 
-          galleryName={gallery.nomeSessao || 'Esta galeria'}
-          onDelete={handleDelete}
-        />
+        {/* Save button in header */}
+        <Button 
+          onClick={handleSave}
+          disabled={isUpdating}
+          variant="terracotta"
+        >
+          {isUpdating ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Salvando...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Alterações
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Two Column Layout */}
@@ -408,25 +423,7 @@ export default function GalleryEdit() {
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end">
-                <Button 
-                  onClick={handleSave}
-                  disabled={isUpdating}
-                  variant="terracotta"
-                >
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Salvar Alterações
-                    </>
-                  )}
-                </Button>
-              </div>
+              {/* Save button removed - now in header */}
             </CardContent>
           </Card>
 
@@ -573,16 +570,17 @@ export default function GalleryEdit() {
             </CardContent>
           </Card>
 
-          {/* Actions Card - Only show if there are actions available */}
-          {canReactivate && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Ações da Galeria</CardTitle>
-                <CardDescription>
-                  Ações que afetam a disponibilidade da galeria
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+          {/* Actions Card - Always show for delete, conditionally show reactivate */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ações da Galeria</CardTitle>
+              <CardDescription>
+                Ações que afetam a disponibilidade da galeria
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Reactivate - only if applicable */}
+              {canReactivate && (
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
                   <div>
                     <p className="font-medium">Reativar Galeria</p>
@@ -596,9 +594,22 @@ export default function GalleryEdit() {
                     onReactivate={handleReactivate}
                   />
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+              
+              {/* Delete as red text link */}
+              <div className={cn("pt-4", canReactivate && "border-t")}>
+                <DeleteGalleryDialog
+                  galleryName={gallery.nomeSessao || 'Esta galeria'}
+                  onDelete={handleDelete}
+                  trigger={
+                    <button className="text-sm text-destructive hover:underline">
+                      Excluir galeria permanentemente
+                    </button>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
