@@ -1871,6 +1871,8 @@ export type Database = {
           account_status: Database["public"]["Enums"]["account_status"]
           account_type: Database["public"]["Enums"]["account_type"]
           created_at: string
+          credits_consumed_total: number | null
+          credits_purchased_total: number | null
           galleries_published_total: number
           gallery_credits: number
           id: string
@@ -1882,6 +1884,8 @@ export type Database = {
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
           created_at?: string
+          credits_consumed_total?: number | null
+          credits_purchased_total?: number | null
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
@@ -1893,6 +1897,8 @@ export type Database = {
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
           created_at?: string
+          credits_consumed_total?: number | null
+          credits_purchased_total?: number | null
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
@@ -2873,7 +2879,7 @@ export type Database = {
         Returns: number
       }
       consume_photo_credits: {
-        Args: { _gallery_id: string; _photo_count?: number; _user_id: string }
+        Args: { _gallery_id: string; _photo_count: number; _user_id: string }
         Returns: boolean
       }
       create_session_from_appointment: {
@@ -2926,15 +2932,6 @@ export type Database = {
       recompute_session_paid: {
         Args: { p_session_id: string }
         Returns: undefined
-      }
-      record_photo_credit_usage: {
-        Args: {
-          _description?: string
-          _gallery_id: string
-          _photo_id: string
-          _user_id: string
-        }
-        Returns: string
       }
     }
     Enums: {
