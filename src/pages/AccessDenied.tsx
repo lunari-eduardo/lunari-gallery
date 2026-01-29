@@ -16,7 +16,7 @@ export default function AccessDenied() {
 
   const handleUpgrade = () => {
     // Link to Lunari Gestão for upgrade
-    window.open('https://app.lunari.com.br/settings', '_blank');
+    window.open('https://app.lunarihub.com/settings', '_blank');
   };
 
   return (

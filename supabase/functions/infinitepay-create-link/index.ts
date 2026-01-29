@@ -119,7 +119,8 @@ Deno.serve(async (req) => {
     } else if (galleryToken) {
       // Build redirect URL to gallery with payment success parameter
       // Using the production URL pattern
-      const baseUrl = 'https://lunari-gallery.lovable.app';
+      // Primary domain updated for Lunari production
+      const baseUrl = 'https://gallery.lunarihub.com';
       infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
       console.log(`💳 Redirect URL configurada: ${infinitePayload.redirect_url}`);
     }
