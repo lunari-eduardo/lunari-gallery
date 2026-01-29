@@ -26,3 +26,12 @@ verify_jwt = false
 
 [functions.check-payment-status]
 verify_jwt = false
+
+[functions.mercadopago-credits-payment]
+verify_jwt = false
+
+[functions.mercadopago-webhook]
+verify_jwt = false
+
+[functions.mercadopago-check-payment]
+verify_jwt = false
