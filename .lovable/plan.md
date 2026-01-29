@@ -1,158 +1,238 @@
-# Mercado Pago Checkout Transparente - Implementação Concluída
 
-## Status: ✅ IMPLEMENTADO
-
----
+# Plano: Salvamento de Rascunho de Galeria e Melhorias na Tela de Edição
 
 ## Resumo
 
-Sistema de compra de créditos via Mercado Pago Checkout Transparente implementado com:
-- **PIX**: QR Code e Copia e Cola
-- **Cartão de Crédito**: Pagamento à vista via tokenização segura
-- **Webhook Global**: Confirmação automática
-- **Polling**: Fallback para detecção de pagamento
+Este plano cobre três áreas principais:
+1. **Permitir salvamento de rascunho** em qualquer etapa da criação de galeria (sem fotos ou cliente)
+2. **Reorganizar a tela de edição** (mover botões, estilizar "excluir" como texto vermelho)
+3. **Corrigir bug do prazo de seleção** que não está sendo salvo
 
 ---
 
-## Pacotes de Créditos
+## Problema 1: Rascunho de Galeria
 
-| Créditos | Preço   | Nome       |
-|----------|---------|------------|
-| 2.000    | R$ 19   | Starter    |
-| 5.000    | R$ 39   | Basic      |
-| 10.000   | R$ 69   | Pro        |
-| 20.000   | R$ 99   | Enterprise |
+### Situação Atual
+A galeria só é criada no banco de dados quando o fotógrafo avança do **Passo 3 → Passo 4 (Fotos)**, e há validação obrigatória de cliente para galerias privadas.
 
----
+### Solução
+Adicionar botão "Salvar Rascunho" disponível em todas as etapas, que cria ou atualiza a galeria no banco com `status: 'rascunho'`, sem exigir cliente ou fotos.
 
-## Arquivos Criados
+### Arquivos a Modificar
 
-### Banco de Dados
-- `gallery_credit_packages` - Pacotes disponíveis para compra
-- `credit_purchases` - Histórico de compras
-- `purchase_credits()` - RPC para adicionar créditos atomicamente
-
-### Edge Functions
-| Função | Descrição |
-|--------|-----------|
-| `mercadopago-credits-payment` | Cria pagamento PIX ou Cartão |
-| `mercadopago-webhook` | Processa notificações do MP |
-| `mercadopago-check-payment` | Polling de status |
-| `mercadopago-public-key` | Retorna public key para frontend |
-
-### Frontend
-| Arquivo | Descrição |
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useCreditPackages.ts` | Hook de pacotes e pagamentos |
-| `src/components/credits/CreditPackageCard.tsx` | Card de pacote |
-| `src/components/credits/CreditCheckoutModal.tsx` | Modal de checkout |
-| `src/components/credits/PixPaymentDisplay.tsx` | Exibição QR Code PIX |
-| `src/components/credits/CardPaymentForm.tsx` | Formulário de cartão |
-| `src/pages/Credits.tsx` | Página de créditos atualizada |
+| `src/pages/GalleryCreate.tsx` | Adicionar botão "Salvar Rascunho" no footer fixo; criar função `handleSaveDraft()` |
+| `src/hooks/useSupabaseGalleries.ts` | Garantir que `createGallery` e `updateGallery` aceitem todos campos como opcionais |
+
+### Detalhes Técnicos
+
+**Nova função em GalleryCreate.tsx:**
+```typescript
+const handleSaveDraft = async () => {
+  try {
+    if (supabaseGalleryId) {
+      // Atualizar galeria existente
+      await updateGallery({
+        id: supabaseGalleryId,
+        data: {
+          nomeSessao: sessionName || undefined,
+          nomePacote: packageName || undefined,
+          clienteNome: selectedClient?.name,
+          clienteEmail: selectedClient?.email,
+          fotosIncluidas: includedPhotos,
+          valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+          prazoSelecaoDias: customDays,
+          permissao: galleryPermission,
+          configuracoes: { ... },
+        }
+      });
+    } else {
+      // Criar nova galeria como rascunho
+      const result = await createSupabaseGallery({
+        clienteId: selectedClient?.id || null,
+        clienteNome: selectedClient?.name || undefined,
+        clienteEmail: selectedClient?.email || undefined,
+        nomeSessao: sessionName || 'Rascunho',
+        // ... demais campos opcionais
+      });
+      if (result?.id) setSupabaseGalleryId(result.id);
+    }
+    toast.success('Rascunho salvo!');
+    navigate('/');
+  } catch (error) {
+    toast.error('Erro ao salvar rascunho');
+  }
+};
+```
+
+**Novo botão no footer fixo:**
+- Posição: Entre "Voltar" e "Próximo"
+- Ícone: Save
+- Texto: "Salvar Rascunho"
+- Variante: outline
 
 ---
 
-## Configuração Necessária
+## Problema 2: Layout da Tela de Edição
 
-### 1. Secrets Configurados ✅
-- `MERCADOPAGO_ACCESS_TOKEN` - Token de acesso (produção)
-- `MERCADOPAGO_PUBLIC_KEY` - Chave pública (produção)
+### Situação Atual (conforme imagem)
+- Botão "Excluir Galeria" está no header (canto superior direito) com estilo vermelho chamativo
+- Botão "Salvar Alterações" está no final do card de informações básicas
 
-### 2. Webhook no Painel Mercado Pago ⚠️ PENDENTE
+### Solução Proposta
+1. **Mover "Salvar Alterações"** para o header (onde estava "Excluir")
+2. **Mover "Excluir Galeria"** para dentro do card de "Ações da Galeria"
+3. **Estilizar "Excluir"** como texto vermelho simples (sem botão vermelho)
 
-1. Acesse: https://www.mercadopago.com.br/developers/panel
-2. Selecione sua aplicação
-3. Vá em **Webhooks** → **Configurar notificações**
-4. Configure:
-   - **URL**: `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/mercadopago-webhook`
-   - **Eventos**: Marque APENAS:
-     - `payment.created`
-     - `payment.updated`
-   - **Modo**: Produção
-5. Salvar
+### Arquivos a Modificar
 
-### 3. Configurações NÃO Utilizadas (Confirmação)
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/GalleryEdit.tsx` | Reorganizar header e cards |
+| `src/components/DeleteGalleryDialog.tsx` | Adicionar suporte para trigger customizado (já existe) |
 
-| Configuração | Status |
-|--------------|--------|
-| `back_urls` | ❌ NÃO USAR - checkout interno |
-| `notification_url` por pagamento | ❌ NÃO USAR - webhook global |
-| Redirect após pagamento | ❌ NÃO USAR - apenas polling |
+### Mudanças de Layout
 
----
+**Header (linhas 254-274):**
+```tsx
+<div className="flex items-center justify-between gap-4">
+  <div className="flex items-center gap-4">
+    <Button variant="ghost" size="icon" onClick={() => navigate(`/gallery/${id}`)}>
+      <ArrowLeft className="h-5 w-5" />
+    </Button>
+    <div>
+      <h1>Editar Galeria</h1>
+      <p>{gallery.nomeSessao || 'Galeria'}</p>
+    </div>
+  </div>
+  
+  {/* NOVO: Botão Salvar no header */}
+  <Button onClick={handleSave} disabled={isUpdating} variant="terracotta">
+    {isUpdating ? <Loader2 /> : <Save />}
+    Salvar Alterações
+  </Button>
+</div>
+```
 
-## Fluxo de Pagamento
+**Remover botão salvar do card de informações (linhas 411-429)**
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                     FLUXO DE COMPRA DE CRÉDITOS                              │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. Usuário acessa /credits e escolhe pacote                                 │
-│     └── Clica no card do pacote desejado                                     │
-│                                                                              │
-│  2. Modal de checkout abre com tabs PIX/Cartão                               │
-│                                                                              │
-│  3A. PIX:                                                                    │
-│      └── Clica "Gerar PIX"                                                   │
-│      └── mercadopago-credits-payment cria pagamento                          │
-│      └── Exibe QR Code + Copia e Cola                                        │
-│      └── Polling automático a cada 5s                                        │
-│                                                                              │
-│  3B. Cartão:                                                                 │
-│      └── Preenche dados do cartão                                            │
-│      └── MercadoPago.js tokeniza (dados seguros)                             │
-│      └── mercadopago-credits-payment processa                                │
-│      └── Se approved: créditos adicionados imediatamente                     │
-│                                                                              │
-│  4. Confirmação via Webhook (PIX) ou Polling                                 │
-│     └── mercadopago-webhook recebe payment.updated                           │
-│     └── Chama RPC purchase_credits                                           │
-│     └── Atualiza photographer_accounts e credit_ledger                       │
-│                                                                              │
-│  5. Polling detecta aprovação → Modal mostra sucesso                         │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+**Novo card de Ações com Excluir (após card de fotos):**
+```tsx
+<Card>
+  <CardHeader>
+    <CardTitle>Ações da Galeria</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-4">
+    {/* Reativar - se aplicável */}
+    {canReactivate && (
+      <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+        <div>
+          <p className="font-medium">Reativar Galeria</p>
+          <p className="text-sm text-muted-foreground">...</p>
+        </div>
+        <ReactivateGalleryDialog ... />
+      </div>
+    )}
+    
+    {/* NOVO: Excluir como texto vermelho */}
+    <div className="pt-4 border-t">
+      <DeleteGalleryDialog
+        galleryName={gallery.nomeSessao || 'Esta galeria'}
+        onDelete={handleDelete}
+        trigger={
+          <button className="text-sm text-destructive hover:underline">
+            Excluir galeria permanentemente
+          </button>
+        }
+      />
+    </div>
+  </CardContent>
+</Card>
 ```
 
 ---
 
-## Segurança
+## Problema 3: Prazo de Seleção Não Salva
 
-| Camada | Proteção |
-|--------|----------|
-| Access Token | Apenas em Supabase Secrets (backend) |
-| Public Key | Via Edge Function (não hardcoded) |
-| Cartão | Tokenizado via MercadoPago.js (dados nunca chegam ao servidor) |
-| Webhook | Logs imediatos + verificação via API |
-| RLS | Usuários só veem próprias compras |
-| Idempotência | Verificação de status antes de processar |
+### Causa Raiz
+O `handleSave` em `GalleryEdit.tsx` **não inclui** o campo `prazoSelecao` na chamada de `updateGallery`. Além disso, a mutation só aceita `prazoSelecaoDias` (número de dias), mas a tela de edição trabalha com a data final diretamente.
+
+### Solução
+1. Adicionar campo `prazoSelecao` (Date) ao `CreateGaleriaData` interface
+2. Atualizar `updateGalleryMutation` para aceitar e salvar `prazo_selecao` como timestamp
+3. Passar `prazoSelecao` no `handleSave`
+
+### Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useSupabaseGalleries.ts` | Adicionar `prazoSelecao?: Date` à interface e mutation |
+| `src/pages/GalleryEdit.tsx` | Incluir `prazoSelecao` no `handleSave` |
+
+### Detalhes Técnicos
+
+**Interface CreateGaleriaData (adicionar campo):**
+```typescript
+export interface CreateGaleriaData {
+  // ... campos existentes
+  prazoSelecaoDias?: number;
+  prazoSelecao?: Date;  // NOVO: Data limite direta
+  // ...
+}
+```
+
+**Mutation updateGalleryMutation (adicionar handling):**
+```typescript
+if (data.prazoSelecao !== undefined) {
+  updateData.prazo_selecao = data.prazoSelecao.toISOString();
+}
+```
+
+**handleSave em GalleryEdit.tsx:**
+```typescript
+const handleSave = async () => {
+  const cleanPhone = clienteTelefone.replace(/\D/g, '');
+  
+  await updateGallery({
+    id: gallery.id,
+    data: {
+      nomeSessao,
+      clienteNome,
+      clienteEmail,
+      clienteTelefone: cleanPhone || undefined,
+      nomePacote: nomePacote || undefined,
+      fotosIncluidas,
+      valorFotoExtra,
+      prazoSelecao,  // NOVO: incluir prazo
+    }
+  });
+  toast.success('Galeria atualizada!');
+};
+```
+
+**Também remover toast duplicado em handleExtendDeadline:**
+O toast "Prazo estendido" é enganoso pois não salva automaticamente. Duas opções:
+- Opção A: Chamar save automaticamente após estender
+- Opção B: Mudar texto para "Prazo ajustado. Clique em Salvar para confirmar."
+
+Recomendo **Opção A** para melhor UX.
 
 ---
 
-## Testes
+## Resumo de Arquivos
 
-Para testar em produção com uso interno:
-1. Use o menor pacote (R$ 19 - 2.000 créditos)
-2. Teste PIX com sua conta bancária pessoal
-3. Teste cartão de crédito pessoal
-4. Verifique se créditos aparecem na página /credits
-5. Confira o histórico de compras
+| Arquivo | Modificações |
+|---------|--------------|
+| `src/pages/GalleryCreate.tsx` | Adicionar `handleSaveDraft` e botão no footer |
+| `src/pages/GalleryEdit.tsx` | Reorganizar layout, mover botões, incluir `prazoSelecao` no save |
+| `src/hooks/useSupabaseGalleries.ts` | Adicionar `prazoSelecao?: Date` à interface e mutation |
+| `src/components/DeleteGalleryDialog.tsx` | Nenhuma mudança (já aceita trigger customizado) |
 
 ---
 
-## Troubleshooting
+## Ordem de Implementação
 
-### Pagamento não confirmado
-1. Verifique logs da Edge Function: https://supabase.com/dashboard/project/tlnjspsywycbudhewsfv/functions/mercadopago-webhook/logs
-2. Clique em "Já paguei, verificar status" no modal PIX
-3. Confira webhook_logs no banco de dados
-
-### Cartão rejeitado
-1. Verifique se os dados estão corretos
-2. Confira se o cartão tem limite disponível
-3. Tente outro cartão
-
-### Public Key não carrega
-1. Verifique se o secret MERCADOPAGO_PUBLIC_KEY está configurado
-2. Teste a edge function: `curl https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/mercadopago-public-key`
+1. **useSupabaseGalleries.ts** - Adicionar suporte a `prazoSelecao`
+2. **GalleryEdit.tsx** - Corrigir bug do prazo + reorganizar layout
+3. **GalleryCreate.tsx** - Adicionar funcionalidade de salvar rascunho
