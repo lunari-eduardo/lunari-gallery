@@ -1,36 +1,20 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
-import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
+import { useCreditPackages } from '@/hooks/useCreditPackages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Camera, Infinity, ShoppingCart, History, CheckCircle2 } from 'lucide-react';
-import { CreditPackagesModal } from '@/components/credits/CreditPackagesModal';
-import { CreditCheckoutModal } from '@/components/credits/CreditCheckoutModal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Credits() {
+  const navigate = useNavigate();
   const { isAdmin } = useAuthContext();
   const { photoCredits, isLoading: isLoadingCredits, refetch } = usePhotoCredits();
-  const { packages, purchases, isLoadingPackages } = useCreditPackages();
-  
-  const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [packagesModalOpen, setPackagesModalOpen] = useState(false);
-
-  const handleSelectPackage = (pkg: CreditPackage) => {
-    setSelectedPackage(pkg);
-    setCheckoutOpen(true);
-  };
-
-  const handleCheckoutSuccess = () => {
-    refetch();
-    setCheckoutOpen(false);
-    setSelectedPackage(null);
-  };
+  const { purchases } = useCreditPackages();
 
   return (
     <div className="space-y-8">
@@ -79,7 +63,7 @@ export default function Credits() {
           {!isAdmin && (
             <div className="pt-4 border-t">
               <Button 
-                onClick={() => setPackagesModalOpen(true)} 
+                onClick={() => navigate('/credits/checkout')} 
                 className="w-full"
                 size="lg"
               >
@@ -151,23 +135,6 @@ export default function Credits() {
           </Card>
         </div>
       )}
-
-      {/* Modal de Seleção de Pacotes */}
-      <CreditPackagesModal
-        open={packagesModalOpen}
-        onOpenChange={setPackagesModalOpen}
-        packages={packages}
-        isLoading={isLoadingPackages}
-        onSelectPackage={handleSelectPackage}
-      />
-
-      {/* Modal de Checkout */}
-      <CreditCheckoutModal
-        open={checkoutOpen}
-        onOpenChange={setCheckoutOpen}
-        package_={selectedPackage}
-        onSuccess={handleCheckoutSuccess}
-      />
     </div>
   );
 }
