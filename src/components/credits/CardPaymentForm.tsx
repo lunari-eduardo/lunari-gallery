@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,25 @@ interface CardPaymentFormProps {
   amount: number;
 }
 
+// Cache da public key
+let cachedPublicKey: string | null = null;
+
+async function fetchPublicKey(): Promise<string> {
+  if (cachedPublicKey) return cachedPublicKey;
+  
+  try {
+    const response = await fetch(
+      'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/mercadopago-public-key'
+    );
+    const data = await response.json();
+    cachedPublicKey = data.public_key || '';
+    return cachedPublicKey;
+  } catch (error) {
+    console.error('Erro ao buscar public key:', error);
+    return '';
+  }
+}
+
 export function CardPaymentForm({ onSubmit, isProcessing, amount }: CardPaymentFormProps) {
   const [cardNumber, setCardNumber] = useState('');
   const [cardholderName, setCardholderName] = useState('');
@@ -36,6 +55,12 @@ export function CardPaymentForm({ onSubmit, isProcessing, amount }: CardPaymentF
   const [securityCode, setSecurityCode] = useState('');
   const [cpf, setCpf] = useState('');
   const [error, setError] = useState('');
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+
+  // Buscar public key ao montar
+  useEffect(() => {
+    fetchPublicKey().then(setPublicKey);
+  }, []);
 
   const formatCardNumber = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -98,10 +123,6 @@ export function CardPaymentForm({ onSubmit, isProcessing, amount }: CardPaymentF
     }
 
     try {
-      // Public Key do Mercado Pago (produção)
-      // Esta chave será injetada via configuração
-      const publicKey = (window as unknown as { MP_PUBLIC_KEY?: string }).MP_PUBLIC_KEY || '';
-      
       if (!publicKey) {
         setError('Chave pública não configurada. Contate o suporte.');
         return;
