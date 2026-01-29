@@ -599,6 +599,45 @@ export function useSupabaseGalleries() {
     []
   );
 
+  // Delete single photo mutation
+  const deletePhotoMutation = useMutation({
+    mutationFn: async ({ galleryId, photoId }: { galleryId: string; photoId: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const response = await fetch(
+        `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/delete-photos`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            galleryId,
+            photoIds: [photoId],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Falha ao excluir foto');
+      }
+
+      return response.json();
+    },
+    onSuccess: (_, { galleryId }) => {
+      queryClient.invalidateQueries({ queryKey: ['galeria-fotos', galleryId] });
+      queryClient.invalidateQueries({ queryKey: ['galerias'] });
+      toast.success('Foto excluída');
+    },
+    onError: (error) => {
+      console.error('Error deleting photo:', error);
+      toast.error('Erro ao excluir foto');
+    },
+  });
+
   return {
     // Data
     galleries,
@@ -619,6 +658,7 @@ export function useSupabaseGalleries() {
     sendGallery: sendGalleryMutation.mutateAsync,
     confirmSelection: confirmSelectionMutation.mutateAsync,
     reopenSelection: reopenSelectionMutation.mutateAsync,
+    deletePhoto: deletePhotoMutation.mutateAsync,
 
     // Helpers
     getPhotoUrl,
@@ -627,5 +667,6 @@ export function useSupabaseGalleries() {
     isCreating: createGalleryMutation.isPending,
     isUpdating: updateGalleryMutation.isPending,
     isDeleting: deleteGalleryMutation.isPending,
+    isDeletingPhoto: deletePhotoMutation.isPending,
   };
 }

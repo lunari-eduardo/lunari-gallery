@@ -13,7 +13,8 @@ import {
   Upload,
   Eye,
   EyeOff,
-  Copy
+  Copy,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,9 +57,11 @@ export default function GalleryEdit() {
     reopenSelection,
     fetchGalleryPhotos,
     getPhotoUrl,
+    deletePhoto,
     isLoading: isSupabaseLoading,
     isUpdating,
-    isDeleting
+    isDeleting,
+    isDeletingPhoto
   } = useSupabaseGalleries();
 
   const {
@@ -241,6 +244,13 @@ export default function GalleryEdit() {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setClienteTelefone(formatPhoneBR(e.target.value));
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!confirm('Excluir esta foto permanentemente?')) return;
+    
+    await deletePhoto({ galleryId: gallery.id, photoId });
+    setLocalPhotoCount(prev => Math.max(0, (prev || 1) - 1));
   };
 
   const handleCopyPassword = () => {
@@ -492,6 +502,17 @@ export default function GalleryEdit() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Delete Gallery - Text link only */}
+          <DeleteGalleryDialog
+            galleryName={gallery.nomeSessao || 'Esta galeria'}
+            onDelete={handleDelete}
+            trigger={
+              <button className="text-sm text-destructive hover:underline">
+                Excluir galeria
+              </button>
+            }
+          />
         </div>
 
         {/* Right Column - Photos & Actions */}
@@ -514,7 +535,7 @@ export default function GalleryEdit() {
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : photos.length > 0 ? (
-                <ScrollArea className="max-h-[300px] rounded-md border">
+                <ScrollArea className="max-h-[450px] rounded-md border">
                   <Table>
                     <TableBody>
                       {photos.map((photo) => (
@@ -530,6 +551,17 @@ export default function GalleryEdit() {
                             <span className="text-sm truncate block max-w-[200px]">
                               {photo.originalFilename}
                             </span>
+                          </TableCell>
+                          <TableCell className="w-10 p-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeletePhoto(photo.id)}
+                              disabled={isDeletingPhoto}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -570,46 +602,24 @@ export default function GalleryEdit() {
             </CardContent>
           </Card>
 
-          {/* Actions Card - Always show for delete, conditionally show reactivate */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Ações da Galeria</CardTitle>
-              <CardDescription>
-                Ações que afetam a disponibilidade da galeria
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Reactivate - only if applicable */}
-              {canReactivate && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
-                  <div>
-                    <p className="font-medium">Reativar Galeria</p>
-                    <p className="text-sm text-muted-foreground">
-                      Permite que o cliente faça novas seleções
-                    </p>
-                  </div>
-                  <ReactivateGalleryDialog
-                    galleryName={gallery.nomeSessao || 'Esta galeria'}
-                    clientLink={gallery.publicToken ? `${window.location.origin}/g/${gallery.publicToken}` : null}
-                    onReactivate={handleReactivate}
-                  />
-                </div>
-              )}
-              
-              {/* Delete as red text link */}
-              <div className={cn("pt-4", canReactivate && "border-t")}>
-                <DeleteGalleryDialog
+          {/* Reactivate Card - Only if applicable */}
+          {canReactivate && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reativar Galeria</CardTitle>
+                <CardDescription>
+                  Permite que o cliente faça novas seleções
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ReactivateGalleryDialog
                   galleryName={gallery.nomeSessao || 'Esta galeria'}
-                  onDelete={handleDelete}
-                  trigger={
-                    <button className="text-sm text-destructive hover:underline">
-                      Excluir galeria permanentemente
-                    </button>
-                  }
+                  clientLink={gallery.publicToken ? `${window.location.origin}/g/${gallery.publicToken}` : null}
+                  onReactivate={handleReactivate}
                 />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
