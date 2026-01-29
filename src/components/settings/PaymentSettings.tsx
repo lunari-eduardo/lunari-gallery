@@ -66,7 +66,8 @@ export function PaymentSettings() {
     const code = params.get('code');
     
     if (isCallback && code) {
-      const redirectUri = `${window.location.origin}/settings?mp_callback=true`;
+      // Always use production domain for OAuth redirect consistency
+      const redirectUri = 'https://gallery.lunarihub.com/settings?mp_callback=true';
       connectMercadoPago.mutate({ code, redirect_uri: redirectUri }, {
         onSettled: () => {
           // Clean URL after processing

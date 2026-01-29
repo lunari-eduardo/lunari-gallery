@@ -378,10 +378,10 @@ export function usePaymentIntegration() {
     },
   });
 
-  // Helper to generate OAuth URL
+  // Helper to generate OAuth URL - always use production domain for consistent redirect
   const getMercadoPagoOAuthUrl = () => {
     if (!mpAppId) return null;
-    const redirectUri = `${window.location.origin}/settings?mp_callback=true`;
+    const redirectUri = 'https://gallery.lunarihub.com/settings?mp_callback=true';
     return `https://auth.mercadopago.com.br/authorization?client_id=${mpAppId}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}`;
   };
 
