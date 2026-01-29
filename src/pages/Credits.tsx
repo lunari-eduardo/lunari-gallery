@@ -4,9 +4,10 @@ import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Camera, Infinity, ShoppingCart, History, CheckCircle2 } from 'lucide-react';
-import { CreditPackageCard } from '@/components/credits/CreditPackageCard';
+import { CreditPackagesModal } from '@/components/credits/CreditPackagesModal';
 import { CreditCheckoutModal } from '@/components/credits/CreditCheckoutModal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -18,6 +19,7 @@ export default function Credits() {
   
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [packagesModalOpen, setPackagesModalOpen] = useState(false);
 
   const handleSelectPackage = (pkg: CreditPackage) => {
     setSelectedPackage(pkg);
@@ -29,9 +31,6 @@ export default function Credits() {
     setCheckoutOpen(false);
     setSelectedPackage(null);
   };
-
-  // Encontrar pacote mais popular (mais vendido ou maior economia)
-  const popularPackageId = packages?.[2]?.id; // Pro (10.000 créditos)
 
   return (
     <div className="space-y-8">
@@ -75,38 +74,22 @@ export default function Credits() {
               <p className="text-muted-foreground mt-1">créditos disponíveis</p>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Pacotes para Compra (apenas para não-admins) */}
-      {!isAdmin && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            <h2 className="text-xl font-semibold">Comprar Créditos</h2>
-          </div>
           
-          {isLoadingPackages ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-64" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {packages?.map((pkg) => (
-                <CreditPackageCard
-                  key={pkg.id}
-                  package_={pkg}
-                  isSelected={selectedPackage?.id === pkg.id}
-                  onSelect={() => handleSelectPackage(pkg)}
-                  isPopular={pkg.id === popularPackageId}
-                />
-              ))}
+          {/* Botão Comprar Créditos dentro do card de saldo */}
+          {!isAdmin && (
+            <div className="pt-4 border-t">
+              <Button 
+                onClick={() => setPackagesModalOpen(true)} 
+                className="w-full"
+                size="lg"
+              >
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Comprar Créditos
+              </Button>
             </div>
           )}
-        </div>
-      )}
+        </CardContent>
+      </Card>
 
       {/* Histórico de Compras */}
       {!isAdmin && purchases && purchases.length > 0 && (
@@ -168,6 +151,15 @@ export default function Credits() {
           </Card>
         </div>
       )}
+
+      {/* Modal de Seleção de Pacotes */}
+      <CreditPackagesModal
+        open={packagesModalOpen}
+        onOpenChange={setPackagesModalOpen}
+        packages={packages}
+        isLoading={isLoadingPackages}
+        onSelectPackage={handleSelectPackage}
+      />
 
       {/* Modal de Checkout */}
       <CreditCheckoutModal

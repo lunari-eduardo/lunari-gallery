@@ -18,7 +18,6 @@ export function CreditPackageCard({
   onSelect,
   isPopular 
 }: CreditPackageCardProps) {
-  const pricePerCredit = (package_.price_cents / 100) / package_.credits;
   const formattedPrice = (package_.price_cents / 100).toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -60,9 +59,6 @@ export function CreditPackageCard({
         
         <div className="text-center border-t pt-3">
           <div className="text-2xl font-bold">{formattedPrice}</div>
-          <p className="text-xs text-muted-foreground">
-            R$ {pricePerCredit.toFixed(4)} por crédito
-          </p>
         </div>
         
         <Button 
