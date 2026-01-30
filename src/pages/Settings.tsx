@@ -1,4 +1,5 @@
 import { Save } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSettings } from '@/hooks/useSettings';
@@ -9,6 +10,11 @@ import { toast } from 'sonner';
 
 export default function Settings() {
   const { settings, updateSettings } = useSettings();
+  const location = useLocation();
+  
+  // Detect if returning from Mercado Pago OAuth callback
+  const params = new URLSearchParams(location.search);
+  const isMpCallback = params.has('mp_callback') || params.get('tab') === 'payment';
 
   const handleSave = () => {
     toast.success('Configurações salvas!');
@@ -23,7 +29,7 @@ export default function Settings() {
         </p>
       </div>
 
-      <Tabs defaultValue="general" className="w-full">
+      <Tabs defaultValue={isMpCallback ? "payment" : "general"} className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-lg">
           <TabsTrigger value="general">Geral</TabsTrigger>
           <TabsTrigger value="personalization">Personalização</TabsTrigger>
