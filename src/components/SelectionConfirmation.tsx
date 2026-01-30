@@ -67,10 +67,12 @@ export function SelectionConfirmation({
 
   return (
     <div 
-      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      className={cn(
+        "min-h-screen flex flex-col bg-background text-foreground",
+        backgroundMode === 'dark' && 'dark'
+      )}
       style={themeStyles}
     >
-    <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
         <div className="flex items-center justify-between px-4 py-4">
@@ -353,7 +355,6 @@ export function SelectionConfirmation({
           </Button>
         </div>
       </div>
-    </div>
     </div>
   );
 }

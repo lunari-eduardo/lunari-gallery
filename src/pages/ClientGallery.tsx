@@ -86,8 +86,7 @@ export default function ClientGallery() {
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
   
-  // Theme state for client gallery
-  const [activeClientMode, setActiveClientMode] = useState<'light' | 'dark'>('light');
+  
   
   // Payment state
   const [paymentInfo, setPaymentInfo] = useState<{
@@ -522,13 +521,10 @@ export default function ClientGallery() {
     }
   }, [galleryId, sessionId, isProcessingPaymentReturn]);
 
-  // Initialize client mode from gallery response
-  useEffect(() => {
-    if (galleryResponse?.clientMode) {
-      setActiveClientMode(galleryResponse.clientMode);
-    }
-  }, [galleryResponse?.clientMode]);
-
+  // Theme mode derived from gallery settings (source of truth)
+  const effectiveBackgroundMode = useMemo(() => {
+    return galleryResponse?.theme?.backgroundMode || 'light';
+  }, [galleryResponse?.theme?.backgroundMode]);
   const gallery = transformedGallery;
   const isLoading = isLoadingGallery || isLoadingPhotos;
 
@@ -797,8 +793,8 @@ export default function ClientGallery() {
     return (
       <div 
         className={cn(
-          "min-h-screen flex flex-col",
-          activeClientMode === 'dark' ? 'dark bg-background text-foreground' : 'bg-background text-foreground'
+          "min-h-screen flex flex-col bg-background text-foreground",
+          effectiveBackgroundMode === 'dark' && 'dark'
         )}
         style={themeStyles}
       >
@@ -952,8 +948,8 @@ export default function ClientGallery() {
     return (
       <div 
         className={cn(
-          "min-h-screen flex flex-col",
-          activeClientMode === 'dark' ? 'dark bg-background text-foreground' : 'bg-background text-foreground'
+          "min-h-screen flex flex-col bg-background text-foreground",
+          effectiveBackgroundMode === 'dark' && 'dark'
         )}
         style={themeStyles}
       >
@@ -1052,8 +1048,8 @@ export default function ClientGallery() {
   return (
     <div 
       className={cn(
-        "min-h-screen flex flex-col",
-        activeClientMode === 'dark' ? 'dark bg-background text-foreground' : 'bg-background text-foreground'
+        "min-h-screen flex flex-col bg-background text-foreground",
+        effectiveBackgroundMode === 'dark' && 'dark'
       )}
       style={themeStyles}
     >
@@ -1073,8 +1069,8 @@ export default function ClientGallery() {
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
         studioName={galleryResponse?.studioSettings?.studio_name}
         contactEmail={null}
-        activeClientMode={activeClientMode}
-        onToggleMode={() => setActiveClientMode(m => m === 'light' ? 'dark' : 'light')}
+        activeClientMode={effectiveBackgroundMode}
+        onToggleMode={() => {}}
       />
 
       {/* Main Content - Full width gallery */}

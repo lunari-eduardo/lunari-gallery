@@ -59,10 +59,12 @@ export function PaymentRedirect({
 
   return (
     <div 
-      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      className={cn(
+        "min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4",
+        backgroundMode === 'dark' && 'dark'
+      )}
       style={themeStyles}
     >
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="max-w-md w-full text-center space-y-8">
         {/* Provider Logo/Icon */}
         <div className={cn(
@@ -126,7 +128,6 @@ export function PaymentRedirect({
           Seus dados estão protegidos.
         </p>
       </div>
-    </div>
     </div>
   );
 }
