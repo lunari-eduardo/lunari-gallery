@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Smartphone, Zap, Link2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -59,23 +59,39 @@ export function PaymentSettings() {
   const [mpMaxParcelas, setMpMaxParcelas] = useState('12');
   const [mpAbsorverTaxa, setMpAbsorverTaxa] = useState(false);
 
-  // Handle OAuth callback
+  // Ref to prevent duplicate OAuth callback processing
+  const hasProcessedCallback = useRef(false);
+  const connectMercadoPagoRef = useRef(connectMercadoPago);
+  const navigateRef = useRef(navigate);
+  
+  // Keep refs updated
+  useEffect(() => {
+    connectMercadoPagoRef.current = connectMercadoPago;
+    navigateRef.current = navigate;
+  });
+
+  // Handle OAuth callback - runs only once per code
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const isCallback = params.get('mp_callback');
     const code = params.get('code');
     
-    if (isCallback && code) {
-      // Always use production domain for OAuth redirect consistency
-      const redirectUri = 'https://gallery.lunarihub.com/settings?mp_callback=true';
-      connectMercadoPago.mutate({ code, redirect_uri: redirectUri }, {
-        onSettled: () => {
-          // Clean URL after processing
-          navigate('/settings', { replace: true });
-        },
-      });
+    // Guard against duplicate processing
+    if (!isCallback || !code || hasProcessedCallback.current) {
+      return;
     }
-  }, [location.search, connectMercadoPago, navigate]);
+    
+    hasProcessedCallback.current = true;
+    
+    // Always use production domain for OAuth redirect consistency
+    const redirectUri = 'https://gallery.lunarihub.com/settings?mp_callback=true';
+    connectMercadoPagoRef.current.mutate({ code, redirect_uri: redirectUri }, {
+      onSettled: () => {
+        // Clean URL after processing
+        navigateRef.current('/settings?tab=payment', { replace: true });
+      },
+    });
+  }, [location.search]);
 
   // Load existing data when available
   useEffect(() => {
