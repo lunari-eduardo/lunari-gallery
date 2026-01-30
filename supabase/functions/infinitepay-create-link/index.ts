@@ -58,13 +58,27 @@ Deno.serve(async (req) => {
 
     const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, qtdFotos }: RequestBody = await req.json();
 
-    // Validate required fields
-    if (!clienteId || !valor || !userId) {
-      console.error('Missing required fields:', { clienteId, valor, userId });
+    // Validate required fields - valor e userId são sempre obrigatórios
+    if (!valor || !userId) {
+      console.error('Missing required fields:', { valor, userId });
       return new Response(
-        JSON.stringify({ error: 'clienteId, valor e userId são obrigatórios' }),
+        JSON.stringify({ success: false, error: 'valor e userId são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Validar que temos referência (cliente OU galeria)
+    if (!clienteId && !galeriaId) {
+      console.error('Cobrança requer cliente_id ou galeria_id');
+      return new Response(
+        JSON.stringify({ success: false, error: 'É necessário um cliente ou galeria vinculada para criar cobrança' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Log informativo para galerias públicas
+    if (!clienteId && galeriaId) {
+      console.log('⚠️ Criando cobrança InfinitePay para galeria pública (sem cliente vinculado)');
     }
 
     // 1. Fetch InfinitePay handle from user integrations
@@ -187,11 +201,12 @@ Deno.serve(async (req) => {
     console.log(`💳 InfinitePay checkout URL generated: ${checkoutUrl}`);
 
     // 6. Create charge record in database with gallery link and photo quantity
+    // Aceita cliente_id NULL para galerias públicas
     const { data: cobranca, error: cobrancaError } = await supabase
       .from('cobrancas')
       .insert({
         user_id: userId,
-        cliente_id: clienteId,
+        cliente_id: clienteId || null, // Permite NULL para galerias públicas
         session_id: sessionId || null,
         valor,
         descricao,

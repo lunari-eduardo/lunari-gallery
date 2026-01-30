@@ -46,12 +46,29 @@ Deno.serve(async (req) => {
     if (!photographerId) {
       console.error('Nenhum ID de fotógrafo fornecido (photographer_id ou userId)');
       return new Response(
-        JSON.stringify({ error: 'ID do fotógrafo é obrigatório' }),
+        JSON.stringify({ success: false, error: 'ID do fotógrafo é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // === VALIDAÇÃO ROBUSTA: Requer cliente OU galeria ===
+    if (!body.clienteId && !body.galeriaId && !body.cobranca_id) {
+      console.error('Cobrança requer cliente_id, galeria_id ou cobranca_id existente');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'É necessário um cliente ou galeria vinculada para criar cobrança' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Log informativo para galerias públicas
+    if (!body.clienteId && body.galeriaId) {
+      console.log('⚠️ Criando cobrança para galeria pública (sem cliente vinculado)');
+    }
     
-    console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId);
+    console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId, 'clienteId:', body.clienteId || 'NULL');
     
     // 2. Buscar email do cliente se não fornecido
     let clienteEmail = body.cliente_email;
@@ -67,11 +84,11 @@ Deno.serve(async (req) => {
     }
     
     if (!clienteEmail) {
-      clienteEmail = 'cliente@email.com'; // Fallback
+      clienteEmail = 'cliente@email.com'; // Fallback para galerias públicas
       console.log('Usando email fallback:', clienteEmail);
     }
     
-    // 3. Criar cobrança se não fornecida
+    // 3. Criar cobrança se não fornecida (aceita cliente_id NULL agora)
     let cobrancaId = body.cobranca_id;
     if (!cobrancaId && body.galeriaId) {
       console.log('Criando nova cobrança para galeria:', body.galeriaId);
@@ -80,7 +97,7 @@ Deno.serve(async (req) => {
         .from('cobrancas')
         .insert({
           user_id: photographerId,
-          cliente_id: body.clienteId,
+          cliente_id: body.clienteId || null, // Permite NULL para galerias públicas
           galeria_id: body.galeriaId,
           session_id: body.sessionId || null,
           valor: body.valor,
@@ -96,7 +113,7 @@ Deno.serve(async (req) => {
       if (cobrancaError) {
         console.error('Erro ao criar cobrança:', cobrancaError);
         return new Response(
-          JSON.stringify({ error: 'Erro ao criar cobrança', details: cobrancaError.message }),
+          JSON.stringify({ success: false, error: 'Erro ao criar cobrança', details: cobrancaError.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -108,7 +125,7 @@ Deno.serve(async (req) => {
     if (!cobrancaId) {
       console.error('Nenhum cobranca_id fornecido e não foi possível criar');
       return new Response(
-        JSON.stringify({ error: 'ID da cobrança é obrigatório ou galeriaId para criar uma nova' }),
+        JSON.stringify({ success: false, error: 'ID da cobrança é obrigatório ou galeriaId para criar uma nova' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -125,7 +142,7 @@ Deno.serve(async (req) => {
     if (integracaoError || !integracao) {
       console.error('Fotógrafo não tem Mercado Pago configurado:', integracaoError);
       return new Response(
-        JSON.stringify({ error: 'Fotógrafo não tem Mercado Pago configurado' }),
+        JSON.stringify({ success: false, error: 'Fotógrafo não tem Mercado Pago configurado' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -188,22 +205,34 @@ Deno.serve(async (req) => {
       absorverTaxa?: boolean;
     } | null;
 
-    // 5. Determinar método de pagamento
-    const paymentMethod = body.payment_method;
+    // 5. Determinar método de pagamento baseado nas configurações
+    let paymentMethod = body.payment_method;
+    
+    // === LÓGICA DE MÉTODOS DE PAGAMENTO CONFORME CONFIGURAÇÃO ===
+    const pixHabilitado = settings?.habilitarPix !== false; // Default true
+    const cartaoHabilitado = settings?.habilitarCartao !== false; // Default true
+    
+    console.log(`📋 Configurações de pagamento: PIX=${pixHabilitado}, Cartão=${cartaoHabilitado}`);
     
     // Validate payment method is enabled (if specified)
-    if (paymentMethod === 'pix' && settings?.habilitarPix === false) {
+    if (paymentMethod === 'pix' && !pixHabilitado) {
       return new Response(
-        JSON.stringify({ error: 'PIX não está habilitado para este fotógrafo' }),
+        JSON.stringify({ success: false, error: 'PIX não está habilitado para este fotógrafo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (paymentMethod === 'credit_card' && settings?.habilitarCartao === false) {
+    if (paymentMethod === 'credit_card' && !cartaoHabilitado) {
       return new Response(
-        JSON.stringify({ error: 'Cartão não está habilitado para este fotógrafo' }),
+        JSON.stringify({ success: false, error: 'Cartão não está habilitado para este fotógrafo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Se nenhum método foi especificado e só PIX está habilitado, força PIX direto
+    if (!paymentMethod && pixHabilitado && !cartaoHabilitado) {
+      console.log('📱 Apenas PIX habilitado - criando pagamento PIX direto');
+      paymentMethod = 'pix';
     }
 
     // 6. Criar pagamento baseado no método (ou checkout genérico se não especificado)
@@ -235,7 +264,7 @@ Deno.serve(async (req) => {
         const errorText = await paymentResponse.text();
         console.error('Erro ao criar pagamento PIX:', errorText);
         return new Response(
-          JSON.stringify({ error: 'Erro ao criar pagamento', details: errorText }),
+          JSON.stringify({ success: false, error: 'Erro ao criar pagamento', details: errorText }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -283,14 +312,20 @@ Deno.serve(async (req) => {
       // Create preference for card payment OR generic checkout (accepts both PIX and card)
       const maxParcelas = settings?.maxParcelas || 12;
       
-      // Determinar métodos de pagamento excluídos
-      const excludedTypes: { id: string }[] = [{ id: 'ticket' }];
+      // Construir lista de métodos de pagamento excluídos
+      const excludedTypes: { id: string }[] = [{ id: 'ticket' }]; // Sempre excluir boleto
       
-      // Se um método específico foi solicitado, excluir o outro
-      if (paymentMethod === 'credit_card') {
-        // Excluir boleto apenas, permitir cartão
+      // Excluir cartão se desabilitado nas configurações
+      if (!cartaoHabilitado) {
+        excludedTypes.push({ id: 'credit_card' });
+        excludedTypes.push({ id: 'debit_card' });
+        console.log('💳 Cartão desabilitado - excluindo do checkout');
       }
-      // Se não foi especificado, permitir ambos (PIX e cartão)
+      
+      // Se cartão específico foi solicitado, não excluir nada adicional
+      if (paymentMethod === 'credit_card') {
+        console.log('💳 Checkout específico para cartão');
+      }
       
       const preferencePayload = {
         items: [{
@@ -315,7 +350,7 @@ Deno.serve(async (req) => {
         auto_return: 'approved',
       };
 
-      console.log('Criando preferência de checkout');
+      console.log('Criando preferência de checkout com exclusões:', JSON.stringify(excludedTypes));
 
       const preferenceResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
         method: 'POST',
@@ -330,7 +365,7 @@ Deno.serve(async (req) => {
         const errorText = await preferenceResponse.text();
         console.error('Erro ao criar preferência:', errorText);
         return new Response(
-          JSON.stringify({ error: 'Erro ao criar checkout', details: errorText }),
+          JSON.stringify({ success: false, error: 'Erro ao criar checkout', details: errorText }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -376,7 +411,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Erro ao criar link de pagamento:', error);
     return new Response(
-      JSON.stringify({ error: 'Erro interno ao processar pagamento' }),
+      JSON.stringify({ success: false, error: 'Erro interno ao processar pagamento' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
