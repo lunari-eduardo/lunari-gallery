@@ -545,18 +545,28 @@ export default function ClientGallery() {
       '--background': '25 15% 10%',
       '--foreground': '30 20% 95%',
       '--card': '25 15% 13%',
+      '--card-foreground': '30 20% 95%',
       '--muted': '25 12% 20%',
       '--muted-foreground': '30 15% 60%',
       '--border': '25 12% 22%',
       '--primary-foreground': '25 15% 10%',
+      '--popover': '25 15% 13%',
+      '--popover-foreground': '30 20% 95%',
+      // Gradients for dark mode
+      '--gradient-card': 'linear-gradient(180deg, hsl(25 15% 13%) 0%, hsl(25 12% 11%) 100%)',
     } : {
       '--background': '30 25% 97%',
       '--foreground': '25 20% 15%',
       '--card': '30 20% 99%',
+      '--card-foreground': '25 20% 15%',
       '--muted': '30 15% 92%',
       '--muted-foreground': '25 10% 45%',
       '--border': '30 15% 88%',
       '--primary-foreground': '30 25% 98%',
+      '--popover': '30 20% 99%',
+      '--popover-foreground': '25 20% 15%',
+      // Gradients for light mode
+      '--gradient-card': 'linear-gradient(180deg, hsl(30 20% 99%) 0%, hsl(30 15% 96%) 100%)',
     };
     
     // Convert hex colors to HSL
@@ -635,6 +645,8 @@ export default function ClientGallery() {
         onSubmit={handlePasswordSubmit}
         error={passwordError}
         isLoading={isCheckingPassword}
+        themeStyles={themeStyles}
+        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
       />
     );
   }
@@ -890,6 +902,8 @@ export default function ClientGallery() {
         isConfirming={confirmMutation.isPending}
         onBack={() => setCurrentStep('gallery')}
         onConfirm={handleConfirm}
+        themeStyles={themeStyles}
+        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
       />
     );
   }
@@ -911,6 +925,8 @@ export default function ClientGallery() {
             description: 'Aguarde a confirmação do pagamento pelo fotógrafo.',
           });
         }}
+        themeStyles={themeStyles}
+        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
       />
     );
   }
@@ -923,6 +939,8 @@ export default function ClientGallery() {
         provedor={paymentInfo.provedor}
         valorTotal={paymentInfo.valorTotal}
         onCancel={() => setCurrentStep('confirmed')}
+        themeStyles={themeStyles}
+        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
       />
     );
   }

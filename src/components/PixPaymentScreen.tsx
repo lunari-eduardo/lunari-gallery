@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import { generatePixPayload } from '@/lib/pixGenerator';
+import { cn } from '@/lib/utils';
 
 interface PixPaymentScreenProps {
   chavePix: string;
@@ -14,6 +15,8 @@ interface PixPaymentScreenProps {
   studioLogoUrl?: string;
   onBack?: () => void;
   onPaymentConfirmed?: () => void;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 
 export function PixPaymentScreen({
@@ -25,6 +28,8 @@ export function PixPaymentScreen({
   studioLogoUrl,
   onBack,
   onPaymentConfirmed,
+  themeStyles = {},
+  backgroundMode = 'light',
 }: PixPaymentScreenProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -73,6 +78,10 @@ export function PixPaymentScreen({
   };
 
   return (
+    <div 
+      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      style={themeStyles}
+    >
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="max-w-md w-full text-center space-y-6">
         {/* Studio Logo/Name */}
@@ -205,6 +214,7 @@ export function PixPaymentScreen({
           Nunca compartilhe senhas ou dados sensíveis.
         </p>
       </div>
+    </div>
     </div>
   );
 }
