@@ -1,117 +1,130 @@
 
-
-# Plano: Corrigir Erro de Conexão do Mercado Pago em Mobile
+# Plano: Corrigir Incompatibilidade entre confirm-selection e mercadopago-create-link
 
 ## Problema Identificado
 
-O problema acontece no fluxo de OAuth callback em dispositivos móveis por dois motivos:
+A Edge Function `confirm-selection` está chamando `mercadopago-create-link` com parâmetros diferentes dos que a função espera:
 
-1. **Re-execução múltipla do useEffect**: O `connectMercadoPago` está nas dependências do `useEffect`, mas como é um objeto de mutation, ele muda a cada render. Isso pode causar múltiplas chamadas à Edge Function.
+| Campo Esperado | Campo Enviado | Status |
+|----------------|---------------|--------|
+| `photographer_id` | `userId` | ❌ Nome diferente |
+| `cobranca_id` | Não enviado | ❌ Faltando |
+| `valor` | `valor` | ✅ OK |
+| `descricao` | `descricao` | ✅ OK |
+| `cliente_email` | Não enviado | ❌ Faltando |
+| `payment_method` | Não enviado | ❌ Faltando |
 
-2. **Tab errada após callback**: A página Settings abre na aba "Geral" por padrão, então mesmo quando o callback funciona, o usuário não vê a aba "Pagamentos" automaticamente.
-
-3. **Falta de debounce/flag**: Não há controle para evitar que o mesmo código OAuth seja processado múltiplas vezes.
+Os logs confirmam: `"Criando pagamento MP para fotógrafo: undefined cobrança: undefined"`
 
 ---
 
 ## Solução
 
-### 1. Adicionar flag para evitar processamento duplicado
+Adaptar a função `mercadopago-create-link` para aceitar **ambos os formatos** de chamada:
 
-Usar um `useRef` para garantir que o código OAuth seja processado apenas uma vez, mesmo que o `useEffect` rode múltiplas vezes.
+1. Formato original do `mercadopago-create-link` (usado por outras partes do sistema)
+2. Formato enviado pela `confirm-selection` (Gallery flow)
 
-### 2. Remover `connectMercadoPago` das dependências
-
-Usar `useRef` para armazenar a função mutation e evitar que mudanças nela causem re-execuções do useEffect.
-
-### 3. Redirecionar para a aba "Pagamentos" após callback
-
-Detectar o parâmetro `mp_callback` na URL e automaticamente abrir a aba de "Pagamentos" para que o usuário veja o resultado.
-
-### 4. Melhorar feedback durante carregamento
-
-Manter o estado de loading visível durante todo o processo de callback.
-
----
-
-## Arquivos a Modificar
-
-### `src/components/settings/PaymentSettings.tsx`
-- Adicionar `useRef` para controlar se o callback já foi processado
-- Remover `connectMercadoPago` das dependências do useEffect
-- Usar `connectMercadoPago.mutateAsync` com controle de flag
-
-### `src/pages/Settings.tsx`
-- Detectar `mp_callback` na URL
-- Definir `defaultValue` dinamicamente para a aba "payment" quando retornando do OAuth
+A função deve detectar qual formato está sendo usado e normalizar os parâmetros internamente.
 
 ---
 
 ## Detalhes Técnicos
 
+### Mudanças em `supabase/functions/mercadopago-create-link/index.ts`
+
 ```text
-ANTES:
+ANTES (Interface rígida):
 ┌─────────────────────────────────────────────┐
-│ useEffect(... , [connectMercadoPago, ...])  │
-│     ↓ (roda múltiplas vezes)                │
-│ connectMercadoPago.mutate(...)              │
-│     ↓ (chamadas duplicadas)                 │
-│ Erro: código OAuth já usado                 │
+│ interface CreateLinkRequest {               │
+│   cobranca_id: string;                      │
+│   photographer_id: string;                  │
+│   valor: number;                            │
+│   descricao: string;                        │
+│   cliente_email: string;                    │
+│   payment_method: 'pix' | 'credit_card';    │
+│ }                                           │
 └─────────────────────────────────────────────┘
 
-DEPOIS:
+DEPOIS (Aceita ambos formatos):
 ┌─────────────────────────────────────────────┐
-│ isProcessingRef = useRef(false)             │
-│ useEffect(... , [location.search])          │
-│     ↓                                       │
-│ if (isProcessingRef.current) return;        │
-│ isProcessingRef.current = true;             │
-│ connectMercadoPago.mutate(...)              │
-│     ↓ (chamada única)                       │
-│ Sucesso!                                    │
+│ interface CreateLinkRequest {               │
+│   // Formato original                       │
+│   cobranca_id?: string;                     │
+│   photographer_id?: string;                 │
+│   cliente_email?: string;                   │
+│   payment_method?: 'pix' | 'credit_card';   │
+│                                             │
+│   // Formato confirm-selection              │
+│   userId?: string;                          │
+│   clienteId?: string;                       │
+│   galeriaId?: string;                       │
+│   galleryToken?: string;                    │
+│   qtdFotos?: number;                        │
+│   sessionId?: string;                       │
+│                                             │
+│   // Comum                                  │
+│   valor: number;                            │
+│   descricao: string;                        │
+│ }                                           │
 └─────────────────────────────────────────────┘
+```
+
+### Lógica de Normalização
+
+1. **Identificar Fotógrafo**: 
+   - Usar `photographer_id` se presente
+   - Caso contrário, usar `userId`
+
+2. **Email do Cliente**: 
+   - Se `cliente_email` não fornecido, buscar via `clienteId` no banco de dados
+
+3. **Cobrança**:
+   - Se `cobranca_id` não fornecido, **criar uma nova cobrança** na tabela `cobrancas` usando `galeriaId` e `qtdFotos`
+
+4. **Método de Pagamento**:
+   - Se não fornecido, usar PIX por padrão (mais comum no fluxo de galeria)
+   - Ou criar preferência de checkout que aceita ambos
+
+---
+
+## Fluxo Atualizado
+
+```text
+┌───────────────────────────────┐
+│     confirm-selection         │
+│  Envia: userId, clienteId,    │
+│  galeriaId, valor, descricao  │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│   mercadopago-create-link     │
+│                               │
+│ 1. Detectar formato de entrada│
+│ 2. Normalizar parâmetros      │
+│ 3. Buscar email do cliente    │
+│ 4. Criar cobrança se preciso  │
+│ 5. Criar preferência MP       │
+│ 6. Retornar checkout_url      │
+└───────────────────────────────┘
 ```
 
 ---
 
-## Mudanças no Settings.tsx
+## Arquivos a Modificar
 
-```typescript
-// Detectar se é um callback do Mercado Pago
-const location = useLocation();
-const params = new URLSearchParams(location.search);
-const isMpCallback = params.has('mp_callback');
-
-// Usar a aba de pagamentos como padrão se for callback
-<Tabs defaultValue={isMpCallback ? "payment" : "general"}>
-```
+1. **`supabase/functions/mercadopago-create-link/index.ts`**:
+   - Expandir interface para aceitar campos do formato `confirm-selection`
+   - Adicionar lógica para normalizar `photographer_id` / `userId`
+   - Adicionar busca de email do cliente via `clienteId`
+   - Adicionar criação de cobrança se `cobranca_id` não for fornecido
+   - Usar preferência de checkout (aceita PIX e cartão) como padrão
 
 ---
 
-## Mudanças no PaymentSettings.tsx
+## Benefícios
 
-```typescript
-// Ref para controlar processamento único
-const hasProcessedCallback = useRef(false);
-
-useEffect(() => {
-  const params = new URLSearchParams(location.search);
-  const isCallback = params.get('mp_callback');
-  const code = params.get('code');
-  
-  // Evitar processamento duplicado
-  if (!isCallback || !code || hasProcessedCallback.current) {
-    return;
-  }
-  
-  hasProcessedCallback.current = true;
-  
-  const redirectUri = 'https://gallery.lunarihub.com/settings?mp_callback=true';
-  connectMercadoPago.mutate({ code, redirect_uri: redirectUri }, {
-    onSettled: () => {
-      navigate('/settings', { replace: true });
-    },
-  });
-}, [location.search]); // Remover connectMercadoPago e navigate
-```
-
+- **Compatibilidade retroativa**: Chamadas existentes continuarão funcionando
+- **Flexibilidade**: A função aceita múltiplos formatos de entrada
+- **Menos mudanças**: Não precisa alterar `confirm-selection`, apenas adaptar `mercadopago-create-link`
