@@ -1,373 +1,348 @@
 
-# Plano: Simplificar Sistema de Temas para Galeria do Cliente
+# Plano de Correção: Tema Personalizado em Todas as Telas
 
-## Resumo da Proposta
+## Problemas Identificados
 
-Migrar de um sistema complexo com "até 3 temas customizáveis" para um modelo mais simples e robusto com apenas **2 tipos de tema**: Sistema (padrão) ou Personalizado (único).
+### Problema 1: Caixa de Mensagem de Boas-Vindas com Fundo Escuro
+A classe `lunari-card` usa a variavel `--gradient-card`, que nao esta sendo definida no `themeStyles`. Quando o tema personalizado tem `backgroundMode: 'light'`, apenas as variaveis basicas (`--background`, `--card`, etc.) sao definidas, mas `--gradient-card` continua usando o valor padrao do CSS que pode conflitar.
 
-## Arquitetura Atual vs Nova
+**Localizacao**: `src/pages/ClientGallery.tsx` linhas 536-572
 
-| Aspecto | Sistema Atual | Sistema Novo |
-|---------|---------------|--------------|
-| Quantidade de temas | Até 3 por fotógrafo | 0 ou 1 (Personalizado) |
-| Cores customizáveis | 4 (primária, fundo, texto, destaque) | 3 (primária, destaque, texto ênfase) |
-| Fundo | Cor livre (color picker) | Apenas Light ou Dark |
-| Texto geral | Customizável | Automático baseado no fundo |
-| Escopo | Apenas galeria principal | Todas as telas do cliente |
+### Problema 2: Telas de Confirmacao e Pagamento sem Tema
+As seguintes telas NAO recebem `themeStyles` nem `backgroundMode`:
+- `SelectionConfirmation` (linha 880-893)
+- `PaymentRedirect` (linha 921-927)
+- `PixPaymentScreen` (linha 900-915)
+- `PasswordScreen` (linha 631-639)
 
-## Nova Interface de Configuração
+Resultado: Essas telas usam o tema do sistema (escuro) em vez do tema personalizado.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  APARÊNCIA DA GALERIA DO CLIENTE                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Tipo de Tema:                                              │
-│  ┌───────────────┐  ┌──────────────────┐                    │
-│  │ ○ Sistema     │  │ ● Personalizado  │                    │
-│  │   (Padrão)    │  │   (Sua marca)    │                    │
-│  └───────────────┘  └──────────────────┘                    │
-│                                                             │
-│  ─────────── Se Personalizado ───────────                   │
-│                                                             │
-│  Fundo:                                                     │
-│  ┌─────────────┐  ┌─────────────┐                          │
-│  │ ○ Claro ☀️  │  │ ● Escuro 🌙 │                          │
-│  └─────────────┘  └─────────────┘                          │
-│                                                             │
-│  Cores da Marca:                                            │
-│  ┌────────────────────────────────────────┐                 │
-│  │ 🎨 Cor Primária        [#B87333] [■]   │ → Botões, CTAs │
-│  │ 🎯 Cor de Destaque     [#8B9A7D] [■]   │ → Seleções     │
-│  │ 📝 Cor de Ênfase       [#2D2A26] [■]   │ → Títulos      │
-│  └────────────────────────────────────────┘                 │
-│                                                             │
-│  Preview:                                                   │
-│  ┌────────────────────────────────────────┐                 │
-│  │ (Simulação do tema em tempo real)      │                 │
-│  └────────────────────────────────────────┘                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+## Solucao
 
-## Regras de Cores por Fundo
-
-### Fundo Claro
-- Background: `--background: 30 25% 97%` (creme claro do Lunari)
-- Texto padrão: `--foreground: 25 20% 15%` (cinza escuro)
-- Card: `--card: 30 20% 99%`
-- Border: `--border: 30 15% 88%`
-- Muted: `--muted: 30 15% 92%`
-
-### Fundo Escuro
-- Background: `--background: 25 15% 10%` (cinza escuro do Lunari)
-- Texto padrão: `--foreground: 30 20% 95%` (cinza claro)
-- Card: `--card: 25 15% 13%`
-- Border: `--border: 25 12% 22%`
-- Muted: `--muted: 25 12% 20%`
-
-### Cores Personalizadas (aplicadas sobre qualquer fundo)
-- **Primária** → `--primary`, `--ring`, `--terracotta`
-- **Destaque** → `--accent`, `--sage`
-- **Ênfase** → Títulos (`font-display`), valores destacados
-
----
-
-## Mudanças Técnicas
-
-### Etapa 1: Atualizar Tipos TypeScript
-
-**Arquivo: `src/types/gallery.ts`**
-
-```typescript
-// ANTES
-export interface CustomTheme {
-  id: string;
-  name: string;
-  primaryColor: string;
-  backgroundColor: string;  // REMOVER
-  textColor: string;        // RENOMEAR para emphasisColor
-  accentColor: string;
-  isDefault?: boolean;      // REMOVER (só 1 tema)
-}
-
-// DEPOIS
-export interface CustomTheme {
-  id: string;
-  name: string;
-  backgroundMode: 'light' | 'dark';  // NOVO: apenas escolha binária
-  primaryColor: string;              // Botões, CTAs
-  accentColor: string;               // Seleções, bordas ativas
-  emphasisColor: string;             // Títulos, valores (renomeado de textColor)
-}
-
-// NOVO: Configuração de tema no nível do fotógrafo
-export interface ThemeConfig {
-  type: 'system' | 'custom';
-  customTheme?: CustomTheme;
-}
-```
-
-### Etapa 2: Atualizar Schema do Banco de Dados
-
-**Migração SQL:**
-
-```sql
--- 1. Adicionar coluna para modo de fundo
-ALTER TABLE gallery_themes 
-ADD COLUMN background_mode text NOT NULL DEFAULT 'light' 
-CHECK (background_mode IN ('light', 'dark'));
-
--- 2. Renomear text_color para emphasis_color (clareza semântica)
-ALTER TABLE gallery_themes 
-RENAME COLUMN text_color TO emphasis_color;
-
--- 3. Remover colunas obsoletas (background_color migrada para background_mode)
-ALTER TABLE gallery_themes 
-DROP COLUMN IF EXISTS background_color;
-
--- 4. Remover coluna is_default (só 1 tema permitido agora)
-ALTER TABLE gallery_themes 
-DROP COLUMN IF EXISTS is_default;
-
--- 5. Adicionar unique constraint: 1 tema por usuário
--- Primeiro, deletar temas extras de usuários que têm mais de 1
-DELETE FROM gallery_themes 
-WHERE id NOT IN (
-  SELECT DISTINCT ON (user_id) id 
-  FROM gallery_themes 
-  ORDER BY user_id, created_at DESC
-);
-
--- Depois, adicionar constraint
-ALTER TABLE gallery_themes 
-ADD CONSTRAINT one_theme_per_user UNIQUE (user_id);
-
--- 6. Atualizar gallery_settings para novo formato
-ALTER TABLE gallery_settings 
-ADD COLUMN theme_type text NOT NULL DEFAULT 'system' 
-CHECK (theme_type IN ('system', 'custom'));
-
--- Migrar active_theme_id existente para theme_type
-UPDATE gallery_settings 
-SET theme_type = 'custom' 
-WHERE active_theme_id IS NOT NULL;
-```
-
-### Etapa 3: Simplificar ThemeManager → ThemeConfig
-
-**Arquivo: `src/components/settings/ThemeManager.tsx` → SUBSTITUIR POR `ThemeConfig.tsx`**
-
-Nova UI com:
-1. Toggle Sistema vs Personalizado
-2. Se Personalizado:
-   - Seletor Light/Dark para fundo
-   - 3 color pickers (Primária, Destaque, Ênfase)
-   - Preview em tempo real
-
-### Etapa 4: Atualizar ThemeEditorModal
-
-**Arquivo: `src/components/settings/ThemeEditorModal.tsx`**
-
-Remover:
-- Campo "Nome do Tema" (não necessário com tema único)
-- Color picker de backgroundColor
-- Color picker de textColor genérico
-
-Adicionar:
-- Toggle Light/Dark para backgroundMode
-- Renomear "Cor do Texto" → "Cor de Ênfase" (títulos/valores)
-
-### Etapa 5: Refatorar ClientGallery para Novo Tema
+### Mudanca 1: Adicionar variaveis de gradiente ao themeStyles
 
 **Arquivo: `src/pages/ClientGallery.tsx`**
 
-Atualizar `themeStyles` useMemo:
+Atualizar o `themeStyles` useMemo para incluir as variaveis de gradiente:
 
 ```typescript
 const themeStyles = useMemo(() => {
   const theme = galleryResponse?.theme;
-  const clientMode = galleryResponse?.clientMode || 'light';
-  
-  // Se não há tema personalizado, usar cores do sistema
   if (!theme) return {};
   
-  // Determinar fundo baseado no backgroundMode (não mais backgroundColor livre)
-  const backgroundMode = theme.backgroundMode || clientMode;
+  const backgroundMode = theme.backgroundMode || 'light';
   
-  // Cores fixas baseadas no modo de fundo (do index.css)
+  // Base colors depend on background mode
   const baseColors = backgroundMode === 'dark' ? {
     '--background': '25 15% 10%',
     '--foreground': '30 20% 95%',
     '--card': '25 15% 13%',
+    '--card-foreground': '30 20% 95%',
     '--muted': '25 12% 20%',
     '--muted-foreground': '30 15% 60%',
     '--border': '25 12% 22%',
+    '--primary-foreground': '25 15% 10%',
+    '--popover': '25 15% 13%',
+    '--popover-foreground': '30 20% 95%',
+    // Gradients for dark mode
+    '--gradient-card': 'linear-gradient(180deg, hsl(25 15% 13%) 0%, hsl(25 12% 11%) 100%)',
   } : {
     '--background': '30 25% 97%',
     '--foreground': '25 20% 15%',
     '--card': '30 20% 99%',
+    '--card-foreground': '25 20% 15%',
     '--muted': '30 15% 92%',
     '--muted-foreground': '25 10% 45%',
     '--border': '30 15% 88%',
+    '--primary-foreground': '30 25% 98%',
+    '--popover': '30 20% 99%',
+    '--popover-foreground': '25 20% 15%',
+    // Gradients for light mode
+    '--gradient-card': 'linear-gradient(180deg, hsl(30 20% 99%) 0%, hsl(30 15% 96%) 100%)',
   };
   
-  // Cores personalizadas do tema
   const primaryHsl = hexToHsl(theme.primaryColor);
   const accentHsl = hexToHsl(theme.accentColor);
-  // emphasisColor usado apenas em classes específicas, não como variável global
   
   return {
     ...baseColors,
     '--primary': primaryHsl || '18 55% 55%',
-    '--primary-foreground': backgroundMode === 'dark' ? '25 15% 10%' : '30 25% 98%',
     '--accent': accentHsl || '120 20% 62%',
     '--ring': primaryHsl || '18 55% 55%',
   } as React.CSSProperties;
-}, [galleryResponse?.theme, galleryResponse?.clientMode]);
+}, [galleryResponse?.theme]);
 ```
 
-### Etapa 6: Aplicar Tema em TODAS as Telas do Cliente
+### Mudanca 2: Passar themeStyles e backgroundMode para SelectionConfirmation
 
-Atualmente o tema só é aplicado na galeria principal. Precisa aplicar em:
-
-1. **PasswordScreen.tsx** - Receber `themeStyles` como prop e aplicar no container
-2. **PaymentRedirect.tsx** - Receber `themeStyles` como prop
-3. **PixPaymentScreen.tsx** - Receber `themeStyles` como prop
-4. **SelectionConfirmation.tsx** - Receber `themeStyles` como prop
-5. **Welcome screen** (dentro de ClientGallery) - Já usa `themeStyles`
-
-**Padrão de implementação:**
-
-```tsx
-// Em ClientGallery.tsx, passar themeStyles para componentes filhos:
-<PasswordScreen
-  // ... outras props
-  themeStyles={themeStyles}
-  backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
-/>
-
-// Nos componentes, aplicar:
-<div 
-  className={cn(
-    "min-h-screen flex flex-col",
-    backgroundMode === 'dark' ? 'dark' : ''
-  )}
-  style={themeStyles}
->
-```
-
-### Etapa 7: Atualizar Edge Function gallery-access
-
-**Arquivo: `supabase/functions/gallery-access/index.ts`**
+**Arquivo: `src/pages/ClientGallery.tsx` (linha ~880)**
 
 ```typescript
-// Buscar tema com novo schema
-if (themeId) {
-  const { data: theme } = await supabase
-    .from("gallery_themes")
-    .select("*")
-    .eq("id", themeId)
-    .maybeSingle();
+return (
+  <SelectionConfirmation
+    gallery={gallery}
+    photos={localPhotos}
+    selectedCount={selectedCount}
+    extraCount={extraCount}
+    extrasACobrar={extrasACobrar}
+    extrasPagasAnteriormente={extrasPagasTotal}
+    valorJaPago={valorJaPago}
+    regrasCongeladas={regrasCongeladas}
+    hasPaymentProvider={hasPaymentProvider}
+    isConfirming={confirmMutation.isPending}
+    onBack={() => setCurrentStep('gallery')}
+    onConfirm={handleConfirm}
+    // NOVO: Props de tema
+    themeStyles={themeStyles}
+    backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+  />
+);
+```
+
+**Arquivo: `src/components/SelectionConfirmation.tsx`**
+
+Adicionar props e aplicar estilos:
+
+```typescript
+interface SelectionConfirmationProps {
+  // ... props existentes
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
+}
+
+export function SelectionConfirmation({ 
+  // ... props existentes
+  themeStyles = {},
+  backgroundMode = 'light',
+}: SelectionConfirmationProps) {
+  // ...
   
-  if (theme) {
-    themeData = {
-      id: theme.id,
-      backgroundMode: theme.background_mode,  // NOVO
-      primaryColor: theme.primary_color,
-      accentColor: theme.accent_color,
-      emphasisColor: theme.emphasis_color,    // RENOMEADO
-    };
-  }
+  return (
+    <div 
+      className={cn(
+        "min-h-screen flex flex-col",
+        backgroundMode === 'dark' ? 'dark' : ''
+      )}
+      style={themeStyles}
+    >
+      {/* Container com bg-background */}
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* ... conteudo existente ... */}
+      </div>
+    </div>
+  );
 }
 ```
 
-### Etapa 8: Atualizar Criação de Galeria
+### Mudanca 3: Passar themeStyles para PaymentRedirect
 
-**Arquivo: `src/pages/GalleryCreate.tsx`**
+**Arquivo: `src/pages/ClientGallery.tsx` (linha ~921)**
 
-Simplificar a seção de seleção de tema:
-- Remover grid de múltiplos temas
-- Mostrar apenas preview do tema único (se existir)
-- Manter toggle Light/Dark para override por galeria
+```typescript
+return (
+  <PaymentRedirect
+    checkoutUrl={paymentInfo.checkoutUrl}
+    provedor={paymentInfo.provedor}
+    valorTotal={paymentInfo.valorTotal}
+    onCancel={() => setCurrentStep('confirmed')}
+    // NOVO: Props de tema
+    themeStyles={themeStyles}
+    backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+  />
+);
+```
 
-### Etapa 9: Atualizar Hook useGallerySettings
+**Arquivo: `src/components/PaymentRedirect.tsx`**
 
-**Arquivo: `src/hooks/useGallerySettings.ts`**
+```typescript
+interface PaymentRedirectProps {
+  // ... props existentes
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
+}
 
-- Remover lógica de múltiplos temas
-- Simplificar para "tem ou não tem tema personalizado"
-- Remover `setDefaultTheme` mutation
+export function PaymentRedirect({ 
+  // ... props existentes
+  themeStyles = {},
+  backgroundMode = 'light',
+}: PaymentRedirectProps) {
+  // ...
+  
+  return (
+    <div 
+      className={cn(
+        "min-h-screen flex flex-col items-center justify-center p-4",
+        backgroundMode === 'dark' ? 'dark' : ''
+      )}
+      style={themeStyles}
+    >
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        {/* ... conteudo existente ... */}
+      </div>
+    </div>
+  );
+}
+```
 
----
+### Mudanca 4: Passar themeStyles para PixPaymentScreen
+
+**Arquivo: `src/pages/ClientGallery.tsx` (linha ~900)**
+
+```typescript
+return (
+  <PixPaymentScreen
+    chavePix={pixPaymentData.chavePix}
+    nomeTitular={pixPaymentData.nomeTitular}
+    tipoChave={pixPaymentData.tipoChave}
+    valorTotal={pixPaymentData.valorTotal}
+    studioName={galleryResponse?.studioSettings?.studio_name}
+    studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+    onPaymentConfirmed={() => {
+      setCurrentStep('confirmed');
+      toast.success('Obrigado!', {
+        description: 'Aguarde a confirmacao do pagamento pelo fotografo.',
+      });
+    }}
+    // NOVO: Props de tema
+    themeStyles={themeStyles}
+    backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+  />
+);
+```
+
+**Arquivo: `src/components/PixPaymentScreen.tsx`**
+
+```typescript
+interface PixPaymentScreenProps {
+  // ... props existentes
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
+}
+
+export function PixPaymentScreen({
+  // ... props existentes
+  themeStyles = {},
+  backgroundMode = 'light',
+}: PixPaymentScreenProps) {
+  // ...
+  
+  return (
+    <div 
+      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      style={themeStyles}
+    >
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        {/* ... conteudo existente ... */}
+      </div>
+    </div>
+  );
+}
+```
+
+### Mudanca 5: Passar themeStyles para PasswordScreen
+
+**Arquivo: `src/pages/ClientGallery.tsx` (linha ~631)**
+
+```typescript
+return (
+  <PasswordScreen
+    sessionName={galleryResponse?.sessionName}
+    studioName={galleryResponse?.studioSettings?.studio_name}
+    studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
+    onSubmit={handlePasswordSubmit}
+    error={passwordError}
+    isLoading={isCheckingPassword}
+    // NOVO: Props de tema
+    themeStyles={themeStyles}
+    backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+  />
+);
+```
+
+**Arquivo: `src/components/PasswordScreen.tsx`**
+
+```typescript
+interface PasswordScreenProps {
+  // ... props existentes
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
+}
+
+export function PasswordScreen({
+  // ... props existentes
+  themeStyles = {},
+  backgroundMode = 'light',
+}: PasswordScreenProps) {
+  // ...
+  
+  return (
+    <div 
+      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      style={themeStyles}
+    >
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* ... conteudo existente ... */}
+      </div>
+    </div>
+  );
+}
+```
 
 ## Arquivos a Modificar
 
-| Arquivo | Tipo | Descrição |
-|---------|------|-----------|
-| `src/types/gallery.ts` | Editar | Novo formato de CustomTheme |
-| `supabase/migrations/...sql` | Criar | Migração do schema |
-| `src/components/settings/ThemeManager.tsx` | Reescrever | → ThemeConfig.tsx |
-| `src/components/settings/ThemeEditorModal.tsx` | Simplificar | Remover campos extras |
-| `src/components/settings/ThemeCard.tsx` | Deletar | Não mais necessário |
-| `src/components/ThemePreviewCard.tsx` | Simplificar | Preview único |
-| `src/pages/ClientGallery.tsx` | Editar | Nova lógica de themeStyles |
-| `src/components/PasswordScreen.tsx` | Editar | Receber themeStyles prop |
-| `src/components/PaymentRedirect.tsx` | Editar | Receber themeStyles prop |
-| `src/components/PixPaymentScreen.tsx` | Editar | Receber themeStyles prop |
-| `src/components/SelectionConfirmation.tsx` | Editar | Receber themeStyles prop |
-| `supabase/functions/gallery-access/index.ts` | Editar | Novo formato de resposta |
-| `src/hooks/useGallerySettings.ts` | Simplificar | Menos mutations |
-| `src/pages/GalleryCreate.tsx` | Simplificar | Seção de tema |
-| `src/components/settings/PersonalizationSettings.tsx` | Editar | Usar novo ThemeConfig |
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/pages/ClientGallery.tsx` | 1. Adicionar `--gradient-card` ao themeStyles<br>2. Passar themeStyles/backgroundMode para 4 componentes |
+| `src/components/SelectionConfirmation.tsx` | Receber e aplicar themeStyles/backgroundMode |
+| `src/components/PaymentRedirect.tsx` | Receber e aplicar themeStyles/backgroundMode |
+| `src/components/PixPaymentScreen.tsx` | Receber e aplicar themeStyles/backgroundMode |
+| `src/components/PasswordScreen.tsx` | Receber e aplicar themeStyles/backgroundMode |
 
----
+## Estrutura do Wrapper de Tema
 
-## Benefícios
+Padrao para todos os componentes que recebem tema:
 
-1. **Simplicidade** - Apenas 2 opções: Sistema ou Personalizado
-2. **Acessibilidade** - Fundo fixo garante contraste adequado
-3. **Consistência** - Tema aplicado em TODAS as telas (login → pagamento)
-4. **Manutenibilidade** - Menos código, menos bugs
-5. **UX para fotógrafo** - Interface mais intuitiva
-6. **Performance** - Menos dados para buscar/processar
-
----
-
-## Migração de Dados Existentes
-
-Para usuários com temas já criados:
-1. Manter o tema mais recente como "tema personalizado"
-2. Converter `background_color` claro para `background_mode: 'light'`
-3. Converter `background_color` escuro para `background_mode: 'dark'`
-4. Renomear `text_color` → `emphasis_color`
-5. Deletar temas extras (manter apenas 1)
-
-```sql
--- Detectar se background era claro ou escuro baseado na luminância
-UPDATE gallery_themes 
-SET background_mode = CASE 
-  WHEN (
-    -- Calcular luminância aproximada do hex color
-    CAST(('x' || SUBSTR(background_color, 2, 2))::bit(8)::int AS FLOAT) * 0.299 +
-    CAST(('x' || SUBSTR(background_color, 4, 2))::bit(8)::int AS FLOAT) * 0.587 +
-    CAST(('x' || SUBSTR(background_color, 6, 2))::bit(8)::int AS FLOAT) * 0.114
-  ) > 127 THEN 'light'
-  ELSE 'dark'
-END;
+```tsx
+<div 
+  className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+  style={themeStyles}
+>
+  <div className="min-h-screen ... bg-background ...">
+    {/* Conteudo do componente */}
+  </div>
+</div>
 ```
 
----
+O wrapper externo:
+- Aplica a classe `dark` se necessario (ativa variaveis CSS do modo escuro)
+- Aplica as `themeStyles` inline (override das variaveis CSS)
 
-## Ordem de Implementação Sugerida
+O container interno:
+- Usa `bg-background` que agora le da variavel customizada
 
-1. ✅ Criar tipos TypeScript novos
-2. ✅ Criar migração SQL
-3. ✅ Atualizar Edge Function gallery-access
-4. ✅ Criar novo ThemeConfig component
-5. ✅ Atualizar ClientGallery com nova lógica
-6. ✅ Propagar themeStyles para componentes filhos
-7. ✅ Atualizar GalleryCreate
-8. ✅ Atualizar useGallerySettings hook
-9. ✅ Deletar componentes não utilizados (ThemeCard, etc.)
-10. ✅ Testar fluxo completo
+## Fluxo Corrigido
+
+```text
+1. Cliente acessa galeria com tema personalizado (light, cores customizadas)
+           |
+2. gallery-access retorna theme: { backgroundMode: 'light', primaryColor: '#B87333', ... }
+           |
+3. ClientGallery calcula themeStyles com todas as variaveis CSS
+           |
+4. Cada tela recebe themeStyles + backgroundMode
+           |
+5. Cada tela aplica:
+   - Wrapper: style={themeStyles} + classe 'dark' se backgroundMode === 'dark'
+   - Container: bg-background (usa variavel customizada)
+           |
+6. Resultado: TODAS as telas (senha, galeria, confirmacao, pagamento) 
+   usam as mesmas cores consistentes
+```
+
+## Beneficios
+
+1. Consistencia visual em todas as telas do cliente
+2. Caixa de mensagem de boas-vindas com fundo correto
+3. Telas de confirmacao e pagamento com tema personalizado
+4. Suporte completo para modo claro e escuro
+5. Cores de marca (primaria, destaque, enfase) aplicadas globalmente
