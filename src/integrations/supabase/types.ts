@@ -1526,6 +1526,7 @@ export type Database = {
           favicon_url: string | null
           studio_logo_url: string | null
           studio_name: string | null
+          theme_type: string | null
           updated_at: string | null
           user_id: string
         }
@@ -1539,6 +1540,7 @@ export type Database = {
           favicon_url?: string | null
           studio_logo_url?: string | null
           studio_name?: string | null
+          theme_type?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -1552,6 +1554,7 @@ export type Database = {
           favicon_url?: string | null
           studio_logo_url?: string | null
           studio_name?: string | null
+          theme_type?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -1568,37 +1571,34 @@ export type Database = {
       gallery_themes: {
         Row: {
           accent_color: string
-          background_color: string
+          background_mode: string | null
           created_at: string | null
+          emphasis_color: string
           id: string
-          is_default: boolean | null
           name: string
           primary_color: string
-          text_color: string
           updated_at: string | null
           user_id: string
         }
         Insert: {
           accent_color?: string
-          background_color?: string
+          background_mode?: string | null
           created_at?: string | null
+          emphasis_color?: string
           id?: string
-          is_default?: boolean | null
           name: string
           primary_color?: string
-          text_color?: string
           updated_at?: string | null
           user_id: string
         }
         Update: {
           accent_color?: string
-          background_color?: string
+          background_mode?: string | null
           created_at?: string | null
+          emphasis_color?: string
           id?: string
-          is_default?: boolean | null
           name?: string
           primary_color?: string
-          text_color?: string
           updated_at?: string | null
           user_id?: string
         }

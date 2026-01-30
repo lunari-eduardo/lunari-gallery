@@ -1461,33 +1461,44 @@ export default function GalleryCreate() {
                   )}
                 </div>
 
-                {/* Theme Selection for Client Gallery */}
-                {settings.customThemes && settings.customThemes.length > 0 && (
+                {/* Theme Selection for Client Gallery - Simplified */}
+                {settings.themeType === 'custom' && settings.customTheme && (
                   <div className="space-y-4 pt-2">
                     <div className="flex items-center gap-2">
                       <Palette className="h-4 w-4 text-primary" />
                       <h3 className="font-medium text-sm">Aparência da Galeria</h3>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Escolha o tema visual que o cliente verá
+                      Usando tema personalizado: {settings.customTheme.name}
                     </p>
                     
-                    <div className="grid grid-cols-3 gap-3">
-                      {settings.customThemes.map((theme) => (
-                        <ThemePreviewCard
-                          key={theme.id}
-                          theme={theme}
-                          isSelected={selectedThemeId === theme.id}
-                          onSelect={() => setSelectedThemeId(theme.id)}
-                          clientMode={clientMode}
-                          size="sm"
+                    {/* Preview of custom theme */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                      <div className="flex gap-1.5">
+                        <div 
+                          className="w-6 h-6 rounded-full border"
+                          style={{ backgroundColor: settings.customTheme.primaryColor }}
+                          title="Cor primária"
                         />
-                      ))}
+                        <div 
+                          className="w-6 h-6 rounded-full border"
+                          style={{ backgroundColor: settings.customTheme.accentColor }}
+                          title="Cor de destaque"
+                        />
+                        <div 
+                          className="w-6 h-6 rounded-full border"
+                          style={{ backgroundColor: settings.customTheme.emphasisColor }}
+                          title="Cor de ênfase"
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        Fundo {settings.customTheme.backgroundMode === 'dark' ? 'escuro' : 'claro'}
+                      </span>
                     </div>
                     
-                    {/* Client Mode Toggle */}
+                    {/* Client Mode Toggle - Override per gallery */}
                     <div className="flex items-center gap-3 pt-2">
-                      <Label className="text-sm">Modo padrão:</Label>
+                      <Label className="text-sm">Modo para esta galeria:</Label>
                       <div className="flex gap-2">
                         <Button
                           type="button"

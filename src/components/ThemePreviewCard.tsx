@@ -6,7 +6,6 @@ interface ThemePreviewCardProps {
   theme: CustomTheme;
   isSelected: boolean;
   onSelect: () => void;
-  clientMode?: 'light' | 'dark';
   size?: 'sm' | 'md';
   showName?: boolean;
 }
@@ -15,18 +14,13 @@ export function ThemePreviewCard({
   theme, 
   isSelected, 
   onSelect, 
-  clientMode = 'light',
   size = 'md',
   showName = true,
 }: ThemePreviewCardProps) {
-  // Calculate effective background based on client mode
-  const effectiveBackground = clientMode === 'dark' 
-    ? adjustColorForDarkMode(theme.backgroundColor) 
-    : theme.backgroundColor;
-  
-  const effectiveText = clientMode === 'dark'
-    ? adjustColorForDarkMode(theme.textColor, true)
-    : theme.textColor;
+  // Use backgroundMode to determine colors
+  const isDarkMode = theme.backgroundMode === 'dark';
+  const effectiveBackground = isDarkMode ? '#1C1917' : '#FAF9F7';
+  const effectiveText = theme.emphasisColor;
 
   return (
     <button
@@ -73,7 +67,7 @@ export function ThemePreviewCard({
         
         {/* Mode indicator */}
         <div className="absolute top-1.5 right-1.5">
-          {clientMode === 'dark' ? (
+          {isDarkMode ? (
             <Moon className="h-3 w-3 text-muted-foreground" />
           ) : (
             <Sun className="h-3 w-3 text-muted-foreground" />
@@ -99,32 +93,4 @@ export function ThemePreviewCard({
       )}
     </button>
   );
-}
-
-// Simple color adjustment for dark mode preview
-function adjustColorForDarkMode(hexColor: string, isText = false): string {
-  // For dark mode, invert light backgrounds to dark and dark text to light
-  if (!hexColor.startsWith('#')) return hexColor;
-  
-  // Parse hex
-  const r = parseInt(hexColor.slice(1, 3), 16);
-  const g = parseInt(hexColor.slice(3, 5), 16);
-  const b = parseInt(hexColor.slice(5, 7), 16);
-  
-  // Calculate luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  
-  if (isText) {
-    // If text is dark, make it light for dark mode
-    if (luminance < 0.5) {
-      return '#F5F5F4'; // Light text
-    }
-    return hexColor;
-  } else {
-    // If background is light, make it dark for dark mode
-    if (luminance > 0.5) {
-      return '#1C1917'; // Dark background
-    }
-    return hexColor;
-  }
 }

@@ -121,15 +121,16 @@ serve(async (req) => {
         .maybeSingle();
       
       if (theme) {
+        // Updated schema: background_mode instead of background_color, emphasis_color instead of text_color
         themeData = {
           id: theme.id,
           name: theme.name,
+          backgroundMode: theme.background_mode || 'light',
           primaryColor: theme.primary_color,
-          backgroundColor: theme.background_color,
-          textColor: theme.text_color,
           accentColor: theme.accent_color,
+          emphasisColor: theme.emphasis_color,
         };
-        console.log("🎨 Loaded theme:", theme.name);
+        console.log("🎨 Loaded theme:", theme.name, "mode:", theme.background_mode);
       }
     }
 
