@@ -79,10 +79,12 @@ export function PixPaymentScreen({
 
   return (
     <div 
-      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      className={cn(
+        "min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4",
+        backgroundMode === 'dark' && 'dark'
+      )}
       style={themeStyles}
     >
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="max-w-md w-full text-center space-y-6">
         {/* Studio Logo/Name */}
         {studioLogoUrl ? (
@@ -214,7 +216,6 @@ export function PixPaymentScreen({
           Nunca compartilhe senhas ou dados sensíveis.
         </p>
       </div>
-    </div>
     </div>
   );
 }

@@ -37,10 +37,12 @@ export function PasswordScreen({
 
   return (
     <div 
-      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      className={cn(
+        "min-h-screen flex flex-col bg-background text-foreground",
+        backgroundMode === 'dark' && 'dark'
+      )}
       style={themeStyles}
     >
-    <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="flex items-center justify-center p-4 border-b border-border/50">
         {studioLogo ? (
@@ -122,7 +124,6 @@ export function PasswordScreen({
           </p>
         </div>
       </main>
-    </div>
     </div>
   );
 }
