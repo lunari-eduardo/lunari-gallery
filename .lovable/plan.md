@@ -1,161 +1,145 @@
 
-# Plano: Corrigir Redirecionamento para Checkout do Mercado Pago
+# Plano: Corrigir Sistema de Créditos para PIX Manual
 
 ## Problema Identificado
 
-A galeria é finalizada sem redirecionar para o checkout porque a função `confirm-selection` espera campos com nomes diferentes dos que `mercadopago-create-link` retorna.
+Quando o fotógrafo clica em "Confirmar Recebimento" para pagamentos PIX Manual, o sistema apenas atualiza o `status_pagamento` para 'pago', mas **não incrementa os contadores de crédito**:
 
-### Mapeamento Atual (Incorreto)
-
-| O que `confirm-selection` busca | O que `mercadopago-create-link` retorna | Resultado |
-|--------------------------------|----------------------------------------|-----------|
-| `paymentData.paymentLink` | `checkout_url` | **undefined** |
-| `paymentData.cobranca?.id` | `cobranca_id` | **undefined** |
+| Campo | Valor Atual | Valor Esperado |
+|-------|-------------|----------------|
+| `total_fotos_extras_vendidas` | 0 | 2 |
+| `valor_total_vendido` | 0 | 20.00 |
+| `status_pagamento` | pago | pago ✓ |
 
 ### Consequência
 
-O código na linha 370-372 resulta em:
-```javascript
-const checkoutUrl = undefined;  // Campo errado lido!
-paymentResponse = { checkoutUrl: undefined, ... }
+No segundo ciclo de seleção, a fórmula de crédito não reconhece as fotos já pagas:
+```
+extrasACobrar = extrasNecessarias - total_fotos_extras_vendidas
+             = 2 - 0 = 2  ← Deveria ser 2 - 2 = 0!
 ```
 
-E na resposta final (linha 541-543):
+---
+
+## Causa Raiz
+
+A confirmação manual no frontend (`GalleryDetail.tsx` linhas 489-516) não replica a lógica dos webhooks automatizados (InfinitePay/Mercado Pago), que incrementam corretamente os contadores.
+
+### Código Atual (Incompleto)
 ```javascript
-requiresPayment: true,           // há pagamento pendente
-checkoutUrl: undefined,          // mas a URL é undefined!
+// Apenas atualiza status - FALTAM os contadores!
+await supabase
+  .from('galerias')
+  .update({ status_pagamento: 'pago' })
+  .eq('id', supabaseGallery.id);
 ```
 
-O frontend em `ClientGallery.tsx` (linha 421) verifica:
+### Código dos Webhooks (Correto)
 ```javascript
-if (data.requiresPayment && data.checkoutUrl) {
-  // Nunca entra aqui porque checkoutUrl é undefined!
-}
-```
-
-E cai direto no else (linha 434-438):
-```javascript
-// Sem pagamento - vai para 'confirmed' ao invés de 'payment'
-setCurrentStep('confirmed');
+// Incrementa contadores + status
+await supabase
+  .from('galerias')
+  .update({
+    total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+    valor_total_vendido: valorAtual + valorCobranca,
+    status_pagamento: 'pago',
+  })
+  .eq('id', galeria.id);
 ```
 
 ---
 
 ## Solução
 
-Existem duas opções:
+Atualizar a confirmação manual de PIX no `GalleryDetail.tsx` para incluir a mesma lógica de crédito usada pelos webhooks.
 
-### Opção A: Alterar `mercadopago-create-link` (Recomendada)
-Padronizar a resposta para usar camelCase igual ao `infinitepay-create-link`:
-- `checkout_url` → `checkoutUrl`
-- `cobranca_id` → `cobrancaId`
-- Adicionar campo `paymentLink` como alias
+### Mudanças em `src/pages/GalleryDetail.tsx`
 
-### Opção B: Alterar `confirm-selection`
-Corrigir os campos que são lidos para usar os nomes corretos:
-- `paymentData.paymentLink` → `paymentData.checkout_url`
-- `paymentData.cobranca?.id` → `paymentData.cobranca_id`
+Alterar o handler do botão "Confirmar Recebimento" (linhas 489-516):
 
-**Escolha: Opção A** - Padroniza as respostas entre provedores e é mais fácil de manter.
-
----
-
-## Mudanças Técnicas
-
-### Arquivo: `supabase/functions/mercadopago-create-link/index.ts`
-
-Alterar a resposta de sucesso do checkout (linhas 351-360):
-
-```text
-ANTES:
-┌─────────────────────────────────────────────────────────────┐
-│ return new Response(JSON.stringify({                        │
-│   success: true,                                            │
-│   preference_id: preferenceData.id,                         │
-│   payment_method: paymentMethod || 'checkout',              │
-│   checkout_url: preferenceData.init_point,                  │ ← snake_case
-│   sandbox_url: preferenceData.sandbox_init_point,           │
-│   cobranca_id: cobrancaId,                                  │ ← snake_case
-│ }))                                                         │
-└─────────────────────────────────────────────────────────────┘
-
-DEPOIS:
-┌─────────────────────────────────────────────────────────────┐
-│ return new Response(JSON.stringify({                        │
-│   success: true,                                            │
-│   preference_id: preferenceData.id,                         │
-│   payment_method: paymentMethod || 'checkout',              │
-│   checkoutUrl: preferenceData.init_point,                   │ ← camelCase
-│   paymentLink: preferenceData.init_point,                   │ ← alias (compatibilidade)
-│   sandbox_url: preferenceData.sandbox_init_point,           │
-│   cobrancaId: cobrancaId,                                   │ ← camelCase
-│   cobranca: { id: cobrancaId },                             │ ← alias (compatibilidade)
-│   provedor: 'mercadopago',                                  │ ← identificação clara
-│ }))                                                         │
-└─────────────────────────────────────────────────────────────┘
+**ANTES:**
+```javascript
+onClick={async () => {
+  const valorExtras = supabaseGallery.valorExtras || calculatedExtraTotal;
+  
+  // Update gallery payment status
+  await supabase
+    .from('galerias')
+    .update({ status_pagamento: 'pago' })
+    .eq('id', supabaseGallery.id);
+  
+  // Update clientes_sessoes.valor_pago...
+}}
 ```
 
-Também alterar a resposta PIX (linhas 264-275) para seguir o mesmo padrão:
-- Adicionar `cobrancaId` e `cobranca: { id: ... }` como aliases
-- Adicionar `provedor: 'mercadopago'`
+**DEPOIS:**
+```javascript
+onClick={async () => {
+  const valorExtras = supabaseGallery.valorExtras || calculatedExtraTotal;
+  
+  // Calculate extras to credit
+  const fotosIncluidas = supabaseGallery.fotosIncluidas || 0;
+  const fotosSelecionadas = supabaseGallery.fotosSelecionadas || 0;
+  const extrasNovas = Math.max(0, fotosSelecionadas - fotosIncluidas);
+  
+  // Get current credit values
+  const extrasAtuais = supabaseGallery.totalFotosExtrasVendidas || 0;
+  const valorAtual = supabaseGallery.valorTotalVendido || 0;
+  
+  // Update gallery with CREDIT SYSTEM increments
+  await supabase
+    .from('galerias')
+    .update({ 
+      status_pagamento: 'pago',
+      total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+      valor_total_vendido: valorAtual + valorExtras,
+    })
+    .eq('id', supabaseGallery.id);
+  
+  // Update clientes_sessoes.valor_pago...
+}}
+```
 
 ---
 
-## Validação do Fluxo Completo
+## Validação do Fluxo Corrigido
 
-Após a correção, o fluxo será:
+Após a correção, o segundo ciclo calculará corretamente:
 
-```text
-1. Cliente confirma seleção
-          ↓
-2. ClientGallery.tsx → confirmMutation
-          ↓
-3. confirm-selection → mercadopago-create-link
-          ↓
-4. mercadopago-create-link retorna:
-   {
-     success: true,
-     checkoutUrl: "https://mercadopago.com.br/checkout/...",
-     paymentLink: "https://mercadopago.com.br/checkout/...",
-     cobrancaId: "uuid...",
-     cobranca: { id: "uuid..." },
-     provedor: "mercadopago"
-   }
-          ↓
-5. confirm-selection (linha 372):
-   paymentData.paymentLink = "https://..." ✓
-   paymentData.cobranca?.id = "uuid..." ✓
-          ↓
-6. confirm-selection retorna:
-   {
-     requiresPayment: true,
-     checkoutUrl: "https://mercadopago.com.br/checkout/...",
-     ...
-   }
-          ↓
-7. ClientGallery.tsx (linha 421):
-   if (data.requiresPayment && data.checkoutUrl) { ✓
-     setPaymentInfo({ checkoutUrl: ... })
-     setCurrentStep('payment')  ← Mostra tela de redirecionamento!
-   }
-          ↓
-8. PaymentRedirect → Redireciona para Mercado Pago
+```
+Primeiro Ciclo:
+- Cliente seleciona 3 fotos (1 incluída + 2 extras)
+- Fotógrafo confirma PIX: +2 extras, +R$ 20
+- galerias.total_fotos_extras_vendidas = 2 ✓
+
+Segundo Ciclo (reativação):
+- Cliente seleciona 4 fotos (1 incluída + 3 extras)
+- extrasNecessarias = 3
+- extrasPagasTotal = 2 (do banco)
+- extrasACobrar = 3 - 2 = 1 foto ✓
+- Valor a cobrar: 1 × R$ 10 = R$ 10 ✓
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-1. **`supabase/functions/mercadopago-create-link/index.ts`**:
-   - Linhas 351-360: Padronizar campos da resposta de checkout para camelCase
-   - Linhas 264-275: Padronizar campos da resposta PIX para camelCase
-   - Adicionar aliases para compatibilidade retroativa
+1. **`src/pages/GalleryDetail.tsx`** (linhas 489-516):
+   - Calcular quantidade de extras baseado em `fotosIncluidas` vs `fotosSelecionadas`
+   - Incrementar `total_fotos_extras_vendidas` com as novas extras
+   - Incrementar `valor_total_vendido` com o valor pago
+   - Manter atualização de `status_pagamento: 'pago'`
+
+---
+
+## Verificação Adicional
+
+Também verificar se o hook `useSupabaseGalleries` está retornando corretamente os campos `fotosIncluidas`, `fotosSelecionadas`, `totalFotosExtrasVendidas` e `valorTotalVendido` para que o cálculo no frontend funcione.
 
 ---
 
 ## Benefícios
 
-1. **Correção imediata**: O checkout redirecionará corretamente
-2. **Compatibilidade retroativa**: Aliases mantêm código legado funcionando
-3. **Consistência**: Mesma estrutura de resposta entre InfinitePay e Mercado Pago
-4. **Facilidade de debug**: Campo `provedor` explícito na resposta
+1. **Correção imediata**: PIX Manual funcionará igual aos webhooks automatizados
+2. **Consistência**: Mesma fórmula de crédito para todos os provedores
+3. **Sem regressão**: Não afeta fluxos existentes de InfinitePay/Mercado Pago
