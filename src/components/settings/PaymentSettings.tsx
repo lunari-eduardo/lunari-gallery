@@ -383,10 +383,22 @@ export function PaymentSettings() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setShowMpSettings(true)}>
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Configurar
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowMpSettings(true)}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Configurar
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => deactivate.mutate('mercadopago')}
+                    disabled={deactivate.isPending}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Power className="h-4 w-4 mr-2" />
+                    Desconectar
+                  </Button>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
