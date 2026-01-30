@@ -5,13 +5,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Interface flexível que aceita ambos os formatos de chamada
 interface CreateLinkRequest {
-  cobranca_id: string;
-  photographer_id: string;
+  // Formato original (chamadas diretas)
+  cobranca_id?: string;
+  photographer_id?: string;
+  cliente_email?: string;
+  payment_method?: 'pix' | 'credit_card';
+  
+  // Formato confirm-selection (Gallery flow)
+  userId?: string;
+  clienteId?: string;
+  galeriaId?: string;
+  galleryToken?: string;
+  qtdFotos?: number;
+  sessionId?: string;
+  
+  // Campos comuns
   valor: number;
   descricao: string;
-  cliente_email: string;
-  payment_method: 'pix' | 'credit_card';
 }
 
 Deno.serve(async (req) => {
@@ -25,15 +37,87 @@ Deno.serve(async (req) => {
 
   try {
     const body: CreateLinkRequest = await req.json();
-    const { cobranca_id, photographer_id, valor, descricao, cliente_email, payment_method } = body;
+    
+    // === NORMALIZAÇÃO DE PARÂMETROS ===
+    
+    // 1. Identificar photographer_id (aceita ambos os nomes)
+    const photographerId = body.photographer_id || body.userId;
+    
+    if (!photographerId) {
+      console.error('Nenhum ID de fotógrafo fornecido (photographer_id ou userId)');
+      return new Response(
+        JSON.stringify({ error: 'ID do fotógrafo é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId);
+    
+    // 2. Buscar email do cliente se não fornecido
+    let clienteEmail = body.cliente_email;
+    if (!clienteEmail && body.clienteId) {
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('email')
+        .eq('id', body.clienteId)
+        .single();
+      
+      clienteEmail = cliente?.email || 'cliente@email.com';
+      console.log('Email do cliente obtido via clienteId:', clienteEmail);
+    }
+    
+    if (!clienteEmail) {
+      clienteEmail = 'cliente@email.com'; // Fallback
+      console.log('Usando email fallback:', clienteEmail);
+    }
+    
+    // 3. Criar cobrança se não fornecida
+    let cobrancaId = body.cobranca_id;
+    if (!cobrancaId && body.galeriaId) {
+      console.log('Criando nova cobrança para galeria:', body.galeriaId);
+      
+      const { data: novaCobranca, error: cobrancaError } = await supabase
+        .from('cobrancas')
+        .insert({
+          user_id: photographerId,
+          cliente_id: body.clienteId,
+          galeria_id: body.galeriaId,
+          session_id: body.sessionId || null,
+          valor: body.valor,
+          descricao: body.descricao,
+          tipo_cobranca: 'foto_extra',
+          qtd_fotos: body.qtdFotos || 0,
+          status: 'pendente',
+          provedor: 'mercadopago',
+        })
+        .select('id')
+        .single();
+      
+      if (cobrancaError) {
+        console.error('Erro ao criar cobrança:', cobrancaError);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao criar cobrança', details: cobrancaError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      cobrancaId = novaCobranca.id;
+      console.log('Cobrança criada com ID:', cobrancaId);
+    }
+    
+    if (!cobrancaId) {
+      console.error('Nenhum cobranca_id fornecido e não foi possível criar');
+      return new Response(
+        JSON.stringify({ error: 'ID da cobrança é obrigatório ou galeriaId para criar uma nova' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    console.log('Criando pagamento MP para fotógrafo:', photographer_id, 'cobrança:', cobranca_id);
-
-    // 1. Get photographer's Mercado Pago credentials
+    // 4. Get photographer's Mercado Pago credentials
     const { data: integracao, error: integracaoError } = await supabase
       .from('usuarios_integracoes')
       .select('access_token, dados_extras, expira_em, refresh_token')
-      .eq('user_id', photographer_id)
+      .eq('user_id', photographerId)
       .eq('provedor', 'mercadopago')
       .eq('status', 'ativo')
       .single();
@@ -84,7 +168,7 @@ Deno.serve(async (req) => {
                 refresh_token: newTokenData.refresh_token,
                 expira_em: newExpiresAt,
               })
-              .eq('user_id', photographer_id)
+              .eq('user_id', photographerId)
               .eq('provedor', 'mercadopago');
 
             integracao.access_token = newTokenData.access_token;
@@ -104,32 +188,35 @@ Deno.serve(async (req) => {
       absorverTaxa?: boolean;
     } | null;
 
-    // Validate payment method is enabled
-    if (payment_method === 'pix' && settings?.habilitarPix === false) {
+    // 5. Determinar método de pagamento
+    const paymentMethod = body.payment_method;
+    
+    // Validate payment method is enabled (if specified)
+    if (paymentMethod === 'pix' && settings?.habilitarPix === false) {
       return new Response(
         JSON.stringify({ error: 'PIX não está habilitado para este fotógrafo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (payment_method === 'credit_card' && settings?.habilitarCartao === false) {
+    if (paymentMethod === 'credit_card' && settings?.habilitarCartao === false) {
       return new Response(
         JSON.stringify({ error: 'Cartão não está habilitado para este fotógrafo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Create payment using photographer's token
-    if (payment_method === 'pix') {
+    // 6. Criar pagamento baseado no método (ou checkout genérico se não especificado)
+    if (paymentMethod === 'pix') {
       // Create PIX payment
       const pixPayload = {
-        transaction_amount: valor,
-        description: descricao,
+        transaction_amount: body.valor,
+        description: body.descricao,
         payment_method_id: 'pix',
         payer: {
-          email: cliente_email,
+          email: clienteEmail,
         },
-        external_reference: cobranca_id,
+        external_reference: cobrancaId,
       };
 
       console.log('Criando PIX com payload:', JSON.stringify(pixPayload));
@@ -139,7 +226,7 @@ Deno.serve(async (req) => {
         headers: {
           'Authorization': `Bearer ${photographerToken}`,
           'Content-Type': 'application/json',
-          'X-Idempotency-Key': `pix-${cobranca_id}`,
+          'X-Idempotency-Key': `pix-${cobrancaId}`,
         },
         body: JSON.stringify(pixPayload),
       });
@@ -168,7 +255,7 @@ Deno.serve(async (req) => {
           provedor: 'mercadopago',
           status: 'pendente',
         })
-        .eq('id', cobranca_id);
+        .eq('id', cobrancaId);
 
       if (updateError) {
         console.error('Erro ao atualizar cobrança:', updateError);
@@ -182,38 +269,48 @@ Deno.serve(async (req) => {
           qr_code: paymentData.point_of_interaction?.transaction_data?.qr_code,
           qr_code_base64: paymentData.point_of_interaction?.transaction_data?.qr_code_base64,
           expiration_date: paymentData.date_of_expiration,
+          cobranca_id: cobrancaId,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } else {
-      // Create preference for card payment (checkout redirect)
+      // Create preference for card payment OR generic checkout (accepts both PIX and card)
       const maxParcelas = settings?.maxParcelas || 12;
+      
+      // Determinar métodos de pagamento excluídos
+      const excludedTypes: { id: string }[] = [{ id: 'ticket' }];
+      
+      // Se um método específico foi solicitado, excluir o outro
+      if (paymentMethod === 'credit_card') {
+        // Excluir boleto apenas, permitir cartão
+      }
+      // Se não foi especificado, permitir ambos (PIX e cartão)
       
       const preferencePayload = {
         items: [{
-          title: descricao,
+          title: body.descricao,
           quantity: 1,
-          unit_price: valor,
+          unit_price: body.valor,
           currency_id: 'BRL',
         }],
         payer: {
-          email: cliente_email,
+          email: clienteEmail,
         },
-        external_reference: cobranca_id,
+        external_reference: cobrancaId,
         payment_methods: {
-          excluded_payment_types: [{ id: 'ticket' }],
+          excluded_payment_types: excludedTypes,
           installments: maxParcelas,
         },
         back_urls: {
-          success: `https://gallery.lunarihub.com/payment/success?ref=${cobranca_id}`,
-          failure: `https://gallery.lunarihub.com/payment/failure?ref=${cobranca_id}`,
-          pending: `https://gallery.lunarihub.com/payment/pending?ref=${cobranca_id}`,
+          success: `https://gallery.lunarihub.com/payment/success?ref=${cobrancaId}`,
+          failure: `https://gallery.lunarihub.com/payment/failure?ref=${cobrancaId}`,
+          pending: `https://gallery.lunarihub.com/payment/pending?ref=${cobrancaId}`,
         },
         auto_return: 'approved',
       };
 
-      console.log('Criando preferência de cartão');
+      console.log('Criando preferência de checkout');
 
       const preferenceResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
         method: 'POST',
@@ -245,7 +342,7 @@ Deno.serve(async (req) => {
           provedor: 'mercadopago',
           status: 'pendente',
         })
-        .eq('id', cobranca_id);
+        .eq('id', cobrancaId);
 
       if (updateError) {
         console.error('Erro ao atualizar cobrança:', updateError);
@@ -255,9 +352,10 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: true,
           preference_id: preferenceData.id,
-          payment_method: 'credit_card',
+          payment_method: paymentMethod || 'checkout',
           checkout_url: preferenceData.init_point,
           sandbox_url: preferenceData.sandbox_init_point,
+          cobranca_id: cobrancaId,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
