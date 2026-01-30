@@ -186,7 +186,14 @@ export default function GalleryCreate() {
           console.log('🔗 Session data found:', data);
           
           if (data?.regras_congeladas) {
-            setRegrasCongeladas(data.regras_congeladas as unknown as RegrasCongeladas);
+            const regras = data.regras_congeladas as unknown as RegrasCongeladas;
+            console.log('🔗 regrasCongeladas loaded:', {
+              fotosIncluidas: regras.pacote?.fotosIncluidas,
+              valorFotoExtra: regras.pacote?.valorFotoExtra,
+              pacoteNome: regras.pacote?.nome,
+              categoria: regras.pacote?.categoria,
+            });
+            setRegrasCongeladas(regras);
           }
           
           // Use session's valor_foto_extra as fallback (normalized)
@@ -207,6 +214,44 @@ export default function GalleryCreate() {
 
     fetchSessionData();
   }, [gestaoParams?.session_id]);
+
+  // NEW: Sync includedPhotos, packageName, sessionName from regrasCongeladas
+  // This runs AFTER regrasCongeladas is loaded to ensure correct values from frozen rules
+  // regrasCongeladas.pacote.fotosIncluidas is the SOURCE OF TRUTH for Gestão sessions
+  useEffect(() => {
+    // Only run when regras are loaded and we have a session
+    if (!regrasLoaded || !regrasCongeladas || !gestaoParams?.session_id) return;
+    
+    const { pacote } = regrasCongeladas;
+    
+    // fotosIncluidas from frozen rules is the source of truth - ALWAYS use it when available
+    if (pacote?.fotosIncluidas !== undefined && pacote.fotosIncluidas > 0) {
+      console.log('🔗 Syncing includedPhotos from regrasCongeladas:', pacote.fotosIncluidas);
+      setIncludedPhotos(pacote.fotosIncluidas);
+    }
+    
+    // Package name from frozen rules (if not already set by URL params)
+    if (pacote?.nome && !packageName) {
+      console.log('🔗 Syncing packageName from regrasCongeladas:', pacote.nome);
+      setPackageName(pacote.nome);
+    }
+    
+    // Session name from category (if not already set by URL params)
+    if (pacote?.categoria && !sessionName) {
+      console.log('🔗 Syncing sessionName from regrasCongeladas:', pacote.categoria);
+      setSessionName(pacote.categoria);
+    }
+    
+    // valorFotoExtra from frozen rules - normalize if in cents
+    if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
+      const valorNormalizado = pacote.valorFotoExtra > 1000 
+        ? pacote.valorFotoExtra / 100 
+        : pacote.valorFotoExtra;
+      console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorNormalizado);
+      setFixedPrice(valorNormalizado);
+    }
+    
+  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, packageName, sessionName]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
   // Only runs once, then clears URL params to prevent re-application
@@ -257,8 +302,12 @@ export default function GalleryCreate() {
       if (packageFromGestao) {
         console.log('🔗 Found package:', packageFromGestao);
         
-        // Use package fotos_incluidas if not explicitly provided in URL
+        // Use package fotos_incluidas ONLY if:
+        // 1. Not explicitly provided in URL
+        // 2. This is a TEMPORARY value - regrasCongeladas useEffect will override when loaded
+        // regrasCongeladas.pacote.fotosIncluidas takes HIGHEST priority when available
         if (!gestaoParams.fotos_incluidas_no_pacote && packageFromGestao.fotosIncluidas) {
+          console.log('🔗 Setting temporary includedPhotos from package (will be overridden by regrasCongeladas if available):', packageFromGestao.fotosIncluidas);
           setIncludedPhotos(packageFromGestao.fotosIncluidas);
         }
         
@@ -267,6 +316,7 @@ export default function GalleryCreate() {
         // 2. No frozen rules exist (regrasCongeladas will be the source of truth if present)
         // When regrasCongeladas exist, pricing comes from there, not package
         if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra && !regrasCongeladas) {
+          console.log('🔗 Setting temporary fixedPrice from package (will be overridden by regrasCongeladas if available):', packageFromGestao.valorFotoExtra);
           setFixedPrice(packageFromGestao.valorFotoExtra);
         }
       }
