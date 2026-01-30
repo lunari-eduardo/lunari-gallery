@@ -1,130 +1,74 @@
 
-# Plano: Corrigir Incompatibilidade entre confirm-selection e mercadopago-create-link
+# Plano: Corrigir Erro 500 no Pagamento (constraint de tipo_cobranca)
 
-## Problema Identificado
+## Problema Raiz Identificado
 
-A Edge Function `confirm-selection` está chamando `mercadopago-create-link` com parâmetros diferentes dos que a função espera:
+A Edge Function `mercadopago-create-link` está tentando inserir `'foto_extra'` no campo `tipo_cobranca`, mas o constraint da tabela só permite:
 
-| Campo Esperado | Campo Enviado | Status |
-|----------------|---------------|--------|
-| `photographer_id` | `userId` | ❌ Nome diferente |
-| `cobranca_id` | Não enviado | ❌ Faltando |
-| `valor` | `valor` | ✅ OK |
-| `descricao` | `descricao` | ✅ OK |
-| `cliente_email` | Não enviado | ❌ Faltando |
-| `payment_method` | Não enviado | ❌ Faltando |
+| Valores Permitidos |
+|--------------------|
+| `'pix'` |
+| `'link'` |
+| `'card'` |
+| `'presencial'` |
 
-Os logs confirmam: `"Criando pagamento MP para fotógrafo: undefined cobrança: undefined"`
+**Log de erro:**
+```
+new row for relation "cobrancas" violates check constraint "cobrancas_tipo_cobranca_check"
+Failing row contains (..., tipo_cobranca: 'foto_extra', ...)
+```
+
+A função `infinitepay-create-link` já usa `'link'` corretamente, mas a `mercadopago-create-link` usa `'foto_extra'` que é inválido.
 
 ---
 
 ## Solução
 
-Adaptar a função `mercadopago-create-link` para aceitar **ambos os formatos** de chamada:
-
-1. Formato original do `mercadopago-create-link` (usado por outras partes do sistema)
-2. Formato enviado pela `confirm-selection` (Gallery flow)
-
-A função deve detectar qual formato está sendo usado e normalizar os parâmetros internamente.
+Alterar o valor de `tipo_cobranca` de `'foto_extra'` para `'link'` na função `mercadopago-create-link`, seguindo o mesmo padrão já usado na `infinitepay-create-link`.
 
 ---
 
-## Detalhes Técnicos
+## Mudança Técnica
 
-### Mudanças em `supabase/functions/mercadopago-create-link/index.ts`
+### Arquivo: `supabase/functions/mercadopago-create-link/index.ts`
 
 ```text
-ANTES (Interface rígida):
-┌─────────────────────────────────────────────┐
-│ interface CreateLinkRequest {               │
-│   cobranca_id: string;                      │
-│   photographer_id: string;                  │
-│   valor: number;                            │
-│   descricao: string;                        │
-│   cliente_email: string;                    │
-│   payment_method: 'pix' | 'credit_card';    │
-│ }                                           │
-└─────────────────────────────────────────────┘
+ANTES (linha 88):
+┌────────────────────────────────────────────┐
+│ tipo_cobranca: 'foto_extra',               │
+└────────────────────────────────────────────┘
 
-DEPOIS (Aceita ambos formatos):
-┌─────────────────────────────────────────────┐
-│ interface CreateLinkRequest {               │
-│   // Formato original                       │
-│   cobranca_id?: string;                     │
-│   photographer_id?: string;                 │
-│   cliente_email?: string;                   │
-│   payment_method?: 'pix' | 'credit_card';   │
-│                                             │
-│   // Formato confirm-selection              │
-│   userId?: string;                          │
-│   clienteId?: string;                       │
-│   galeriaId?: string;                       │
-│   galleryToken?: string;                    │
-│   qtdFotos?: number;                        │
-│   sessionId?: string;                       │
-│                                             │
-│   // Comum                                  │
-│   valor: number;                            │
-│   descricao: string;                        │
-│ }                                           │
-└─────────────────────────────────────────────┘
+DEPOIS:
+┌────────────────────────────────────────────┐
+│ tipo_cobranca: 'link',                     │
+└────────────────────────────────────────────┘
 ```
 
-### Lógica de Normalização
-
-1. **Identificar Fotógrafo**: 
-   - Usar `photographer_id` se presente
-   - Caso contrário, usar `userId`
-
-2. **Email do Cliente**: 
-   - Se `cliente_email` não fornecido, buscar via `clienteId` no banco de dados
-
-3. **Cobrança**:
-   - Se `cobranca_id` não fornecido, **criar uma nova cobrança** na tabela `cobrancas` usando `galeriaId` e `qtdFotos`
-
-4. **Método de Pagamento**:
-   - Se não fornecido, usar PIX por padrão (mais comum no fluxo de galeria)
-   - Ou criar preferência de checkout que aceita ambos
+Isso é consistente com a função `infinitepay-create-link` que já usa `'link'` (linha 198).
 
 ---
 
-## Fluxo Atualizado
+## Sobre a Lentidão (15 segundos)
 
-```text
-┌───────────────────────────────┐
-│     confirm-selection         │
-│  Envia: userId, clienteId,    │
-│  galeriaId, valor, descricao  │
-└───────────────┬───────────────┘
-                │
-                ▼
-┌───────────────────────────────┐
-│   mercadopago-create-link     │
-│                               │
-│ 1. Detectar formato de entrada│
-│ 2. Normalizar parâmetros      │
-│ 3. Buscar email do cliente    │
-│ 4. Criar cobrança se preciso  │
-│ 5. Criar preferência MP       │
-│ 6. Retornar checkout_url      │
-└───────────────────────────────┘
+A lentidão na abertura da galeria provavelmente está relacionada ao **cold start** das Edge Functions do Supabase. Quando uma função não é usada por um tempo, ela precisa ser "aquecida" novamente na primeira requisição. Logs mostram:
+
+```
+booted (time: 26ms)
 ```
 
----
-
-## Arquivos a Modificar
-
-1. **`supabase/functions/mercadopago-create-link/index.ts`**:
-   - Expandir interface para aceitar campos do formato `confirm-selection`
-   - Adicionar lógica para normalizar `photographer_id` / `userId`
-   - Adicionar busca de email do cliente via `clienteId`
-   - Adicionar criação de cobrança se `cobranca_id` não for fornecido
-   - Usar preferência de checkout (aceita PIX e cartão) como padrão
+Isso indica que a função em si é rápida, mas o tempo de boot inicial pode variar. Não há alteração de código que resolva isso diretamente - é uma característica da infraestrutura serverless.
 
 ---
 
 ## Benefícios
 
-- **Compatibilidade retroativa**: Chamadas existentes continuarão funcionando
-- **Flexibilidade**: A função aceita múltiplos formatos de entrada
-- **Menos mudanças**: Não precisa alterar `confirm-selection`, apenas adaptar `mercadopago-create-link`
+1. **Correção imediata**: O pagamento via Mercado Pago funcionará corretamente
+2. **Consistência**: Ambas as funções de pagamento usarão o mesmo valor `'link'`
+3. **Sem breaking changes**: Não afeta registros existentes
+
+---
+
+## Arquivos a Modificar
+
+1. **`supabase/functions/mercadopago-create-link/index.ts`** (linha 88):
+   - Alterar `tipo_cobranca: 'foto_extra'` para `tipo_cobranca: 'link'`
