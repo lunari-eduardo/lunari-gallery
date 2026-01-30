@@ -114,16 +114,18 @@ export interface Gallery {
   extraTotal: number;
 }
 
-// Tema personalizado para galerias do cliente
+// Tema personalizado para galerias do cliente (simplificado)
 export interface CustomTheme {
   id: string;
   name: string;
-  primaryColor: string;
-  backgroundColor: string;
-  textColor: string;
-  accentColor: string;
-  isDefault?: boolean;
+  backgroundMode: 'light' | 'dark';  // Apenas claro ou escuro
+  primaryColor: string;              // Botões, CTAs
+  accentColor: string;               // Seleções, bordas ativas
+  emphasisColor: string;             // Títulos, valores destacados
 }
+
+// Configuração de tema no nível do fotógrafo
+export type ThemeType = 'system' | 'custom';
 
 // Template de email
 export interface EmailTemplate {
@@ -142,9 +144,10 @@ export interface GlobalSettings {
   studioName: string;
   studioLogo?: string;
   
-  // Personalização
-  customThemes: CustomTheme[];
-  activeThemeId?: string;
+  // Personalização - tema único (simplificado)
+  themeType: ThemeType;
+  customTheme?: CustomTheme;  // Único tema personalizado (se houver)
+  activeThemeId?: string;     // ID do tema ativo (para compatibilidade)
   defaultWatermark: WatermarkSettings;
   emailTemplates: EmailTemplate[];
   faviconUrl?: string;

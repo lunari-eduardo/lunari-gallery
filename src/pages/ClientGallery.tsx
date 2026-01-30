@@ -537,21 +537,37 @@ export default function ClientGallery() {
     const theme = galleryResponse?.theme;
     if (!theme) return {};
     
+    // Use backgroundMode (light/dark) instead of custom background color
+    const backgroundMode = theme.backgroundMode || 'light';
+    
+    // Base colors depend on background mode
+    const baseColors = backgroundMode === 'dark' ? {
+      '--background': '25 15% 10%',
+      '--foreground': '30 20% 95%',
+      '--card': '25 15% 13%',
+      '--muted': '25 12% 20%',
+      '--muted-foreground': '30 15% 60%',
+      '--border': '25 12% 22%',
+      '--primary-foreground': '25 15% 10%',
+    } : {
+      '--background': '30 25% 97%',
+      '--foreground': '25 20% 15%',
+      '--card': '30 20% 99%',
+      '--muted': '30 15% 92%',
+      '--muted-foreground': '25 10% 45%',
+      '--border': '30 15% 88%',
+      '--primary-foreground': '30 25% 98%',
+    };
+    
+    // Convert hex colors to HSL
     const primaryHsl = hexToHsl(theme.primaryColor);
-    const backgroundHsl = hexToHsl(theme.backgroundColor);
-    const foregroundHsl = hexToHsl(theme.textColor);
     const accentHsl = hexToHsl(theme.accentColor);
     
     return {
-      '--primary': primaryHsl || '26 71% 46%',
-      '--background': backgroundHsl || '40 20% 98%',
-      '--foreground': foregroundHsl || '30 10% 20%',
-      '--accent': accentHsl || '93 19% 46%',
-      '--card': backgroundHsl || '40 20% 98%',
-      '--muted': backgroundHsl ? `${backgroundHsl.split(' ')[0]} 10% 90%` : '40 10% 90%',
-      '--muted-foreground': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 45%` : '30 10% 45%',
-      '--border': foregroundHsl ? `${foregroundHsl.split(' ')[0]} 10% 85%` : '30 10% 85%',
-      '--primary-foreground': '0 0% 100%',
+      ...baseColors,
+      '--primary': primaryHsl || '18 55% 55%',
+      '--accent': accentHsl || '120 20% 62%',
+      '--ring': primaryHsl || '18 55% 55%',
     } as React.CSSProperties;
   }, [galleryResponse?.theme]);
 

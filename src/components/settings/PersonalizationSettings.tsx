@@ -1,6 +1,6 @@
 import { useGallerySettings } from '@/hooks/useGallerySettings';
 import { LogoUploader } from './LogoUploader';
-import { ThemeManager } from './ThemeManager';
+import { ThemeConfig } from './ThemeConfig';
 import { WatermarkDefaults } from './WatermarkDefaults';
 import { EmailTemplates } from './EmailTemplates';
 import { FaviconUploader } from './FaviconUploader';
@@ -9,16 +9,12 @@ export function PersonalizationSettings() {
   const {
     settings,
     updateSettings,
-    createTheme,
-    updateTheme,
-    deleteTheme,
-    setDefaultTheme,
+    saveCustomTheme,
+    deleteCustomTheme,
+    setThemeType,
   } = useGallerySettings();
 
   if (!settings) return null;
-
-  // Extract client default mode from clientTheme (light/dark only, not system)
-  const clientDefaultMode = settings.clientTheme === 'dark' ? 'dark' : 'light';
 
   return (
     <div className="space-y-8">
@@ -47,18 +43,14 @@ export function PersonalizationSettings() {
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-muted-foreground">Aparência da Galeria do Cliente</h3>
         
-        {/* Themes */}
+        {/* Theme Config (simplified) */}
         <div className="lunari-card p-6">
-          <ThemeManager
-            themes={settings.customThemes}
-            activeThemeId={settings.activeThemeId}
-            clientDefaultMode={clientDefaultMode}
-            onCreateTheme={createTheme}
-            onUpdateTheme={updateTheme}
-            onDeleteTheme={deleteTheme}
-            onSetDefaultTheme={setDefaultTheme}
-            onActiveThemeChange={(themeId) => updateSettings({ activeThemeId: themeId })}
-            onClientDefaultModeChange={(mode) => updateSettings({ clientTheme: mode })}
+          <ThemeConfig
+            themeType={settings.themeType}
+            customTheme={settings.customTheme}
+            onThemeTypeChange={(type) => setThemeType(type)}
+            onSaveCustomTheme={saveCustomTheme}
+            onDeleteCustomTheme={deleteCustomTheme}
           />
         </div>
 
@@ -81,7 +73,6 @@ export function PersonalizationSettings() {
             templates={settings.emailTemplates}
             onTemplatesChange={(templates) => {
               // For now, email templates still use the old pattern
-              // This can be refactored later if needed
             }}
           />
         </div>

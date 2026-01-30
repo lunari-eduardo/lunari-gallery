@@ -25,12 +25,11 @@ export function useSettings(): UseSettingsReturn {
   // Initialize settings if user has none - runs only once
   useEffect(() => {
     if (!isLoading && dbSettings && !hasInitialized.current &&
-        dbSettings.customThemes.length === 0 && 
         dbSettings.emailTemplates.length === 0) {
       hasInitialized.current = true;
       initializeSettings.mutate();
     }
-  }, [isLoading, dbSettings]); // Removed initializeSettings from deps to prevent re-runs
+  }, [isLoading, dbSettings]);
 
   // Use database settings or fallback to mock
   const settings: GlobalSettings = dbSettings || mockGlobalSettings;

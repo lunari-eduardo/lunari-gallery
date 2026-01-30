@@ -1,17 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { GlobalSettings, CustomTheme, EmailTemplate, WatermarkSettings, DiscountPreset } from '@/types/gallery';
+import { GlobalSettings, CustomTheme, EmailTemplate, WatermarkSettings, DiscountPreset, ThemeType } from '@/types/gallery';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 
 // Default settings for new users
-const defaultSettings: Omit<GlobalSettings, 'customThemes' | 'emailTemplates' | 'discountPresets'> = {
+const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | 'discountPresets'> = {
   defaultGalleryPermission: 'private',
   clientTheme: 'system',
   defaultExpirationDays: 10,
   studioName: 'Meu Estúdio',
   studioLogo: undefined,
+  themeType: 'system',
   activeThemeId: undefined,
   defaultWatermark: {
     type: 'standard',
@@ -20,17 +21,6 @@ const defaultSettings: Omit<GlobalSettings, 'customThemes' | 'emailTemplates' | 
   },
   faviconUrl: undefined,
 };
-
-const defaultThemes: Omit<CustomTheme, 'id'>[] = [
-  {
-    name: 'Padrão',
-    primaryColor: '#B87333',
-    backgroundColor: '#FAFAF8',
-    textColor: '#2D2A26',
-    accentColor: '#8B9A7D',
-    isDefault: true,
-  },
-];
 
 const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
   {
@@ -59,9 +49,7 @@ function parseWatermark(json: Json | null): WatermarkSettings {
     return defaultSettings.defaultWatermark;
   }
   const obj = json as Record<string, unknown>;
-  // Simplify: only 'none' or 'standard' supported
   let type = (obj.type as WatermarkSettings['type']) || 'standard';
-  // Convert legacy types to 'standard'
   if (type !== 'none' && type !== 'standard') {
     type = 'standard';
   }
@@ -73,10 +61,10 @@ function parseWatermark(json: Json | null): WatermarkSettings {
   };
 }
 
-// Convert database rows to GlobalSettings
+// Convert database rows to GlobalSettings (simplified for single theme)
 function rowsToSettings(
   settingsRow: any | null,
-  themes: any[],
+  theme: any | null,
   emailTemplates: any[],
   discountPresets: any[]
 ): GlobalSettings {
@@ -86,22 +74,25 @@ function rowsToSettings(
     defaultExpirationDays: settingsRow.default_expiration_days ?? 10,
     studioName: settingsRow.studio_name ?? 'Meu Estúdio',
     studioLogo: settingsRow.studio_logo_url || undefined,
+    themeType: (settingsRow.theme_type as ThemeType) ?? 'system',
     activeThemeId: settingsRow.active_theme_id || undefined,
     defaultWatermark: parseWatermark(settingsRow.default_watermark),
     faviconUrl: settingsRow.favicon_url || undefined,
   } : defaultSettings;
 
+  // Single custom theme (if exists)
+  const customTheme: CustomTheme | undefined = theme ? {
+    id: theme.id,
+    name: theme.name,
+    backgroundMode: (theme.background_mode as 'light' | 'dark') || 'light',
+    primaryColor: theme.primary_color,
+    accentColor: theme.accent_color,
+    emphasisColor: theme.emphasis_color,
+  } : undefined;
+
   return {
     ...baseSettings,
-    customThemes: themes.map(t => ({
-      id: t.id,
-      name: t.name,
-      primaryColor: t.primary_color,
-      backgroundColor: t.background_color,
-      textColor: t.text_color,
-      accentColor: t.accent_color,
-      isDefault: t.is_default ?? false,
-    })),
+    customTheme,
     emailTemplates: emailTemplates.map(e => ({
       id: e.id,
       name: e.name,
@@ -128,22 +119,22 @@ export function useGallerySettings() {
     queryFn: async (): Promise<GlobalSettings> => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // Fetch all data in parallel
-      const [settingsRes, themesRes, templatesRes, presetsRes] = await Promise.all([
+      // Fetch all data in parallel (single theme now, not array)
+      const [settingsRes, themeRes, templatesRes, presetsRes] = await Promise.all([
         supabase.from('gallery_settings').select('*').eq('user_id', user.id).maybeSingle(),
-        supabase.from('gallery_themes').select('*').eq('user_id', user.id).order('created_at'),
+        supabase.from('gallery_themes').select('*').eq('user_id', user.id).maybeSingle(),
         supabase.from('gallery_email_templates').select('*').eq('user_id', user.id).order('type'),
         supabase.from('gallery_discount_presets').select('*').eq('user_id', user.id).order('created_at'),
       ]);
 
       if (settingsRes.error) throw settingsRes.error;
-      if (themesRes.error) throw themesRes.error;
+      if (themeRes.error && themeRes.error.code !== 'PGRST116') throw themeRes.error;
       if (templatesRes.error) throw templatesRes.error;
       if (presetsRes.error) throw presetsRes.error;
 
       return rowsToSettings(
         settingsRes.data,
-        themesRes.data || [],
+        themeRes.data,
         templatesRes.data || [],
         presetsRes.data || []
       );
@@ -166,31 +157,10 @@ export function useGallerySettings() {
           client_theme: defaultSettings.clientTheme,
           default_expiration_days: defaultSettings.defaultExpirationDays,
           default_watermark: defaultSettings.defaultWatermark as unknown as Json,
+          theme_type: 'system',
         });
 
       if (settingsError) throw settingsError;
-
-      // Check if themes exist
-      const { data: existingThemes } = await supabase
-        .from('gallery_themes')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
-
-      if (!existingThemes || existingThemes.length === 0) {
-        // Create default themes
-        for (const theme of defaultThemes) {
-          await supabase.from('gallery_themes').insert({
-            user_id: user.id,
-            name: theme.name,
-            primary_color: theme.primaryColor,
-            background_color: theme.backgroundColor,
-            text_color: theme.textColor,
-            accent_color: theme.accentColor,
-            is_default: theme.isDefault ?? false,
-          });
-        }
-      }
 
       // Check if templates exist
       const { data: existingTemplates } = await supabase
@@ -237,6 +207,7 @@ export function useGallerySettings() {
         client_theme: data.clientTheme,
         default_expiration_days: data.defaultExpirationDays,
         active_theme_id: data.activeThemeId || null,
+        theme_type: data.themeType,
         default_watermark: data.defaultWatermark as unknown as Json,
       };
 
@@ -246,14 +217,12 @@ export function useGallerySettings() {
       );
 
       if (existing) {
-        // Update existing record
         const { error } = await supabase
           .from('gallery_settings')
           .update(filteredData)
           .eq('user_id', user.id);
         if (error) throw error;
       } else {
-        // Insert new record
         const { error } = await supabase
           .from('gallery_settings')
           .insert({ user_id: user.id, ...filteredData });
@@ -269,111 +238,118 @@ export function useGallerySettings() {
     },
   });
 
-  // Theme mutations
-  const createTheme = useMutation({
-    mutationFn: async (theme: Omit<CustomTheme, 'id'>) => {
+  // Save or update single custom theme
+  const saveCustomTheme = useMutation({
+    mutationFn: async (theme: Omit<CustomTheme, 'id'> & { id?: string }) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      const { error } = await supabase.from('gallery_themes').insert({
-        user_id: user.id,
-        name: theme.name,
-        primary_color: theme.primaryColor,
-        background_color: theme.backgroundColor,
-        text_color: theme.textColor,
-        accent_color: theme.accentColor,
-        is_default: theme.isDefault || false,
-      });
+      if (theme.id) {
+        // Update existing theme
+        const { error } = await supabase
+          .from('gallery_themes')
+          .update({
+            name: theme.name,
+            background_mode: theme.backgroundMode,
+            primary_color: theme.primaryColor,
+            accent_color: theme.accentColor,
+            emphasis_color: theme.emphasisColor,
+          })
+          .eq('id', theme.id)
+          .eq('user_id', user.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Create new theme (upsert to handle unique constraint)
+        const { data, error } = await supabase
+          .from('gallery_themes')
+          .upsert({
+            user_id: user.id,
+            name: theme.name,
+            background_mode: theme.backgroundMode,
+            primary_color: theme.primaryColor,
+            accent_color: theme.accentColor,
+            emphasis_color: theme.emphasisColor,
+          }, { onConflict: 'user_id' })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Update settings to use custom theme
+        await supabase
+          .from('gallery_settings')
+          .update({ 
+            theme_type: 'custom',
+            active_theme_id: data.id 
+          })
+          .eq('user_id', user.id);
+      }
     },
     onSuccess: () => {
-      toast.success('Tema criado com sucesso!');
+      toast.success('Tema salvo com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
     onError: (error) => {
-      toast.error('Erro ao criar tema');
-      console.error('Create theme error:', error);
+      toast.error('Erro ao salvar tema');
+      console.error('Save theme error:', error);
     },
   });
 
-  const updateTheme = useMutation({
-    mutationFn: async (theme: CustomTheme) => {
+  // Delete custom theme (revert to system)
+  const deleteCustomTheme = useMutation({
+    mutationFn: async () => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      const { error } = await supabase
-        .from('gallery_themes')
-        .update({
-          name: theme.name,
-          primary_color: theme.primaryColor,
-          background_color: theme.backgroundColor,
-          text_color: theme.textColor,
-          accent_color: theme.accentColor,
-          is_default: theme.isDefault || false,
-        })
-        .eq('id', theme.id)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Tema atualizado!');
-      queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
-    },
-    onError: (error) => {
-      toast.error('Erro ao atualizar tema');
-      console.error('Update theme error:', error);
-    },
-  });
-
-  const deleteTheme = useMutation({
-    mutationFn: async (themeId: string) => {
-      if (!user?.id) throw new Error('User not authenticated');
-
-      const { error } = await supabase
+      // Delete theme
+      const { error: deleteError } = await supabase
         .from('gallery_themes')
         .delete()
-        .eq('id', themeId)
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
+
+      // Update settings to use system theme
+      const { error: updateError } = await supabase
+        .from('gallery_settings')
+        .update({ 
+          theme_type: 'system',
+          active_theme_id: null 
+        })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
     },
     onSuccess: () => {
-      toast.success('Tema excluído!');
+      toast.success('Tema removido. Usando tema do sistema.');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
     onError: (error) => {
-      toast.error('Erro ao excluir tema');
+      toast.error('Erro ao remover tema');
       console.error('Delete theme error:', error);
     },
   });
 
-  // Set theme as default
-  const setDefaultTheme = useMutation({
-    mutationFn: async (themeId: string) => {
+  // Set theme type (system or custom)
+  const setThemeType = useMutation({
+    mutationFn: async (themeType: ThemeType) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // First, unset all themes as default
-      await supabase
-        .from('gallery_themes')
-        .update({ is_default: false })
-        .eq('user_id', user.id);
-
-      // Then set the selected one as default
       const { error } = await supabase
-        .from('gallery_themes')
-        .update({ is_default: true })
-        .eq('id', themeId)
-        .eq('user_id', user.id);
+        .from('gallery_settings')
+        .upsert({
+          user_id: user.id,
+          theme_type: themeType,
+          active_theme_id: themeType === 'system' ? null : settings?.customTheme?.id || null,
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Tema definido como padrão!');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
     onError: (error) => {
-      toast.error('Erro ao definir tema padrão');
-      console.error('Set default theme error:', error);
+      toast.error('Erro ao alterar tipo de tema');
+      console.error('Set theme type error:', error);
     },
   });
 
@@ -460,11 +436,10 @@ export function useGallerySettings() {
     initializeSettings,
     updateSettings: updateSettings.mutate,
     isUpdating: updateSettings.isPending,
-    // Theme operations
-    createTheme: createTheme.mutate,
-    updateTheme: updateTheme.mutate,
-    deleteTheme: deleteTheme.mutate,
-    setDefaultTheme: setDefaultTheme.mutate,
+    // Theme operations (simplified)
+    saveCustomTheme: saveCustomTheme.mutate,
+    deleteCustomTheme: deleteCustomTheme.mutate,
+    setThemeType: setThemeType.mutate,
     // Email template operations
     updateEmailTemplate: updateEmailTemplate.mutate,
     // Discount preset operations

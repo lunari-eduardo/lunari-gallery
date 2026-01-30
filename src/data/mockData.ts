@@ -11,37 +11,10 @@ export const mockGlobalSettings: GlobalSettings = {
   studioName: 'Studio Lunari',
   studioLogo: undefined,
   
-  // Personalização
-  customThemes: [
-    {
-      id: 'theme-default',
-      name: 'Padrão',
-      primaryColor: '#B87333',
-      backgroundColor: '#FAFAF8',
-      textColor: '#2D2A26',
-      accentColor: '#8B9A7D',
-      isDefault: true,
-    },
-    {
-      id: 'theme-elegant',
-      name: 'Elegante',
-      primaryColor: '#1A1A1A',
-      backgroundColor: '#FFFFFF',
-      textColor: '#1A1A1A',
-      accentColor: '#C9A96E',
-      isDefault: false,
-    },
-    {
-      id: 'theme-romantic',
-      name: 'Romântico',
-      primaryColor: '#D4A5A5',
-      backgroundColor: '#FDF8F8',
-      textColor: '#4A3F3F',
-      accentColor: '#B8D4C8',
-      isDefault: false,
-    },
-  ],
-  activeThemeId: 'theme-default',
+  // Personalização - tema único simplificado
+  themeType: 'system',
+  customTheme: undefined,
+  activeThemeId: undefined,
   defaultWatermark: {
     type: 'standard',
     opacity: 40,
