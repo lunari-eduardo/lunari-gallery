@@ -1,180 +1,241 @@
 
-# Plano de Correção: Textos Invisíveis e Modo Escuro Inconsistente
+# Plano de Correção: Fotos Incluídas no Pacote não Puxando do Gestão
 
-## Problemas Identificados
+## Diagnóstico Completo
 
-### Problema 1: Textos Claros Invisíveis nas Telas de Confirmação/Pagamento
+### Problema Identificado
 
-Na tela `SelectionConfirmation`, os valores como "Galeria Pública", "Teste", "Pacote" estão com cor bege clara (quase invisível) sobre fundo claro.
+Quando uma galeria é criada através do link do Gestão (modo assistido), o campo "Fotos Incluídas no Pacote" não está sendo preenchido com o valor correto que vem das **regras congeladas** (`regrasCongeladas.pacote.fotosIncluidas`).
 
-**Causa Raiz:**
-O CSS inline via `themeStyles` define as variáveis corretamente, mas a estrutura do wrapper não está propagando corretamente. O problema está na forma como as variáveis CSS são aplicadas:
+### Causa Raiz
 
-```tsx
-// Estrutura atual (problemática)
-<div className={cn(backgroundMode === 'dark' ? 'dark' : '')} style={themeStyles}>
-  <div className="min-h-screen flex flex-col bg-background">
+Existem **dois useEffects separados** com problema de **timing e falta de sincronização**:
+
+```text
+useEffect 1 (linhas 163-209)     useEffect 2 (linhas 213-309)
+─────────────────────────────    ─────────────────────────────
+Busca regrasCongeladas           Preenche campos do formulário
+do banco de dados                (sessionName, packageName, etc.)
+         │                                  │
+         ▼                                  ▼
+setRegrasCongeladas()            setIncludedPhotos() ← PROBLEMA!
+setFixedPrice() ✓                           │
+         │                                  │
+         ▼                                  ▼
+regrasLoaded = true              Usa apenas:
+                                 - URL param (se existir)
+                                 - Lookup no gestaoPackages
+                                 
+                                 NÃO USA regrasCongeladas!
 ```
 
-O `themeStyles` define `--foreground: '25 20% 15%'` para modo claro, mas o `font-medium` que usa `text-foreground` não está herdando corretamente porque a classe `.dark` do CSS global pode estar conflitando.
+**Problemas específicos:**
 
-### Problema 2: Modo Escuro Só Funciona no Login
+1. O useEffect 2 **não espera** `regrasLoaded` antes de processar
+2. O useEffect 2 **não tem** `regrasCongeladas` nas dependências
+3. O useEffect 2 **ignora** `regrasCongeladas.pacote.fotosIncluidas`
 
-A tela de senha (`PasswordScreen`) usa `backgroundMode` corretamente, mas as outras telas usam `activeClientMode`:
+### Evidência no Banco de Dados
 
-| Tela | Variável Usada | Fonte |
-|------|---------------|-------|
-| PasswordScreen | `backgroundMode` | `galleryResponse.theme.backgroundMode` ✓ |
-| Welcome | `activeClientMode` | Estado local inicializado de `clientMode` ✗ |
-| Main Gallery | `activeClientMode` | Estado local ✗ |
-| Confirmed | `activeClientMode` | Estado local ✗ |
+As regras congeladas contêm o valor correto:
+```json
+{
+  "pacote": {
+    "fotosIncluidas": 30,  // ← Valor correto que deveria ser usado
+    "valorFotoExtra": 25,
+    "nome": "Marca Essencial 30f"
+  }
+}
+```
 
-O `clientMode` (modo do cliente/navegador) é diferente de `backgroundMode` (tema configurado pelo fotógrafo).
+Mas o formulário mostra o valor padrão (30 hardcoded) ou outro valor incorreto.
 
-## Solução
+## Solução Proposta
 
-### Parte 1: Unificar Fonte de Verdade para Modo de Fundo
+### Mudança Principal
 
-Em `ClientGallery.tsx`, derivar o modo de fundo diretamente do tema quando houver tema personalizado:
+Adicionar um **terceiro useEffect** dedicado para sincronizar `includedPhotos` com `regrasCongeladas` quando as regras são carregadas:
 
 ```typescript
-// Lógica corrigida
-const effectiveBackgroundMode = galleryResponse?.theme?.backgroundMode 
-  || galleryResponse?.clientMode 
-  || 'light';
+// NOVO: Sincronizar includedPhotos e outros campos com regrasCongeladas
+useEffect(() => {
+  // Só executa quando regras são carregadas e há session_id
+  if (!regrasLoaded || !regrasCongeladas || !gestaoParams?.session_id) return;
+  
+  // regrasCongeladas é a fonte de verdade para dados do pacote
+  const { pacote } = regrasCongeladas;
+  
+  // Atualizar fotos incluídas (sempre do regras, pois é o valor congelado)
+  if (pacote?.fotosIncluidas !== undefined && pacote.fotosIncluidas > 0) {
+    console.log('🔗 Setting includedPhotos from regrasCongeladas:', pacote.fotosIncluidas);
+    setIncludedPhotos(pacote.fotosIncluidas);
+  }
+  
+  // Atualizar nome do pacote se disponível
+  if (pacote?.nome && !packageName) {
+    setPackageName(pacote.nome);
+  }
+  
+  // Atualizar categoria/sessão se disponível
+  if (pacote?.categoria && !sessionName) {
+    setSessionName(pacote.categoria);
+  }
+  
+}, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id]);
 ```
 
-Usar `effectiveBackgroundMode` em TODAS as telas em vez de `activeClientMode`.
+### Hierarquia de Prioridade
 
-### Parte 2: Corrigir Estrutura de Aplicação do Tema
+A nova lógica segue esta ordem de prioridade:
 
-O problema é que a classe `.dark` do CSS global pode estar sobrepondo as variáveis inline. Precisamos garantir que:
-
-1. O wrapper externo aplique tanto a classe `.dark` quanto as variáveis inline
-2. O container interno use `bg-background` que herda as variáveis
-
-```tsx
-// Estrutura corrigida
-<div 
-  className={cn("min-h-screen flex flex-col bg-background", backgroundMode === 'dark' && 'dark')}
-  style={themeStyles}
->
-  {/* Conteúdo */}
-</div>
+```text
+1. regrasCongeladas.pacote.fotosIncluidas (MAIOR PRIORIDADE)
+   ↓ Se não existir...
+2. gestaoParams.fotos_incluidas_no_pacote (URL param)
+   ↓ Se não existir...
+3. packageFromGestao.fotosIncluidas (lookup na tabela pacotes)
+   ↓ Se não existir...
+4. Valor padrão: 30
 ```
 
-Fundir os dois divs em um só resolve o problema de escopo das variáveis CSS.
+### Garantias Anti-Falha
+
+| Cenário | Comportamento |
+|---------|---------------|
+| regrasCongeladas existe | Usa `pacote.fotosIncluidas` |
+| regrasCongeladas não existe, URL param existe | Usa param da URL |
+| Nenhum acima, pacote encontrado no DB | Usa `fotos_incluidas` do pacote |
+| Nada disponível | Mantém valor padrão (30) |
+| Usuário clica "Override" | Permite edição manual |
 
 ## Arquivos a Modificar
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/ClientGallery.tsx` | 1. Criar `effectiveBackgroundMode` unificado<br>2. Usar em todas as renderizações (welcome, main, confirmed)<br>3. Passar corretamente para componentes filhos |
-| `src/components/SelectionConfirmation.tsx` | Fundir wrapper externo com container interno |
-| `src/components/PaymentRedirect.tsx` | Fundir wrapper externo com container interno |
-| `src/components/PixPaymentScreen.tsx` | Fundir wrapper externo com container interno |
-| `src/components/PasswordScreen.tsx` | Fundir wrapper externo com container interno (consistência) |
+### 1. `src/pages/GalleryCreate.tsx`
 
-## Mudanças Detalhadas
+**Mudança 1: Adicionar novo useEffect após o de fetch de regras (após linha 209)**
 
-### ClientGallery.tsx
-
-**Linha ~526-530 - Calcular modo efetivo:**
 ```typescript
-// Usar backgroundMode do tema como fonte primária
-const effectiveBackgroundMode = useMemo(() => {
-  return galleryResponse?.theme?.backgroundMode || 'light';
-}, [galleryResponse?.theme?.backgroundMode]);
+// NEW: Sync includedPhotos, packageName, sessionName from regrasCongeladas
+// This runs AFTER regrasCongeladas is loaded to ensure correct values
+useEffect(() => {
+  // Only run when regras are loaded and we have a session
+  if (!regrasLoaded || !regrasCongeladas || !gestaoParams?.session_id) return;
+  
+  const { pacote } = regrasCongeladas;
+  
+  // fotosIncluidas from frozen rules is the source of truth
+  if (pacote?.fotosIncluidas !== undefined && pacote.fotosIncluidas > 0) {
+    console.log('🔗 Syncing includedPhotos from regrasCongeladas:', pacote.fotosIncluidas);
+    setIncludedPhotos(pacote.fotosIncluidas);
+  }
+  
+  // Package name from frozen rules (if not already set)
+  if (pacote?.nome && !packageName) {
+    console.log('🔗 Syncing packageName from regrasCongeladas:', pacote.nome);
+    setPackageName(pacote.nome);
+  }
+  
+  // Session name from category (if not already set)
+  if (pacote?.categoria && !sessionName) {
+    console.log('🔗 Syncing sessionName from regrasCongeladas:', pacote.categoria);
+    setSessionName(pacote.categoria);
+  }
+  
+}, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, packageName, sessionName]);
 ```
 
-**Linhas ~796-803 (Welcome), ~952-958 (Confirmed), ~1052-1058 (Main):**
-Substituir `activeClientMode` por `effectiveBackgroundMode`:
+**Mudança 2: Ajustar o useEffect de pre-fill (linhas 213-309) para não sobrescrever valores de regrasCongeladas**
+
+Na lógica de pre-fill, adicionar verificação:
+
 ```typescript
-className={cn(
-  "min-h-screen flex flex-col bg-background text-foreground",
-  effectiveBackgroundMode === 'dark' && 'dark'
-)}
-style={themeStyles}
+// Step 2: Package name and lookup package data
+if (gestaoParams.pacote_nome) {
+  setPackageName(gestaoParams.pacote_nome);
+  
+  // Lookup package to get fotos_incluidas and valor_foto_extra
+  const packageFromGestao = gestaoPackages.find(
+    pkg => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase()
+  );
+  
+  if (packageFromGestao) {
+    console.log('🔗 Found package:', packageFromGestao);
+    
+    // Use package fotos_incluidas ONLY if:
+    // 1. Not explicitly provided in URL
+    // 2. regrasCongeladas not loaded yet (will be overwritten when loaded)
+    // regrasCongeladas.pacote.fotosIncluidas takes priority when available
+    if (!gestaoParams.fotos_incluidas_no_pacote && packageFromGestao.fotosIncluidas) {
+      // Only set if regrasCongeladas doesn't have the value
+      // (regrasCongeladas useEffect will override this if needed)
+      setIncludedPhotos(packageFromGestao.fotosIncluidas);
+    }
+    
+    // ... resto do código
+  }
+}
 ```
 
-**Remover** o toggle de modo (linhas 527-530 e o handler `onToggleMode` no ClientGalleryHeader) pois o modo agora vem do tema configurado.
+**Mudança 3: Log adicional para debugging**
 
-### SelectionConfirmation.tsx
+Adicionar log no fetch de regras para facilitar debug:
 
-**Linhas 68-73 - Fundir wrappers:**
-```tsx
-// ANTES
-<div className={cn(backgroundMode === 'dark' ? 'dark' : '')} style={themeStyles}>
-  <div className="min-h-screen flex flex-col bg-background">
-
-// DEPOIS
-<div 
-  className={cn(
-    "min-h-screen flex flex-col bg-background text-foreground",
-    backgroundMode === 'dark' && 'dark'
-  )}
-  style={themeStyles}
->
-```
-
-Também remover o `</div>` extra no final.
-
-### PaymentRedirect.tsx
-
-**Linhas 60-65 - Fundir wrappers:**
-```tsx
-// DEPOIS
-<div 
-  className={cn(
-    "min-h-screen flex flex-col items-center justify-center bg-background p-4",
-    backgroundMode === 'dark' && 'dark'
-  )}
-  style={themeStyles}
->
-```
-
-### PixPaymentScreen.tsx
-
-Aplicar mesma correção de fundir wrappers.
-
-### PasswordScreen.tsx
-
-**Linhas 38-43 - Fundir wrappers:**
-```tsx
-// DEPOIS
-<div 
-  className={cn(
-    "min-h-screen flex flex-col bg-background",
-    backgroundMode === 'dark' && 'dark'
-  )}
-  style={themeStyles}
->
+```typescript
+if (data?.regras_congeladas) {
+  const regras = data.regras_congeladas as unknown as RegrasCongeladas;
+  console.log('🔗 regrasCongeladas loaded:', {
+    fotosIncluidas: regras.pacote?.fotosIncluidas,
+    valorFotoExtra: regras.pacote?.valorFotoExtra,
+    pacoteNome: regras.pacote?.nome,
+  });
+  setRegrasCongeladas(regras);
+}
 ```
 
 ## Fluxo Corrigido
 
 ```text
-1. Fotógrafo configura galeria com tema: backgroundMode = 'dark'
-          |
-2. gallery-access retorna: theme.backgroundMode = 'dark'
-          |
-3. ClientGallery calcula: effectiveBackgroundMode = 'dark'
-          |
-4. themeStyles inclui variáveis para modo escuro:
-   '--background': '25 15% 10%',
-   '--foreground': '30 20% 95%',
-   ...
-          |
-5. TODAS as telas aplicam:
-   - className="... bg-background text-foreground dark"
-   - style={themeStyles}
-          |
-6. Resultado: Textos legíveis em todas as telas
+1. Usuário clica no link do Gestão
+   URL: /galeria/nova?session_id=workflow-xxx&cliente_id=...&pacote_nome=Teste
+                │
+                ▼
+2. useGestaoParams() captura params da URL
+   gestaoParams = { session_id: 'workflow-xxx', pacote_nome: 'Teste', ... }
+                │
+                ▼
+3. useEffect 1: Fetch regrasCongeladas do banco
+   SELECT regras_congeladas FROM clientes_sessoes WHERE session_id = 'workflow-xxx'
+   regrasCongeladas = { pacote: { fotosIncluidas: 5, ... }, ... }
+   regrasLoaded = true
+                │
+                ▼
+4. useEffect 2: Pre-fill básico (cliente, etc.)
+   setSelectedClient(...)
+   setPackageName('Teste')
+   (includedPhotos pode receber valor temporário)
+                │
+                ▼
+5. ✨ NOVO useEffect 3: Sync com regrasCongeladas ✨
+   if (regrasLoaded && regrasCongeladas) {
+     setIncludedPhotos(regrasCongeladas.pacote.fotosIncluidas)  // 5
+   }
+                │
+                ▼
+6. Formulário exibe valor correto: "Fotos Incluídas no Pacote: 5"
 ```
+
+## Testes Recomendados
+
+1. **Teste com sessão existente**: Criar galeria via link do Gestão com session_id válido
+2. **Teste sem regras congeladas**: Criar galeria via link do Gestão sem regras_congeladas no banco
+3. **Teste com URL param explícito**: Link com `fotos_incluidas_no_pacote=10` deve usar 10
+4. **Teste manual**: Criar galeria manualmente (sem Gestão) deve usar valor padrão
+5. **Teste Override**: Ativar override e verificar se edição manual funciona
 
 ## Benefícios
 
-1. **Textos visíveis** - Cores de texto corretas para cada modo de fundo
-2. **Consistência** - Mesmo tema em TODAS as telas (senha → galeria → confirmação → pagamento)
-3. **Fonte única** - `theme.backgroundMode` é a fonte de verdade, não `clientMode`
-4. **Estrutura limpa** - Um único wrapper com classe + style em vez de dois divs
+- Valor das fotos incluídas sempre correto quando vem do Gestão
+- Fonte de verdade única: `regrasCongeladas`
+- Compatibilidade mantida com fluxo manual
+- Logs detalhados para debugging
+- Código mais previsível e fácil de manter
