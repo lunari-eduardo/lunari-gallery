@@ -614,7 +614,7 @@ export type Database = {
       }
       cobrancas: {
         Row: {
-          cliente_id: string
+          cliente_id: string | null
           created_at: string | null
           data_pagamento: string | null
           descricao: string | null
@@ -641,7 +641,7 @@ export type Database = {
           valor: number
         }
         Insert: {
-          cliente_id: string
+          cliente_id?: string | null
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
@@ -668,7 +668,7 @@ export type Database = {
           valor: number
         }
         Update: {
-          cliente_id?: string
+          cliente_id?: string | null
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
