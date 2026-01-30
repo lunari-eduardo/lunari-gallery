@@ -1,169 +1,201 @@
 
-# Plano de Correção: Erro 500 ao Gerar Pagamento + Sistema Robusto
+# Plano de Correção: Mercado Pago PIX Automatizado + Sistema Robusto
 
-## Problema Principal Identificado
+## Problemas Identificados
 
-O erro 500 ocorre porque **a galeria foi criada sem cliente vinculado** (Galeria Pública), mas a tabela `cobrancas` exige `cliente_id` como campo obrigatório (NOT NULL).
+### Problema 1: PIX do MP não tem checkoutUrl
 
-### Evidências do Log:
-```
-null value in column "cliente_id" of relation "cobrancas" violates not-null constraint
-Failing row contains (..., cliente_id: null, ...)
-```
+Quando **apenas PIX está habilitado** no Mercado Pago (`habilitarCartao: false`):
 
-### Galeria Afetada:
-```sql
-SELECT cliente_id FROM galerias WHERE id = '5e66eb25-e723-497a-be25-5c4dfda4687f';
--- Resultado: cliente_id = NULL (Galeria Pública)
-```
+1. `mercadopago-create-link` cria pagamento PIX direto (linha 239-309)
+2. A resposta contém `qr_code` e `qr_code_base64`, mas **NÃO inclui `checkoutUrl`**
+3. `confirm-selection` lê `paymentData.paymentLink` → **undefined**
+4. O frontend verifica `data.checkoutUrl` → **undefined**
+5. Cai no fallback "sem pagamento" → vai para `'confirmed'`
 
-## Análise de Impacto em Todos os Provedores
+```text
+Fluxo Atual (QUEBRADO):
 
-| Provedor | Arquivo | Problema | Status |
-|----------|---------|----------|--------|
-| Mercado Pago | `mercadopago-create-link/index.ts` | Insere `cliente_id: null` sem validação (linha 83) | **QUEBRADO** |
-| InfinitePay | `infinitepay-create-link/index.ts` | Valida `clienteId` obrigatório, retorna 400 (linha 62) | **QUEBRADO** |
-| gallery-create-payment | `gallery-create-payment/index.ts` | Passa `cliente_id` sem validação (linha 132) | **QUEBRADO** |
+mercadopago-create-link retorna:
+{
+  success: true,
+  payment_method: 'pix',
+  qr_code: "00020126...",         ← QR Code está aqui!
+  qr_code_base64: "data:image...", ← Imagem também!
+  cobrancaId: "uuid...",
+  // checkoutUrl: UNDEFINED!       ← FALTA este campo
+}
 
-## Causa Raiz
+confirm-selection lê:
+paymentData.paymentLink → undefined  ← ERRO!
 
-1. **Inconsistência de schema**: A tabela `galerias` permite `cliente_id = NULL` (para galerias públicas), mas `cobrancas` requer `cliente_id NOT NULL`
-2. **Falta de validação**: As Edge Functions não validam se `cliente_id` existe antes de criar cobrança
-3. **Tratamento de erro genérico**: Erros de constraint retornam 500 em vez de mensagem clara
-
-## Solução Proposta (3 Etapas)
-
-### Etapa 1: Corrigir Schema (Banco de Dados)
-
-Alterar a tabela `cobrancas` para permitir `cliente_id = NULL`, igual à tabela `galerias`:
-
-```sql
-ALTER TABLE cobrancas ALTER COLUMN cliente_id DROP NOT NULL;
+ClientGallery verifica:
+if (data.requiresPayment && data.checkoutUrl) { ← FALSE!
+  // Nunca entra aqui
+}
+setCurrentStep('confirmed'); ← Pula direto para finalizado!
 ```
 
-**Justificativa**: Se uma galeria pode existir sem cliente, a cobrança dessa galeria também deve poder existir sem cliente. O vínculo é feito pelo `galeria_id`.
+### Problema 2: Não há tratamento para "MP PIX Automatizado"
 
-### Etapa 2: Adicionar Validação Robusta nas Edge Functions
+O frontend reconhece apenas dois tipos:
 
-Mesmo após permitir NULL, devemos adicionar validações claras para:
-- Alertar quando cliente está ausente
-- Garantir que `galeria_id` OU `cliente_id` esteja presente
-- Retornar erros amigáveis em vez de 500
+| Tipo | Condição | Ação |
+|------|----------|------|
+| PIX Manual | `paymentMethod === 'pix_manual'` | Mostra `PixPaymentScreen` interno |
+| Checkout Externo | `checkoutUrl !== undefined` | Redireciona para MP/InfinitePay |
 
-**Arquivo: `mercadopago-create-link/index.ts`**
+O **PIX automatizado do Mercado Pago** (com `qr_code` próprio) não é tratado!
 
-Adicionar antes de criar cobrança (linha ~77):
+### Problema 3: Número máximo de parcelas pode não funcionar
+
+O `maxParcelas` é lido corretamente das configurações (linha 313 de `mercadopago-create-link`), porém, se a configuração nunca foi salva ou está mal formatada, pode haver problemas.
+
+## Análise de Decisão: Como Tratar MP PIX?
+
+Existem duas opções arquiteturais:
+
+### Opção A: PIX do MP = Tela Interna (como PIX Manual)
+- Mostrar QR Code do Mercado Pago no próprio frontend
+- Vantagem: Cliente não sai do site
+- Desvantagem: Requer polling para saber se pagou
+
+### Opção B: PIX do MP = Sempre criar Preference (checkout externo) ✓ RECOMENDADA
+- Mesmo com só PIX, criar uma "Preference" do Checkout Pro
+- O checkout do MP mostra apenas opção PIX
+- Vantagem: Fluxo consistente, confirmação automática via redirect
+- Desvantagem: Cliente sai momentaneamente do site
+
+**Escolha: Opção B** - Mais simples, robusto e mantém consistência com outros provedores.
+
+## Solução
+
+### Mudança 1: Sempre criar Preference quando for checkout de galeria
+
+Quando `paymentMethod` não é explicitamente `'pix'`, sempre criar uma Preference do Checkout Pro. A API do MP já cuida de mostrar apenas as opções habilitadas.
+
+**Arquivo: `supabase/functions/mercadopago-create-link/index.ts`**
+
+Remover a lógica que força `paymentMethod = 'pix'` quando só PIX habilitado (linhas 232-236):
 
 ```typescript
-// Validar que temos pelo menos uma referência (cliente ou galeria)
-if (!body.clienteId && !body.galeriaId) {
-  console.error('Cobrança requer cliente_id ou galeria_id');
-  return new Response(
-    JSON.stringify({ 
-      success: false,
-      error: 'É necessário um cliente ou galeria vinculada para criar cobrança' 
-    }),
-    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
+// ANTES (REMOVER):
+if (!paymentMethod && pixHabilitado && !cartaoHabilitado) {
+  console.log('📱 Apenas PIX habilitado - criando pagamento PIX direto');
+  paymentMethod = 'pix';
 }
 
-// Log de aviso para galerias públicas (não bloqueante)
-if (!body.clienteId && body.galeriaId) {
-  console.log('⚠️ Criando cobrança para galeria pública (sem cliente)');
-}
+// DEPOIS:
+// Apenas criar pagamento PIX direto se EXPLICITAMENTE solicitado
+// Caso contrário, sempre criar Preference (checkout externo)
+// A Preference vai excluir cartão automaticamente se não habilitado
 ```
 
-**Arquivo: `infinitepay-create-link/index.ts`**
-
-Alterar validação (linhas 61-68):
-
+Manter a exclusão de cartão na Preference (já existe, linha 319-323):
 ```typescript
-// ANTES: if (!clienteId || !valor || !userId)
-// DEPOIS: Permitir cliente null se tiver galeria
-if (!valor || !userId) {
-  console.error('Missing required fields:', { valor, userId });
-  return new Response(
-    JSON.stringify({ error: 'valor e userId são obrigatórios' }),
-    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
-
-// Validar referência (cliente ou galeria)
-if (!clienteId && !galeriaId) {
-  console.error('Cobrança requer cliente_id ou galeria_id');
-  return new Response(
-    JSON.stringify({ error: 'É necessário um cliente ou galeria vinculada' }),
-    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
-```
-
-### Etapa 3: Aplicar Métodos de Pagamento Conforme Configuração
-
-Atualmente, quando `habilitarCartao: false`, o sistema ainda cria um checkout genérico que mostra opção de cartão. Devemos respeitar as configurações:
-
-**Arquivo: `mercadopago-create-link/index.ts`**
-
-Alterar a lógica de exclusão de métodos (linhas 286-294):
-
-```typescript
-// Construir lista de exclusões baseada nas configurações do fotógrafo
-const excludedTypes: { id: string }[] = [{ id: 'ticket' }]; // Sempre excluir boleto
-
-// Excluir cartão se desabilitado nas configurações
-if (settings?.habilitarCartao === false) {
+if (!cartaoHabilitado) {
   excludedTypes.push({ id: 'credit_card' });
   excludedTypes.push({ id: 'debit_card' });
-  console.log('💳 Cartão desabilitado pelo fotógrafo - excluindo do checkout');
+  console.log('💳 Cartão desabilitado - excluindo do checkout');
 }
+```
 
-// Se só PIX está habilitado, criar pagamento PIX direto em vez de preference
-if (settings?.habilitarCartao === false && settings?.habilitarPix !== false) {
-  // Redirecionar para o fluxo de PIX direto
-  console.log('📱 Apenas PIX habilitado - criando pagamento PIX direto');
-  // ... usar o bloco de criação de PIX (linhas 210-280)
-}
+### Mudança 2: Adicionar validação de maxParcelas
+
+Garantir que `maxParcelas` seja sempre um número válido:
+
+```typescript
+// Validar maxParcelas
+const maxParcelas = Math.min(
+  Math.max(1, parseInt(String(settings?.maxParcelas)) || 12),
+  24 // Limite máximo do MP
+);
+console.log(`📊 Parcelas máximas configuradas: ${maxParcelas}`);
+```
+
+### Mudança 3: Atualizar confirm-selection para compatibilidade
+
+Garantir que `confirm-selection` leia corretamente tanto `checkoutUrl` quanto `paymentLink`:
+
+**Arquivo: `supabase/functions/confirm-selection/index.ts` (linha 370-372)**
+
+```typescript
+// ANTES:
+const checkoutUrl = integracao.provedor === 'infinitepay'
+  ? paymentData.checkoutUrl
+  : paymentData.paymentLink;
+
+// DEPOIS (mais robusto):
+const checkoutUrl = paymentData.checkoutUrl || paymentData.paymentLink;
 ```
 
 ## Fluxo Corrigido
 
 ```text
-1. Cliente confirma seleção em galeria pública
+1. Fotógrafo configura MP: PIX ✓, Cartão ✗
+
+2. Cliente confirma seleção
           ↓
-2. confirm-selection passa cliente_id=null, galeria_id=uuid
+3. confirm-selection → mercadopago-create-link
           ↓
-3. mercadopago-create-link:
-   - Valida: galeria_id existe ✓
-   - Loga: "Criando cobrança para galeria pública"
-   - Verifica settings: habilitarCartao=false, habilitarPix=true
-   - Cria pagamento PIX direto (não preference)
+4. mercadopago-create-link:
+   - NÃO força paymentMethod = 'pix'
+   - Cria Preference com excludedTypes = ['ticket', 'credit_card', 'debit_card']
           ↓
-4. cobrancas.insert({ cliente_id: null, galeria_id: uuid }) ✓
+5. Preference retorna:
+   {
+     init_point: "https://www.mercadopago.com.br/checkout/...",
+     // Checkout mostrará apenas PIX!
+   }
           ↓
-5. Retorna checkoutUrl ou QR Code PIX
+6. Resposta normalizada:
+   {
+     success: true,
+     checkoutUrl: "https://...",    ✓
+     paymentLink: "https://...",    ✓
+     cobrancaId: "...",             ✓
+   }
+          ↓
+7. confirm-selection captura checkoutUrl ✓
+          ↓
+8. ClientGallery:
+   if (data.requiresPayment && data.checkoutUrl) {
+     setCurrentStep('payment');  ← Funciona!
+   }
+          ↓
+9. PaymentRedirect → Cliente vai ao MP, vê só PIX
 ```
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| **Migration SQL** | `ALTER TABLE cobrancas ALTER COLUMN cliente_id DROP NOT NULL;` |
-| `supabase/functions/mercadopago-create-link/index.ts` | 1. Validação cliente/galeria<br>2. Respeitar config de métodos<br>3. Redirecionar para PIX quando só PIX habilitado |
-| `supabase/functions/infinitepay-create-link/index.ts` | 1. Permitir cliente null<br>2. Validar referência (cliente OU galeria) |
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/mercadopago-create-link/index.ts` | 1. Remover lógica que força PIX direto (linhas 232-236)<br>2. Validar maxParcelas com limites |
+| `supabase/functions/confirm-selection/index.ts` | Fallback para `checkoutUrl OR paymentLink` (linha 370-372) |
+
+## Validações de Robustez Adicionais
+
+Para blindar o sistema, também adicionaremos:
+
+1. **Log detalhado** quando criar Preference com exclusões
+2. **Validação de tipo** para maxParcelas (converter string para número)
+3. **Fallback seguro** se configurações estiverem vazias ou malformadas
+
+## Cenários de Teste
+
+Após implementação:
+
+- [ ] Galeria com MP (só PIX) → Deve redirecionar para checkout MP com só PIX
+- [ ] Galeria com MP (PIX + Cartão) → Deve redirecionar para checkout MP completo
+- [ ] Galeria com MP (só Cartão) → Deve redirecionar para checkout MP com só cartão
+- [ ] Galeria pública + MP (qualquer config) → Deve funcionar
+- [ ] Galeria com InfinitePay → Sem alteração (continua funcionando)
+- [ ] Galeria com PIX Manual → Sem alteração (continua funcionando)
+- [ ] Verificar se parcelas estão limitadas conforme configuração
 
 ## Benefícios
 
-1. **Correção imediata**: Galerias públicas poderão gerar pagamentos
-2. **Configurações respeitadas**: Desabilitar cartão realmente impedirá opção de cartão
-3. **Erros claros**: Mensagens específicas em vez de 500 genérico
-4. **Sistema robusto**: Modificações pontuais não causarão erros em cascata
-5. **Consistência**: Mesmo comportamento entre Mercado Pago e InfinitePay
-
-## Testes Recomendados
-
-Após implementação, testar cenários:
-- [ ] Galeria pública + Mercado Pago (só PIX)
-- [ ] Galeria pública + Mercado Pago (PIX + Cartão)
-- [ ] Galeria pública + InfinitePay
-- [ ] Galeria com cliente + Mercado Pago
-- [ ] Galeria com cliente + PIX Manual
+1. **Correção imediata**: PIX-only do MP vai funcionar
+2. **Fluxo consistente**: Sempre checkout externo para provedores automatizados
+3. **Sistema robusto**: Validações previnem erros de configuração
+4. **Sem regressão**: InfinitePay e PIX Manual continuam iguais
