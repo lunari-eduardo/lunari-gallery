@@ -1,74 +1,161 @@
 
-# Plano: Corrigir Erro 500 no Pagamento (constraint de tipo_cobranca)
+# Plano: Corrigir Redirecionamento para Checkout do Mercado Pago
 
-## Problema Raiz Identificado
+## Problema Identificado
 
-A Edge Function `mercadopago-create-link` está tentando inserir `'foto_extra'` no campo `tipo_cobranca`, mas o constraint da tabela só permite:
+A galeria é finalizada sem redirecionar para o checkout porque a função `confirm-selection` espera campos com nomes diferentes dos que `mercadopago-create-link` retorna.
 
-| Valores Permitidos |
-|--------------------|
-| `'pix'` |
-| `'link'` |
-| `'card'` |
-| `'presencial'` |
+### Mapeamento Atual (Incorreto)
 
-**Log de erro:**
+| O que `confirm-selection` busca | O que `mercadopago-create-link` retorna | Resultado |
+|--------------------------------|----------------------------------------|-----------|
+| `paymentData.paymentLink` | `checkout_url` | **undefined** |
+| `paymentData.cobranca?.id` | `cobranca_id` | **undefined** |
+
+### Consequência
+
+O código na linha 370-372 resulta em:
+```javascript
+const checkoutUrl = undefined;  // Campo errado lido!
+paymentResponse = { checkoutUrl: undefined, ... }
 ```
-new row for relation "cobrancas" violates check constraint "cobrancas_tipo_cobranca_check"
-Failing row contains (..., tipo_cobranca: 'foto_extra', ...)
+
+E na resposta final (linha 541-543):
+```javascript
+requiresPayment: true,           // há pagamento pendente
+checkoutUrl: undefined,          // mas a URL é undefined!
 ```
 
-A função `infinitepay-create-link` já usa `'link'` corretamente, mas a `mercadopago-create-link` usa `'foto_extra'` que é inválido.
+O frontend em `ClientGallery.tsx` (linha 421) verifica:
+```javascript
+if (data.requiresPayment && data.checkoutUrl) {
+  // Nunca entra aqui porque checkoutUrl é undefined!
+}
+```
+
+E cai direto no else (linha 434-438):
+```javascript
+// Sem pagamento - vai para 'confirmed' ao invés de 'payment'
+setCurrentStep('confirmed');
+```
 
 ---
 
 ## Solução
 
-Alterar o valor de `tipo_cobranca` de `'foto_extra'` para `'link'` na função `mercadopago-create-link`, seguindo o mesmo padrão já usado na `infinitepay-create-link`.
+Existem duas opções:
+
+### Opção A: Alterar `mercadopago-create-link` (Recomendada)
+Padronizar a resposta para usar camelCase igual ao `infinitepay-create-link`:
+- `checkout_url` → `checkoutUrl`
+- `cobranca_id` → `cobrancaId`
+- Adicionar campo `paymentLink` como alias
+
+### Opção B: Alterar `confirm-selection`
+Corrigir os campos que são lidos para usar os nomes corretos:
+- `paymentData.paymentLink` → `paymentData.checkout_url`
+- `paymentData.cobranca?.id` → `paymentData.cobranca_id`
+
+**Escolha: Opção A** - Padroniza as respostas entre provedores e é mais fácil de manter.
 
 ---
 
-## Mudança Técnica
+## Mudanças Técnicas
 
 ### Arquivo: `supabase/functions/mercadopago-create-link/index.ts`
 
+Alterar a resposta de sucesso do checkout (linhas 351-360):
+
 ```text
-ANTES (linha 88):
-┌────────────────────────────────────────────┐
-│ tipo_cobranca: 'foto_extra',               │
-└────────────────────────────────────────────┘
+ANTES:
+┌─────────────────────────────────────────────────────────────┐
+│ return new Response(JSON.stringify({                        │
+│   success: true,                                            │
+│   preference_id: preferenceData.id,                         │
+│   payment_method: paymentMethod || 'checkout',              │
+│   checkout_url: preferenceData.init_point,                  │ ← snake_case
+│   sandbox_url: preferenceData.sandbox_init_point,           │
+│   cobranca_id: cobrancaId,                                  │ ← snake_case
+│ }))                                                         │
+└─────────────────────────────────────────────────────────────┘
 
 DEPOIS:
-┌────────────────────────────────────────────┐
-│ tipo_cobranca: 'link',                     │
-└────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ return new Response(JSON.stringify({                        │
+│   success: true,                                            │
+│   preference_id: preferenceData.id,                         │
+│   payment_method: paymentMethod || 'checkout',              │
+│   checkoutUrl: preferenceData.init_point,                   │ ← camelCase
+│   paymentLink: preferenceData.init_point,                   │ ← alias (compatibilidade)
+│   sandbox_url: preferenceData.sandbox_init_point,           │
+│   cobrancaId: cobrancaId,                                   │ ← camelCase
+│   cobranca: { id: cobrancaId },                             │ ← alias (compatibilidade)
+│   provedor: 'mercadopago',                                  │ ← identificação clara
+│ }))                                                         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Isso é consistente com a função `infinitepay-create-link` que já usa `'link'` (linha 198).
+Também alterar a resposta PIX (linhas 264-275) para seguir o mesmo padrão:
+- Adicionar `cobrancaId` e `cobranca: { id: ... }` como aliases
+- Adicionar `provedor: 'mercadopago'`
 
 ---
 
-## Sobre a Lentidão (15 segundos)
+## Validação do Fluxo Completo
 
-A lentidão na abertura da galeria provavelmente está relacionada ao **cold start** das Edge Functions do Supabase. Quando uma função não é usada por um tempo, ela precisa ser "aquecida" novamente na primeira requisição. Logs mostram:
+Após a correção, o fluxo será:
 
+```text
+1. Cliente confirma seleção
+          ↓
+2. ClientGallery.tsx → confirmMutation
+          ↓
+3. confirm-selection → mercadopago-create-link
+          ↓
+4. mercadopago-create-link retorna:
+   {
+     success: true,
+     checkoutUrl: "https://mercadopago.com.br/checkout/...",
+     paymentLink: "https://mercadopago.com.br/checkout/...",
+     cobrancaId: "uuid...",
+     cobranca: { id: "uuid..." },
+     provedor: "mercadopago"
+   }
+          ↓
+5. confirm-selection (linha 372):
+   paymentData.paymentLink = "https://..." ✓
+   paymentData.cobranca?.id = "uuid..." ✓
+          ↓
+6. confirm-selection retorna:
+   {
+     requiresPayment: true,
+     checkoutUrl: "https://mercadopago.com.br/checkout/...",
+     ...
+   }
+          ↓
+7. ClientGallery.tsx (linha 421):
+   if (data.requiresPayment && data.checkoutUrl) { ✓
+     setPaymentInfo({ checkoutUrl: ... })
+     setCurrentStep('payment')  ← Mostra tela de redirecionamento!
+   }
+          ↓
+8. PaymentRedirect → Redireciona para Mercado Pago
 ```
-booted (time: 26ms)
-```
-
-Isso indica que a função em si é rápida, mas o tempo de boot inicial pode variar. Não há alteração de código que resolva isso diretamente - é uma característica da infraestrutura serverless.
-
----
-
-## Benefícios
-
-1. **Correção imediata**: O pagamento via Mercado Pago funcionará corretamente
-2. **Consistência**: Ambas as funções de pagamento usarão o mesmo valor `'link'`
-3. **Sem breaking changes**: Não afeta registros existentes
 
 ---
 
 ## Arquivos a Modificar
 
-1. **`supabase/functions/mercadopago-create-link/index.ts`** (linha 88):
-   - Alterar `tipo_cobranca: 'foto_extra'` para `tipo_cobranca: 'link'`
+1. **`supabase/functions/mercadopago-create-link/index.ts`**:
+   - Linhas 351-360: Padronizar campos da resposta de checkout para camelCase
+   - Linhas 264-275: Padronizar campos da resposta PIX para camelCase
+   - Adicionar aliases para compatibilidade retroativa
+
+---
+
+## Benefícios
+
+1. **Correção imediata**: O checkout redirecionará corretamente
+2. **Compatibilidade retroativa**: Aliases mantêm código legado funcionando
+3. **Consistência**: Mesma estrutura de resposta entre InfinitePay e Mercado Pago
+4. **Facilidade de debug**: Campo `provedor` explícito na resposta
