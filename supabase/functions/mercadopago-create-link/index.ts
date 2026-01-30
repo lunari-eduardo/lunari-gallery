@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
           session_id: body.sessionId || null,
           valor: body.valor,
           descricao: body.descricao,
-          tipo_cobranca: 'foto_extra',
+          tipo_cobranca: 'link',
           qtd_fotos: body.qtdFotos || 0,
           status: 'pendente',
           provedor: 'mercadopago',
