@@ -490,10 +490,23 @@ export default function GalleryDetail() {
                 try {
                   const valorExtras = supabaseGallery.valorExtras || calculatedExtraTotal;
                   
-                  // Update gallery payment status
+                  // Calculate extras to credit (same logic as webhooks)
+                  const fotosIncluidas = supabaseGallery.fotosIncluidas || 0;
+                  const fotosSelecionadas = supabaseGallery.fotosSelecionadas || 0;
+                  const extrasNovas = Math.max(0, fotosSelecionadas - fotosIncluidas);
+                  
+                  // Get current credit values
+                  const extrasAtuais = supabaseGallery.totalFotosExtrasVendidas || 0;
+                  const valorAtual = supabaseGallery.valorTotalVendido || 0;
+                  
+                  // Update gallery with CREDIT SYSTEM increments (replicates webhook logic)
                   const { error } = await supabase
                     .from('galerias')
-                    .update({ status_pagamento: 'pago' })
+                    .update({ 
+                      status_pagamento: 'pago',
+                      total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+                      valor_total_vendido: valorAtual + valorExtras,
+                    })
                     .eq('id', supabaseGallery.id);
                   
                   if (error) throw error;
