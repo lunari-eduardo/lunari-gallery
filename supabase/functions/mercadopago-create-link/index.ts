@@ -269,6 +269,11 @@ Deno.serve(async (req) => {
           qr_code: paymentData.point_of_interaction?.transaction_data?.qr_code,
           qr_code_base64: paymentData.point_of_interaction?.transaction_data?.qr_code_base64,
           expiration_date: paymentData.date_of_expiration,
+          // Campos padronizados (camelCase)
+          cobrancaId: cobrancaId,
+          cobranca: { id: cobrancaId },
+          provedor: 'mercadopago',
+          // Alias para compatibilidade
           cobranca_id: cobrancaId,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -353,6 +358,13 @@ Deno.serve(async (req) => {
           success: true,
           preference_id: preferenceData.id,
           payment_method: paymentMethod || 'checkout',
+          // Campos padronizados (camelCase) - confirm-selection espera estes nomes
+          checkoutUrl: preferenceData.init_point,
+          paymentLink: preferenceData.init_point, // Alias para compatibilidade
+          cobrancaId: cobrancaId,
+          cobranca: { id: cobrancaId }, // Alias para compatibilidade
+          provedor: 'mercadopago',
+          // Campos legados (snake_case) para compatibilidade retroativa
           checkout_url: preferenceData.init_point,
           sandbox_url: preferenceData.sandbox_init_point,
           cobranca_id: cobrancaId,
