@@ -8,13 +8,17 @@ interface PaymentRedirectProps {
   provedor: 'infinitepay' | 'mercadopago' | string;
   valorTotal: number;
   onCancel?: () => void;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 
 export function PaymentRedirect({ 
   checkoutUrl, 
   provedor, 
   valorTotal,
-  onCancel 
+  onCancel,
+  themeStyles = {},
+  backgroundMode = 'light',
 }: PaymentRedirectProps) {
   const [countdown, setCountdown] = useState(3);
   const [redirected, setRedirected] = useState(false);
@@ -54,6 +58,10 @@ export function PaymentRedirect({
   };
 
   return (
+    <div 
+      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      style={themeStyles}
+    >
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="max-w-md w-full text-center space-y-8">
         {/* Provider Logo/Icon */}
@@ -118,6 +126,7 @@ export function PaymentRedirect({
           Seus dados estão protegidos.
         </p>
       </div>
+    </div>
     </div>
   );
 }

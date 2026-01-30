@@ -12,6 +12,8 @@ interface PasswordScreenProps {
   onSubmit: (password: string) => Promise<void>;
   error?: string;
   isLoading?: boolean;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 
 export function PasswordScreen({
@@ -21,6 +23,8 @@ export function PasswordScreen({
   onSubmit,
   error,
   isLoading = false,
+  themeStyles = {},
+  backgroundMode = 'light',
 }: PasswordScreenProps) {
   const [password, setPassword] = useState('');
 
@@ -32,6 +36,10 @@ export function PasswordScreen({
   };
 
   return (
+    <div 
+      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      style={themeStyles}
+    >
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="flex items-center justify-center p-4 border-b border-border/50">
@@ -114,6 +122,7 @@ export function PasswordScreen({
           </p>
         </div>
       </main>
+    </div>
     </div>
   );
 }

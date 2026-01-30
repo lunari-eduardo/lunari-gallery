@@ -19,6 +19,8 @@ interface SelectionConfirmationProps {
   isConfirming?: boolean;
   onBack: () => void;
   onConfirm: () => void;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 
 export function SelectionConfirmation({ 
@@ -33,7 +35,9 @@ export function SelectionConfirmation({
   hasPaymentProvider = false,
   isConfirming = false,
   onBack, 
-  onConfirm 
+  onConfirm,
+  themeStyles = {},
+  backgroundMode = 'light',
 }: SelectionConfirmationProps) {
   const currentDate = new Date();
   const { saleSettings } = gallery;
@@ -62,6 +66,10 @@ export function SelectionConfirmation({
   };
 
   return (
+    <div 
+      className={cn(backgroundMode === 'dark' ? 'dark' : '')}
+      style={themeStyles}
+    >
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
@@ -345,6 +353,7 @@ export function SelectionConfirmation({
           </Button>
         </div>
       </div>
+    </div>
     </div>
   );
 }
