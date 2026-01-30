@@ -367,13 +367,11 @@ Deno.serve(async (req) => {
           console.log(`💳 Payment response:`, { success: paymentData?.success, error: paymentError?.message || paymentData?.error });
 
           if (!paymentError && paymentData?.success) {
-            const checkoutUrl = integracao.provedor === 'infinitepay'
-              ? paymentData.checkoutUrl
-              : paymentData.paymentLink;
-
-            const cobrancaId = integracao.provedor === 'infinitepay'
-              ? paymentData.cobrancaId
-              : paymentData.cobranca?.id;
+            // === NORMALIZAÇÃO ROBUSTA: aceita múltiplos formatos de resposta ===
+            const checkoutUrl = paymentData.checkoutUrl || paymentData.paymentLink || paymentData.checkout_url;
+            
+            // Captura cobrancaId de múltiplos formatos possíveis
+            const cobrancaId = paymentData.cobrancaId || paymentData.cobranca?.id || paymentData.cobranca_id;
 
             paymentResponse = {
               checkoutUrl,

@@ -229,10 +229,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Se nenhum método foi especificado e só PIX está habilitado, força PIX direto
-    if (!paymentMethod && pixHabilitado && !cartaoHabilitado) {
-      console.log('📱 Apenas PIX habilitado - criando pagamento PIX direto');
-      paymentMethod = 'pix';
+    // === MUDANÇA: Não forçar PIX direto automaticamente ===
+    // Sempre criar Preference (checkout externo) a menos que PIX seja EXPLICITAMENTE solicitado
+    // A Preference vai excluir cartão automaticamente via excludedTypes se não habilitado
+    // Isso garante que o cliente sempre tenha um checkoutUrl para redirecionamento
+    if (!paymentMethod && !cartaoHabilitado && pixHabilitado) {
+      console.log('📱 Apenas PIX habilitado - criando Preference com exclusão de cartão (checkout mostrará só PIX)');
+      // NÃO seta paymentMethod = 'pix' - deixa criar Preference
     }
 
     // 6. Criar pagamento baseado no método (ou checkout genérico se não especificado)
@@ -310,7 +313,10 @@ Deno.serve(async (req) => {
 
     } else {
       // Create preference for card payment OR generic checkout (accepts both PIX and card)
-      const maxParcelas = settings?.maxParcelas || 12;
+      // Validar maxParcelas com limites seguros (1-24, default 12)
+      const rawParcelas = parseInt(String(settings?.maxParcelas)) || 12;
+      const maxParcelas = Math.min(Math.max(1, rawParcelas), 24);
+      console.log(`📊 Parcelas máximas configuradas: ${maxParcelas} (raw: ${settings?.maxParcelas})`);
       
       // Construir lista de métodos de pagamento excluídos
       const excludedTypes: { id: string }[] = [{ id: 'ticket' }]; // Sempre excluir boleto
