@@ -789,6 +789,123 @@ export default function ClientGallery() {
     .replace('{sessao}', gallery.sessionName)
     .replace('{estudio}', 'Studio Lunari');
 
+  // ✨ PRIMEIRA VERIFICAÇÃO: Galeria confirmada = modo read-only
+  // Deve vir ANTES de showWelcome para garantir que galerias confirmadas
+  // sempre mostrem apenas fotos selecionadas, independente do estado de welcome
+  if (isConfirmed && currentStep !== 'confirmation' && currentStep !== 'payment') {
+    const confirmedSelectedPhotos = localPhotos.filter(p => p.isSelected);
+    
+    return (
+      <div 
+        className={cn(
+          "min-h-screen flex flex-col bg-background text-foreground",
+          effectiveBackgroundMode === 'dark' && 'dark'
+        )}
+        style={themeStyles}
+      >
+        <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
+          <div className="flex items-center justify-center px-3 py-4">
+            {galleryResponse?.studioSettings?.studio_logo_url ? (
+              <img 
+                src={galleryResponse.studioSettings.studio_logo_url} 
+                alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
+                className="h-10 max-w-[180px] object-contain"
+              />
+            ) : (
+              <Logo size="sm" variant="gallery" />
+            )}
+          </div>
+          <div className="text-center py-2 border-t border-border/30">
+            <p className="text-sm font-medium">{gallery.sessionName}</p>
+            <p className="text-xs text-muted-foreground">Seleção confirmada</p>
+          </div>
+        </header>
+        
+        <main className="flex-1 p-4 space-y-6">
+          {/* Banner de sucesso */}
+          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Check className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-lg font-semibold text-primary">
+                Seleção Confirmada!
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Você selecionou {confirmedSelectedPhotos.length} fotos. 
+              Para alterações, entre em contato com o fotógrafo.
+            </p>
+          </div>
+
+          {/* Grid de APENAS fotos selecionadas */}
+          {confirmedSelectedPhotos.length > 0 ? (
+            <>
+              <h3 className="font-medium text-sm text-muted-foreground">
+                Suas fotos selecionadas ({confirmedSelectedPhotos.length})
+              </h3>
+              <MasonryGrid>
+                {confirmedSelectedPhotos.map((photo, index) => (
+                  <MasonryItem key={photo.id}>
+                    <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(index)}>
+                      <div className="aspect-square overflow-hidden rounded-lg">
+                        <img 
+                          src={photo.thumbnailUrl} 
+                          alt={photo.filename}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      {/* Indicador de seleção */}
+                      <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-md">
+                        <Check className="h-4 w-4 text-primary-foreground" />
+                      </div>
+                      {/* Indicador de favorito */}
+                      {photo.isFavorite && (
+                        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-destructive flex items-center justify-center shadow-md">
+                          <svg className="h-3 w-3 text-destructive-foreground fill-current" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                          </svg>
+                        </div>
+                      )}
+                      {/* Indicador de comentário */}
+                      {photo.comment && !photo.isFavorite && (
+                        <div className="absolute top-2 right-2 bg-background/90 rounded-full p-1.5 shadow-sm">
+                          <svg className="h-3 w-3 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  </MasonryItem>
+                ))}
+              </MasonryGrid>
+            </>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Nenhuma foto foi selecionada.</p>
+            </div>
+          )}
+        </main>
+
+        {/* Lightbox read-only - apenas fotos selecionadas */}
+        {lightboxIndex !== null && (
+          <Lightbox
+            photos={confirmedSelectedPhotos}
+            currentIndex={lightboxIndex}
+            watermark={gallery.settings.watermark}
+            watermarkDisplay={gallery.settings.watermarkDisplay}
+            allowComments={false}
+            allowDownload={gallery.settings.allowDownload}
+            disabled={true}
+            onClose={() => setLightboxIndex(null)}
+            onNavigate={setLightboxIndex}
+            onSelect={() => {}}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Tela de boas-vindas - apenas para galerias NÃO confirmadas
   if (showWelcome) {
     return (
       <div 
@@ -941,109 +1058,7 @@ export default function ClientGallery() {
     );
   }
 
-  // Render Confirmed Step - Read-only view of selected photos
-  if (currentStep === 'confirmed') {
-    const confirmedSelectedPhotos = localPhotos.filter(p => p.isSelected);
-    
-    return (
-      <div 
-        className={cn(
-          "min-h-screen flex flex-col bg-background text-foreground",
-          effectiveBackgroundMode === 'dark' && 'dark'
-        )}
-        style={themeStyles}
-      >
-        <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
-          <div className="flex items-center justify-center px-3 py-4">
-            {galleryResponse?.studioSettings?.studio_logo_url ? (
-              <img 
-                src={galleryResponse.studioSettings.studio_logo_url} 
-                alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-                className="h-10 max-w-[180px] object-contain"
-              />
-            ) : (
-              <Logo size="sm" variant="gallery" />
-            )}
-          </div>
-          <div className="text-center py-2 border-t border-border/30">
-            <p className="text-sm font-medium">{gallery.sessionName}</p>
-            <p className="text-xs text-muted-foreground">Seleção confirmada</p>
-          </div>
-        </header>
-        
-        <main className="flex-1 p-4 space-y-6">
-          {/* Success Banner */}
-          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Check className="h-5 w-5 text-primary" />
-              <h2 className="font-display text-lg font-semibold text-primary">
-                Seleção Confirmada!
-              </h2>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Você selecionou {confirmedSelectedPhotos.length} fotos. 
-              Para alterações, entre em contato com o fotógrafo.
-            </p>
-          </div>
-
-          {/* Selected Photos Grid - Read Only */}
-          {confirmedSelectedPhotos.length > 0 ? (
-            <>
-              <h3 className="font-medium text-sm text-muted-foreground">
-                Suas fotos selecionadas ({confirmedSelectedPhotos.length})
-              </h3>
-              <MasonryGrid>
-                {confirmedSelectedPhotos.map((photo, index) => (
-                  <MasonryItem key={photo.id}>
-                    <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(index)}>
-                      <div className="aspect-square overflow-hidden rounded-lg">
-                        <img 
-                          src={photo.thumbnailUrl} 
-                          alt={photo.filename}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                      {/* Selected indicator */}
-                      <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-md">
-                        <Check className="h-4 w-4 text-primary-foreground" />
-                      </div>
-                      {/* Comment indicator */}
-                      {photo.comment && (
-                        <div className="absolute bottom-2 right-2 bg-background/90 rounded-full p-1.5 shadow-sm">
-                          <AlertCircle className="h-3 w-3 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-                  </MasonryItem>
-                ))}
-              </MasonryGrid>
-            </>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Nenhuma foto foi selecionada.</p>
-            </div>
-          )}
-        </main>
-
-        {/* Lightbox for confirmed view - only selected photos */}
-        {lightboxIndex !== null && (
-          <Lightbox
-            photos={confirmedSelectedPhotos}
-            currentIndex={lightboxIndex}
-            watermark={gallery.settings.watermark}
-            watermarkDisplay={gallery.settings.watermarkDisplay}
-            allowComments={false}
-            allowDownload={gallery.settings.allowDownload}
-            disabled={true}
-            onClose={() => setLightboxIndex(null)}
-            onNavigate={setLightboxIndex}
-            onSelect={() => {}}
-          />
-        )}
-      </div>
-    );
-  }
+  // Bloco 'confirmed' removido - agora verificamos isConfirmed no início do render
 
   return (
     <div 
