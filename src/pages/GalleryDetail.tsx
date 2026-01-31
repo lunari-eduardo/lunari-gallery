@@ -689,7 +689,7 @@ export default function GalleryDetail() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Valor foto extra</span>
-                  <span className="font-medium">R$ {supabaseGallery.valorFotoExtra.toFixed(2)}</span>
+                  <span className="font-medium">R$ {valorUnitario.toFixed(2)}</span>
                 </div>
               </div>
             </div>
