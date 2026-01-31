@@ -79,25 +79,25 @@ export function PhotoCard({
         <div className="absolute inset-0 bg-muted animate-pulse" />
       )}
 
-      {/* Overlay - appears only on hover */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100">
-        {/* Selection indicator */}
-        <button
-          onClick={(e) => { e.stopPropagation(); if (!disabled) onSelect(); }}
-          disabled={disabled}
-          className={cn(
-            'absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200',
-            isSelected 
-              ? 'bg-primary border-primary text-primary-foreground' 
-              : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40',
-            disabled && 'pointer-events-none'
-          )}
-        >
-          {isSelected && <Check className="h-4 w-4" />}
-        </button>
+      {/* Selection button - always visible when selected, otherwise on hover only */}
+      <button
+        onClick={(e) => { e.stopPropagation(); if (!disabled) onSelect(); }}
+        disabled={disabled}
+        className={cn(
+          'absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
+          isSelected 
+            ? 'bg-primary border-primary text-primary-foreground' 
+            : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 opacity-0 group-hover:opacity-100',
+          disabled && 'pointer-events-none'
+        )}
+      >
+        {isSelected && <Check className="h-4 w-4" />}
+      </button>
 
+      {/* Overlay - appears only on hover */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none">
         {/* Actions */}
-        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto">
           <span className="text-white/90 text-xs font-medium truncate max-w-[60%]">
             {photo.originalFilename || photo.filename}
           </span>
@@ -129,13 +129,6 @@ export function PhotoCard({
           </div>
         </div>
       </div>
-
-      {/* Selection indicator - always visible when selected */}
-      {isSelected && (
-        <div className="absolute top-3 left-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center z-10">
-          <Check className="h-3 w-3 text-primary-foreground" />
-        </div>
-      )}
 
       {/* Favorite indicator - always visible when favorited */}
       {photo.isFavorite && (
