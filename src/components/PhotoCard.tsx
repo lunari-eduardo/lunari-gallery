@@ -42,7 +42,6 @@ export function PhotoCard({
     <div 
       className={cn(
         'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300',
-        isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
         disabled && 'opacity-60 cursor-not-allowed'
       )}
       style={{ aspectRatio: `${photo.width}/${photo.height}` }}
@@ -131,16 +130,26 @@ export function PhotoCard({
         </div>
       </div>
 
+      {/* Selection indicator - always visible when selected */}
+      {isSelected && (
+        <div className="absolute top-3 left-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center z-10">
+          <Check className="h-3 w-3 text-primary-foreground" />
+        </div>
+      )}
+
       {/* Favorite indicator - always visible when favorited */}
       {photo.isFavorite && (
-        <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-red-500 flex items-center justify-center">
+        <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-red-500 flex items-center justify-center z-10">
           <Heart className="h-3 w-3 text-white fill-current" />
         </div>
       )}
 
-      {/* Comment indicator - only show if not favorited (to avoid overlap) */}
-      {photo.comment && !photo.isFavorite && (
-        <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+      {/* Comment indicator - positioned based on favorite presence */}
+      {photo.comment && (
+        <div className={cn(
+          "absolute top-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center z-10",
+          photo.isFavorite ? "right-11" : "right-3"
+        )}>
           <MessageSquare className="h-3 w-3 text-primary-foreground" />
         </div>
       )}
