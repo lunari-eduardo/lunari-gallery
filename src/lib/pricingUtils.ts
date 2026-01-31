@@ -257,10 +257,35 @@ export function calcularPrecoProgressivoComCredito(
   // Normalize fallback value
   const fallbackNormalizado = normalizarValor(valorFotoExtraFixo);
   
-  // Default result for no new extras
+  // Default result for no new extras - but still show correct unit price for display
   if (extrasNovas <= 0 || totalExtras <= 0) {
+    // Calculate unit price for display even when there's nothing new to charge
+    // Use the average price paid (valorJaPago / extrasPagasTotal) for accuracy
+    let displayUnitPrice = fallbackNormalizado;
+    
+    if (extrasPagasTotal > 0 && valorJaPago > 0) {
+      // Best approach: use actual average price paid
+      displayUnitPrice = valorJaPago / extrasPagasTotal;
+    } else if (regrasCongeladas?.precificacaoFotoExtra) {
+      // Fallback: look up the tier price for previously paid quantity
+      const regras = regrasCongeladas.precificacaoFotoExtra;
+      const qtdParaFaixa = extrasPagasTotal > 0 ? extrasPagasTotal : 1;
+      
+      if (regras.modelo === 'global' && regras.tabelaGlobal?.faixas) {
+        const faixa = encontrarFaixaPreco(qtdParaFaixa, regras.tabelaGlobal.faixas);
+        if (faixa?.valor) displayUnitPrice = normalizarValor(faixa.valor);
+      } else if (regras.modelo === 'categoria' && regras.tabelaCategoria?.faixas && !regras.tabelaCategoria.usar_valor_fixo_pacote) {
+        const faixa = encontrarFaixaPreco(qtdParaFaixa, regras.tabelaCategoria.faixas);
+        if (faixa?.valor) displayUnitPrice = normalizarValor(faixa.valor);
+      } else {
+        // Fixed pricing model
+        const valorPacote = regrasCongeladas.pacote?.valorFotoExtra;
+        if (valorPacote && valorPacote > 0) displayUnitPrice = normalizarValor(valorPacote);
+      }
+    }
+    
     return {
-      valorUnitario: 0,
+      valorUnitario: displayUnitPrice,  // Show actual average price or tier price
       valorACobrar: 0,
       valorTotalIdeal: valorJaPago,
       economia: 0,

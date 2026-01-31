@@ -34,6 +34,40 @@ import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaix
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemePreviewCard } from '@/components/ThemePreviewCard';
+
+// Helper to extract the initial extra photo price from frozen rules
+// Handles progressive pricing by getting the first tier price
+function getInitialExtraPrice(regras: RegrasCongeladas | null): number {
+  if (!regras) return 0;
+  
+  const precificacao = regras.precificacaoFotoExtra;
+  
+  // Fixed model: use package price
+  if (!precificacao || precificacao.modelo === 'fixo') {
+    return regras.pacote?.valorFotoExtra || 0;
+  }
+  
+  // Global model: get first tier price
+  if (precificacao.modelo === 'global' && precificacao.tabelaGlobal?.faixas?.length) {
+    const sortedFaixas = [...precificacao.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
+    return sortedFaixas[0]?.valor || regras.pacote?.valorFotoExtra || 0;
+  }
+  
+  // Category model: check if should use fixed price
+  if (precificacao.modelo === 'categoria') {
+    if (precificacao.tabelaCategoria?.usar_valor_fixo_pacote) {
+      return regras.pacote?.valorFotoExtra || 0;
+    }
+    if (precificacao.tabelaCategoria?.faixas?.length) {
+      const sortedFaixas = [...precificacao.tabelaCategoria.faixas].sort((a, b) => a.min - b.min);
+      return sortedFaixas[0]?.valor || regras.pacote?.valorFotoExtra || 0;
+    }
+  }
+  
+  // Fallback
+  return regras.pacote?.valorFotoExtra || 0;
+}
+
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -499,7 +533,7 @@ export default function GalleryCreate() {
               // Use same pricing logic as creation
               valorFotoExtra: saleMode !== 'no_sale' 
                 ? (isAssistedMode && regrasCongeladas && !overridePricing 
-                    ? regrasCongeladas.pacote?.valorFotoExtra || 0
+                    ? getInitialExtraPrice(regrasCongeladas)
                     : fixedPrice)
                 : 0,
             }
@@ -554,7 +588,11 @@ export default function GalleryCreate() {
             clienteNome: selectedClient?.name,
             clienteEmail: selectedClient?.email,
             fotosIncluidas: includedPhotos,
-            valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+            valorFotoExtra: saleMode !== 'no_sale' 
+              ? (isAssistedMode && regrasCongeladas && !overridePricing 
+                  ? getInitialExtraPrice(regrasCongeladas) 
+                  : fixedPrice)
+              : 0,
             prazoSelecaoDias: customDays,
             permissao: galleryPermission,
             mensagemBoasVindas: welcomeMessage,
@@ -586,7 +624,11 @@ export default function GalleryCreate() {
           nomeSessao: sessionName || 'Rascunho',
           nomePacote: packageName || undefined,
           fotosIncluidas: includedPhotos,
-          valorFotoExtra: saleMode !== 'no_sale' ? fixedPrice : 0,
+          valorFotoExtra: saleMode !== 'no_sale' 
+            ? (isAssistedMode && regrasCongeladas && !overridePricing 
+                ? getInitialExtraPrice(regrasCongeladas) 
+                : fixedPrice)
+            : 0,
           prazoSelecaoDias: customDays,
           permissao: galleryPermission,
           mensagemBoasVindas: welcomeMessage,
