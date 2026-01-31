@@ -1,135 +1,165 @@
 
-# Correção: Valores Zerados no GalleryDetail e "0" Solto
+# Correção: Comentário não aceita espaço e botões com cor branca
 
 ## Problemas Identificados
 
-### Problema 1: "0" Misterioso no Resumo da Seleção
-Na linha 174 de `SelectionSummary.tsx`:
-```typescript
-{economia && economia > 0 && (...)}
-```
-Quando `economia = 0`, o operador `&&` em JavaScript retorna `0` (falsy value), e React renderiza esse `0` como texto na tela. Este é um bug clássico de React.
+### Problema 1: Espaço dispara seleção em vez de digitar
+No arquivo `Lightbox.tsx` (linhas 125-133), o handler de teclado captura a tecla de espaço globalmente:
 
-### Problema 2: "Valor adicional: R$ 0.00" na Mensagem
-Na linha 190, a mensagem sempre mostra `displayTotal`:
 ```typescript
-`Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
+const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  // ...
+  if (e.key === ' ' && !disabled) {
+    e.preventDefault();  // ← Bloqueia o espaço
+    onSelect(currentPhoto.id);  // ← Seleciona a foto
+  }
+}, [...]);
 ```
-Quando todas as extras já foram pagas (`extrasACobrar = 0`), `displayTotal = 0`. A mensagem deveria mostrar o valor total já pago, não o valor a pagar.
 
-### Problema 3: "Valor foto extra: R$ 0.00" na Aba Detalhes
-Na linha 692 de `GalleryDetail.tsx`:
+Este listener é adicionado ao `document` (linha 137), então intercepta TODOS os eventos de teclado, incluindo quando o usuário está digitando no textarea de comentário.
+
+**Solução**: Verificar se o foco está em um elemento de input/textarea antes de processar o atalho de espaço.
+
+### Problema 2: Botões com texto branco em fundo branco
+Nas linhas 405-408 e 420-424, os botões não selecionados usam classes forçando cor branca:
+
 ```typescript
-R$ {supabaseGallery.valorFotoExtra.toFixed(2)}
+className={cn(
+  !isMobile && 'gap-2',
+  !currentPhoto.isSelected && 'text-white border-white/40 hover:bg-white/10'  // ← Força branco
+)}
 ```
-O campo `valor_foto_extra` no banco está zerado porque a galeria usa precificação progressiva (modelo categoria). Deveria usar o `valorUnitario` calculado.
 
-### Dados do Banco (Galeria "Teste"):
-- `valor_foto_extra: 0` (campo DB, incorreto para exibição)
-- `valor_total_vendido: 12` (R$ 12,00 já pagos)
-- `total_fotos_extras_vendidas: 4` (4 fotos extras pagas)
-- Tabela de preços: [1-2: R$5, 3-4: R$3, 5+: R$2]
-- Preço médio pago: 12 / 4 = R$ 3,00
+Isso não considera o tema da galeria do cliente, que pode ter fundo claro.
+
+**Solução**: Usar cores que respeitam o tema (como `text-foreground`) ou aplicar estilos específicos apenas no contexto do lightbox escuro (que tem `bg-black/95`).
+
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/SelectionSummary.tsx` | 1. Corrigir condição de `economia` para não renderizar "0"<br>2. Mostrar valor já pago na mensagem quando `displayTotal = 0` |
-| `src/pages/GalleryDetail.tsx` | Usar `valorUnitario` calculado em vez do valor zerado do banco |
+| `src/components/Lightbox.tsx` | 1. Ignorar atalho de espaço quando foco está em input/textarea<br>2. Corrigir cores dos botões para contexto lightbox |
+
+---
 
 ## Mudanças Detalhadas
 
-### 1. SelectionSummary.tsx - Linha 174
+### 1. Corrigir handler de teclado (linhas 125-133)
 
-Corrigir a condição para usar comparação explícita:
-
-```typescript
-// ANTES:
-{economia && economia > 0 && (
-
-// DEPOIS:
-{economia !== undefined && economia > 0 && (
-```
-
-### 2. SelectionSummary.tsx - Linhas 184-193
-
-Ajustar a mensagem para mostrar o valor correto baseado no contexto:
+Adicionar verificação para não processar espaço quando o usuário está digitando:
 
 ```typescript
 // ANTES:
-{isOverLimit && gallery.settings.allowExtraPhotos && (
-  <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/10 text-sm">
-    <AlertCircle className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-    <p className="text-primary">
-      {isClient 
-        ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do pacote. O valor adicional será cobrado posteriormente.`
-        : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
-      }
-    </p>
-  </div>
-)}
+const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  if (e.key === 'Escape') onClose();
+  if (e.key === 'ArrowLeft' && currentIndex > 0) onNavigate(currentIndex - 1);
+  if (e.key === 'ArrowRight' && currentIndex < photos.length - 1) onNavigate(currentIndex + 1);
+  if (e.key === ' ' && !disabled) {
+    e.preventDefault();
+    onSelect(currentPhoto.id);
+  }
+}, [currentIndex, photos.length, currentPhoto?.id, disabled, onClose, onNavigate, onSelect]);
 
 // DEPOIS:
-{isOverLimit && gallery.settings.allowExtraPhotos && (
-  <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/10 text-sm">
-    <AlertCircle className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-    <p className="text-primary">
-      {isClient 
-        ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do pacote. O valor adicional será cobrado posteriormente.`
-        : displayTotal > 0
-          ? `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
-          : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor já pago: R$ ${valorJaPago.toFixed(2)}`
-      }
-    </p>
-  </div>
-)}
+const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  // Ignore keyboard shortcuts when user is typing in an input or textarea
+  const activeElement = document.activeElement;
+  const isTyping = activeElement?.tagName === 'INPUT' || 
+                   activeElement?.tagName === 'TEXTAREA' ||
+                   activeElement?.getAttribute('contenteditable') === 'true';
+  
+  if (e.key === 'Escape') onClose();
+  
+  // Only process navigation and selection shortcuts when not typing
+  if (!isTyping) {
+    if (e.key === 'ArrowLeft' && currentIndex > 0) onNavigate(currentIndex - 1);
+    if (e.key === 'ArrowRight' && currentIndex < photos.length - 1) onNavigate(currentIndex + 1);
+    if (e.key === ' ' && !disabled) {
+      e.preventDefault();
+      onSelect(currentPhoto.id);
+    }
+  }
+}, [currentIndex, photos.length, currentPhoto?.id, disabled, onClose, onNavigate, onSelect]);
 ```
 
-### 3. GalleryDetail.tsx - Linhas 690-693
+### 2. Corrigir cores dos botões (linhas 399-461)
 
-Substituir o valor zerado do banco pelo valor calculado:
+Como o lightbox SEMPRE tem fundo escuro (`bg-black/95`), as cores brancas são corretas neste contexto. Porém, o problema é que a variante `outline` do Button inclui `bg-background`, que herda a cor de fundo do tema do cliente.
+
+Solução: Garantir que os botões do lightbox tenham fundo transparente/escuro explícito:
 
 ```typescript
-// ANTES:
-<div className="flex justify-between">
-  <span className="text-muted-foreground">Valor foto extra</span>
-  <span className="font-medium">R$ {supabaseGallery.valorFotoExtra.toFixed(2)}</span>
-</div>
+// Botão Selecionar (linha 400-412)
+<Button
+  onClick={() => !disabled && onSelect(currentPhoto.id)}
+  disabled={disabled}
+  variant={currentPhoto.isSelected ? 'terracotta' : 'outline'}
+  size={isMobile ? 'icon' : 'default'}
+  className={cn(
+    !isMobile && 'gap-2',
+    !currentPhoto.isSelected && 'bg-transparent text-white border-white/40 hover:bg-white/10 hover:text-white'
+  )}
+>
 
-// DEPOIS:
-<div className="flex justify-between">
-  <span className="text-muted-foreground">Valor foto extra</span>
-  <span className="font-medium">R$ {valorUnitario.toFixed(2)}</span>
-</div>
+// Botão Favoritar (linha 414-430)
+<Button
+  onClick={() => !disabled && onFavorite(currentPhoto.id)}
+  disabled={disabled}
+  variant="outline"
+  size={isMobile ? 'icon' : 'default'}
+  className={cn(
+    !isMobile && 'gap-2',
+    'bg-transparent',
+    currentPhoto.isFavorite 
+      ? 'text-red-500 border-red-500/40 hover:bg-red-500/10' 
+      : 'text-white border-white/40 hover:bg-white/10 hover:text-white'
+  )}
+>
+
+// Botão Comentar (linha 432-446)
+<Button
+  onClick={() => setShowComment(!showComment)}
+  variant="outline"
+  size={isMobile ? 'icon' : 'default'}
+  className={cn(
+    !isMobile && 'gap-2',
+    'bg-transparent',
+    currentPhoto.comment 
+      ? 'text-primary border-primary hover:bg-primary/10' 
+      : 'text-white border-white/40 hover:bg-white/10 hover:text-white'
+  )}
+>
+
+// Botão Baixar (linha 448-461)
+<Button
+  onClick={handleDownload}
+  variant="outline"
+  size={isMobile ? 'icon' : 'default'}
+  className={cn(
+    !isMobile && 'gap-2',
+    'bg-transparent text-white border-white/40 hover:bg-white/10 hover:text-white'
+  )}
+>
 ```
 
-Nota: O `valorUnitario` já é calculado na linha 351 usando `calcularPrecoProgressivoComCredito` e está disponível no escopo.
+---
 
 ## Resultado Esperado
 
-| Local | Antes | Depois |
-|-------|-------|--------|
-| Resumo - abaixo de "Valor a pagar" | "0" solto | Nada (removido) |
-| Resumo - mensagem amarela | "Valor adicional: R$ 0.00" | "Valor já pago: R$ 12.00" |
-| Detalhes - "Valor foto extra" | R$ 0.00 | R$ 3.00 (média paga) |
+| Problema | Antes | Depois |
+|----------|-------|--------|
+| Digitar espaço no comentário | Seleciona/deseleciona foto | Adiciona espaço no texto |
+| Setas enquanto digita | Navega entre fotos | Não interfere na digitação |
+| Botões não selecionados | Texto branco invisível em fundo branco | Texto branco visível em fundo escuro do lightbox |
 
-## Fluxo de Valores Corrigido
+---
 
-```text
-Galeria "Teste":
-├── valor_foto_extra (banco) = 0 (ignorado para exibição)
-├── valorTotalVendido (banco) = 12
-├── totalFotosExtrasVendidas (banco) = 4
-│
-└── calcularPrecoProgressivoComCredito():
-    ├── extrasNovas = 0 (nada novo a cobrar)
-    ├── extrasPagasTotal = 4
-    ├── valorJaPago = 12
-    │
-    └── Retorna:
-        ├── valorUnitario = 12 / 4 = R$ 3.00 ← Exibido em Detalhes
-        ├── valorACobrar = 0 ← "Valor a pagar"
-        ├── valorTotalIdeal = 12
-        └── economia = 0 ← NÃO renderiza o "0"
-```
+## Fluxo de Teste
+
+1. Abrir lightbox de uma foto
+2. Clicar em "Comentar" para abrir o painel
+3. Digitar texto com espaços → espaços devem aparecer normalmente
+4. Usar setas do teclado dentro do textarea → não deve navegar entre fotos
+5. Verificar que os botões "Selecionar", "Favoritar", "Comentar" são visíveis e legíveis
