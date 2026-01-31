@@ -171,7 +171,7 @@ export function SelectionSummary({
             </div>
             
             {/* Show savings/discount indicator when progressive pricing applied */}
-            {economia && economia > 0 && (
+            {economia !== undefined && economia > 0 && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-accent/20 text-accent-foreground text-sm">
                 <TrendingDown className="h-4 w-4 flex-shrink-0" />
                 <span>Economia: R$ {economia.toFixed(2)}</span>
@@ -187,7 +187,9 @@ export function SelectionSummary({
           <p className="text-primary">
             {isClient 
               ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do pacote. O valor adicional será cobrado posteriormente.`
-              : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
+              : displayTotal > 0
+                ? `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
+                : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor já pago: R$ ${valorJaPago.toFixed(2)}`
             }
           </p>
         </div>
