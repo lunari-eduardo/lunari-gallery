@@ -26,6 +26,7 @@ interface PhotoCodesModalProps {
   onOpenChange: (open: boolean) => void;
   photos: GalleryPhoto[];
   clientName: string;
+  filter?: 'all' | 'favorites';
 }
 
 const formatLabels: Record<CodeFormat, string> = {
@@ -39,12 +40,17 @@ export function PhotoCodesModal({
   open, 
   onOpenChange, 
   photos,
-  clientName 
+  clientName,
+  filter = 'all'
 }: PhotoCodesModalProps) {
   const [format, setFormat] = useState<CodeFormat>('windows');
   const [copied, setCopied] = useState(false);
 
-  const selectedPhotos = photos.filter(p => p.isSelected);
+  const selectedPhotos = photos.filter(p => {
+    if (!p.isSelected) return false;
+    if (filter === 'favorites') return p.isFavorite;
+    return true;
+  });
   
   const generateCode = (): string => {
     if (selectedPhotos.length === 0) return 'Nenhuma foto selecionada';

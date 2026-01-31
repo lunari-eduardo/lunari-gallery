@@ -6,6 +6,7 @@ import {
   ArrowLeft, 
   Send, 
   Eye,
+  EyeOff,
   FileText,
   User,
   Calendar,
@@ -15,7 +16,9 @@ import {
   Pencil,
   Check,
   Clock,
-  RefreshCw
+  RefreshCw,
+  MessageSquare,
+  Heart
 } from 'lucide-react';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
@@ -49,6 +52,8 @@ export default function GalleryDetail() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
+  const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
   
   // Get settings for email templates
   const { settings } = useSettings();
@@ -259,6 +264,8 @@ export default function GalleryDetail() {
   }
 
   const selectedPhotos = transformedPhotos.filter(p => p.isSelected);
+  const favoritePhotos = selectedPhotos.filter(p => p.isFavorite);
+  const photosWithComments = selectedPhotos.filter(p => p.comment);
   
   // Use public_token for client link if available, otherwise show warning
   const hasPublicToken = !!supabaseGallery.publicToken;
@@ -588,24 +595,100 @@ export default function GalleryDetail() {
 
         <TabsContent value="selection" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              {selectedPhotos.length > 0 ? (
-                <MasonryGrid>
-                  {selectedPhotos.map((photo, index) => (
-                    <MasonryItem key={photo.id}>
-                      <PhotoCard
-                        photo={photo}
-                        watermark={watermark}
-                        isSelected={true}
-                        allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
-                        disabled
-                        onSelect={() => {}}
-                        onViewFullscreen={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
-                      />
-                    </MasonryItem>
+            <div className="lg:col-span-2 space-y-4">
+              {/* Resumo com badges */}
+              <div className="lunari-card p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-lg font-medium">
+                      {selectedPhotos.length} foto{selectedPhotos.length !== 1 ? 's' : ''} selecionada{selectedPhotos.length !== 1 ? 's' : ''}
+                    </span>
+                    
+                    {/* Badges */}
+                    <div className="flex items-center gap-2">
+                      {favoritePhotos.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium">
+                          <Heart className="h-3 w-3 fill-current" />
+                          {favoritePhotos.length} favorita{favoritePhotos.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      
+                      {photosWithComments.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                          <MessageSquare className="h-3 w-3" />
+                          {photosWithComments.length} comentário{photosWithComments.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {selectedPhotos.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowSelectedPhotos(!showSelectedPhotos)}
+                    >
+                      {showSelectedPhotos ? (
+                        <>
+                          <EyeOff className="h-4 w-4 mr-2" />
+                          Ocultar fotos
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Ver fotos selecionadas
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Lista vertical de fotos (expansível) */}
+              {showSelectedPhotos && selectedPhotos.length > 0 && (
+                <div className="lunari-card divide-y divide-border">
+                  {selectedPhotos.map((photo) => (
+                    <div 
+                      key={photo.id} 
+                      className="flex items-start gap-4 p-3 hover:bg-muted/50 transition-colors"
+                    >
+                      {/* Thumbnail 1:1 */}
+                      <div 
+                        className="w-16 h-16 rounded overflow-hidden flex-shrink-0 cursor-pointer"
+                        onClick={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
+                      >
+                        <img 
+                          src={photo.thumbnailUrl} 
+                          alt={photo.filename}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm truncate">
+                            {photo.originalFilename || photo.filename}
+                          </span>
+                          {photo.isFavorite && (
+                            <Heart className="h-4 w-4 text-red-500 fill-current flex-shrink-0" />
+                          )}
+                        </div>
+                        
+                        {photo.comment && (
+                          <div className="mt-1 text-sm text-muted-foreground flex items-start gap-2">
+                            <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            <span className="line-clamp-2">{photo.comment}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ))}
-                </MasonryGrid>
-              ) : (
+                </div>
+              )}
+              
+              {/* Empty state */}
+              {selectedPhotos.length === 0 && (
                 <div className="text-center py-16 lunari-card">
                   <Image className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">
@@ -624,7 +707,7 @@ export default function GalleryDetail() {
                 valorJaPago={valorJaPago}
               />
 
-              {/* Payment Status Card in Selection tab - use aggregated totals */}
+              {/* Payment Status Card in Selection tab */}
               {supabaseGallery.statusPagamento && supabaseGallery.statusPagamento !== 'sem_vendas' && (
                 <div className="mt-4">
                   <PaymentStatusCard
@@ -648,15 +731,35 @@ export default function GalleryDetail() {
                 </div>
               )}
 
+              {/* Botão de códigos com filtro de favoritas */}
               {selectedPhotos.length > 0 && (
-                <Button 
-                  variant="terracotta" 
-                  className="w-full mt-4"
-                  onClick={() => setIsCodesModalOpen(true)}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Códigos para separação das fotos
-                </Button>
+                <div className="mt-4 space-y-2">
+                  <Button 
+                    variant="terracotta" 
+                    className="w-full"
+                    onClick={() => {
+                      setCodesFilter('all');
+                      setIsCodesModalOpen(true);
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Códigos para separação das fotos
+                  </Button>
+                  
+                  {favoritePhotos.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        setCodesFilter('favorites');
+                        setIsCodesModalOpen(true);
+                      }}
+                    >
+                      <Heart className="h-4 w-4 mr-2" />
+                      Códigos só das favoritas ({favoritePhotos.length})
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -804,6 +907,7 @@ export default function GalleryDetail() {
         onOpenChange={setIsCodesModalOpen}
         photos={transformedPhotos}
         clientName={supabaseGallery.clienteNome || 'Cliente'}
+        filter={codesFilter}
       />
 
       {/* Send Gallery Modal */}
