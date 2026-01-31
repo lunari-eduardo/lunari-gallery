@@ -123,12 +123,22 @@ export function Lightbox({
   }, [currentIndex, currentPhoto?.comment]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ignore keyboard shortcuts when user is typing in an input or textarea
+    const activeElement = document.activeElement;
+    const isTyping = activeElement?.tagName === 'INPUT' || 
+                     activeElement?.tagName === 'TEXTAREA' ||
+                     activeElement?.getAttribute('contenteditable') === 'true';
+    
     if (e.key === 'Escape') onClose();
-    if (e.key === 'ArrowLeft' && currentIndex > 0) onNavigate(currentIndex - 1);
-    if (e.key === 'ArrowRight' && currentIndex < photos.length - 1) onNavigate(currentIndex + 1);
-    if (e.key === ' ' && !disabled) {
-      e.preventDefault();
-      onSelect(currentPhoto.id);
+    
+    // Only process navigation and selection shortcuts when not typing
+    if (!isTyping) {
+      if (e.key === 'ArrowLeft' && currentIndex > 0) onNavigate(currentIndex - 1);
+      if (e.key === 'ArrowRight' && currentIndex < photos.length - 1) onNavigate(currentIndex + 1);
+      if (e.key === ' ' && !disabled) {
+        e.preventDefault();
+        onSelect(currentPhoto.id);
+      }
     }
   }, [currentIndex, photos.length, currentPhoto?.id, disabled, onClose, onNavigate, onSelect]);
 
@@ -404,7 +414,7 @@ export function Lightbox({
             size={isMobile ? 'icon' : 'default'}
             className={cn(
               !isMobile && 'gap-2',
-              !currentPhoto.isSelected && 'text-white border-white/40 hover:bg-white/10'
+              !currentPhoto.isSelected && 'bg-transparent text-white border-white/40 hover:bg-white/10 hover:text-white'
             )}
           >
             <Check className="h-4 w-4" />
@@ -419,9 +429,10 @@ export function Lightbox({
               size={isMobile ? 'icon' : 'default'}
               className={cn(
                 !isMobile && 'gap-2',
+                'bg-transparent',
                 currentPhoto.isFavorite 
-                  ? 'text-red-500 border-red-500/40' 
-                  : 'text-white border-white/40 hover:bg-white/10'
+                  ? 'text-red-500 border-red-500/40 hover:bg-red-500/10' 
+                  : 'text-white border-white/40 hover:bg-white/10 hover:text-white'
               )}
             >
               <Heart className={cn("h-4 w-4", currentPhoto.isFavorite && "fill-current")} />
@@ -436,8 +447,10 @@ export function Lightbox({
               size={isMobile ? 'icon' : 'default'}
               className={cn(
                 !isMobile && 'gap-2',
-                'text-white border-white/40 hover:bg-white/10',
-                currentPhoto.comment && 'text-primary border-primary'
+                'bg-transparent',
+                currentPhoto.comment 
+                  ? 'text-primary border-primary hover:bg-primary/10' 
+                  : 'text-white border-white/40 hover:bg-white/10 hover:text-white'
               )}
             >
               <MessageSquare className="h-4 w-4" />
@@ -452,7 +465,7 @@ export function Lightbox({
               size={isMobile ? 'icon' : 'default'}
               className={cn(
                 !isMobile && 'gap-2',
-                'text-white border-white/40 hover:bg-white/10'
+                'bg-transparent text-white border-white/40 hover:bg-white/10 hover:text-white'
               )}
             >
               <Download className="h-4 w-4" />
