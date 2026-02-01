@@ -1,262 +1,190 @@
 
-
-# Corrigir Precificação Progressiva para Galerias Standalone
+# Corrigir Consistência do Tema (Claro/Escuro) na Galeria do Cliente
 
 ## Problema Identificado
 
-Quando o fotógrafo cria uma galeria **sem integração com o Gestão** e configura **"Pacotes com descontos"** (precificação progressiva), as faixas de preço configuradas **não são aplicadas** em nenhum momento:
+Quando o fotógrafo seleciona o modo "Escuro" para a galeria do cliente, a tela de senha aparece corretamente em modo escuro, mas as demais telas (boas-vindas, galeria, confirmação, pagamento) ficam em modo claro.
 
-| Ponto de Falha | Descrição |
-|----------------|-----------|
-| **Cliente (seleção)** | O preço exibido usa apenas `gallery.extraPhotoPrice` fixo, ignorando as faixas |
-| **Confirmação (Edge Function)** | O cálculo no `confirm-selection` também ignora as faixas para galerias sem `session_id` |
-| **Fotógrafo (detalhes)** | O resumo financeiro mostra apenas o preço fixo |
-
-### Causa Raiz
-
-O sistema de precificação foi desenhado para usar `regrasCongeladas` (do Gestão), mas:
+### Fluxo de Dados Atual (Quebrado)
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  FLUXO ATUAL - DESCONECTADO                                         │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  GalleryCreate.tsx                    ClientGallery.tsx             │
-│  ┌─────────────────────┐              ┌─────────────────────┐       │
-│  │ discountPackages[] │              │ calcularPreco...    │       │
-│  │ (salvo em          │     ✗        │ (só lê              │       │
-│  │  configuracoes.    │ ──────────►  │  regrasCongeladas)  │       │
-│  │  saleSettings)     │              │                     │       │
-│  └─────────────────────┘              └─────────────────────┘       │
-│                                                                     │
-│  As faixas são SALVAS mas NUNCA LIDAS para precificação!           │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  CRIAÇÃO DA GALERIA                                                   │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  GalleryCreate.tsx                    Banco de Dados                  │
+│  ┌─────────────────────┐              ┌─────────────────────┐         │
+│  │ clientMode: 'dark'  │    ─────►    │ configuracoes: {    │         │
+│  │ themeId: undefined  │              │   clientMode: 'dark'│         │
+│  │                     │              │   themeId: null     │         │
+│  └─────────────────────┘              └─────────────────────┘         │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  EDGE FUNCTION (gallery-access)                                       │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Retorno da Edge Function:                                            │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │ {                                                               │  │
+│  │   success: true,                                                │  │
+│  │   gallery: {...},                                               │  │
+│  │   theme: null,          ← Só é populado se themeId existe!      │  │
+│  │   clientMode: 'dark'    ← Existe, mas é ignorado no frontend    │  │
+│  │ }                                                               │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  FRONTEND (ClientGallery.tsx)                                         │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  themeStyles = useMemo(() => {                                        │
+│    const theme = galleryResponse?.theme;                              │
+│    if (!theme) return {};   ← PROBLEMA: Retorna vazio!               │
+│    ...                                                                │
+│  });                                                                  │
+│                                                                       │
+│  effectiveBackgroundMode = galleryResponse?.theme?.backgroundMode     │
+│                            ↑ PROBLEMA: Ignora clientMode!             │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-### Dados Salvos vs Dados Usados
+### Por que a Tela de Senha Funciona?
 
-| Campo | Onde é salvo | Onde é usado |
-|-------|--------------|--------------|
-| `saleSettings.discountPackages[]` | `galerias.configuracoes` | ❌ Nunca lido para cálculo |
-| `saleSettings.pricingModel` = 'packages' | `galerias.configuracoes` | ❌ Ignorado |
-| `regrasCongeladas.precificacaoFotoExtra.faixas[]` | `galerias.regras_congeladas` | ✅ Usado por `calcularPrecoProgressivoComCredito()` |
+A tela de senha funciona por acidente: quando `requiresPassword` é `true`, a Edge Function retorna um subset de dados e o componente `PasswordScreen` ainda não tem acesso ao `galleryResponse?.theme` completo. O tema é aplicado corretamente porque usa lógica diferente.
+
+**Porém**, analisando melhor o código atual, a tela de senha também deveria estar falhando - ela recebe `galleryResponse?.theme?.backgroundMode || 'light'`. A inconsistência visual nos prints sugere que o tema está funcionando na senha por algum estado intermediário.
 
 ---
 
 ## Solução Proposta
 
-### Estratégia: Transformar `discountPackages` em `regrasCongeladas`
+### Estratégia: Unificar `clientMode` com `theme` na Edge Function
 
-Em vez de modificar a função `calcularPrecoProgressivoComCredito()` (que é usada em vários lugares e Edge Functions), vamos **gerar automaticamente** um objeto `regrasCongeladas` quando o fotógrafo configura faixas de desconto em modo standalone.
+Quando não há tema personalizado (`themeId`), a Edge Function deve construir um objeto `theme` baseado apenas no `clientMode`. Isso garante que o frontend sempre receba um `theme` consistente.
 
-Isso mantém o sistema unificado:
+### Implementação
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  FLUXO PROPOSTO - UNIFICADO                                         │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  GalleryCreate.tsx                    ClientGallery.tsx             │
-│  ┌─────────────────────┐              ┌─────────────────────┐       │
-│  │ discountPackages[] │              │ calcularPreco...    │       │
-│  │     ↓               │              │ (lê                 │       │
-│  │ buildRegras...()   │     ✓        │  regrasCongeladas)  │       │
-│  │     ↓               │ ──────────►  │                     │       │
-│  │ regrasCongeladas   │              │ ✓ Funciona!         │       │
-│  └─────────────────────┘              └─────────────────────┘       │
-│                                                                     │
-│  Transforma faixas manuais para o formato padrão                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
+#### 1. Modificar Edge Function `gallery-access`
 
----
+**Arquivo:** `supabase/functions/gallery-access/index.ts`
 
-## Implementação Detalhada
-
-### 1. Criar Função de Transformação
-
-**Arquivo:** `src/lib/pricingUtils.ts`
-
-Adicionar função para converter `discountPackages` (formato standalone) para `RegrasCongeladas`:
+Criar um objeto `theme` mesmo quando não há `themeId`:
 
 ```typescript
-/**
- * Builds RegrasCongeladas from standalone discount packages
- * Used when photographer configures progressive pricing without Gestão integration
- */
-export function buildRegrasFromDiscountPackages(
-  discountPackages: DiscountPackage[],
-  fixedPrice: number,
-  includedPhotos: number,
-  packageName?: string
-): RegrasCongeladas {
-  // If no packages or using fixed pricing, return simple fixed rules
-  if (!discountPackages || discountPackages.length === 0) {
-    return {
-      modelo: 'fixo',
-      pacote: {
-        nome: packageName || 'Pacote Manual',
-        fotosIncluidas: includedPhotos,
-        valorFotoExtra: fixedPrice,
-      },
-      precificacaoFotoExtra: {
-        modelo: 'fixo',
-        valorFixo: fixedPrice,
-      },
+// 7. Build theme data
+const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+const themeId = galleryConfig?.themeId as string | undefined;
+const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+
+let themeData = null;
+
+if (themeId) {
+  // Fetch custom theme from database
+  const { data: theme } = await supabase
+    .from("gallery_themes")
+    .select("*")
+    .eq("id", themeId)
+    .maybeSingle();
+  
+  if (theme) {
+    themeData = {
+      id: theme.id,
+      name: theme.name,
+      backgroundMode: theme.background_mode || 'light',
+      primaryColor: theme.primary_color,
+      accentColor: theme.accent_color,
+      emphasisColor: theme.emphasis_color,
     };
   }
+}
 
-  // Transform discountPackages to faixas format
-  const faixas: FaixaPreco[] = discountPackages.map(pkg => ({
-    min: pkg.minPhotos,
-    max: pkg.maxPhotos, // Already null for infinity
-    valor: pkg.pricePerPhoto,
-  }));
-
-  return {
-    modelo: 'global', // Use global model for standalone packages
-    dataCongelamento: new Date().toISOString(),
-    pacote: {
-      nome: packageName || 'Pacote Manual',
-      fotosIncluidas: includedPhotos,
-      valorFotoExtra: fixedPrice, // Base price for savings calculation
-    },
-    precificacaoFotoExtra: {
-      modelo: 'global',
-      tabelaGlobal: {
-        faixas,
-      },
-    },
+// NOVO: Se não há tema personalizado, criar tema do sistema baseado no clientMode
+if (!themeData) {
+  themeData = {
+    id: 'system',
+    name: 'Sistema',
+    backgroundMode: clientMode, // Usa o modo escolhido pelo fotógrafo
+    primaryColor: null,         // Usa cores padrão do sistema
+    accentColor: null,
+    emphasisColor: null,
   };
 }
 ```
 
-### 2. Atualizar GalleryCreate.tsx - Gerar regrasCongeladas ao Salvar
+#### 2. Atualizar `themeStyles` no Frontend
 
-**Arquivo:** `src/pages/GalleryCreate.tsx`
+**Arquivo:** `src/pages/ClientGallery.tsx`
 
-Quando o fotógrafo usa `pricingModel === 'packages'`, gerar `regrasCongeladas` automaticamente:
-
-Modificar a função `createSupabaseGalleryForUploads`:
+Modificar o `useMemo` para tratar o caso de tema do sistema:
 
 ```typescript
-// Determine if we should generate regrasCongeladas from manual packages
-const shouldBuildRegras = !regrasCongeladas && !isAssistedMode && 
-                          saleMode !== 'no_sale' && 
-                          pricingModel === 'packages' && 
-                          discountPackages.length > 0;
-
-const finalRegrasCongeladas = shouldBuildRegras 
-  ? buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName)
-  : (hasRegras ? regrasCongeladas : null);
-
-const result = await createSupabaseGallery({
-  // ... other fields
-  regrasCongeladas: finalRegrasCongeladas,
-});
-```
-
-Aplicar a mesma lógica em:
-- `handleNext()` (step 5 - final update)
-- `handleSaveDraft()`
-
-### 3. Atualizar a Edge Function confirm-selection
-
-**Arquivo:** `supabase/functions/confirm-selection/index.ts`
-
-Quando não há `session_id`, verificar se existe `regrasCongeladas` na própria galeria:
-
-```typescript
-// 3. Calculate progressive pricing using CREDIT SYSTEM
-let valorUnitario = 0;
-let valorTotal = 0;
-
-// Try to get regrasCongeladas: session first, then gallery itself
-let regrasCongeladas: RegrasCongeladas | null = null;
-
-if (gallery.session_id) {
-  // Fetch from session (Gestão flow)
-  const { data: sessao } = await supabase
-    .from('clientes_sessoes')
-    .select('regras_congeladas, valor_foto_extra')
-    .eq('session_id', gallery.session_id)
-    .single();
+const themeStyles = useMemo(() => {
+  const theme = galleryResponse?.theme;
   
-  if (sessao?.regras_congeladas) {
-    regrasCongeladas = sessao.regras_congeladas as RegrasCongeladas;
-  }
-} 
-
-// Fallback: check gallery's own regrasCongeladas (standalone mode)
-if (!regrasCongeladas && gallery.regras_congeladas) {
-  regrasCongeladas = gallery.regras_congeladas as RegrasCongeladas;
-  console.log('📊 Using gallery regrasCongeladas (standalone mode)');
-}
-
-// Use the unified credit system formula
-const resultado = calcularPrecoProgressivoComCredito(
-  extrasACobrar,
-  extrasPagasTotal,
-  valorJaPago,
-  regrasCongeladas, // Now includes standalone packages
-  gallery.valor_foto_extra || 0
-);
-```
-
-### 4. Atualizar gallery-access Edge Function
-
-**Arquivo:** `supabase/functions/gallery-access/index.ts`
-
-Garantir que `regrasCongeladas` da galeria é retornado mesmo sem session:
-
-```typescript
-// 4. Fetch pricing rules: session first, then gallery itself
-let regrasCongeladas = gallery.regras_congeladas;
-
-if (gallery.session_id) {
-  const { data: sessao } = await supabase
-    .from('clientes_sessoes')
-    .select('regras_congeladas')
-    .eq('session_id', gallery.session_id)
-    .single();
+  // Use backgroundMode from theme, fallback to clientMode, then 'light'
+  const backgroundMode = theme?.backgroundMode || galleryResponse?.clientMode || 'light';
   
-  if (sessao?.regras_congeladas) {
-    regrasCongeladas = sessao.regras_congeladas;
-    console.log('📊 Loaded pricing rules from session:', gallery.session_id);
+  // Base colors depend on background mode (always apply, even for system theme)
+  const baseColors = backgroundMode === 'dark' ? {
+    '--background': '25 15% 10%',
+    '--foreground': '30 20% 95%',
+    '--card': '25 15% 13%',
+    '--card-foreground': '30 20% 95%',
+    '--muted': '25 12% 20%',
+    '--muted-foreground': '30 15% 60%',
+    '--border': '25 12% 22%',
+    '--primary-foreground': '25 15% 10%',
+    '--popover': '25 15% 13%',
+    '--popover-foreground': '30 20% 95%',
+    '--gradient-card': 'linear-gradient(180deg, hsl(25 15% 13%) 0%, hsl(25 12% 11%) 100%)',
+  } : {
+    // Light mode values (existing)
+    '--background': '30 25% 97%',
+    '--foreground': '25 20% 15%',
+    '--card': '30 20% 99%',
+    '--card-foreground': '25 20% 15%',
+    '--muted': '30 15% 92%',
+    '--muted-foreground': '25 10% 45%',
+    '--border': '30 15% 88%',
+    '--primary-foreground': '30 25% 98%',
+    '--popover': '30 20% 99%',
+    '--popover-foreground': '25 20% 15%',
+    '--gradient-card': 'linear-gradient(180deg, hsl(30 20% 99%) 0%, hsl(30 15% 96%) 100%)',
+  };
+  
+  // Only add custom colors if theme has them (not system theme)
+  if (theme?.primaryColor) {
+    const primaryHsl = hexToHsl(theme.primaryColor);
+    const accentHsl = hexToHsl(theme.accentColor);
+    
+    return {
+      ...baseColors,
+      '--primary': primaryHsl || '18 55% 55%',
+      '--accent': accentHsl || '120 20% 62%',
+      '--ring': primaryHsl || '18 55% 55%',
+    } as React.CSSProperties;
   }
-}
-
-// If still no regrasCongeladas, gallery's own is used (standalone mode)
-if (!regrasCongeladas && gallery.regras_congeladas) {
-  console.log('📊 Using gallery regrasCongeladas (standalone mode)');
-  regrasCongeladas = gallery.regras_congeladas;
-}
+  
+  return baseColors as React.CSSProperties;
+}, [galleryResponse?.theme, galleryResponse?.clientMode]);
 ```
 
-### 5. Importar Tipos Necessários
+#### 3. Atualizar `effectiveBackgroundMode`
 
-**Arquivo:** `src/pages/GalleryCreate.tsx`
+**Arquivo:** `src/pages/ClientGallery.tsx`
 
-Adicionar import da nova função:
-
-```typescript
-import { 
-  RegrasCongeladas, 
-  getModeloDisplayName, 
-  getFaixasFromRegras, 
-  formatFaixaDisplay,
-  buildRegrasFromDiscountPackages 
-} from '@/lib/pricingUtils';
-```
-
-**Arquivo:** `src/lib/pricingUtils.ts`
-
-Adicionar import do tipo DiscountPackage:
+Incluir fallback para `clientMode`:
 
 ```typescript
-import { DiscountPackage } from '@/types/gallery';
+const effectiveBackgroundMode = useMemo(() => {
+  // Priority: theme.backgroundMode > clientMode > 'light'
+  return galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+}, [galleryResponse?.theme?.backgroundMode, galleryResponse?.clientMode]);
 ```
 
 ---
@@ -265,63 +193,76 @@ import { DiscountPackage } from '@/types/gallery';
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/lib/pricingUtils.ts` | Adicionar `buildRegrasFromDiscountPackages()` |
-| `src/pages/GalleryCreate.tsx` | Chamar a nova função ao criar/atualizar galeria standalone |
-| `supabase/functions/confirm-selection/index.ts` | Fallback para `gallery.regras_congeladas` |
-| `supabase/functions/gallery-access/index.ts` | Garantir que retorna `regras_congeladas` da galeria |
+| `supabase/functions/gallery-access/index.ts` | Criar objeto `theme` do sistema quando não há tema personalizado |
+| `src/pages/ClientGallery.tsx` | Atualizar `themeStyles` e `effectiveBackgroundMode` para usar fallback de `clientMode` |
 
 ---
 
-## Fluxo Resultante
-
-### Criação (Standalone)
+## Fluxo Corrigido
 
 ```text
-1. Fotógrafo configura faixas: [1-2: R$20], [3-5: R$15], [6+: R$10]
-2. GalleryCreate chama buildRegrasFromDiscountPackages()
-3. Gera regrasCongeladas = {
-     modelo: 'global',
-     pacote: { valorFotoExtra: 25, fotosIncluidas: 30 },
-     precificacaoFotoExtra: {
-       modelo: 'global',
-       tabelaGlobal: { faixas: [...] }
-     }
-   }
-4. Salva em galerias.regras_congeladas
+┌───────────────────────────────────────────────────────────────────────┐
+│  EDGE FUNCTION (gallery-access) - CORRIGIDO                          │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Se themeId existe:                                                   │
+│    theme = { id, name, backgroundMode, primaryColor, ... }           │
+│                                                                       │
+│  Se NÃO existe themeId:                                               │
+│    theme = { id: 'system', backgroundMode: clientMode, ... }         │
+│                                                                       │
+│  Resultado: theme SEMPRE existe com backgroundMode correto            │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  FRONTEND (ClientGallery.tsx) - CORRIGIDO                            │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  themeStyles:                                                         │
+│    - SEMPRE aplica baseColors baseado em backgroundMode              │
+│    - Adiciona cores personalizadas só se existirem                   │
+│                                                                       │
+│  effectiveBackgroundMode:                                             │
+│    theme?.backgroundMode || clientMode || 'light'                    │
+│                                                                       │
+│  Resultado: Todas as telas respeitam o modo escolhido                │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-### Seleção do Cliente
+---
 
-```text
-1. gallery-access retorna regrasCongeladas (da galeria)
-2. ClientGallery usa calcularPrecoProgressivoComCredito()
-3. Cliente vê preços progressivos corretos
-```
+## Telas Afetadas (Todas Consistentes)
 
-### Confirmação
-
-```text
-1. confirm-selection busca regrasCongeladas da galeria
-2. Aplica precificação progressiva no valor final
-3. Cria cobrança com valor correto
-```
+| Tela | Componente | Modo Escuro Aplicado |
+|------|-----------|---------------------|
+| Senha | `PasswordScreen` | Sim (via `backgroundMode` e `themeStyles`) |
+| Boas-vindas | `ClientGallery` (showWelcome) | Sim (via `effectiveBackgroundMode`) |
+| Galeria | `ClientGallery` (main) | Sim (via `effectiveBackgroundMode`) |
+| Confirmação | `SelectionConfirmation` | Sim (via props `backgroundMode`) |
+| PIX Manual | `PixPaymentScreen` | Sim (via props `backgroundMode`) |
+| Redirect | `PaymentRedirect` | Sim (via props `backgroundMode`) |
+| Confirmada | `ClientGallery` (isConfirmed) | Sim (via `effectiveBackgroundMode`) |
 
 ---
 
 ## Testes a Realizar
 
-1. **Criar galeria standalone com faixas de desconto**
-   - Configurar 3 faixas: [1-2: R$20], [3-5: R$15], [6+: R$10]
-   - Verificar se `regras_congeladas` é salvo no banco
+1. **Galeria com tema do sistema + modo escuro**
+   - Criar galeria sem tema personalizado
+   - Selecionar "Escuro" no "Modo para esta galeria"
+   - Verificar que TODAS as telas ficam em modo escuro
 
-2. **Acessar como cliente**
-   - Selecionar 4 fotos extras
-   - Verificar se preço exibido é R$15/foto (não R$25)
+2. **Galeria com tema do sistema + modo claro**
+   - Criar galeria sem tema personalizado
+   - Selecionar "Claro" no "Modo para esta galeria"
+   - Verificar que TODAS as telas ficam em modo claro
 
-3. **Confirmar seleção**
-   - Verificar se o valor cobrado respeita a faixa
+3. **Galeria com tema personalizado**
+   - Criar galeria com tema personalizado (cores customizadas)
+   - Verificar que cores e modo funcionam corretamente
 
-4. **Testar modo Gestão (não quebrar)**
-   - Criar galeria via Gestão com regras congeladas
-   - Verificar se continua funcionando normalmente
-
+4. **Galeria já existente**
+   - Acessar galeria criada antes da correção
+   - Verificar que ainda funciona (modo padrão light)
