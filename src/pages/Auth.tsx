@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { Logo } from '@/components/Logo';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { LoginForm } from '@/components/auth/LoginForm';
+import { SignupForm } from '@/components/auth/SignupForm';
+import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
+import { UpdatePasswordForm } from '@/components/auth/UpdatePasswordForm';
 import { toast } from 'sonner';
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading, accessLoading, hasGalleryAccess, signInWithGoogle } = useAuthContext();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showUpdatePassword, setShowUpdatePassword] = useState(false);
 
   // Check if we're processing an OAuth callback (has hash with token)
   useEffect(() => {
@@ -28,6 +37,13 @@ export default function Auth() {
     }
   }, []);
 
+  // Check for password reset callback
+  useEffect(() => {
+    if (searchParams.get('reset') === 'true') {
+      setShowUpdatePassword(true);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     console.log('🔍 Auth page state:', { 
       user: user?.email, 
@@ -36,6 +52,11 @@ export default function Auth() {
       hasGalleryAccess,
       isProcessingCallback 
     });
+    
+    // Don't redirect if we're showing the update password form
+    if (showUpdatePassword && user) {
+      return;
+    }
     
     if (!loading && !accessLoading && user) {
       console.log('✅ User authenticated, checking access...');
@@ -47,7 +68,7 @@ export default function Auth() {
         navigate('/access-denied', { replace: true });
       }
     }
-  }, [user, loading, accessLoading, hasGalleryAccess, navigate, isProcessingCallback]);
+  }, [user, loading, accessLoading, hasGalleryAccess, navigate, isProcessingCallback, showUpdatePassword]);
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
@@ -63,6 +84,42 @@ export default function Auth() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Render update password form if needed
+  if (showUpdatePassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-border/50 bg-card/95 backdrop-blur">
+          <CardHeader className="text-center space-y-4 pb-2">
+            <div className="flex justify-center">
+              <Logo size="lg" variant="gallery" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <UpdatePasswordForm />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render reset password form if needed
+  if (showResetPassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-border/50 bg-card/95 backdrop-blur">
+          <CardHeader className="text-center space-y-4 pb-2">
+            <div className="flex justify-center">
+              <Logo size="lg" variant="gallery" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <ResetPasswordForm onBack={() => setShowResetPassword(false)} />
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -84,6 +141,28 @@ export default function Auth() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-4">
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Entrar</TabsTrigger>
+              <TabsTrigger value="signup">Criar Conta</TabsTrigger>
+            </TabsList>
+            <TabsContent value="login" className="mt-4">
+              <LoginForm onForgotPassword={() => setShowResetPassword(true)} />
+            </TabsContent>
+            <TabsContent value="signup" className="mt-4">
+              <SignupForm />
+            </TabsContent>
+          </Tabs>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator className="w-full" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">ou</span>
+            </div>
+          </div>
+
           <Button
             onClick={handleGoogleSignIn}
             disabled={isSigningIn}
@@ -112,7 +191,7 @@ export default function Auth() {
                 />
               </svg>
             )}
-            Entrar com Google
+            Continuar com Google
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">

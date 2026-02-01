@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useEffect } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, AuthError } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess, AccessLevel } from '@/hooks/useGalleryAccess';
 
@@ -13,14 +13,29 @@ interface AuthContextType {
   isAdmin: boolean;
   planName: string | null;
   accessLoading: boolean;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
-  signOut: () => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: AuthError | null }>;
+  signInWithEmail: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUpWithEmail: (email: string, password: string, nome?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
+  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
+  signOut: () => Promise<{ error: AuthError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { user, session, loading, signInWithGoogle, signOut } = useAuth();
+  const { 
+    user, 
+    session, 
+    loading, 
+    signInWithGoogle, 
+    signInWithEmail,
+    signUpWithEmail,
+    resetPassword,
+    updatePassword,
+    signOut 
+  } = useAuth();
+  
   const { 
     hasAccess, 
     accessLevel, 
@@ -52,6 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     planName,
     accessLoading,
     signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    resetPassword,
+    updatePassword,
     signOut,
   };
 
