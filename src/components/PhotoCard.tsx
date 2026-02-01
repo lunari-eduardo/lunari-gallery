@@ -94,58 +94,45 @@ export function PhotoCard({
         {isSelected && <Check className="h-4 w-4" />}
       </button>
 
+      {/* Favorite button - always visible when favorited, otherwise on hover only */}
+      {onFavorite && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onFavorite(); }}
+          className={cn(
+            'absolute top-3 right-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
+            photo.isFavorite 
+              ? 'bg-red-500 border-red-500 text-white' 
+              : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 text-white/80 hover:text-white opacity-0 group-hover:opacity-100'
+          )}
+        >
+          <Heart className={cn("h-4 w-4", photo.isFavorite && "fill-current")} />
+        </button>
+      )}
+
+      {/* Comment button - always visible when has comment, otherwise on hover only */}
+      {allowComments && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onComment?.(); }}
+          className={cn(
+            'absolute top-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
+            photo.comment 
+              ? 'bg-primary border-primary text-primary-foreground' 
+              : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 text-white/80 hover:text-white opacity-0 group-hover:opacity-100',
+            onFavorite ? 'right-11' : 'right-3'
+          )}
+        >
+          <MessageSquare className="h-4 w-4" />
+        </button>
+      )}
+
       {/* Overlay - appears only on hover */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none">
-        {/* Actions */}
-        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto">
-          <span className="text-white/90 text-xs font-medium truncate max-w-[60%]">
+        <div className="absolute bottom-3 left-3 right-3 pointer-events-auto">
+          <span className="text-white/90 text-xs font-medium truncate block max-w-[60%]">
             {photo.originalFilename || photo.filename}
           </span>
-          <div className="flex items-center gap-1.5">
-            {allowComments && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onComment?.(); }}
-                className={cn(
-                  'h-8 w-8 rounded-full bg-black/40 flex items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-colors',
-                  photo.comment && 'text-primary'
-                )}
-              >
-                <MessageSquare className="h-4 w-4" />
-              </button>
-            )}
-            {onFavorite && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onFavorite(); }}
-                className={cn(
-                  'h-8 w-8 rounded-full flex items-center justify-center transition-colors',
-                  photo.isFavorite 
-                    ? 'bg-red-500/20 text-red-500' 
-                    : 'bg-black/40 text-white/80 hover:bg-black/60 hover:text-white'
-                )}
-              >
-                <Heart className={cn("h-4 w-4", photo.isFavorite && "fill-current")} />
-              </button>
-            )}
-          </div>
         </div>
       </div>
-
-      {/* Favorite indicator - always visible when favorited */}
-      {photo.isFavorite && (
-        <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-red-500 flex items-center justify-center z-10">
-          <Heart className="h-3 w-3 text-white fill-current" />
-        </div>
-      )}
-
-      {/* Comment indicator - positioned based on favorite presence */}
-      {photo.comment && (
-        <div className={cn(
-          "absolute top-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center z-10",
-          photo.isFavorite ? "right-11" : "right-3"
-        )}>
-          <MessageSquare className="h-3 w-3 text-primary-foreground" />
-        </div>
-      )}
     </div>
   );
 }
