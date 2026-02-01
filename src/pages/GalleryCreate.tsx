@@ -30,7 +30,7 @@ import { usePaymentIntegration } from '@/hooks/usePaymentIntegration';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
-import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay } from '@/lib/pricingUtils';
+import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay, buildRegrasFromDiscountPackages } from '@/lib/pricingUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemePreviewCard } from '@/components/ThemePreviewCard';
@@ -441,16 +441,33 @@ export default function GalleryCreate() {
       const clientName = selectedClient?.name || 'Galeria Pública';
       const clientEmail = selectedClient?.email || '';
 
-      // Determine the final extra photo price based on pricing source
-      // When we have frozen rules and no override, use normalized rules value
-      const hasRegras = regrasCongeladas && !overridePricing;
+      // Determine the final extra photo price and regrasCongeladas based on pricing source
+      // When we have frozen rules from Gestão and no override, use them
+      const hasSessionRegras = regrasCongeladas && !overridePricing;
       const hasSessionId = !!gestaoParams?.session_id;
       
       let valorFotoExtraFinal = fixedPrice;
-      if (hasRegras) {
+      let finalRegrasCongeladas: RegrasCongeladas | null = null;
+      
+      if (hasSessionRegras) {
+        // Assisted mode with Gestão rules - use frozen rules
         const valorRaw = regrasCongeladas.pacote?.valorFotoExtra || 0;
-        // Normalize if in cents
         valorFotoExtraFinal = valorRaw > 1000 ? valorRaw / 100 : valorRaw;
+        finalRegrasCongeladas = regrasCongeladas;
+      } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
+        // Standalone mode with discount packages - generate regrasCongeladas
+        console.log('📦 Generating regrasCongeladas from standalone discount packages');
+        finalRegrasCongeladas = buildRegrasFromDiscountPackages(
+          discountPackages,
+          fixedPrice,
+          includedPhotos,
+          packageName
+        );
+        // Use first tier price for the valorFotoExtra field
+        if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
+          const sortedFaixas = [...finalRegrasCongeladas.precificacaoFotoExtra.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
+          valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
+        }
       }
 
       const result = await createSupabaseGallery({
@@ -468,8 +485,8 @@ export default function GalleryCreate() {
         // Use session_id if present in URL, regardless of integration status
         sessionId: hasSessionId ? gestaoParams.session_id : null,
         origin: hasSessionId ? 'gestao' : 'manual',
-        // Pass frozen rules if not overriding
-        regrasCongeladas: hasRegras ? regrasCongeladas : null,
+        // Pass frozen rules from Gestão OR generated from discount packages
+        regrasCongeladas: finalRegrasCongeladas,
       });
       
       if (result?.id) {
@@ -507,6 +524,30 @@ export default function GalleryCreate() {
       // Final step - save all configurations, publish automatically, and navigate to the gallery
       if (supabaseGalleryId) {
         try {
+          // Determine regrasCongeladas and valorFotoExtra for final update
+          const hasSessionRegras = regrasCongeladas && !overridePricing;
+          const hasSessionId = !!gestaoParams?.session_id;
+          
+          let valorFotoExtraFinal = fixedPrice;
+          let finalRegrasCongeladas: RegrasCongeladas | null = null;
+          
+          if (hasSessionRegras) {
+            valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
+            finalRegrasCongeladas = regrasCongeladas;
+          } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
+            // Standalone mode with discount packages - generate regrasCongeladas
+            finalRegrasCongeladas = buildRegrasFromDiscountPackages(
+              discountPackages,
+              fixedPrice,
+              includedPhotos,
+              packageName
+            );
+            if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
+              const sortedFaixas = [...finalRegrasCongeladas.precificacaoFotoExtra.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
+              valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
+            }
+          }
+          
           // Update gallery with all settings from Step 4
           await updateGallery({
             id: supabaseGalleryId,
@@ -530,12 +571,9 @@ export default function GalleryCreate() {
               },
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
-              // Use same pricing logic as creation
-              valorFotoExtra: saleMode !== 'no_sale' 
-                ? (isAssistedMode && regrasCongeladas && !overridePricing 
-                    ? getInitialExtraPrice(regrasCongeladas)
-                    : fixedPrice)
-                : 0,
+              valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
+              // Include regrasCongeladas for standalone progressive pricing
+              ...(finalRegrasCongeladas && { regrasCongeladas: finalRegrasCongeladas }),
             }
           });
           
@@ -579,6 +617,24 @@ export default function GalleryCreate() {
       }
 
       if (supabaseGalleryId) {
+        // Determine regrasCongeladas for draft update
+        const hasSessionRegras = regrasCongeladas && !overridePricing;
+        const hasSessionId = !!gestaoParams?.session_id;
+        
+        let valorFotoExtraFinal = fixedPrice;
+        let finalRegrasCongeladas: RegrasCongeladas | null = null;
+        
+        if (hasSessionRegras) {
+          valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
+          finalRegrasCongeladas = regrasCongeladas;
+        } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
+          finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
+          if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
+            const sortedFaixas = [...finalRegrasCongeladas.precificacaoFotoExtra.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
+            valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
+          }
+        }
+        
         // Update existing gallery
         await updateGallery({
           id: supabaseGalleryId,
@@ -588,11 +644,7 @@ export default function GalleryCreate() {
             clienteNome: selectedClient?.name,
             clienteEmail: selectedClient?.email,
             fotosIncluidas: includedPhotos,
-            valorFotoExtra: saleMode !== 'no_sale' 
-              ? (isAssistedMode && regrasCongeladas && !overridePricing 
-                  ? getInitialExtraPrice(regrasCongeladas) 
-                  : fixedPrice)
-              : 0,
+            valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
             prazoSelecaoDias: customDays,
             permissao: galleryPermission,
             mensagemBoasVindas: welcomeMessage,
@@ -611,11 +663,29 @@ export default function GalleryCreate() {
               themeId: selectedThemeId,
               clientMode: clientMode,
             },
+            ...(finalRegrasCongeladas && { regrasCongeladas: finalRegrasCongeladas }),
           }
         });
         toast.success('Rascunho salvo!');
         navigate('/');
       } else {
+        // Determine regrasCongeladas for new draft
+        const hasSessionId = !!gestaoParams?.session_id;
+        
+        let valorFotoExtraFinal = fixedPrice;
+        let finalRegrasCongeladas: RegrasCongeladas | null = null;
+        
+        if (isAssistedMode && regrasCongeladas && !overridePricing) {
+          valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
+          finalRegrasCongeladas = regrasCongeladas;
+        } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
+          finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
+          if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
+            const sortedFaixas = [...finalRegrasCongeladas.precificacaoFotoExtra.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
+            valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
+          }
+        }
+        
         // Create new gallery as draft
         const result = await createSupabaseGallery({
           clienteId: selectedClient?.id || null,
@@ -624,17 +694,14 @@ export default function GalleryCreate() {
           nomeSessao: sessionName || 'Rascunho',
           nomePacote: packageName || undefined,
           fotosIncluidas: includedPhotos,
-          valorFotoExtra: saleMode !== 'no_sale' 
-            ? (isAssistedMode && regrasCongeladas && !overridePricing 
-                ? getInitialExtraPrice(regrasCongeladas) 
-                : fixedPrice)
-            : 0,
+          valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
           prazoSelecaoDias: customDays,
           permissao: galleryPermission,
           mensagemBoasVindas: welcomeMessage,
           galleryPassword: passwordToUse,
           sessionId: gestaoParams?.session_id || null,
           origin: gestaoParams?.session_id ? 'gestao' : 'manual',
+          regrasCongeladas: finalRegrasCongeladas,
           configuracoes: {
             watermark: {
               type: watermarkType,
