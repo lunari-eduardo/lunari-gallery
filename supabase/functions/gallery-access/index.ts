@@ -134,7 +134,25 @@ serve(async (req) => {
       }
     }
 
-    // 8. Return gallery data
+    // 8. Log first client access if not already logged
+    const { data: existingAccess } = await supabase
+      .from('galeria_acoes')
+      .select('id')
+      .eq('galeria_id', gallery.id)
+      .eq('tipo', 'cliente_acessou')
+      .maybeSingle();
+
+    if (!existingAccess) {
+      await supabase.from('galeria_acoes').insert({
+        galeria_id: gallery.id,
+        tipo: 'cliente_acessou',
+        descricao: 'Cliente acessou a galeria pela primeira vez',
+        user_id: null, // Anonymous client action
+      });
+      console.log('📊 First access logged for gallery:', gallery.id);
+    }
+
+    // 9. Return gallery data
     const saleSettings = gallery.configuracoes?.saleSettings || null;
     
     return new Response(
