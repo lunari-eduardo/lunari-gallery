@@ -79,6 +79,25 @@ export default function GalleryDetail() {
     enabled: !!supabaseGallery && !!id,
   });
 
+  // Fetch gallery actions from database for timeline
+  const { data: galleryActions = [] } = useQuery({
+    queryKey: ['galeria-acoes', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('galeria_acoes')
+        .select('id, tipo, descricao, created_at')
+        .eq('galeria_id', id!)
+        .order('created_at', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching gallery actions:', error);
+        return [];
+      }
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   // Fetch ALL paid cobrancas for payment history
   const { data: cobrancasPagas = [], refetch: refetchCobrancas } = useQuery({
     queryKey: ['galeria-cobrancas-pagas', id],
@@ -230,6 +249,30 @@ export default function GalleryDetail() {
     }));
   }, [supabasePhotos, supabaseGallery, getPhotoUrl]);
 
+  // Build actions timeline from database
+  const actions: GalleryAction[] = useMemo(() => {
+    // Map database action types to component types
+    const typeMap: Record<string, GalleryAction['type']> = {
+      'criada': 'created',
+      'enviada': 'sent',
+      'cliente_acessou': 'client_started',
+      'cliente_confirmou': 'client_confirmed',
+      'selecao_reaberta': 'selection_reopened',
+      'pagamento_confirmado': 'client_confirmed',
+    };
+    
+    // Filter relevant action types for main timeline
+    const relevantTypes = ['criada', 'enviada', 'cliente_acessou', 'cliente_confirmou', 'selecao_reaberta', 'pagamento_confirmado'];
+    
+    return galleryActions
+      .filter((action: { tipo: string }) => relevantTypes.includes(action.tipo))
+      .map((action: { id: string; tipo: string; descricao: string | null; created_at: string }) => ({
+        id: action.id,
+        type: typeMap[action.tipo] || 'created',
+        timestamp: new Date(action.created_at),
+        description: action.descricao || action.tipo,
+      }));
+  }, [galleryActions]);
   // Combined loading state
   const isLoadingData = isSupabaseLoading || isLoadingPhotos;
 
@@ -328,25 +371,6 @@ export default function GalleryDetail() {
     };
     return statusMap[status] || 'created';
   };
-
-  // Build actions timeline
-  const actions: GalleryAction[] = [
-    {
-      id: '1',
-      type: 'created',
-      timestamp: supabaseGallery.createdAt,
-      description: 'Galeria criada',
-    },
-  ];
-  
-  if (supabaseGallery.enviadoEm) {
-    actions.push({
-      id: '2',
-      type: 'sent',
-      timestamp: supabaseGallery.enviadoEm,
-      description: 'Galeria enviada para o cliente',
-    });
-  }
 
   // Calculate progressive pricing for summary using credit system
   const regrasCongeladas = supabaseGallery.regrasCongeladas as RegrasCongeladas | null;
