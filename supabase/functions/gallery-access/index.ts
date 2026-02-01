@@ -52,13 +52,18 @@ serve(async (req) => {
 
     // 3. Check password for private galleries
     if (gallery.permissao === "private") {
-      // If no password provided, request it
+    // If no password provided, request it
       if (!password) {
+        // Extract clientMode from gallery config for password screen theming
+        const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+        const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+        
         return new Response(
           JSON.stringify({ 
             requiresPassword: true, 
             galleryId: gallery.id,
             sessionName: gallery.nome_sessao,
+            clientMode: clientMode,  // Include for password screen theming
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
