@@ -1,125 +1,202 @@
 
+# Implementar Histórico Completo de Ações da Galeria
 
-# Unificar Botões de Favorito e Comentário
+## Análise do Problema
 
-## Problema Identificado
+### Situação Atual
 
-Assim como acontecia com o botão de seleção, existem elementos duplicados para favoritos e comentários:
+O sistema **já possui** a tabela `galeria_acoes` e o componente `ActionTimeline` para exibir ações, porém há dois problemas principais:
 
-| Elemento | Posição | Visibilidade | Clicável |
-|----------|---------|--------------|----------|
-| Botão de comentário (linha 105-114) | Inferior direito | Apenas hover | Sim |
-| Indicador de comentário (linha 140-148) | Superior direito | Sempre quando tem comentário | Não |
-| Botão de favorito (linha 116-128) | Inferior direito | Apenas hover | Sim |
-| Indicador de favorito (linha 133-138) | Superior direito | Sempre quando favoritado | Não |
+| Problema | Descrição |
+|----------|-----------|
+| **Histórico não é buscado do banco** | O `GalleryDetail.tsx` constrói o array `actions` manualmente usando apenas `createdAt` e `enviadoEm` da galeria, ignorando completamente os registros da tabela `galeria_acoes` |
+| **Ações importantes não são registradas** | Alguns eventos cruciais não estão sendo salvos na tabela |
 
-Isso confunde o cliente que vê dois ícones para a mesma função.
+### Mapeamento de Eventos
 
-## Solução
+| Evento | Salvo atualmente? | Onde deveria ser salvo |
+|--------|-------------------|------------------------|
+| Galeria criada | Sim - `useSupabaseGalleries.ts` | OK |
+| Galeria enviada | Sim - `useSupabaseGalleries.ts` | OK |
+| Cliente acessou pela primeira vez | **NÃO** | `gallery-access` Edge Function |
+| Cliente confirmou seleção | Sim - `confirm-selection` Edge Function | OK |
+| Seleção reaberta | Sim - `useSupabaseGalleries.ts` | OK |
+| Pagamento confirmado | Sim - `mercadopago-webhook` | OK |
 
-Aplicar o mesmo padrão usado no botão de seleção:
-- **Mover os botões de favorito e comentário para o canto superior direito**
-- **Torná-los sempre visíveis quando ativos, ou apenas no hover quando inativos**
-- **Remover os indicadores visuais duplicados**
-
-## Mudanças no `src/components/PhotoCard.tsx`
-
-### 1. Adicionar botões de Favorito e Comentário fora do overlay (após o botão de seleção)
-
-```tsx
-{/* Selection button - always visible when selected, otherwise on hover only */}
-<button ... >
-  {isSelected && <Check className="h-4 w-4" />}
-</button>
-
-{/* Favorite button - always visible when favorited, otherwise on hover only */}
-{onFavorite && (
-  <button
-    onClick={(e) => { e.stopPropagation(); onFavorite(); }}
-    className={cn(
-      'absolute top-3 right-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
-      photo.isFavorite 
-        ? 'bg-red-500 border-red-500 text-white' 
-        : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 text-white/80 hover:text-white opacity-0 group-hover:opacity-100'
-    )}
-  >
-    <Heart className={cn("h-4 w-4", photo.isFavorite && "fill-current")} />
-  </button>
-)}
-
-{/* Comment button - always visible when has comment, otherwise on hover only */}
-{allowComments && (
-  <button
-    onClick={(e) => { e.stopPropagation(); onComment?.(); }}
-    className={cn(
-      'absolute top-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
-      photo.comment 
-        ? 'bg-primary border-primary text-primary-foreground' 
-        : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 text-white/80 hover:text-white opacity-0 group-hover:opacity-100',
-      onFavorite ? 'right-11' : 'right-3'
-    )}
-  >
-    <MessageSquare className="h-4 w-4" />
-  </button>
-)}
-```
-
-### 2. Remover botões duplicados do overlay (linhas 104-129)
-
-O overlay ficará apenas com o nome do arquivo:
-
-```tsx
-{/* Overlay - appears only on hover */}
-<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none">
-  <div className="absolute bottom-3 left-3 right-3 pointer-events-auto">
-    <span className="text-white/90 text-xs font-medium truncate max-w-[60%]">
-      {photo.originalFilename || photo.filename}
-    </span>
-  </div>
-</div>
-```
-
-### 3. Remover indicadores visuais duplicados (linhas 133-148)
-
-Remover completamente:
-- Indicador de favorito (linhas 133-138)
-- Indicador de comentário (linhas 140-148)
-
-## Resultado Visual Esperado
+### Fluxo Visual do Problema
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│                                                                  │
-│  Sem hover:                    Com hover:                        │
-│  ┌──────────────┐              ┌──────────────┐                  │
-│  │(✓)       💬❤️│              │(✓)       💬❤️│  ← Botões        │
-│  │              │              │              │    clicáveis     │
-│  │    imagem    │              │    imagem    │                  │
-│  │              │              │              │                  │
-│  │              │              │ DSC_001.jpg  │  ← Nome aparece  │
-│  └──────────────┘              └──────────────┘    no hover      │
-│   (botões ativos                                                 │
-│    sempre visíveis)                                              │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FLUXO ATUAL (QUEBRADO)                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  galeria_acoes (BD)          GalleryDetail.tsx (UI)                │
+│  ┌─────────────────┐         ┌─────────────────┐                   │
+│  │ criada          │    ✗    │ actions = []    │                   │
+│  │ enviada         │ ──────► │   + createdAt   │  ← Construído     │
+│  │ cliente_acessou │    ✗    │   + enviadoEm   │    manualmente    │
+│  │ confirmada      │    ✗    │                 │                   │
+│  └─────────────────┘         └─────────────────┘                   │
+│                                                                     │
+│  Resultado: Histórico incompleto e desatualizado                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FLUXO PROPOSTO (CORRETO)                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  galeria_acoes (BD)          GalleryDetail.tsx (UI)                │
+│  ┌─────────────────┐         ┌─────────────────┐                   │
+│  │ criada          │    ✓    │ useQuery(...)   │                   │
+│  │ enviada         │ ──────► │   actions =     │  ← Busca do       │
+│  │ cliente_acessou │    ✓    │   galeria_acoes │    banco          │
+│  │ confirmada      │    ✓    │                 │                   │
+│  │ reaberta        │    ✓    │                 │                   │
+│  └─────────────────┘         └─────────────────┘                   │
+│                                                                     │
+│  Resultado: Histórico completo e em tempo real                     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Layout dos Botões (Canto Superior)
+---
 
-| Posição | Botão | Visibilidade |
-|---------|-------|--------------|
-| Esquerda (left-3) | ✓ Seleção | Sempre se selecionado, hover se não |
-| Direita (right-3) | ❤️ Favorito | Sempre se favoritado, hover se não |
-| Direita deslocado (right-11) | 💬 Comentário | Sempre se tem comentário, hover se não |
+## Plano de Implementação
 
-## Comportamento por Estado
+### 1. Registrar "Cliente Acessou Pela Primeira Vez" na Edge Function
 
-| Estado | Visibilidade do botão |
-|--------|----------------------|
-| Ativo (selecionado/favoritado/com comentário) | Sempre visível, estilo preenchido |
-| Inativo | Aparece apenas no hover, estilo outline/transparente |
+**Arquivo:** `supabase/functions/gallery-access/index.ts`
 
-## Arquivo a Modificar
+Após validar o acesso com sucesso, verificar se já existe uma ação do tipo `cliente_acessou` para esta galeria. Se não existir, criar:
 
-- `src/components/PhotoCard.tsx`
+```typescript
+// Verificar se é o primeiro acesso
+const { data: existingAccess } = await supabase
+  .from('galeria_acoes')
+  .select('id')
+  .eq('galeria_id', gallery.id)
+  .eq('tipo', 'cliente_acessou')
+  .maybeSingle();
 
+// Se primeiro acesso, registrar ação
+if (!existingAccess) {
+  await supabase.from('galeria_acoes').insert({
+    galeria_id: gallery.id,
+    tipo: 'cliente_acessou',
+    descricao: 'Cliente acessou a galeria pela primeira vez',
+    user_id: null, // Ação anônima do cliente
+  });
+  console.log('📊 First access logged for gallery:', gallery.id);
+}
+```
+
+### 2. Buscar Ações do Banco no GalleryDetail
+
+**Arquivo:** `src/pages/GalleryDetail.tsx`
+
+Adicionar uma query para buscar as ações da tabela `galeria_acoes`:
+
+```typescript
+// Fetch gallery actions from database
+const { data: galleryActions = [] } = useQuery({
+  queryKey: ['galeria-acoes', id],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('galeria_acoes')
+      .select('id, tipo, descricao, created_at')
+      .eq('galeria_id', id)
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching gallery actions:', error);
+      return [];
+    }
+    return data;
+  },
+  enabled: !!id,
+});
+```
+
+### 3. Transformar Ações do Banco para o Formato do Timeline
+
+**Arquivo:** `src/pages/GalleryDetail.tsx`
+
+Substituir a construção manual do array `actions` por uma transformação dos dados do banco:
+
+```typescript
+// Transform database actions to GalleryAction format
+const actions: GalleryAction[] = useMemo(() => {
+  // Mapeamento de tipos do banco para tipos do componente
+  const typeMap: Record<string, GalleryAction['type']> = {
+    'criada': 'created',
+    'enviada': 'sent',
+    'cliente_acessou': 'client_started',
+    'cliente_confirmou': 'client_confirmed',
+    'selecao_reaberta': 'selection_reopened',
+    'pagamento_confirmado': 'client_confirmed', // Agrupa com confirmação
+  };
+  
+  // Filtra apenas ações importantes para o timeline principal
+  const relevantTypes = ['criada', 'enviada', 'cliente_acessou', 'cliente_confirmou', 'selecao_reaberta', 'pagamento_confirmado'];
+  
+  return galleryActions
+    .filter(action => relevantTypes.includes(action.tipo))
+    .map(action => ({
+      id: action.id,
+      type: typeMap[action.tipo] || 'created',
+      timestamp: new Date(action.created_at),
+      description: action.descricao || action.tipo,
+    }));
+}, [galleryActions]);
+```
+
+### 4. Atualizar o Componente ActionTimeline
+
+**Arquivo:** `src/components/ActionTimeline.tsx`
+
+Adicionar configuração para o tipo `pagamento_confirmado`:
+
+```typescript
+import { CreditCard } from 'lucide-react';
+
+const actionConfig: Record<GalleryAction['type'], { icon: React.ElementType; color: string }> = {
+  created: { icon: Circle, color: 'text-muted-foreground' },
+  sent: { icon: Send, color: 'text-blue-500' },
+  client_started: { icon: MousePointer, color: 'text-amber-500' },
+  client_confirmed: { icon: CheckCircle, color: 'text-green-500' },
+  selection_reopened: { icon: RotateCcw, color: 'text-primary' },
+  expired: { icon: Clock, color: 'text-destructive' },
+};
+```
+
+### 5. Atualizar Tipos
+
+**Arquivo:** `src/types/gallery.ts`
+
+Garantir que o tipo `GalleryAction['type']` inclui todos os tipos necessários (já está correto).
+
+---
+
+## Resumo das Mudanças
+
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/gallery-access/index.ts` | Adicionar registro de primeiro acesso do cliente |
+| `src/pages/GalleryDetail.tsx` | Buscar ações do banco via `useQuery` + transformar para formato do timeline |
+| `src/components/ActionTimeline.tsx` | Nenhuma mudança necessária (já suporta os tipos) |
+
+## Resultado Esperado
+
+Após implementação, o histórico mostrará:
+
+| Evento | Ícone | Cor |
+|--------|-------|-----|
+| Galeria criada | ○ | Cinza |
+| Galeria enviada para o cliente | → | Azul |
+| Cliente acessou a galeria pela primeira vez | 👆 | Âmbar |
+| Cliente confirmou a seleção | ✓ | Verde |
+| Seleção reaberta pelo fotógrafo | ↺ | Primária |
+| (em caso de reativação, todos os eventos subsequentes aparecem na ordem) | | |
+
+O histórico será **dinâmico** e refletirá exatamente o que está salvo no banco de dados, incluindo múltiplos ciclos de reativação.
