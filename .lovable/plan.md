@@ -1,82 +1,123 @@
 
 
-# Correção: Unificar Botão de Seleção
+# Unificar Botões de Favorito e Comentário
 
-## Problema
+## Problema Identificado
 
-Atualmente existem dois elementos separados para seleção:
+Assim como acontecia com o botão de seleção, existem elementos duplicados para favoritos e comentários:
 
-| Elemento | Tipo | Visibilidade | Clicável |
-|----------|------|--------------|----------|
-| Botão no hover (linhas 85-97) | `<button>` | Apenas no hover | Sim |
-| Indicador permanente (linhas 133-138) | `<div>` | Sempre quando selecionado | Não (abre foto) |
+| Elemento | Posição | Visibilidade | Clicável |
+|----------|---------|--------------|----------|
+| Botão de comentário (linha 105-114) | Inferior direito | Apenas hover | Sim |
+| Indicador de comentário (linha 140-148) | Superior direito | Sempre quando tem comentário | Não |
+| Botão de favorito (linha 116-128) | Inferior direito | Apenas hover | Sim |
+| Indicador de favorito (linha 133-138) | Superior direito | Sempre quando favoritado | Não |
 
-Quando o usuário clica no indicador permanente para desmarcar, o clique passa para o container e abre o lightbox.
+Isso confunde o cliente que vê dois ícones para a mesma função.
 
 ## Solução
 
-Remover o indicador visual separado e transformar o botão de seleção existente em um elemento **sempre visível**, não apenas no hover.
+Aplicar o mesmo padrão usado no botão de seleção:
+- **Mover os botões de favorito e comentário para o canto superior direito**
+- **Torná-los sempre visíveis quando ativos, ou apenas no hover quando inativos**
+- **Remover os indicadores visuais duplicados**
 
-### Mudanças no `src/components/PhotoCard.tsx`
+## Mudanças no `src/components/PhotoCard.tsx`
 
-#### 1. Mover o botão de seleção para FORA do overlay de hover
-
-Atualmente o botão está dentro do overlay (linha 82-131) que só aparece no hover. Precisamos movê-lo para fora, tornando-o sempre visível.
-
-#### 2. Remover o indicador visual duplicado
-
-Remover as linhas 133-138 que criam o `<div>` não-clicável.
-
-#### 3. Ajustar estilos para visibilidade constante
-
-O botão de seleção terá estilos diferentes baseados no estado:
-- **Não selecionado**: Aparece apenas no hover (comportamento atual)
-- **Selecionado**: Sempre visível como indicador clicável
-
-### Código Final
+### 1. Adicionar botões de Favorito e Comentário fora do overlay (após o botão de seleção)
 
 ```tsx
 {/* Selection button - always visible when selected, otherwise on hover only */}
-<button
-  onClick={(e) => { e.stopPropagation(); if (!disabled) onSelect(); }}
-  disabled={disabled}
-  className={cn(
-    'absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
-    isSelected 
-      ? 'bg-primary border-primary text-primary-foreground' 
-      : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 opacity-0 group-hover:opacity-100',
-    disabled && 'pointer-events-none'
-  )}
->
+<button ... >
   {isSelected && <Check className="h-4 w-4" />}
 </button>
 
-{/* Overlay - appears only on hover (SEM o botão de seleção) */}
+{/* Favorite button - always visible when favorited, otherwise on hover only */}
+{onFavorite && (
+  <button
+    onClick={(e) => { e.stopPropagation(); onFavorite(); }}
+    className={cn(
+      'absolute top-3 right-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
+      photo.isFavorite 
+        ? 'bg-red-500 border-red-500 text-white' 
+        : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 text-white/80 hover:text-white opacity-0 group-hover:opacity-100'
+    )}
+  >
+    <Heart className={cn("h-4 w-4", photo.isFavorite && "fill-current")} />
+  </button>
+)}
+
+{/* Comment button - always visible when has comment, otherwise on hover only */}
+{allowComments && (
+  <button
+    onClick={(e) => { e.stopPropagation(); onComment?.(); }}
+    className={cn(
+      'absolute top-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
+      photo.comment 
+        ? 'bg-primary border-primary text-primary-foreground' 
+        : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 text-white/80 hover:text-white opacity-0 group-hover:opacity-100',
+      onFavorite ? 'right-11' : 'right-3'
+    )}
+  >
+    <MessageSquare className="h-4 w-4" />
+  </button>
+)}
+```
+
+### 2. Remover botões duplicados do overlay (linhas 104-129)
+
+O overlay ficará apenas com o nome do arquivo:
+
+```tsx
+{/* Overlay - appears only on hover */}
 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none">
-  {/* Apenas informações e ações no rodapé */}
-  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto">
-    ...
+  <div className="absolute bottom-3 left-3 right-3 pointer-events-auto">
+    <span className="text-white/90 text-xs font-medium truncate max-w-[60%]">
+      {photo.originalFilename || photo.filename}
+    </span>
   </div>
 </div>
-
-{/* REMOVER: o indicador visual separado (linhas 133-138) */}
 ```
 
-## Resultado Esperado
+### 3. Remover indicadores visuais duplicados (linhas 133-148)
 
-| Estado | Comportamento |
-|--------|---------------|
-| Foto não selecionada | Botão aparece no hover, clicável |
-| Foto selecionada | Botão sempre visível com check, clicável para desmarcar |
+Remover completamente:
+- Indicador de favorito (linhas 133-138)
+- Indicador de comentário (linhas 140-148)
+
+## Resultado Visual Esperado
 
 ```text
-┌──────────────┐      ┌──────────────┐
-│              │      │(✓)          │  ← Botão sempre visível e clicável
-│   imagem     │  →   │   imagem     │
-│              │      │              │
-└──────────────┘      └──────────────┘
-  Não selecionado       Selecionado
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  Sem hover:                    Com hover:                        │
+│  ┌──────────────┐              ┌──────────────┐                  │
+│  │(✓)       💬❤️│              │(✓)       💬❤️│  ← Botões        │
+│  │              │              │              │    clicáveis     │
+│  │    imagem    │              │    imagem    │                  │
+│  │              │              │              │                  │
+│  │              │              │ DSC_001.jpg  │  ← Nome aparece  │
+│  └──────────────┘              └──────────────┘    no hover      │
+│   (botões ativos                                                 │
+│    sempre visíveis)                                              │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+## Layout dos Botões (Canto Superior)
+
+| Posição | Botão | Visibilidade |
+|---------|-------|--------------|
+| Esquerda (left-3) | ✓ Seleção | Sempre se selecionado, hover se não |
+| Direita (right-3) | ❤️ Favorito | Sempre se favoritado, hover se não |
+| Direita deslocado (right-11) | 💬 Comentário | Sempre se tem comentário, hover se não |
+
+## Comportamento por Estado
+
+| Estado | Visibilidade do botão |
+|--------|----------------------|
+| Ativo (selecionado/favoritado/com comentário) | Sempre visível, estilo preenchido |
+| Inativo | Aparece apenas no hover, estilo outline/transparente |
 
 ## Arquivo a Modificar
 
