@@ -107,7 +107,7 @@ serve(async (req) => {
       .eq("user_id", gallery.user_id)
       .single();
 
-    // 7. Fetch theme data if configured
+    // 7. Build theme data - always return a theme object for consistent styling
     const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
     const themeId = galleryConfig?.themeId as string | undefined;
     const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
@@ -130,8 +130,22 @@ serve(async (req) => {
           accentColor: theme.accent_color,
           emphasisColor: theme.emphasis_color,
         };
-        console.log("🎨 Loaded theme:", theme.name, "mode:", theme.background_mode);
+        console.log("🎨 Loaded custom theme:", theme.name, "mode:", theme.background_mode);
       }
+    }
+    
+    // CRITICAL: Always provide a theme object, using clientMode when no custom theme exists
+    // This ensures the frontend consistently receives backgroundMode for all screens
+    if (!themeData) {
+      themeData = {
+        id: 'system',
+        name: 'Sistema',
+        backgroundMode: clientMode, // Use photographer's chosen mode
+        primaryColor: null,         // System defaults
+        accentColor: null,
+        emphasisColor: null,
+      };
+      console.log("🎨 Using system theme with mode:", clientMode);
     }
 
     // 8. Log first client access if not already logged
