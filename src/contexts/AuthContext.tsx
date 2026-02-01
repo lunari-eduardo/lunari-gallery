@@ -18,6 +18,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, nome?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
+  updateEmail: (newEmail: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
 }
 
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUpWithEmail,
     resetPassword,
     updatePassword,
+    updateEmail,
     signOut 
   } = useAuth();
   
@@ -71,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUpWithEmail,
     resetPassword,
     updatePassword,
+    updateEmail,
     signOut,
   };
 

@@ -2,9 +2,14 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Mail } from 'lucide-react';
+import { ChangeEmailForm } from '@/components/account/ChangeEmailForm';
 
 export default function Account() {
   const { user } = useAuthContext();
+
+  // Verificar se é usuário de email/senha (não OAuth)
+  const isEmailUser = user?.app_metadata?.provider === 'email' || 
+                      user?.app_metadata?.providers?.includes('email');
 
   return (
     <div className="space-y-6">
@@ -16,7 +21,7 @@ export default function Account() {
         </p>
       </div>
 
-      <div className="max-w-md">
+      <div className="max-w-md space-y-6">
         {/* Perfil */}
         <Card>
           <CardHeader>
@@ -46,6 +51,11 @@ export default function Account() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Alterar Email - apenas para usuários email/senha */}
+        {isEmailUser && user?.email && (
+          <ChangeEmailForm currentEmail={user.email} />
+        )}
       </div>
     </div>
   );

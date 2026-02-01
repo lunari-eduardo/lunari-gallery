@@ -137,6 +137,22 @@ export function useAuth() {
     return { error: null };
   };
 
+  const updateEmail = async (newEmail: string) => {
+    console.log('📧 Updating email to:', newEmail);
+    
+    const { error } = await supabase.auth.updateUser({
+      email: newEmail,
+    });
+    
+    if (error) {
+      console.error('❌ Email update error:', error);
+      return { error };
+    }
+    
+    console.log('✅ Confirmation email sent to new address');
+    return { error: null };
+  };
+
   const signOut = async () => {
     console.log('🚪 Starting sign out...');
     
@@ -176,6 +192,7 @@ export function useAuth() {
     signUpWithEmail,
     resetPassword,
     updatePassword,
+    updateEmail,
     signOut,
   };
 }
