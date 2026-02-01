@@ -522,21 +522,22 @@ export default function ClientGallery() {
   }, [galleryId, sessionId, isProcessingPaymentReturn]);
 
   // Theme mode derived from gallery settings (source of truth)
+  // Priority: theme.backgroundMode > clientMode > 'light'
   const effectiveBackgroundMode = useMemo(() => {
-    return galleryResponse?.theme?.backgroundMode || 'light';
-  }, [galleryResponse?.theme?.backgroundMode]);
+    return galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+  }, [galleryResponse?.theme?.backgroundMode, galleryResponse?.clientMode]);
   const gallery = transformedGallery;
   const isLoading = isLoadingGallery || isLoadingPhotos;
 
   // Build dynamic CSS variables from custom theme - MUST be before early returns
+  // Now always applies base colors based on backgroundMode, even for system theme
   const themeStyles = useMemo(() => {
     const theme = galleryResponse?.theme;
-    if (!theme) return {};
     
-    // Use backgroundMode (light/dark) instead of custom background color
-    const backgroundMode = theme.backgroundMode || 'light';
+    // Use backgroundMode from theme, fallback to clientMode, then 'light'
+    const backgroundMode = theme?.backgroundMode || galleryResponse?.clientMode || 'light';
     
-    // Base colors depend on background mode
+    // Base colors depend on background mode (always applied, even for system theme)
     const baseColors = backgroundMode === 'dark' ? {
       '--background': '25 15% 10%',
       '--foreground': '30 20% 95%',
@@ -565,17 +566,21 @@ export default function ClientGallery() {
       '--gradient-card': 'linear-gradient(180deg, hsl(30 20% 99%) 0%, hsl(30 15% 96%) 100%)',
     };
     
-    // Convert hex colors to HSL
-    const primaryHsl = hexToHsl(theme.primaryColor);
-    const accentHsl = hexToHsl(theme.accentColor);
+    // Only add custom colors if theme has them (not system theme with null colors)
+    if (theme?.primaryColor) {
+      const primaryHsl = hexToHsl(theme.primaryColor);
+      const accentHsl = hexToHsl(theme.accentColor);
+      
+      return {
+        ...baseColors,
+        '--primary': primaryHsl || '18 55% 55%',
+        '--accent': accentHsl || '120 20% 62%',
+        '--ring': primaryHsl || '18 55% 55%',
+      } as React.CSSProperties;
+    }
     
-    return {
-      ...baseColors,
-      '--primary': primaryHsl || '18 55% 55%',
-      '--accent': accentHsl || '120 20% 62%',
-      '--ring': primaryHsl || '18 55% 55%',
-    } as React.CSSProperties;
-  }, [galleryResponse?.theme]);
+    return baseColors as React.CSSProperties;
+  }, [galleryResponse?.theme, galleryResponse?.clientMode]);
 
   // Loading state
   if (isLoading) {
@@ -642,7 +647,7 @@ export default function ClientGallery() {
         error={passwordError}
         isLoading={isCheckingPassword}
         themeStyles={themeStyles}
-        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+        backgroundMode={effectiveBackgroundMode}
       />
     );
   }
