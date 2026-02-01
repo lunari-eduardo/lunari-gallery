@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     // 1. Fetch gallery to validate status and get session_id + extras already paid
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas, valor_total_vendido')
+      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas, valor_total_vendido, regras_congeladas')
       .eq('id', galleryId)
       .single();
 
@@ -222,8 +222,12 @@ Deno.serve(async (req) => {
     
     console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}`);
 
+    // Try to get regras: session first, then gallery's own (standalone mode)
+    let regrasCongeladasSource: RegrasCongeladas | null = null;
+    let fallbackPrice = gallery.valor_foto_extra || 0;
+
     if (gallery.session_id) {
-      // Fetch session data with frozen rules
+      // Fetch session data with frozen rules (Gestão flow)
       const { data: sessao, error: sessaoError } = await supabase
         .from('clientes_sessoes')
         .select('id, regras_congeladas, valor_foto_extra')
@@ -234,33 +238,31 @@ Deno.serve(async (req) => {
         console.warn('Session fetch error:', sessaoError.message);
       }
 
-      if (sessao) {
-        console.log('📊 Session found, calculating with credit system...');
-        const regras = sessao.regras_congeladas as RegrasCongeladas | null;
-        const fallbackPrice = sessao.valor_foto_extra || gallery.valor_foto_extra || 0;
-
-        // Use credit system formula
-        const resultado = calcularPrecoProgressivoComCredito(
-          extrasACobrar,     // New extras in this cycle
-          extrasPagasTotal,  // Previously paid quantity
-          valorJaPago,       // Previously paid amount R$
-          regras, 
-          fallbackPrice
-        );
-        valorUnitario = resultado.valorUnitario;
-        valorTotal = resultado.valorACobrar; // THIS IS THE KEY CHANGE: use valorACobrar, not valorTotal
-
-        console.log(`📊 Credit-based pricing: valorTotalIdeal=R$${resultado.valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
+      if (sessao?.regras_congeladas) {
+        console.log('📊 Using regrasCongeladas from session (Gestão mode)');
+        regrasCongeladasSource = sessao.regras_congeladas as RegrasCongeladas;
+        fallbackPrice = sessao.valor_foto_extra || gallery.valor_foto_extra || 0;
       }
-    } else {
-      // No session = use gallery's fixed price with credit system
-      valorUnitario = gallery.valor_foto_extra || 0;
-      const totalExtras = extrasPagasTotal + extrasACobrar;
-      const valorTotalIdeal = totalExtras * valorUnitario;
-      valorTotal = Math.max(0, valorTotalIdeal - valorJaPago);
-      
-      console.log(`📊 No session - fixed price credit system: totalExtras=${totalExtras}, valorTotalIdeal=R$${valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
     }
+
+    // Fallback: check gallery's own regrasCongeladas (standalone mode with discount packages)
+    if (!regrasCongeladasSource && gallery.regras_congeladas) {
+      console.log('📊 Using regrasCongeladas from gallery (standalone mode)');
+      regrasCongeladasSource = gallery.regras_congeladas as RegrasCongeladas;
+    }
+
+    // Calculate using credit system with whatever regras we found (or null)
+    const resultado = calcularPrecoProgressivoComCredito(
+      extrasACobrar,
+      extrasPagasTotal,
+      valorJaPago,
+      regrasCongeladasSource,
+      fallbackPrice
+    );
+    valorUnitario = resultado.valorUnitario;
+    valorTotal = resultado.valorACobrar;
+
+    console.log(`📊 Credit-based pricing: modelo=${regrasCongeladasSource ? 'progressivo' : 'fixo'}, valorTotalIdeal=R$${resultado.valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
 
     // 4. Parse sale settings to determine if payment is required
     const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string } } | null;

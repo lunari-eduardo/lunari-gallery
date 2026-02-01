@@ -3,6 +3,8 @@
  * Handles discount tiers for extra photos based on frozen rules from Gestão
  */
 
+import { DiscountPackage } from '@/types/gallery';
+
 export interface FaixaPreco {
   min: number;
   max: number | null; // null = unlimited (8+, etc.)
@@ -413,4 +415,64 @@ export function getFaixasFromRegras(regras: RegrasCongeladas | null | undefined)
   }
   
   return [];
+}
+
+/**
+ * Builds RegrasCongeladas from standalone discount packages
+ * Used when photographer configures progressive pricing without Gestão integration
+ * 
+ * This function transforms the UI-friendly DiscountPackage[] format into the
+ * standard RegrasCongeladas format used by the pricing engine.
+ * 
+ * @param discountPackages - Array of discount packages from the UI
+ * @param fixedPrice - Base price per extra photo (used for savings calculation)
+ * @param includedPhotos - Number of photos included in the package
+ * @param packageName - Optional package name for display
+ * @returns RegrasCongeladas object ready to be saved to the database
+ */
+export function buildRegrasFromDiscountPackages(
+  discountPackages: DiscountPackage[],
+  fixedPrice: number,
+  includedPhotos: number,
+  packageName?: string
+): RegrasCongeladas {
+  // If no packages or using fixed pricing, return simple fixed rules
+  if (!discountPackages || discountPackages.length === 0) {
+    return {
+      modelo: 'fixo',
+      dataCongelamento: new Date().toISOString(),
+      pacote: {
+        nome: packageName || 'Pacote Manual',
+        fotosIncluidas: includedPhotos,
+        valorFotoExtra: fixedPrice,
+      },
+      precificacaoFotoExtra: {
+        modelo: 'fixo',
+        valorFixo: fixedPrice,
+      },
+    };
+  }
+
+  // Transform discountPackages to faixas format
+  const faixas: FaixaPreco[] = discountPackages.map(pkg => ({
+    min: pkg.minPhotos,
+    max: pkg.maxPhotos, // Already null for infinity
+    valor: pkg.pricePerPhoto,
+  }));
+
+  return {
+    modelo: 'global', // Use global model for standalone packages
+    dataCongelamento: new Date().toISOString(),
+    pacote: {
+      nome: packageName || 'Pacote Manual',
+      fotosIncluidas: includedPhotos,
+      valorFotoExtra: fixedPrice, // Base price for savings calculation
+    },
+    precificacaoFotoExtra: {
+      modelo: 'global',
+      tabelaGlobal: {
+        faixas,
+      },
+    },
+  };
 }
