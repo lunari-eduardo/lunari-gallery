@@ -77,7 +77,7 @@ export function PasswordScreen({
             </h1>
             {sessionName && (
               <p 
-                className="text-muted-foreground text-lg"
+                className="text-2xl sm:text-3xl font-normal text-muted-foreground"
                 style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
               >
                 {applyTitleCase(sessionName, titleCaseMode)}

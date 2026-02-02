@@ -65,7 +65,7 @@ export function FinalizedGalleryScreen({
         {/* Nome da sessão (sutil) */}
         {sessionName && (
           <p 
-            className="text-sm text-muted-foreground mt-8"
+            className="text-lg sm:text-xl font-normal text-muted-foreground mt-8"
             style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
           >
             {applyTitleCase(sessionName, titleCaseMode)}

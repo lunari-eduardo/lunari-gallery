@@ -1001,7 +1001,7 @@ export default function ClientGallery() {
             
             <div>
               <h1 
-                className="text-3xl font-semibold mb-2"
+                className="text-4xl sm:text-5xl font-normal mb-2"
                 style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
               >
                 {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
