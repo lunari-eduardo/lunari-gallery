@@ -41,8 +41,70 @@ serve(async (req) => {
       );
     }
 
-    // 2. Check if gallery is in valid status
-    const validStatuses = ["enviado", "selecao_iniciada", "selecao_completa"];
+    // 2. Check if gallery is finalized (show completion screen instead of gallery)
+    const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
+    
+    if (isFinalized) {
+      // Fetch studio settings for logo on finalized screen
+      const { data: settings } = await supabase
+        .from("gallery_settings")
+        .select("studio_name, studio_logo_url, favicon_url")
+        .eq("user_id", gallery.user_id)
+        .single();
+      
+      // Build theme data for finalized screen
+      const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+      const themeId = galleryConfig?.themeId as string | undefined;
+      const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+      
+      let themeData = null;
+      if (themeId) {
+        const { data: theme } = await supabase
+          .from("gallery_themes")
+          .select("*")
+          .eq("id", themeId)
+          .maybeSingle();
+        
+        if (theme) {
+          themeData = {
+            id: theme.id,
+            name: theme.name,
+            backgroundMode: theme.background_mode || 'light',
+            primaryColor: theme.primary_color,
+            accentColor: theme.accent_color,
+            emphasisColor: theme.emphasis_color,
+          };
+        }
+      }
+      
+      // Use system theme with clientMode if no custom theme
+      if (!themeData) {
+        themeData = {
+          id: 'system',
+          name: 'Sistema',
+          backgroundMode: clientMode,
+          primaryColor: null,
+          accentColor: null,
+          emphasisColor: null,
+        };
+      }
+      
+      console.log("🔒 Gallery finalized - returning minimal data for completion screen");
+      
+      return new Response(
+        JSON.stringify({ 
+          finalized: true,
+          sessionName: gallery.nome_sessao,
+          studioSettings: settings || null,
+          theme: themeData,
+          clientMode: clientMode,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3. Check if gallery is in valid status for selection
+    const validStatuses = ["enviado", "selecao_iniciada"];
     if (!validStatuses.includes(gallery.status)) {
       return new Response(
         JSON.stringify({ error: "Galeria não disponível", code: "NOT_AVAILABLE" }),
