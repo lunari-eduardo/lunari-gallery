@@ -1,111 +1,57 @@
 
-# Centralizar Grid de Fotos com Largura Máxima Premium
 
-## Problema Atual
+# Ordenação Alfabética das Fotos da Galeria
 
-As imagens mostram claramente dois cenários problemáticos:
+## Solução Simplificada
 
-1. **10 fotos**: O grid preenche 5 colunas mas sobra espaço no lado direito
-2. **3 fotos**: O grid fica totalmente alinhado à esquerda com muito espaço vazio
+Ao invés de rastrear ordem de seleção no upload, ordenar sempre por `original_filename`. Isso funciona porque:
 
-Isso acontece porque o container não tem largura máxima e não é centralizado.
+- Câmeras nomeiam fotos sequencialmente (DSC_0001, DSC_0002, LISE2752, LISE2754...)
+- Não requer mudanças no upload
+- Fotos antigas automaticamente ficam ordenadas corretamente
+- Lógica simples e previsível
 
-## Solução
+## Mudanças Necessárias
 
-Adicionar um wrapper centralizado com largura máxima apropriada para experiência premium em desktop, mantendo comportamento fluido em mobile.
+Substituir `.order("order_index")` por `.order("original_filename")` em **3 arquivos**:
 
-### Abordagem Visual
+### 1. Hook Principal - `src/hooks/useSupabaseGalleries.ts`
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  ANTES                              DEPOIS                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌───┬───┬───┬───┬───┐             │     ┌───┬───┬───┬───┬───┐     │
-│  │   │   │   │   │   │      →      │     │   │   │   │   │   │     │
-│  └───┴───┴───┴───┴───┘             │     └───┴───┴───┴───┴───┘     │
-│  ┌───┬───┐                         │     ┌───┬───┬───┬───┬───┐     │
-│  │   │   │      espaço vazio       │     │   │   │   │   │   │     │
-│  └───┴───┘                         │     └───┴───┴───┴───┴───┘     │
-│                                                                     │
-│  Alinhado à esquerda               Centralizado com max-width      │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+```typescript
+// Linha 233: Mudar de
+.order('order_index', { ascending: true });
+
+// Para
+.order('original_filename', { ascending: true });
 ```
 
-## Implementação Técnica
+### 2. Edge Function - `supabase/functions/gallery-access/index.ts`
 
-### 1. Atualizar CSS do Masonry Grid
+```typescript
+// Linha 102: Mudar de
+.order("order_index", { ascending: true });
 
-No `src/index.css`, adicionar centralização ao container:
-
-**Adicionar:**
-```css
-.masonry-container {
-  width: 100%;
-  max-width: 1800px;
-  margin: 0 auto;
-  padding: 0 0.5rem;
-}
-
-@media (min-width: 640px) {
-  .masonry-container {
-    padding: 0 1rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .masonry-container {
-    padding: 0 1.5rem;
-  }
-}
+// Para
+.order("original_filename", { ascending: true });
 ```
 
-### 2. Atualizar Componente MasonryGrid
+### 3. Fallback no Client - `src/pages/ClientGallery.tsx`
 
-No `src/components/MasonryGrid.tsx`, envolver a grid em um container centralizado:
+```typescript
+// Linha 228: Mudar de
+.order('order_index');
 
-```tsx
-export function MasonryGrid({ children, className }: MasonryGridProps) {
-  return (
-    <div className="masonry-container">
-      <div className={cn('masonry-grid', className)}>
-        {children}
-      </div>
-    </div>
-  );
-}
+// Para
+.order('original_filename', { ascending: true });
 ```
 
-### 3. Ajustar Páginas que Usam a Grid
+## Resultado
 
-Simplificar o wrapper em `ClientGallery.tsx` e `GalleryPreview.tsx`:
+| Antes | Depois |
+|-------|--------|
+| LISE2755.JPG (upload rápido) | LISE2752.JPG |
+| LISE2752.JPG (upload lento) | LISE2754.JPG |
+| LISE2754.JPG | LISE2755.JPG |
 
-**Antes:**
-```tsx
-<main className="flex-1 px-1 sm:px-2 py-2 pb-20">
-```
+Fotos sempre aparecem na ordem correta, independente da velocidade de upload.
 
-**Depois:**
-```tsx
-<main className="flex-1 py-2 pb-20">
-```
-
-(O padding horizontal agora é gerenciado pelo `.masonry-container`)
-
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/index.css` | Adicionar classe `.masonry-container` com max-width e centralização |
-| `src/components/MasonryGrid.tsx` | Envolver grid em container centralizado |
-| `src/pages/ClientGallery.tsx` | Remover padding horizontal do `<main>` |
-| `src/pages/GalleryPreview.tsx` | Remover padding horizontal do `<main>` |
-
-## Resultado Esperado
-
-- **Desktop ultrawide**: Grid centralizada com máx 1800px, margem elegante nas laterais
-- **Desktop normal**: Grid usa toda a largura disponível até 1800px
-- **Mobile**: Comportamento atual mantido (full width)
-
-A experiência fica mais próxima de galerias fotográficas profissionais como Pixieset, Pic-Time e PASS.
