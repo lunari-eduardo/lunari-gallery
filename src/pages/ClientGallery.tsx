@@ -19,6 +19,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
 import { PasswordScreen } from '@/components/PasswordScreen';
+import { FinalizedGalleryScreen } from '@/components/FinalizedGalleryScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
@@ -646,6 +647,19 @@ export default function ClientGallery() {
         onSubmit={handlePasswordSubmit}
         error={passwordError}
         isLoading={isCheckingPassword}
+        themeStyles={themeStyles}
+        backgroundMode={effectiveBackgroundMode}
+      />
+    );
+  }
+
+  // Finalized gallery screen - show completion message instead of gallery
+  if (galleryResponse?.finalized) {
+    return (
+      <FinalizedGalleryScreen
+        sessionName={galleryResponse.sessionName}
+        studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+        studioName={galleryResponse.studioSettings?.studio_name}
         themeStyles={themeStyles}
         backgroundMode={effectiveBackgroundMode}
       />
