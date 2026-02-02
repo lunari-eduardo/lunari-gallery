@@ -355,6 +355,7 @@ export default function ClientGallery() {
       return response.json();
     },
     onSuccess: (data) => {
+      // 1. Atualizar estado local para feedback visual imediato
       setLocalPhotos(prev => prev.map(p => 
         p.id === data.photo.id 
           ? { 
@@ -365,6 +366,21 @@ export default function ClientGallery() {
             } 
           : p
       ));
+      
+      // 2. Sincronizar cache do React Query para prevenir sobrescrita no refetch
+      queryClient.setQueryData(['client-gallery-photos', galleryId], (oldData: any[] | undefined) => {
+        if (!oldData) return oldData;
+        return oldData.map((p) => 
+          p.id === data.photo.id 
+            ? { 
+                ...p, 
+                is_selected: data.photo.is_selected,
+                is_favorite: data.photo.is_favorite ?? p.is_favorite,
+                comment: data.photo.comment ?? p.comment,
+              } 
+            : p
+        );
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -443,9 +459,27 @@ export default function ClientGallery() {
   });
 
   // Sync photos state when data loads and detect if already confirmed
+  // Proteção: só sobrescreve localPhotos na primeira carga ou mudança estrutural
   useEffect(() => {
     if (photos.length > 0) {
-      setLocalPhotos(photos);
+      setLocalPhotos(prev => {
+        // Primeira carga ou mudança estrutural (quantidade diferente)
+        if (prev.length === 0 || prev.length !== photos.length) {
+          return photos;
+        }
+        // Atualizar apenas campos não-editáveis (URLs, dimensions)
+        // mantendo isSelected, isFavorite, comment do estado local
+        return prev.map(localPhoto => {
+          const serverPhoto = photos.find(p => p.id === localPhoto.id);
+          return serverPhoto ? {
+            ...serverPhoto,
+            isSelected: localPhoto.isSelected,
+            isFavorite: localPhoto.isFavorite,
+            comment: localPhoto.comment,
+          } : localPhoto;
+        });
+      });
+      
       const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'confirmado' || 
                                  supabaseGallery?.finalized_at;
       setIsConfirmed(!!isAlreadyConfirmed);
