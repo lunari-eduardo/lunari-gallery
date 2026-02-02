@@ -96,7 +96,7 @@ export function ClientGalleryHeader({
         {/* Sub-header - Nome da Sessão + Contagem + Status */}
         <div className="text-center py-3 border-t border-border/30 px-4">
           <h1 
-            className="text-lg sm:text-xl font-semibold tracking-wide"
+            className="text-2xl sm:text-3xl font-normal tracking-wide"
             style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
           >
             {applyTitleCase(sessionName, titleCaseMode)}

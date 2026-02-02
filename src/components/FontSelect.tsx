@@ -128,7 +128,7 @@ export function FontSelect({
           </TooltipProvider>
         )}
         <p 
-          className="text-2xl tracking-wide"
+          className="text-3xl font-normal tracking-wide"
           style={{ fontFamily: selectedFont.family }}
         >
           {displayText}
