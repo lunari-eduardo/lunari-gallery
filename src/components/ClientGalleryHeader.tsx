@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { HelpCircle, Sun, Moon, AlertTriangle, Clock, Check } from 'lucide-react';
+import { HelpCircle, AlertTriangle, Clock, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { HelpInstructionsModal } from '@/components/HelpInstructionsModal';
 import { cn } from '@/lib/utils';
-
 interface ClientGalleryHeaderProps {
   sessionName: string;
   totalPhotos: number;
@@ -22,8 +21,6 @@ interface ClientGalleryHeaderProps {
   studioLogoUrl?: string | null;
   studioName?: string | null;
   contactEmail?: string | null;
-  activeClientMode: 'light' | 'dark';
-  onToggleMode: () => void;
 }
 
 export function ClientGalleryHeader({
@@ -41,8 +38,6 @@ export function ClientGalleryHeader({
   studioLogoUrl,
   studioName,
   contactEmail,
-  activeClientMode,
-  onToggleMode,
 }: ClientGalleryHeaderProps) {
   const [showHelpModal, setShowHelpModal] = useState(false);
 
@@ -78,21 +73,6 @@ export function ClientGalleryHeader({
           
           {/* Ações - Direita (absoluto) */}
           <div className="absolute right-4 flex items-center gap-1 sm:gap-2">
-            {/* Toggle de modo claro/escuro */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-9 w-9"
-              onClick={onToggleMode}
-              title={activeClientMode === 'dark' ? 'Modo claro' : 'Modo escuro'}
-            >
-              {activeClientMode === 'dark' ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
-            </Button>
-            
             {/* Botão de Ajuda */}
             <Button 
               variant="ghost" 
