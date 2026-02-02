@@ -98,6 +98,11 @@ serve(async (req) => {
           studioSettings: settings || null,
           theme: themeData,
           clientMode: clientMode,
+          // Include font settings for finalized screen styling
+          settings: {
+            sessionFont: galleryConfig?.sessionFont || undefined,
+            titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+          },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -126,6 +131,11 @@ serve(async (req) => {
             galleryId: gallery.id,
             sessionName: gallery.nome_sessao,
             clientMode: clientMode,  // Include for password screen theming
+            // Include font settings for password screen styling
+            settings: {
+              sessionFont: galleryConfig?.sessionFont || undefined,
+              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+            },
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
