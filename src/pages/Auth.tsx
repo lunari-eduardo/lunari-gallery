@@ -22,20 +22,34 @@ export default function Auth() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showUpdatePassword, setShowUpdatePassword] = useState(false);
 
-  // Check if we're processing an OAuth callback (has hash with token)
+  // Check if we're processing an OAuth callback or email change (has hash with token)
   useEffect(() => {
     const hash = window.location.hash;
     const savedOrigin = localStorage.getItem('auth_origin');
     
     if (hash && hash.includes('access_token')) {
-      console.log('🔐 Processing OAuth callback...');
+      const params = new URLSearchParams(hash.substring(1));
+      const type = params.get('type');
+      
+      console.log('🔐 Processing auth callback, type:', type);
       console.log('📍 Saved origin:', savedOrigin);
+      
+      // Handle email change confirmation
+      if (type === 'email_change') {
+        console.log('📧 Email change confirmation detected');
+        toast.success('Email alterado com sucesso!');
+        // Clear hash and redirect to home
+        window.history.replaceState(null, '', '/');
+        navigate('/', { replace: true });
+        return;
+      }
+      
       setIsProcessingCallback(true);
       
       // Limpar origem após processar
       localStorage.removeItem('auth_origin');
     }
-  }, []);
+  }, [navigate]);
 
   // Check for password reset callback
   useEffect(() => {

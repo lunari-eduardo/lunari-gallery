@@ -14,11 +14,35 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('🔔 Auth state changed:', event, session?.user?.email);
+        
+        // Handle email change confirmation
+        if (event === 'USER_UPDATED') {
+          console.log('✅ User updated - email may have changed');
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
       }
     );
+    
+    // Process auth tokens from URL hash (email change, signup, recovery)
+    const processAuthTokens = () => {
+      const hash = window.location.hash;
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const type = hashParams.get('type');
+        
+        if (type === 'email_change' || type === 'signup' || type === 'recovery') {
+          console.log('🔄 Processing auth token of type:', type);
+          // Supabase client processes automatically via onAuthStateChange
+          // Clean the hash after processing
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      }
+    };
+    
+    processAuthTokens();
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {

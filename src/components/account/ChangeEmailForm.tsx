@@ -148,8 +148,9 @@ export function ChangeEmailForm({ currentEmail }: ChangeEmailFormProps) {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Um email de confirmação será enviado para o novo endereço. 
-            O email atual permanece até a confirmação.
+            Um email de confirmação será enviado para o novo endereço.
+            Clique no link recebido para confirmar a alteração.
+            Após confirmar, você será logado automaticamente com o novo email.
           </AlertDescription>
         </Alert>
       </CardContent>
