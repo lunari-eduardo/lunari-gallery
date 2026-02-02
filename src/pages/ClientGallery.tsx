@@ -25,12 +25,13 @@ import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
-import { WatermarkSettings, DiscountPackage } from '@/types/gallery';
+import { WatermarkSettings, DiscountPackage, TitleCaseMode } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
+import { applyTitleCase } from '@/lib/textTransform';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
@@ -299,6 +300,7 @@ export default function ClientGallery() {
         allowDownload: config?.allowDownload === true,
         allowExtraPhotos: true,
         sessionFont: config?.sessionFont as string | undefined,
+        titleCaseMode: (config?.titleCaseMode as TitleCaseMode) || 'normal',
       },
       photos: [],
       actions: [],
@@ -679,6 +681,7 @@ export default function ClientGallery() {
       <PasswordScreen
         sessionName={galleryResponse?.sessionName}
         sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
         onSubmit={handlePasswordSubmit}
@@ -696,6 +699,7 @@ export default function ClientGallery() {
       <FinalizedGalleryScreen
         sessionName={galleryResponse.sessionName}
         sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
         studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
         studioName={galleryResponse.studioSettings?.studio_name}
         themeStyles={themeStyles}
@@ -1000,7 +1004,7 @@ export default function ClientGallery() {
                 className="text-3xl font-semibold mb-2"
                 style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
               >
-                {gallery.sessionName}
+                {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
               </h1>
               <p className="text-muted-foreground">
                 {localPhotos.length} fotos disponíveis
@@ -1137,6 +1141,7 @@ export default function ClientGallery() {
       <ClientGalleryHeader
         sessionName={gallery.sessionName}
         sessionFont={getFontFamilyById(gallery.settings.sessionFont)}
+        titleCaseMode={gallery.settings.titleCaseMode || 'normal'}
         totalPhotos={localPhotos.length}
         deadline={hasDeadline ? gallery.settings.deadline : null}
         hasDeadline={hasDeadline}

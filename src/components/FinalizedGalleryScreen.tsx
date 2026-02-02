@@ -1,10 +1,13 @@
 import { Check } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
+import { TitleCaseMode } from '@/types/gallery';
+import { applyTitleCase } from '@/lib/textTransform';
 
 interface FinalizedGalleryScreenProps {
   sessionName?: string;
   sessionFont?: string;
+  titleCaseMode?: TitleCaseMode;
   studioLogoUrl?: string;
   studioName?: string;
   themeStyles?: React.CSSProperties;
@@ -14,6 +17,7 @@ interface FinalizedGalleryScreenProps {
 export function FinalizedGalleryScreen({
   sessionName,
   sessionFont,
+  titleCaseMode = 'normal',
   studioLogoUrl,
   studioName,
   themeStyles,
@@ -64,7 +68,7 @@ export function FinalizedGalleryScreen({
             className="text-sm text-muted-foreground mt-8"
             style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
           >
-            {sessionName}
+            {applyTitleCase(sessionName, titleCaseMode)}
           </p>
         )}
       </div>

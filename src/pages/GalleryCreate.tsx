@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
-import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission, PaymentMethod } from '@/types/gallery';
+import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission, PaymentMethod, TitleCaseMode } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
@@ -126,6 +126,7 @@ export default function GalleryCreate() {
   const [savePasswordToClient, setSavePasswordToClient] = useState(true);
   const [sessionName, setSessionName] = useState('');
   const [sessionFont, setSessionFont] = useState('playfair');
+  const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
   const [packageName, setPackageName] = useState('');
   const [includedPhotos, setIncludedPhotos] = useState(30);
 
@@ -665,6 +666,7 @@ export default function GalleryCreate() {
               themeId: selectedThemeId,
               clientMode: clientMode,
               sessionFont: sessionFont,
+              titleCaseMode: titleCaseMode,
             },
             ...(finalRegrasCongeladas && { regrasCongeladas: finalRegrasCongeladas }),
           }
@@ -716,11 +718,12 @@ export default function GalleryCreate() {
             allowComments: allowComments,
             allowDownload: allowDownload,
             allowExtraPhotos: allowExtraPhotos,
-            saleSettings: getSaleSettings(),
-            themeId: selectedThemeId,
-            clientMode: clientMode,
-            sessionFont: sessionFont,
-          },
+              saleSettings: getSaleSettings(),
+              themeId: selectedThemeId,
+              clientMode: clientMode,
+              sessionFont: sessionFont,
+              titleCaseMode: titleCaseMode,
+            },
         });
         
         if (result?.id) {
@@ -1089,6 +1092,8 @@ export default function GalleryCreate() {
                 value={sessionFont}
                 onChange={setSessionFont}
                 previewText={sessionName || 'Ensaio Gestante'}
+                titleCaseMode={titleCaseMode}
+                onTitleCaseModeChange={setTitleCaseMode}
               />
             </div>
 

@@ -4,10 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
+import { TitleCaseMode } from '@/types/gallery';
+import { applyTitleCase } from '@/lib/textTransform';
 
 interface PasswordScreenProps {
   sessionName?: string;
   sessionFont?: string;
+  titleCaseMode?: TitleCaseMode;
   studioName?: string;
   studioLogo?: string;
   onSubmit: (password: string) => Promise<void>;
@@ -20,6 +23,7 @@ interface PasswordScreenProps {
 export function PasswordScreen({
   sessionName,
   sessionFont,
+  titleCaseMode = 'normal',
   studioName,
   studioLogo,
   onSubmit,
@@ -76,7 +80,7 @@ export function PasswordScreen({
                 className="text-muted-foreground text-lg"
                 style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
               >
-                {sessionName}
+                {applyTitleCase(sessionName, titleCaseMode)}
               </p>
             )}
           </div>

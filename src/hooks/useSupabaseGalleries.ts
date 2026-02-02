@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
-import { WatermarkSettings } from '@/types/gallery';
+import { WatermarkSettings, TitleCaseMode } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
 import { RegrasCongeladas } from '@/lib/pricingUtils';
 
@@ -49,8 +49,9 @@ export interface GaleriaConfiguracoes {
   // Theme settings for client gallery
   themeId?: string;
   clientMode?: 'light' | 'dark';
-  // Session title font
+  // Session title font and casing
   sessionFont?: string;
+  titleCaseMode?: TitleCaseMode;
 }
 
 export interface Galeria {
