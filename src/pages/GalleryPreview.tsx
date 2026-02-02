@@ -127,7 +127,7 @@ export default function GalleryPreview() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-1 sm:px-2 py-2 pb-20">
+      <main className="flex-1 py-2 pb-20">
         {transformedPhotos.length > 0 ? (
           <MasonryGrid>
             {transformedPhotos.map((photo) => (
