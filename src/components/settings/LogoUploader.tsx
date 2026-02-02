@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 interface LogoUploaderProps {
   logo?: string;
@@ -13,12 +13,25 @@ export function LogoUploader({ logo, onLogoChange }: LogoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFileSelect = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Formato inválido. Use PNG, JPG ou SVG.');
+      return;
+    }
+    
+    // Verificar tamanho (máx 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 2MB.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
       onLogoChange(result);
+      toast.success('Logo atualizado!');
+    };
+    reader.onerror = () => {
+      toast.error('Erro ao carregar arquivo.');
     };
     reader.readAsDataURL(file);
   };

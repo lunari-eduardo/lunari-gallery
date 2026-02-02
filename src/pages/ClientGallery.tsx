@@ -1089,8 +1089,6 @@ export default function ClientGallery() {
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
         studioName={galleryResponse?.studioSettings?.studio_name}
         contactEmail={null}
-        activeClientMode={effectiveBackgroundMode}
-        onToggleMode={() => {}}
       />
 
       {/* Main Content - Full width gallery */}
