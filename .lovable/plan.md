@@ -1,187 +1,181 @@
 
-# Correção: Estado de Seleção Perdido ao Minimizar Página
+# Sistema de Seleção de Fonte para Nome da Galeria
 
-## Problema Identificado
+## Visão Geral
 
-O React Query está configurado com `staleTime: 0` (padrão) e `refetchOnWindowFocus: true` (padrão). Isso significa que:
+Implementar um seletor de fontes no formulário de criação de galeria que permite ao fotógrafo escolher entre 10 fontes do Google Fonts para exibir o nome da sessão na galeria do cliente.
 
-1. Quando o usuário minimiza e volta à página, um **refetch automático** é disparado
-2. O `useEffect` sobrescreve `localPhotos` com os dados do refetch
-3. Se houver qualquer inconsistência de timing ou cache, as alterações visuais são perdidas
+## Fontes Disponíveis (Google Fonts)
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ Fluxo atual (com bug)                                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. Seleciona foto → Mutation salva no banco → localPhotos = ✓     │
-│                                                                     │
-│  2. Minimiza página                                                 │
-│                                                                     │
-│  3. Restaura página → React Query refetch → useEffect sobrescreve  │
-│                                                                     │
-│  4. Se dados do refetch forem "antigos" → Seleção "desaparece"     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## Solução
-
-Atualizar o cache do React Query **após cada mutation bem-sucedida** em vez de depender apenas do estado local. Assim, quando o refetch ocorrer, o cache já terá os dados corretos.
-
-### Estratégia: Invalidate + setQueryData
-
-```typescript
-// Após mutation bem-sucedida, atualizar o cache do React Query
-onSuccess: (data) => {
-  // 1. Atualizar estado local (feedback imediato)
-  setLocalPhotos(prev => prev.map(p => ...));
-  
-  // 2. Atualizar cache do React Query (previne sobrescrita no refetch)
-  queryClient.setQueryData(['client-gallery-photos', galleryId], (old) => {
-    if (!old) return old;
-    return old.map((p) => 
-      p.id === data.photo.id 
-        ? { ...p, is_selected: data.photo.is_selected, ... }
-        : p
-    );
-  });
-}
-```
+| Nome Corrigido | Estilo | URL Google Fonts |
+|----------------|--------|------------------|
+| Imperial Script | Cursiva elegante | `Imperial+Script` |
+| League Script | Cursiva casual | `League+Script` |
+| Allura | Script romântica | `Allura` |
+| Amatic SC | Handwritten | `Amatic+SC:wght@400;700` |
+| Shadows Into Light | Handwritten | `Shadows+Into+Light` |
+| Source Serif 4 | Serif clássica | `Source+Serif+4:wght@400;600;700` |
+| Cormorant | Serif elegante | `Cormorant:wght@400;500;600;700` |
+| Bodoni Moda | Serif moderna | `Bodoni+Moda:wght@400;500;600;700` |
+| Raleway | Sans-serif clean | `Raleway:wght@400;500;600;700` |
+| Quicksand | Sans-serif amigável | `Quicksand:wght@400;500;600;700` |
 
 ---
 
 ## Mudanças Técnicas
 
-### Arquivo: `src/pages/ClientGallery.tsx`
+### 1. Carregar Fontes no `index.html`
 
-#### 1. Atualizar `selectionMutation.onSuccess` (linhas 357-368)
-
-**Antes:**
-```typescript
-onSuccess: (data) => {
-  setLocalPhotos(prev => prev.map(p => 
-    p.id === data.photo.id 
-      ? { ...p, isSelected: data.photo.is_selected, ... } 
-      : p
-  ));
-},
+```html
+<!-- Após linha 22, adicionar: -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Imperial+Script&family=League+Script&family=Allura&family=Amatic+SC:wght@400;700&family=Shadows+Into+Light&family=Source+Serif+4:wght@400;600;700&family=Cormorant:wght@400;500;600;700&family=Bodoni+Moda:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 ```
 
-**Depois:**
+### 2. Novo Componente: `src/components/FontSelect.tsx`
+
+Componente de seletor com preview em tempo real:
+
 ```typescript
-onSuccess: (data) => {
-  // 1. Atualizar estado local para feedback visual imediato
-  setLocalPhotos(prev => prev.map(p => 
-    p.id === data.photo.id 
-      ? { 
-          ...p, 
-          isSelected: data.photo.is_selected, 
-          isFavorite: data.photo.is_favorite ?? p.isFavorite,
-          comment: data.photo.comment || p.comment 
-        } 
-      : p
-  ));
-  
-  // 2. Sincronizar cache do React Query para prevenir sobrescrita no refetch
-  queryClient.setQueryData(['client-gallery-photos', galleryId], (oldData: any[]) => {
-    if (!oldData) return oldData;
-    return oldData.map((p) => 
-      p.id === data.photo.id 
-        ? { 
-            ...p, 
-            is_selected: data.photo.is_selected,
-            is_favorite: data.photo.is_favorite ?? p.is_favorite,
-            comment: data.photo.comment ?? p.comment,
-          } 
-        : p
-    );
-  });
-},
+interface FontOption {
+  id: string;
+  name: string;
+  family: string;  // CSS font-family
+}
+
+const GALLERY_FONTS: FontOption[] = [
+  { id: 'playfair', name: 'Playfair Display', family: '"Playfair Display", serif' }, // Padrão atual
+  { id: 'imperial', name: 'Imperial Script', family: '"Imperial Script", cursive' },
+  { id: 'league', name: 'League Script', family: '"League Script", cursive' },
+  { id: 'allura', name: 'Allura', family: '"Allura", cursive' },
+  { id: 'amatic', name: 'Amatic SC', family: '"Amatic SC", cursive' },
+  { id: 'shadows', name: 'Shadows Into Light', family: '"Shadows Into Light", cursive' },
+  { id: 'source-serif', name: 'Source Serif 4', family: '"Source Serif 4", serif' },
+  { id: 'cormorant', name: 'Cormorant', family: '"Cormorant", serif' },
+  { id: 'bodoni', name: 'Bodoni Moda', family: '"Bodoni Moda", serif' },
+  { id: 'raleway', name: 'Raleway', family: '"Raleway", sans-serif' },
+  { id: 'quicksand', name: 'Quicksand', family: '"Quicksand", sans-serif' },
+];
 ```
 
-#### 2. Adicionar proteção no useEffect (linha 446)
+UI do componente:
+- Dropdown com nome da fonte
+- Preview abaixo mostrando o nome da sessão na fonte selecionada
+- Cada item do dropdown mostra o nome da fonte estilizado
 
-Evitar sobrescrever `localPhotos` se já tiver dados e não houver mudança real:
+### 3. Atualizar `GalleryCreate.tsx`
 
-**Antes:**
+#### Novo estado (após linha 171):
 ```typescript
-useEffect(() => {
-  if (photos.length > 0) {
-    setLocalPhotos(photos);
-    // ...
-  }
-}, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
+const [sessionFont, setSessionFont] = useState<string>('playfair');
 ```
 
-**Depois:**
+#### Adicionar campo no Step 1 (após linha 1049):
 ```typescript
-useEffect(() => {
-  if (photos.length > 0) {
-    // Só sobrescrever se ainda não tiver fotos locais (primeira carga)
-    // ou se for realmente uma mudança estrutural (quantidade diferente)
-    setLocalPhotos(prev => {
-      if (prev.length === 0 || prev.length !== photos.length) {
-        return photos;
-      }
-      // Atualizar apenas campos não-editáveis (URLs, dimensions)
-      // mantendo is_selected, is_favorite, comment do estado local
-      return prev.map(localPhoto => {
-        const serverPhoto = photos.find(p => p.id === localPhoto.id);
-        return serverPhoto ? {
-          ...serverPhoto,
-          isSelected: localPhoto.isSelected,
-          isFavorite: localPhoto.isFavorite,
-          comment: localPhoto.comment,
-        } : localPhoto;
-      });
-    });
-    
-    const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'confirmado' || 
-                               supabaseGallery?.finalized_at;
-    setIsConfirmed(!!isAlreadyConfirmed);
-    if (isAlreadyConfirmed) {
-      setCurrentStep('confirmed');
-      setShowWelcome(false);
-    }
-  }
-}, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
+<div className="space-y-2">
+  <Label>Fonte do Título</Label>
+  <FontSelect
+    value={sessionFont}
+    onChange={setSessionFont}
+    previewText={sessionName || 'Ensaio Gestante'}
+  />
+</div>
 ```
 
----
+#### Salvar no objeto `configuracoes` (linhas 651-665, 705-719):
+```typescript
+configuracoes: {
+  // ... existente
+  sessionFont: sessionFont,  // Novo campo
+}
+```
 
-## Arquivos a Modificar
+### 4. Atualizar Edge Function `gallery-access`
 
+Incluir `sessionFont` na resposta da galeria (já vem automaticamente dentro de `configuracoes`).
+
+### 5. Atualizar Componentes do Cliente
+
+#### `ClientGalleryHeader.tsx` (linha 91):
+```typescript
+// Antes
+<h1 className="font-display text-lg sm:text-xl font-semibold uppercase tracking-wide">
+  {sessionName}
+</h1>
+
+// Depois
+<h1 
+  className="text-lg sm:text-xl font-semibold uppercase tracking-wide"
+  style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+>
+  {sessionName}
+</h1>
+```
+
+#### Componentes afetados:
 | Arquivo | Mudança |
 |---------|---------|
-| `src/pages/ClientGallery.tsx` | Sincronizar cache após mutation + proteger useEffect |
+| `ClientGalleryHeader.tsx` | Aplicar `sessionFont` via style inline |
+| `ClientGallery.tsx` (welcome) | Aplicar `sessionFont` no h1 da tela de boas-vindas |
+| `PasswordScreen.tsx` | Aplicar `sessionFont` no nome da sessão |
+| `FinalizedGalleryScreen.tsx` | Aplicar `sessionFont` no nome da sessão |
+
+### 6. Passagem de Dados
+
+Fluxo de dados do font selecionado:
+
+```text
+GalleryCreate                    ClientGallery
+     │                                │
+     ▼                                ▼
+configuracoes.sessionFont ────► gallery.settings.sessionFont
+     │                                │
+     ▼                                ▼
+Supabase: galerias.configuracoes     Props para Header/Welcome/Password
+```
 
 ---
 
-## Resultado Esperado
+## Arquivos a Criar/Modificar
+
+| Arquivo | Tipo | Mudança |
+|---------|------|---------|
+| `index.html` | Modificar | Adicionar link das 10 fontes Google |
+| `src/components/FontSelect.tsx` | **Criar** | Componente seletor com preview |
+| `src/pages/GalleryCreate.tsx` | Modificar | Estado + campo no Step 1 + salvar em configuracoes |
+| `src/pages/ClientGallery.tsx` | Modificar | Extrair sessionFont e passar para componentes |
+| `src/components/ClientGalleryHeader.tsx` | Modificar | Aceitar prop sessionFont e aplicar no h1 |
+| `src/components/PasswordScreen.tsx` | Modificar | Aceitar prop sessionFont |
+| `src/components/FinalizedGalleryScreen.tsx` | Modificar | Aceitar prop sessionFont |
+
+---
+
+## Preview do Componente FontSelect
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ Fluxo corrigido                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. Seleciona foto → Mutation salva no banco                        │
-│                    → localPhotos atualizado ✓                       │
-│                    → Cache do React Query atualizado ✓              │
-│                                                                     │
-│  2. Minimiza página                                                 │
-│                                                                     │
-│  3. Restaura página → React Query refetch → Cache já está correto   │
-│                     → useEffect preserva seleções locais            │
-│                                                                     │
-│  4. Estado permanece consistente ✓                                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────┐
+│  Fonte do Título                          │
+├───────────────────────────────────────────┤
+│  ┌─────────────────────────────────────┐  │
+│  │  Cormorant                      ▾   │  │  ← Dropdown
+│  └─────────────────────────────────────┘  │
+│                                           │
+│  ┌─────────────────────────────────────┐  │
+│  │                                     │  │
+│  │      Ensaio Gestante               │  │  ← Preview com fonte aplicada
+│  │      (fonte: Cormorant)            │  │
+│  │                                     │  │
+│  └─────────────────────────────────────┘  │
+└───────────────────────────────────────────┘
 ```
 
-## Benefícios
+---
 
-1. **Consistência**: Estado local e cache do React Query sempre sincronizados
-2. **Resiliência**: Refetch automático não sobrescreve alterações do usuário
-3. **Performance**: Sem necessidade de desabilitar `refetchOnWindowFocus` globalmente
-4. **Offline-friendly**: Estado local é preservado mesmo se o refetch falhar
+## Resultado na Galeria do Cliente
+
+O nome da sessão será exibido na fonte escolhida pelo fotógrafo em:
+- Tela de senha (se galeria privada)
+- Tela de boas-vindas
+- Header durante seleção
+- Tela de confirmação final
