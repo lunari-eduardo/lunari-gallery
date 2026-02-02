@@ -1,75 +1,145 @@
 
+# Tela de Seleção Concluída para Galerias Finalizadas
 
-# Ordenação por Linhas (Esquerda para Direita)
+## Situação Atual
 
-## Problema Identificado
+Quando o cliente tenta acessar uma galeria já finalizada:
+- O Edge Function `gallery-access` permite acesso (status `selecao_completa` está na lista de válidos)
+- O frontend mostra as fotos selecionadas em modo "read-only"
+- O cliente ainda vê a galeria completa (filtrando apenas fotos selecionadas)
 
-O CSS `column-count` utilizado atualmente distribui os itens **verticalmente** em cada coluna:
+## Novo Comportamento Desejado
+
+Após a finalização, o cliente deve ver **apenas uma tela de mensagem simples**:
 
 ```text
-ATUAL (column-count):           DESEJADO (CSS Grid):
-┌─────┬─────┬─────┐             ┌─────┬─────┬─────┐
-│  1  │  4  │  7  │             │  1  │  2  │  3  │
-│  2  │  5  │  8  │             │  4  │  5  │  6  │
-│  3  │  6  │  9  │             │  7  │  8  │  9  │
-└─────┴─────┴─────┘             └─────┴─────┴─────┘
+[Logo do Fotógrafo]
+
+✓ Seleção de fotos enviada com sucesso
+
+Sua seleção de fotos foi enviada com sucesso.
+A partir de agora, o fotógrafo dará continuidade ao processo.
+
+Em caso de dúvidas ou ajustes, fale diretamente com o fotógrafo.
 ```
 
-As fotos estão sendo ordenadas alfabeticamente corretamente no banco de dados, mas o `column-count` distribui da primeira para a última coluna de cima para baixo.
-
-## Solução
-
-Substituir `column-count` por CSS Grid, que distribui itens da esquerda para a direita naturalmente.
-
-**Trade-off:** O layout "masonry" verdadeiro (onde fotos de alturas diferentes encaixam como tijolos) não é possível com CSS Grid puro. As fotos ficarão em uma grade uniforme com todas as linhas da mesma altura (baseada na foto mais alta daquela linha).
+A tela deve respeitar:
+- O tema (claro/escuro) configurado pelo fotógrafo
+- As cores personalizadas do tema (se houver)
+- O logo do estúdio
 
 ---
 
 ## Mudanças Técnicas
 
-### Arquivo 1: `src/index.css`
+### 1. Edge Function `gallery-access` (linhas 44-51)
 
-Substituir `column-count` por `display: grid`:
+Alterar a lógica para retornar um status especial quando a galeria está finalizada:
 
-```css
-.masonry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
+```typescript
+// Substituir validação atual por verificação de finalização
+const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
+
+if (isFinalized) {
+  // Galeria finalizada - retornar apenas dados mínimos para tela de conclusão
+  return new Response(
+    JSON.stringify({ 
+      finalized: true,
+      sessionName: gallery.nome_sessao,
+      studioSettings: settings,  // Para logo
+      theme: themeData,          // Para cores/modo
+      clientMode: clientMode,
+    }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
 
-@media (min-width: 640px) {
-  .masonry-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .masonry-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (min-width: 1280px) {
-  .masonry-grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-@media (min-width: 1536px) {
-  .masonry-grid {
-    grid-template-columns: repeat(6, 1fr);
-  }
-}
-
-.masonry-item {
-  /* Remover break-inside pois não se aplica a grid */
+// Depois, verificar se está em status válido para seleção
+const validStatuses = ["enviado", "selecao_iniciada"];
+if (!validStatuses.includes(gallery.status)) {
+  return new Response(
+    JSON.stringify({ error: "Galeria não disponível", code: "NOT_AVAILABLE" }),
+    { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
 ```
 
-### Arquivo 2: `src/components/MasonryGrid.tsx`
+### 2. ClientGallery.tsx - Nova Tela de Conclusão
 
-Manter o componente como está - apenas o CSS muda.
+Adicionar verificação logo após o loading, antes de qualquer outra tela:
+
+```typescript
+// Verificar se galeria está finalizada (logo após loading)
+if (galleryResponse?.finalized) {
+  return (
+    <FinalizedGalleryScreen
+      sessionName={galleryResponse.sessionName}
+      studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+      studioName={galleryResponse.studioSettings?.studio_name}
+      themeStyles={themeStyles}
+      backgroundMode={effectiveBackgroundMode}
+    />
+  );
+}
+```
+
+### 3. Novo Componente: `FinalizedGalleryScreen`
+
+Criar novo componente em `src/components/FinalizedGalleryScreen.tsx`:
+
+```typescript
+interface FinalizedGalleryScreenProps {
+  sessionName?: string;
+  studioLogoUrl?: string;
+  studioName?: string;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
+}
+
+export function FinalizedGalleryScreen({ ... }: FinalizedGalleryScreenProps) {
+  return (
+    <div className={cn("min-h-screen", backgroundMode === 'dark' && 'dark')} style={themeStyles}>
+      {/* Centralizado vertical e horizontalmente */}
+      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+        {/* Logo do estúdio */}
+        {studioLogoUrl ? (
+          <img src={studioLogoUrl} alt={studioName} className="h-12 max-w-[200px] object-contain mb-8" />
+        ) : (
+          <Logo size="md" variant="gallery" className="mb-8" />
+        )}
+        
+        {/* Ícone de sucesso */}
+        <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-6">
+          <Check className="h-8 w-8 text-primary" />
+        </div>
+        
+        {/* Título */}
+        <h1 className="font-display text-2xl font-semibold text-center mb-4">
+          Seleção de fotos enviada com sucesso
+        </h1>
+        
+        {/* Mensagem */}
+        <div className="max-w-md text-center space-y-3">
+          <p className="text-muted-foreground">
+            Sua seleção de fotos foi enviada com sucesso.
+            A partir de agora, o fotógrafo dará continuidade ao processo.
+          </p>
+          <p className="text-muted-foreground text-sm">
+            Em caso de dúvidas ou ajustes, fale diretamente com o fotógrafo.
+          </p>
+        </div>
+        
+        {/* Nome da sessão (sutil) */}
+        {sessionName && (
+          <p className="text-xs text-muted-foreground mt-8">
+            {sessionName}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+```
 
 ---
 
@@ -77,28 +147,33 @@ Manter o componente como está - apenas o CSS muda.
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/index.css` | Substituir `column-count` por CSS Grid |
+| `supabase/functions/gallery-access/index.ts` | Retornar `finalized: true` para galerias confirmadas |
+| `src/pages/ClientGallery.tsx` | Detectar `galleryResponse?.finalized` e mostrar nova tela |
+| `src/components/FinalizedGalleryScreen.tsx` | **Novo arquivo** - Componente da tela de conclusão |
 
 ---
 
-## Resultado Esperado
-
-Fotos ordenadas alfabeticamente fluindo da esquerda para a direita:
+## Fluxo Resultante
 
 ```text
-LISE2752 → LISE2754 → LISE2755 → LISE2756 → LISE2757 → LISE2758
-    ↓
-LISE2759 → LISE2760 → LISE2761 → LISE2762 → LISE2763 → LISE2764
-    ↓
-...e assim por diante
+Cliente acessa link → Edge Function verifica token
+                          ↓
+         ┌─────────────────┴─────────────────┐
+         ↓                                   ↓
+   Galeria finalizada?                 Galeria ativa?
+   (confirmado/finalized_at)           (enviado/selecao_iniciada)
+         ↓                                   ↓
+   Retorna { finalized: true }         Retorna dados completos
+         ↓                                   ↓
+   Tela de "Seleção Enviada"           Galeria interativa normal
+   (apenas mensagem + logo)
 ```
 
-## Impacto
+---
 
-Esta mudança afeta todas as visualizações de galeria:
-- Galeria do cliente (`ClientGallery.tsx`)
-- Detalhe da galeria no painel do fotógrafo (`GalleryDetail.tsx`)
-- Preview da galeria (`GalleryPreview.tsx`)
+## Benefícios
 
-Todas passarão a exibir fotos em ordem de leitura natural (esquerda → direita, cima → baixo).
-
+1. **Privacidade**: Cliente não vê mais as fotos após finalização
+2. **Clareza**: Mensagem objetiva sobre próximos passos
+3. **Consistência**: Tema e logo do fotógrafo respeitados
+4. **Performance**: Menos dados trafegados (não carrega fotos)
