@@ -1,142 +1,193 @@
 
 
-# Corrigir Fluxo de Troca de Email
+# Corrigir Fluxo de Atualização de Senha Após Troca de Email
 
 ## Problema Identificado
 
-Existem dois problemas no fluxo atual:
+Os logs de autenticação revelam a causa exata do erro:
 
-### 1. Configuração "Secure Email Change" do Supabase
-O Supabase está configurado com **Secure Email Change** habilitado, o que significa:
-- Envia confirmação para o email **antigo** E para o email **novo**
-- Ambos os links precisam ser clicados para a troca ser concluída
-- Isso causa confusão para o usuário
+| Horário | Ação | Resultado |
+|---------|------|-----------|
+| 00:37:30 | Login com `cartbeem8@gmail.com` | ✅ OK |
+| 00:38:14 | Solicitar troca para `valmordeick@gmail.com` | ✅ Email enviado |
+| 00:39:35 | Confirmar troca de email | ✅ Email alterado |
+| 00:41:09 | Usar link de recovery | ✅ Nova sessão criada |
+| 00:41:23+ | Tentar `updateUser({ password })` | ❌ **Session not found** |
 
-### 2. Processamento do Token de Email Change
-Quando o usuário clica no link de confirmação, o Supabase redireciona com parâmetros especiais na URL, mas o aplicativo não está processando esses tokens corretamente.
+**Causa Raiz:** A troca de email invalida a sessão antiga, mas o frontend não está detectando que o usuário tem uma sessão válida após clicar no link de recovery. O formulário de atualização de senha (`UpdatePasswordForm`) tenta usar uma sessão que não existe mais.
 
-## Soluções
+## Análise Técnica
 
-### Solução 1: Desabilitar "Secure Email Change" (Recomendado - Ação Manual)
+Quando o usuário clica no link de **recovery** (recuperação de senha), o Supabase:
+1. Processa o token de recovery
+2. Cria uma sessão temporária
+3. Redireciona para `/auth?reset=true#access_token=...`
 
-No **Supabase Dashboard**, ir em:
-- **Authentication** → **Email Templates** → **Email Settings**
-- Desabilitar **"Secure email change"**
+O problema é que:
+- O `useAuth` processa o hash e **limpa ele** antes do Supabase terminar de processar
+- O formulário `UpdatePasswordForm` é exibido, mas **sem sessão válida**
+- A chamada `updatePassword()` falha com "Session not found"
 
-Com isso, apenas o novo email receberá o link de confirmação, e ao clicar nele, a troca é concluída automaticamente.
+## Solução
 
-### Solução 2: Melhorar o Processamento de Tokens no Frontend
+### 1. Aguardar Processamento da Sessão de Recovery
 
-Atualizar o código para processar corretamente os tokens de `email_change`:
+No `Auth.tsx`, precisamos garantir que a sessão de recovery seja processada **antes** de mostrar o formulário de atualização de senha.
 
-#### Arquivo: `src/hooks/useAuth.ts`
-
-Adicionar verificação no useEffect para detectar quando a URL contém tokens de confirmação de email:
-
-```typescript
-useEffect(() => {
-  // Detectar e processar tokens de confirmação na URL (email change, signup, etc)
-  const processAuthTokens = async () => {
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const type = hashParams.get('type');
-    
-    if (type === 'email_change' || type === 'signup' || type === 'recovery') {
-      console.log('🔄 Processing auth token of type:', type);
-      // O Supabase client processa automaticamente via onAuthStateChange
-      // Limpar o hash após processamento
-      if (window.location.hash) {
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-    }
-  };
-  
-  processAuthTokens();
-}, []);
-```
-
-#### Arquivo: `src/pages/Auth.tsx`
-
-Melhorar o handling de callbacks de email change:
-
-```typescript
-useEffect(() => {
-  const hash = window.location.hash;
-  
-  if (hash) {
-    const params = new URLSearchParams(hash.substring(1));
-    const type = params.get('type');
-    const accessToken = params.get('access_token');
-    
-    if (type === 'email_change' && accessToken) {
-      console.log('📧 Email change confirmation detected');
-      toast.success('Email alterado com sucesso!');
-      // Limpar hash e redirecionar
-      window.history.replaceState(null, '', '/');
-    }
-  }
-}, []);
-```
-
-### Solução 3: Melhorar Feedback ao Usuário
-
-No `ChangeEmailForm.tsx`, informar claramente o que vai acontecer:
-
-```typescript
-<Alert>
-  <Info className="h-4 w-4" />
-  <AlertDescription>
-    Um email de confirmação será enviado para o novo endereço.
-    Clique no link no email recebido para confirmar a alteração.
-    Você será deslogado e precisará fazer login com o novo email.
-  </AlertDescription>
-</Alert>
-```
-
-## Fluxo Corrigido
+**Fluxo Corrigido:**
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  FLUXO DE TROCA DE EMAIL - CORRIGIDO                               │
+│  FLUXO DE RECUPERAÇÃO DE SENHA - CORRIGIDO                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  1. Usuário digita novo email no formulário                         │
-│  2. Sistema chama supabase.auth.updateUser({ email: novoEmail })    │
-│  3. Supabase envia email de confirmação para o NOVO endereço        │
-│     (com Secure Email Change DESABILITADO)                         │
-│  4. Usuário clica no link                                          │
-│  5. Supabase processa o token e atualiza o email                   │
-│  6. Usuário é autenticado automaticamente com novo email           │
-│  7. onAuthStateChange dispara evento USER_UPDATED                  │
-│  8. Aplicativo detecta e redireciona para a página inicial         │
+│  1. Usuário clica no link de recovery no email                      │
+│  2. URL: /auth?reset=true#access_token=XXX&type=recovery            │
+│  3. Supabase processa token e dispara onAuthStateChange             │
+│  4. Frontend aguarda user !== null                                  │
+│  5. ENTÃO exibe formulário de nova senha                            │
+│  6. updatePassword() funciona porque há sessão válida               │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Ações Necessárias
-
-| Tipo | Ação | Responsável |
-|------|------|-------------|
-| **Manual** | Desabilitar "Secure email change" no Supabase Dashboard | Usuário |
-| **Código** | Melhorar processamento de tokens em `useAuth.ts` | Sistema |
-| **Código** | Adicionar feedback de sucesso em `Auth.tsx` | Sistema |
-| **Código** | Melhorar mensagem explicativa em `ChangeEmailForm.tsx` | Sistema |
-
-## Arquivos a Modificar
+### 2. Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/hooks/useAuth.ts` | Adicionar log de eventos `USER_UPDATED` |
-| `src/pages/Auth.tsx` | Processar callback de `email_change` |
-| `src/components/account/ChangeEmailForm.tsx` | Melhorar mensagem de feedback |
+| `src/pages/Auth.tsx` | Aguardar sessão válida antes de exibir `UpdatePasswordForm` |
+| `src/hooks/useAuth.ts` | Processar token de `recovery` corretamente |
 
-## Configuração do Supabase (Manual)
+### 3. Implementação
 
-Acesse o [Supabase Dashboard - Authentication Settings](https://supabase.com/dashboard/project/tlnjspsywycbudhewsfv/auth/providers) e:
+#### Modificar `src/pages/Auth.tsx`
 
-1. Vá em **Authentication** → **Email Templates**
-2. Role até **Email Settings**
-3. **Desabilite** a opção "Secure email change"
-4. Salve as alterações
+Detectar o callback de recovery e aguardar a sessão:
 
-Isso fará com que apenas o novo email receba o link de confirmação, simplificando o fluxo.
+```typescript
+// Check for password reset callback
+useEffect(() => {
+  const hash = window.location.hash;
+  const resetParam = searchParams.get('reset');
+  
+  // Detectar se é um callback de recovery (link do email)
+  if (hash && hash.includes('type=recovery')) {
+    console.log('🔄 Recovery callback detected, waiting for session...');
+    // Não mostrar formulário ainda - aguardar sessão
+    return;
+  }
+  
+  // Se já tem sessão e está na página de reset, mostrar formulário
+  if (resetParam === 'true' && user) {
+    setShowUpdatePassword(true);
+  }
+}, [searchParams, user]);
+```
+
+#### Modificar `src/hooks/useAuth.ts`
+
+Garantir que tokens de recovery sejam processados antes de limpar o hash:
+
+```typescript
+const processAuthTokens = () => {
+  const hash = window.location.hash;
+  if (hash) {
+    const hashParams = new URLSearchParams(hash.substring(1));
+    const type = hashParams.get('type');
+    
+    // Para recovery, NÃO limpar o hash imediatamente
+    // Deixar o Supabase processar primeiro
+    if (type === 'recovery') {
+      console.log('🔄 Recovery token detected - letting Supabase process');
+      // O Supabase vai processar automaticamente via onAuthStateChange
+      // Limpar apenas os parâmetros de busca após o processamento
+      return;
+    }
+    
+    if (type === 'email_change' || type === 'signup') {
+      console.log('🔄 Processing auth token of type:', type);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }
+};
+```
+
+### 4. Exibir Formulário Apenas Quando Há Sessão
+
+No `Auth.tsx`, a condição para mostrar `UpdatePasswordForm` deve verificar se há usuário autenticado:
+
+```typescript
+// Render update password form if user is authenticated and reset param is present
+if (showUpdatePassword && user) {
+  return (
+    <div className="min-h-screen flex items-center justify-center ...">
+      <Card>
+        <UpdatePasswordForm />
+      </Card>
+    </div>
+  );
+}
+
+// Se reset=true mas ainda não tem user, mostrar loading
+if (searchParams.get('reset') === 'true' && !user && !loading) {
+  // Pode significar que o link expirou ou foi usado
+  return (
+    <div className="min-h-screen flex items-center justify-center ...">
+      <Card>
+        <div className="text-center p-6">
+          <p>Link expirado ou inválido. Solicite um novo link de recuperação.</p>
+          <Button onClick={() => setShowResetPassword(true)}>
+            Solicitar novo link
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+```
+
+### 5. Diagrama do Fluxo Corrigido
+
+```text
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Email     │     │  Clique no  │     │  Supabase   │     │  Formulário │
+│  Recovery   │ ──▶ │   Link      │ ──▶ │  Processa   │ ──▶ │  Aparece    │
+│   Enviado   │     │             │     │  Token      │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+                                              │
+                                              ▼
+                                        ┌─────────────┐
+                                        │  Sessão     │
+                                        │  Criada     │
+                                        └─────────────┘
+                                              │
+                                              ▼
+                                        ┌─────────────┐
+                                        │  user !== null │
+                                        │  (useAuth)  │
+                                        └─────────────┘
+                                              │
+                                              ▼
+                                        ┌─────────────┐
+                                        │ showUpdate  │
+                                        │ Password    │
+                                        │ Form = true │
+                                        └─────────────┘
+```
+
+## Resumo das Mudanças
+
+| Componente | Antes | Depois |
+|------------|-------|--------|
+| `Auth.tsx` | Mostra formulário baseado em `?reset=true` | Mostra formulário se `reset=true` **E** `user` existe |
+| `useAuth.ts` | Limpa hash imediatamente | Não limpa hash de `recovery` - deixa Supabase processar |
+| `UpdatePasswordForm` | Assume que há sessão | Funciona normalmente (sessão garantida pelo parent) |
+
+## Consideração de Edge Case
+
+Se o link de recovery **expirou**, o usuário verá uma mensagem clara:
+- "Link expirado ou inválido"
+- Botão para solicitar novo link
+
+Isso evita confusão e o loop de erro atual.
 
