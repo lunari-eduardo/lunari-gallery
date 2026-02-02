@@ -1,140 +1,188 @@
 
-# Sistema de Seleção de Fonte para Nome da Galeria ✅ IMPLEMENTADO
 
-## Status: COMPLETO
+# Sistema de Controle de Caixa para Título da Galeria
 
-## Visão Geral
+## Situação Atual
 
-Implementar um seletor de fontes no formulário de criação de galeria que permite ao fotógrafo escolher entre 10 fontes do Google Fonts para exibir o nome da sessão na galeria do cliente.
+O título da galeria (nome da sessão) é exibido em **caixa alta forçada** em vários locais:
+- Preview no seletor de fontes (`FontSelect.tsx`) - usa classe `uppercase`
+- Header da galeria (`ClientGalleryHeader.tsx`) - usa classe `uppercase`
+- Demais telas não usam uppercase, mas também não oferecem controle
 
-## Fontes Disponíveis (Google Fonts)
+O usuário quer que o título seja exibido **exatamente como digitado**, com opção de aplicar transformações.
 
-| Nome Corrigido | Estilo | URL Google Fonts |
-|----------------|--------|------------------|
-| Imperial Script | Cursiva elegante | `Imperial+Script` |
-| League Script | Cursiva casual | `League+Script` |
-| Allura | Script romântica | `Allura` |
-| Amatic SC | Handwritten | `Amatic+SC:wght@400;700` |
-| Shadows Into Light | Handwritten | `Shadows+Into+Light` |
-| Source Serif 4 | Serif clássica | `Source+Serif+4:wght@400;600;700` |
-| Cormorant | Serif elegante | `Cormorant:wght@400;500;600;700` |
-| Bodoni Moda | Serif moderna | `Bodoni+Moda:wght@400;500;600;700` |
-| Raleway | Sans-serif clean | `Raleway:wght@400;500;600;700` |
-| Quicksand | Sans-serif amigável | `Quicksand:wght@400;500;600;700` |
+## Nova Funcionalidade
+
+Adicionar um botão `[T]` ao lado do preview no seletor de fontes que alterna entre 3 modos:
+
+| Modo | Descrição | Exemplo |
+|------|-----------|---------|
+| `normal` | Exatamente como digitado | "Ensaio gestante" |
+| `uppercase` | Tudo em caixa alta | "ENSAIO GESTANTE" |
+| `titlecase` | Início de palavras (exceto conjunções) | "Ensaio Gestante" |
+
+### Conjunções ignoradas no Title Case
+`e`, `de`, `da`, `do`, `das`, `dos`, `com`, `em`, `para`, `a`, `o`, `as`, `os`
 
 ---
 
 ## Mudanças Técnicas
 
-### 1. Carregar Fontes no `index.html`
-
-```html
-<!-- Após linha 22, adicionar: -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Imperial+Script&family=League+Script&family=Allura&family=Amatic+SC:wght@400;700&family=Shadows+Into+Light&family=Source+Serif+4:wght@400;600;700&family=Cormorant:wght@400;500;600;700&family=Bodoni+Moda:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
-```
-
-### 2. Novo Componente: `src/components/FontSelect.tsx`
-
-Componente de seletor com preview em tempo real:
+### 1. Atualizar Tipo `GallerySettings` (types/gallery.ts)
 
 ```typescript
-interface FontOption {
-  id: string;
-  name: string;
-  family: string;  // CSS font-family
+export type TitleCaseMode = 'normal' | 'uppercase' | 'titlecase';
+
+export interface GallerySettings {
+  // ... existente
+  sessionFont?: string;
+  titleCaseMode?: TitleCaseMode;  // Novo campo
 }
-
-const GALLERY_FONTS: FontOption[] = [
-  { id: 'playfair', name: 'Playfair Display', family: '"Playfair Display", serif' }, // Padrão atual
-  { id: 'imperial', name: 'Imperial Script', family: '"Imperial Script", cursive' },
-  { id: 'league', name: 'League Script', family: '"League Script", cursive' },
-  { id: 'allura', name: 'Allura', family: '"Allura", cursive' },
-  { id: 'amatic', name: 'Amatic SC', family: '"Amatic SC", cursive' },
-  { id: 'shadows', name: 'Shadows Into Light', family: '"Shadows Into Light", cursive' },
-  { id: 'source-serif', name: 'Source Serif 4', family: '"Source Serif 4", serif' },
-  { id: 'cormorant', name: 'Cormorant', family: '"Cormorant", serif' },
-  { id: 'bodoni', name: 'Bodoni Moda', family: '"Bodoni Moda", serif' },
-  { id: 'raleway', name: 'Raleway', family: '"Raleway", sans-serif' },
-  { id: 'quicksand', name: 'Quicksand', family: '"Quicksand", sans-serif' },
-];
 ```
 
-UI do componente:
-- Dropdown com nome da fonte
-- Preview abaixo mostrando o nome da sessão na fonte selecionada
-- Cada item do dropdown mostra o nome da fonte estilizado
+### 2. Função de Transformação de Texto (novo helper)
 
-### 3. Atualizar `GalleryCreate.tsx`
+Criar `src/lib/textTransform.ts`:
 
-#### Novo estado (após linha 171):
 ```typescript
-const [sessionFont, setSessionFont] = useState<string>('playfair');
+const CONJUNCTIONS = ['e', 'de', 'da', 'do', 'das', 'dos', 'com', 'em', 'para', 'a', 'o', 'as', 'os'];
+
+export function applyTitleCase(text: string, mode: 'normal' | 'uppercase' | 'titlecase' = 'normal'): string {
+  if (!text) return text;
+  
+  switch (mode) {
+    case 'uppercase':
+      return text.toUpperCase();
+    case 'titlecase':
+      return text
+        .toLowerCase()
+        .split(' ')
+        .map((word, index) => {
+          // Primeira palavra sempre capitalizada
+          if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1);
+          // Conjunções ficam minúsculas
+          if (CONJUNCTIONS.includes(word)) return word;
+          // Outras palavras capitalizadas
+          return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+    default:
+      return text;
+  }
+}
 ```
 
-#### Adicionar campo no Step 1 (após linha 1049):
+### 3. Atualizar `FontSelect.tsx`
+
+Adicionar prop para modo e toggle button:
+
 ```typescript
-<div className="space-y-2">
-  <Label>Fonte do Título</Label>
-  <FontSelect
-    value={sessionFont}
-    onChange={setSessionFont}
-    previewText={sessionName || 'Ensaio Gestante'}
-  />
-</div>
+interface FontSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  previewText?: string;
+  titleCaseMode?: TitleCaseMode;
+  onTitleCaseModeChange?: (mode: TitleCaseMode) => void;
+}
 ```
 
-#### Salvar no objeto `configuracoes` (linhas 651-665, 705-719):
+UI com botão toggle ao lado do preview:
+
+```text
+┌────────────────────────────────────────────────────┐
+│  ┌──────────────────────────────────────────────┐  │
+│  │  Cormorant                              ▾    │  │
+│  └──────────────────────────────────────────────┘  │
+│                                                    │
+│  ┌────────────────────────────────────────────┬──┐ │
+│  │                                            │Tt│ │ ← Botão toggle
+│  │       Alice e Pedro                        │  │ │
+│  │       (título com fonte aplicada)          │──│ │
+│  │                                            │  │ │
+│  └────────────────────────────────────────────┴──┘ │
+│  Prévia do título da galeria                       │
+└────────────────────────────────────────────────────┘
+```
+
+Ícones do botão por modo:
+- `normal`: `Type` (fonte normal)
+- `uppercase`: `CaseSensitive` ou `ALargeSmall`
+- `titlecase`: `CaseUpper` ou ícone personalizado
+
+Ciclo: normal → uppercase → titlecase → normal
+
+### 4. Atualizar `GalleryCreate.tsx`
+
+Novo estado:
+```typescript
+const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
+```
+
+Passar para `FontSelect`:
+```typescript
+<FontSelect
+  value={sessionFont}
+  onChange={setSessionFont}
+  previewText={sessionName || 'Ensaio Gestante'}
+  titleCaseMode={titleCaseMode}
+  onTitleCaseModeChange={setTitleCaseMode}
+/>
+```
+
+Salvar em `configuracoes`:
 ```typescript
 configuracoes: {
   // ... existente
-  sessionFont: sessionFont,  // Novo campo
+  sessionFont: sessionFont,
+  titleCaseMode: titleCaseMode,  // Novo
 }
 ```
 
-### 4. Atualizar Edge Function `gallery-access`
-
-Incluir `sessionFont` na resposta da galeria (já vem automaticamente dentro de `configuracoes`).
-
 ### 5. Atualizar Componentes do Cliente
 
-#### `ClientGalleryHeader.tsx` (linha 91):
+Cada componente que exibe o título deve:
+1. Receber `titleCaseMode` como prop (ou extrair de settings)
+2. Aplicar `applyTitleCase(sessionName, titleCaseMode)`
+3. **Remover a classe `uppercase`** quando existente
+
+| Arquivo | Mudança |
+|---------|---------|
+| `ClientGalleryHeader.tsx` | Remover `uppercase`, aplicar `applyTitleCase()` |
+| `PasswordScreen.tsx` | Aplicar `applyTitleCase()` |
+| `FinalizedGalleryScreen.tsx` | Aplicar `applyTitleCase()` |
+| `ClientGallery.tsx` (welcome + confirmed) | Aplicar `applyTitleCase()` |
+
+Exemplo no `ClientGalleryHeader.tsx`:
+
 ```typescript
 // Antes
-<h1 className="font-display text-lg sm:text-xl font-semibold uppercase tracking-wide">
+<h1 className="text-lg sm:text-xl font-semibold uppercase tracking-wide">
   {sessionName}
 </h1>
 
 // Depois
 <h1 
-  className="text-lg sm:text-xl font-semibold uppercase tracking-wide"
+  className="text-lg sm:text-xl font-semibold tracking-wide"
   style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
 >
-  {sessionName}
+  {applyTitleCase(sessionName, titleCaseMode)}
 </h1>
 ```
 
-#### Componentes afetados:
-| Arquivo | Mudança |
-|---------|---------|
-| `ClientGalleryHeader.tsx` | Aplicar `sessionFont` via style inline |
-| `ClientGallery.tsx` (welcome) | Aplicar `sessionFont` no h1 da tela de boas-vindas |
-| `PasswordScreen.tsx` | Aplicar `sessionFont` no nome da sessão |
-| `FinalizedGalleryScreen.tsx` | Aplicar `sessionFont` no nome da sessão |
+### 6. Atualizar `ClientGallery.tsx`
 
-### 6. Passagem de Dados
+Extrair `titleCaseMode` do settings e passar para componentes:
 
-Fluxo de dados do font selecionado:
+```typescript
+const titleCaseMode = gallery.settings.titleCaseMode || 'normal';
 
-```text
-GalleryCreate                    ClientGallery
-     │                                │
-     ▼                                ▼
-configuracoes.sessionFont ────► gallery.settings.sessionFont
-     │                                │
-     ▼                                ▼
-Supabase: galerias.configuracoes     Props para Header/Welcome/Password
+// Passar para header
+<ClientGalleryHeader
+  sessionName={gallery.sessionName}
+  sessionFont={getFontFamilyById(gallery.settings.sessionFont)}
+  titleCaseMode={titleCaseMode}
+  // ...
+/>
 ```
 
 ---
@@ -143,41 +191,52 @@ Supabase: galerias.configuracoes     Props para Header/Welcome/Password
 
 | Arquivo | Tipo | Mudança |
 |---------|------|---------|
-| `index.html` | Modificar | Adicionar link das 10 fontes Google |
-| `src/components/FontSelect.tsx` | **Criar** | Componente seletor com preview |
-| `src/pages/GalleryCreate.tsx` | Modificar | Estado + campo no Step 1 + salvar em configuracoes |
-| `src/pages/ClientGallery.tsx` | Modificar | Extrair sessionFont e passar para componentes |
-| `src/components/ClientGalleryHeader.tsx` | Modificar | Aceitar prop sessionFont e aplicar no h1 |
-| `src/components/PasswordScreen.tsx` | Modificar | Aceitar prop sessionFont |
-| `src/components/FinalizedGalleryScreen.tsx` | Modificar | Aceitar prop sessionFont |
+| `src/lib/textTransform.ts` | **Criar** | Função `applyTitleCase()` |
+| `src/types/gallery.ts` | Modificar | Adicionar tipo `TitleCaseMode` e campo em `GallerySettings` |
+| `src/components/FontSelect.tsx` | Modificar | Adicionar botão toggle + props + lógica |
+| `src/pages/GalleryCreate.tsx` | Modificar | Estado + salvar em configuracoes |
+| `src/components/ClientGalleryHeader.tsx` | Modificar | Remover `uppercase`, adicionar prop + aplicar função |
+| `src/components/PasswordScreen.tsx` | Modificar | Adicionar prop + aplicar função |
+| `src/components/FinalizedGalleryScreen.tsx` | Modificar | Adicionar prop + aplicar função |
+| `src/pages/ClientGallery.tsx` | Modificar | Extrair titleCaseMode e passar para componentes |
 
 ---
 
-## Preview do Componente FontSelect
+## Fluxo de Dados
 
 ```text
-┌───────────────────────────────────────────┐
-│  Fonte do Título                          │
-├───────────────────────────────────────────┤
-│  ┌─────────────────────────────────────┐  │
-│  │  Cormorant                      ▾   │  │  ← Dropdown
-│  └─────────────────────────────────────┘  │
-│                                           │
-│  ┌─────────────────────────────────────┐  │
-│  │                                     │  │
-│  │      Ensaio Gestante               │  │  ← Preview com fonte aplicada
-│  │      (fonte: Cormorant)            │  │
-│  │                                     │  │
-│  └─────────────────────────────────────┘  │
-└───────────────────────────────────────────┘
+GalleryCreate                         ClientGallery
+     │                                      │
+     ▼                                      ▼
+configuracoes.titleCaseMode ──────► gallery.settings.titleCaseMode
+     │                                      │
+     ▼                                      ▼
+Preview com transformação            Componentes aplicam applyTitleCase()
 ```
 
 ---
 
-## Resultado na Galeria do Cliente
+## Resultado Visual no Cliente
 
-O nome da sessão será exibido na fonte escolhida pelo fotógrafo em:
-- Tela de senha (se galeria privada)
-- Tela de boas-vindas
-- Header durante seleção
-- Tela de confirmação final
+Com modo `titlecase` selecionado:
+
+```text
+Usuário digita: "alice e pedro"
+                      ↓
+Exibido como: "Alice e Pedro"
+```
+
+Com modo `normal`:
+```text
+Usuário digita: "alice e pedro"
+                      ↓
+Exibido como: "alice e pedro"
+```
+
+Com modo `uppercase`:
+```text
+Usuário digita: "alice e pedro"
+                      ↓
+Exibido como: "ALICE E PEDRO"
+```
+
