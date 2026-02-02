@@ -1,70 +1,75 @@
 
 
-# Correções na Galeria do Cliente
+# Ordenação por Linhas (Esquerda para Direita)
 
-## Problema 1: Grid não parece centralizada
+## Problema Identificado
 
-### Análise
-O CSS atual usa `column-count` para criar o layout masonry. Este método distribui elementos automaticamente em colunas, mas quando há poucas fotos, as colunas são preenchidas da esquerda para a direita, deixando espaço à direita.
+O CSS `column-count` utilizado atualmente distribui os itens **verticalmente** em cada coluna:
 
-O `.masonry-container` já tem `margin: 0 auto` (centralizado) e `max-width: 1800px`, mas o problema visual ocorre porque:
-- Com 9 fotos em tela de 5 colunas, sobra 1 "espaço" vazio na última coluna
-- O conteúdo dentro das colunas fica alinhado à esquerda naturalmente
+```text
+ATUAL (column-count):           DESEJADO (CSS Grid):
+┌─────┬─────┬─────┐             ┌─────┬─────┬─────┐
+│  1  │  4  │  7  │             │  1  │  2  │  3  │
+│  2  │  5  │  8  │             │  4  │  5  │  6  │
+│  3  │  6  │  9  │             │  7  │  8  │  9  │
+└─────┴─────┴─────┘             └─────┴─────┴─────┘
+```
 
-### Solução
-Manter o `max-width: 1800px` mas adicionar uma camada de controle adicional. Como o `column-count` é difícil de centralizar quando incompleto, vamos ajustar o padding responsivo para equilibrar melhor o espaço disponível.
+As fotos estão sendo ordenadas alfabeticamente corretamente no banco de dados, mas o `column-count` distribui da primeira para a última coluna de cima para baixo.
 
-**Mudança no `src/index.css`:**
+## Solução
+
+Substituir `column-count` por CSS Grid, que distribui itens da esquerda para a direita naturalmente.
+
+**Trade-off:** O layout "masonry" verdadeiro (onde fotos de alturas diferentes encaixam como tijolos) não é possível com CSS Grid puro. As fotos ficarão em uma grade uniforme com todas as linhas da mesma altura (baseada na foto mais alta daquela linha).
+
+---
+
+## Mudanças Técnicas
+
+### Arquivo 1: `src/index.css`
+
+Substituir `column-count` por `display: grid`:
+
 ```css
-.masonry-container {
-  width: 100%;
-  max-width: 1800px;
-  margin: 0 auto;
-  padding: 0 1rem;  /* Aumentar padding base */
+.masonry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
 }
 
 @media (min-width: 640px) {
-  .masonry-container {
-    padding: 0 2rem;  /* Aumentar padding tablet */
+  .masonry-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (min-width: 1024px) {
-  .masonry-container {
-    padding: 0 3rem;  /* Aumentar padding desktop */
+  .masonry-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .masonry-grid {
+    grid-template-columns: repeat(5, 1fr);
   }
 }
 
 @media (min-width: 1536px) {
-  .masonry-container {
-    padding: 0 4rem;  /* Padding generoso em ultrawide */
+  .masonry-grid {
+    grid-template-columns: repeat(6, 1fr);
   }
+}
+
+.masonry-item {
+  /* Remover break-inside pois não se aplica a grid */
 }
 ```
 
----
+### Arquivo 2: `src/components/MasonryGrid.tsx`
 
-## Problema 2: Logo do fotógrafo não aparece
-
-Os dados do banco mostram `studio_logo_url: null` para todos os fotógrafos. Precisamos melhorar o feedback do upload.
-
-### Mudança no `src/components/settings/LogoUploader.tsx`:
-- Adicionar toast de sucesso/erro
-- Validar tamanho do arquivo (máx 2MB)
-
----
-
-## Problema 3: Botão toggle (sol/lua) visível
-
-O projeto define que o tema é controlado exclusivamente pelo fotógrafo - o cliente não deve ter toggle.
-
-### Mudança no `src/components/ClientGalleryHeader.tsx`:
-- Remover botão de toggle de tema
-- Remover props `activeClientMode` e `onToggleMode`
-- Remover imports `Sun` e `Moon`
-
-### Mudança no `src/pages/ClientGallery.tsx`:
-- Remover props `activeClientMode` e `onToggleMode` do componente
+Manter o componente como está - apenas o CSS muda.
 
 ---
 
@@ -72,18 +77,28 @@ O projeto define que o tema é controlado exclusivamente pelo fotógrafo - o cli
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/index.css` | Aumentar padding do `.masonry-container` para melhor equilíbrio visual |
-| `src/components/ClientGalleryHeader.tsx` | Remover botão toggle + props não usadas |
-| `src/pages/ClientGallery.tsx` | Remover props `activeClientMode` e `onToggleMode` |
-| `src/components/settings/LogoUploader.tsx` | Adicionar toast de feedback + validação de tamanho |
-| `src/App.css` | Deletar arquivo (não utilizado, resquício do Vite) |
+| `src/index.css` | Substituir `column-count` por CSS Grid |
 
 ---
 
 ## Resultado Esperado
 
-1. **Grid com melhor equilíbrio visual**: Padding mais generoso nas laterais reduz a sensação de "vazio à direita"
-2. **Sem toggle de tema**: Interface mais limpa, tema controlado apenas pelo fotógrafo
-3. **Feedback de logo**: Usuário sabe se o upload funcionou ou falhou
-4. **Codebase limpo**: Remoção de arquivo legado não utilizado
+Fotos ordenadas alfabeticamente fluindo da esquerda para a direita:
+
+```text
+LISE2752 → LISE2754 → LISE2755 → LISE2756 → LISE2757 → LISE2758
+    ↓
+LISE2759 → LISE2760 → LISE2761 → LISE2762 → LISE2763 → LISE2764
+    ↓
+...e assim por diante
+```
+
+## Impacto
+
+Esta mudança afeta todas as visualizações de galeria:
+- Galeria do cliente (`ClientGallery.tsx`)
+- Detalhe da galeria no painel do fotógrafo (`GalleryDetail.tsx`)
+- Preview da galeria (`GalleryPreview.tsx`)
+
+Todas passarão a exibir fotos em ordem de leitura natural (esquerda → direita, cima → baixo).
 
