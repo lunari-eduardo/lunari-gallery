@@ -99,7 +99,7 @@ serve(async (req) => {
       .from("galeria_fotos")
       .select("*")
       .eq("galeria_id", gallery.id)
-      .order("order_index", { ascending: true });
+      .order("original_filename", { ascending: true });
 
     if (photosError) {
       console.error("Error fetching photos:", photosError);

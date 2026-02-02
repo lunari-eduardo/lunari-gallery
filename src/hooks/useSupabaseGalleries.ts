@@ -230,7 +230,7 @@ export function useSupabaseGalleries() {
       .from('galeria_fotos')
       .select('*')
       .eq('galeria_id', galleryId)
-      .order('order_index', { ascending: true });
+      .order('original_filename', { ascending: true });
 
     if (error) throw error;
     return data.map(transformPhoto);
