@@ -30,6 +30,7 @@ import { GalleryPhoto, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
+import { getFontFamilyById } from '@/components/FontSelect';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
@@ -297,6 +298,7 @@ export default function ClientGallery() {
         allowComments: config?.allowComments !== false,
         allowDownload: config?.allowDownload === true,
         allowExtraPhotos: true,
+        sessionFont: config?.sessionFont as string | undefined,
       },
       photos: [],
       actions: [],
@@ -676,6 +678,7 @@ export default function ClientGallery() {
     return (
       <PasswordScreen
         sessionName={galleryResponse?.sessionName}
+        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
         onSubmit={handlePasswordSubmit}
@@ -692,6 +695,7 @@ export default function ClientGallery() {
     return (
       <FinalizedGalleryScreen
         sessionName={galleryResponse.sessionName}
+        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
         studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
         studioName={galleryResponse.studioSettings?.studio_name}
         themeStyles={themeStyles}
@@ -869,7 +873,12 @@ export default function ClientGallery() {
             )}
           </div>
           <div className="text-center py-2 border-t border-border/30">
-            <p className="text-sm font-medium">{gallery.sessionName}</p>
+            <p 
+              className="text-sm font-medium"
+              style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
+            >
+              {gallery.sessionName}
+            </p>
             <p className="text-xs text-muted-foreground">Seleção confirmada</p>
           </div>
         </header>
@@ -987,7 +996,10 @@ export default function ClientGallery() {
             </div>
             
             <div>
-              <h1 className="font-display text-3xl font-semibold mb-2">
+              <h1 
+                className="text-3xl font-semibold mb-2"
+                style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
+              >
                 {gallery.sessionName}
               </h1>
               <p className="text-muted-foreground">
@@ -1124,6 +1136,7 @@ export default function ClientGallery() {
       {/* New Header with centered logo */}
       <ClientGalleryHeader
         sessionName={gallery.sessionName}
+        sessionFont={getFontFamilyById(gallery.settings.sessionFont)}
         totalPhotos={localPhotos.length}
         deadline={hasDeadline ? gallery.settings.deadline : null}
         hasDeadline={hasDeadline}

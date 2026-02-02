@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 
 interface FinalizedGalleryScreenProps {
   sessionName?: string;
+  sessionFont?: string;
   studioLogoUrl?: string;
   studioName?: string;
   themeStyles?: React.CSSProperties;
@@ -12,6 +13,7 @@ interface FinalizedGalleryScreenProps {
 
 export function FinalizedGalleryScreen({
   sessionName,
+  sessionFont,
   studioLogoUrl,
   studioName,
   themeStyles,
@@ -58,7 +60,10 @@ export function FinalizedGalleryScreen({
         
         {/* Nome da sessão (sutil) */}
         {sessionName && (
-          <p className="text-xs text-muted-foreground mt-8">
+          <p 
+            className="text-sm text-muted-foreground mt-8"
+            style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+          >
             {sessionName}
           </p>
         )}

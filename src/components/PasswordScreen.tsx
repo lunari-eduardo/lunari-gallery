@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 interface PasswordScreenProps {
   sessionName?: string;
+  sessionFont?: string;
   studioName?: string;
   studioLogo?: string;
   onSubmit: (password: string) => Promise<void>;
@@ -18,6 +19,7 @@ interface PasswordScreenProps {
 
 export function PasswordScreen({
   sessionName,
+  sessionFont,
   studioName,
   studioLogo,
   onSubmit,
@@ -70,7 +72,10 @@ export function PasswordScreen({
               Galeria Protegida
             </h1>
             {sessionName && (
-              <p className="text-muted-foreground">
+              <p 
+                className="text-muted-foreground text-lg"
+                style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+              >
                 {sessionName}
               </p>
             )}

@@ -8,6 +8,7 @@ import { HelpInstructionsModal } from '@/components/HelpInstructionsModal';
 import { cn } from '@/lib/utils';
 interface ClientGalleryHeaderProps {
   sessionName: string;
+  sessionFont?: string;
   totalPhotos: number;
   deadline?: Date | null;
   hasDeadline: boolean;
@@ -25,6 +26,7 @@ interface ClientGalleryHeaderProps {
 
 export function ClientGalleryHeader({
   sessionName,
+  sessionFont,
   totalPhotos,
   deadline,
   hasDeadline,
@@ -88,7 +90,10 @@ export function ClientGalleryHeader({
         
         {/* Sub-header - Nome da Sessão + Contagem + Status */}
         <div className="text-center py-3 border-t border-border/30 px-4">
-          <h1 className="font-display text-lg sm:text-xl font-semibold uppercase tracking-wide">
+          <h1 
+            className="text-lg sm:text-xl font-semibold uppercase tracking-wide"
+            style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+          >
             {sessionName}
           </h1>
           <div className="flex items-center justify-center gap-3 mt-1 flex-wrap">
