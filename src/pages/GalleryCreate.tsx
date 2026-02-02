@@ -490,6 +490,24 @@ export default function GalleryCreate() {
         origin: hasSessionId ? 'gestao' : 'manual',
         // Pass frozen rules from Gestão OR generated from discount packages
         regrasCongeladas: finalRegrasCongeladas,
+        // Include all configuration settings including font
+        configuracoes: {
+          watermark: {
+            type: watermarkType,
+            opacity: watermarkOpacity,
+            position: 'center',
+          },
+          watermarkDisplay: watermarkDisplay,
+          imageResizeOption: imageResizeOption,
+          allowComments: allowComments,
+          allowDownload: allowDownload,
+          allowExtraPhotos: allowExtraPhotos,
+          saleSettings: getSaleSettings(),
+          themeId: selectedThemeId,
+          clientMode: clientMode,
+          sessionFont: sessionFont,
+          titleCaseMode: titleCaseMode,
+        },
       });
       
       if (result?.id) {
@@ -571,6 +589,9 @@ export default function GalleryCreate() {
                 // Theme settings for client gallery
                 themeId: selectedThemeId,
                 clientMode: clientMode,
+                // Font settings for session title
+                sessionFont: sessionFont,
+                titleCaseMode: titleCaseMode,
               },
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
