@@ -1,57 +1,89 @@
 
 
-# Ordenação Alfabética das Fotos da Galeria
+# Correções na Galeria do Cliente
 
-## Solução Simplificada
+## Problema 1: Grid não parece centralizada
 
-Ao invés de rastrear ordem de seleção no upload, ordenar sempre por `original_filename`. Isso funciona porque:
+### Análise
+O CSS atual usa `column-count` para criar o layout masonry. Este método distribui elementos automaticamente em colunas, mas quando há poucas fotos, as colunas são preenchidas da esquerda para a direita, deixando espaço à direita.
 
-- Câmeras nomeiam fotos sequencialmente (DSC_0001, DSC_0002, LISE2752, LISE2754...)
-- Não requer mudanças no upload
-- Fotos antigas automaticamente ficam ordenadas corretamente
-- Lógica simples e previsível
+O `.masonry-container` já tem `margin: 0 auto` (centralizado) e `max-width: 1800px`, mas o problema visual ocorre porque:
+- Com 9 fotos em tela de 5 colunas, sobra 1 "espaço" vazio na última coluna
+- O conteúdo dentro das colunas fica alinhado à esquerda naturalmente
 
-## Mudanças Necessárias
+### Solução
+Manter o `max-width: 1800px` mas adicionar uma camada de controle adicional. Como o `column-count` é difícil de centralizar quando incompleto, vamos ajustar o padding responsivo para equilibrar melhor o espaço disponível.
 
-Substituir `.order("order_index")` por `.order("original_filename")` em **3 arquivos**:
+**Mudança no `src/index.css`:**
+```css
+.masonry-container {
+  width: 100%;
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 0 1rem;  /* Aumentar padding base */
+}
 
-### 1. Hook Principal - `src/hooks/useSupabaseGalleries.ts`
+@media (min-width: 640px) {
+  .masonry-container {
+    padding: 0 2rem;  /* Aumentar padding tablet */
+  }
+}
 
-```typescript
-// Linha 233: Mudar de
-.order('order_index', { ascending: true });
+@media (min-width: 1024px) {
+  .masonry-container {
+    padding: 0 3rem;  /* Aumentar padding desktop */
+  }
+}
 
-// Para
-.order('original_filename', { ascending: true });
+@media (min-width: 1536px) {
+  .masonry-container {
+    padding: 0 4rem;  /* Padding generoso em ultrawide */
+  }
+}
 ```
 
-### 2. Edge Function - `supabase/functions/gallery-access/index.ts`
+---
 
-```typescript
-// Linha 102: Mudar de
-.order("order_index", { ascending: true });
+## Problema 2: Logo do fotógrafo não aparece
 
-// Para
-.order("original_filename", { ascending: true });
-```
+Os dados do banco mostram `studio_logo_url: null` para todos os fotógrafos. Precisamos melhorar o feedback do upload.
 
-### 3. Fallback no Client - `src/pages/ClientGallery.tsx`
+### Mudança no `src/components/settings/LogoUploader.tsx`:
+- Adicionar toast de sucesso/erro
+- Validar tamanho do arquivo (máx 2MB)
 
-```typescript
-// Linha 228: Mudar de
-.order('order_index');
+---
 
-// Para
-.order('original_filename', { ascending: true });
-```
+## Problema 3: Botão toggle (sol/lua) visível
 
-## Resultado
+O projeto define que o tema é controlado exclusivamente pelo fotógrafo - o cliente não deve ter toggle.
 
-| Antes | Depois |
-|-------|--------|
-| LISE2755.JPG (upload rápido) | LISE2752.JPG |
-| LISE2752.JPG (upload lento) | LISE2754.JPG |
-| LISE2754.JPG | LISE2755.JPG |
+### Mudança no `src/components/ClientGalleryHeader.tsx`:
+- Remover botão de toggle de tema
+- Remover props `activeClientMode` e `onToggleMode`
+- Remover imports `Sun` e `Moon`
 
-Fotos sempre aparecem na ordem correta, independente da velocidade de upload.
+### Mudança no `src/pages/ClientGallery.tsx`:
+- Remover props `activeClientMode` e `onToggleMode` do componente
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/index.css` | Aumentar padding do `.masonry-container` para melhor equilíbrio visual |
+| `src/components/ClientGalleryHeader.tsx` | Remover botão toggle + props não usadas |
+| `src/pages/ClientGallery.tsx` | Remover props `activeClientMode` e `onToggleMode` |
+| `src/components/settings/LogoUploader.tsx` | Adicionar toast de feedback + validação de tamanho |
+| `src/App.css` | Deletar arquivo (não utilizado, resquício do Vite) |
+
+---
+
+## Resultado Esperado
+
+1. **Grid com melhor equilíbrio visual**: Padding mais generoso nas laterais reduz a sensação de "vazio à direita"
+2. **Sem toggle de tema**: Interface mais limpa, tema controlado apenas pelo fotógrafo
+3. **Feedback de logo**: Usuário sabe se o upload funcionou ou falhou
+4. **Codebase limpo**: Remoção de arquivo legado não utilizado
 
