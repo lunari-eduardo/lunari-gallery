@@ -1,4 +1,4 @@
-import { Label } from '@/components/ui/label';
+import { Type, CaseSensitive, CaseUpper } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -6,6 +6,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { TitleCaseMode } from '@/types/gallery';
+import { applyTitleCase } from '@/lib/textTransform';
 
 export interface FontOption {
   id: string;
@@ -37,10 +46,36 @@ interface FontSelectProps {
   value: string;
   onChange: (value: string) => void;
   previewText?: string;
+  titleCaseMode?: TitleCaseMode;
+  onTitleCaseModeChange?: (mode: TitleCaseMode) => void;
 }
 
-export function FontSelect({ value, onChange, previewText = 'Ensaio Gestante' }: FontSelectProps) {
+const TITLE_CASE_MODES: { mode: TitleCaseMode; icon: typeof Type; label: string }[] = [
+  { mode: 'normal', icon: Type, label: 'Normal (como digitado)' },
+  { mode: 'uppercase', icon: CaseSensitive, label: 'MAIÚSCULAS' },
+  { mode: 'titlecase', icon: CaseUpper, label: 'Início De Palavras' },
+];
+
+export function FontSelect({ 
+  value, 
+  onChange, 
+  previewText = 'Ensaio Gestante',
+  titleCaseMode = 'normal',
+  onTitleCaseModeChange,
+}: FontSelectProps) {
   const selectedFont = GALLERY_FONTS.find(f => f.id === value) || GALLERY_FONTS[0];
+  
+  const currentModeIndex = TITLE_CASE_MODES.findIndex(m => m.mode === titleCaseMode);
+  const currentModeConfig = TITLE_CASE_MODES[currentModeIndex] || TITLE_CASE_MODES[0];
+  const IconComponent = currentModeConfig.icon;
+  
+  const handleToggleCaseMode = () => {
+    if (!onTitleCaseModeChange) return;
+    const nextIndex = (currentModeIndex + 1) % TITLE_CASE_MODES.length;
+    onTitleCaseModeChange(TITLE_CASE_MODES[nextIndex].mode);
+  };
+  
+  const displayText = applyTitleCase(previewText, titleCaseMode);
 
   return (
     <div className="space-y-3">
@@ -70,13 +105,33 @@ export function FontSelect({ value, onChange, previewText = 'Ensaio Gestante' }:
         </SelectContent>
       </Select>
       
-      {/* Preview Box */}
-      <div className="border rounded-lg bg-muted/30 p-6 text-center">
+      {/* Preview Box with Case Toggle */}
+      <div className="border rounded-lg bg-muted/30 p-6 text-center relative">
+        {onTitleCaseModeChange && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-2 right-2 h-8 w-8"
+                  onClick={handleToggleCaseMode}
+                >
+                  <IconComponent className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                <p>{currentModeConfig.label}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         <p 
-          className="text-2xl uppercase tracking-wide"
+          className="text-2xl tracking-wide"
           style={{ fontFamily: selectedFont.family }}
         >
-          {previewText}
+          {displayText}
         </p>
         <p className="text-xs text-muted-foreground mt-2">
           Prévia do título da galeria

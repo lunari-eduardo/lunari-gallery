@@ -1,4 +1,5 @@
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
+export type TitleCaseMode = 'normal' | 'uppercase' | 'titlecase';
 
 // Gestão integration - parameters received via URL when creating gallery from Gestão
 export interface GestaoSessionParams {
@@ -69,6 +70,7 @@ export interface GallerySettings {
   allowDownload: boolean;
   allowExtraPhotos: boolean;
   sessionFont?: string;
+  titleCaseMode?: TitleCaseMode;
 }
 
 export interface GalleryPhoto {
