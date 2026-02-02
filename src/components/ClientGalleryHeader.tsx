@@ -48,7 +48,7 @@ export function ClientGalleryHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
+      <header className="bg-background border-b border-border/50">
         {/* Top Bar - Logo centralizado + Ações */}
         <div className="flex items-center justify-center relative px-4 py-4">
           {/* Prazo de seleção - Esquerda (absoluto) */}
