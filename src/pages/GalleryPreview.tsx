@@ -93,7 +93,7 @@ export default function GalleryPreview() {
       </Alert>
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
+      <header className="bg-background border-b border-border/50">
         <div className="flex items-center justify-between px-3 py-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/gallery/${id}`)}>
