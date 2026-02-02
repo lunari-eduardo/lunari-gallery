@@ -187,7 +187,7 @@ export function useGallerySettings() {
     },
   });
 
-  // Update base settings
+  // Update base settings - only updates fields that are explicitly provided
   const updateSettings = useMutation({
     mutationFn: async (data: Partial<GlobalSettings>) => {
       if (!user?.id) throw new Error('User not authenticated');
@@ -199,33 +199,50 @@ export function useGallerySettings() {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const baseData = {
-        studio_name: data.studioName,
-        studio_logo_url: data.studioLogo || null,
-        favicon_url: data.faviconUrl || null,
-        default_gallery_permission: data.defaultGalleryPermission,
-        client_theme: data.clientTheme,
-        default_expiration_days: data.defaultExpirationDays,
-        active_theme_id: data.activeThemeId || null,
-        theme_type: data.themeType,
-        default_watermark: data.defaultWatermark as unknown as Json,
-      };
+      // Build update object only with provided fields (explicit undefined check)
+      const updateData: Record<string, unknown> = {};
+      
+      if (data.studioName !== undefined) {
+        updateData.studio_name = data.studioName;
+      }
+      if (data.studioLogo !== undefined) {
+        updateData.studio_logo_url = data.studioLogo || null;
+      }
+      if (data.faviconUrl !== undefined) {
+        updateData.favicon_url = data.faviconUrl || null;
+      }
+      if (data.defaultGalleryPermission !== undefined) {
+        updateData.default_gallery_permission = data.defaultGalleryPermission;
+      }
+      if (data.clientTheme !== undefined) {
+        updateData.client_theme = data.clientTheme;
+      }
+      if (data.defaultExpirationDays !== undefined) {
+        updateData.default_expiration_days = data.defaultExpirationDays;
+      }
+      if (data.activeThemeId !== undefined) {
+        updateData.active_theme_id = data.activeThemeId || null;
+      }
+      if (data.themeType !== undefined) {
+        updateData.theme_type = data.themeType;
+      }
+      if (data.defaultWatermark !== undefined) {
+        updateData.default_watermark = data.defaultWatermark as unknown as Json;
+      }
 
-      // Filter out undefined values
-      const filteredData = Object.fromEntries(
-        Object.entries(baseData).filter(([_, v]) => v !== undefined)
-      );
+      // Nothing to update
+      if (Object.keys(updateData).length === 0) return;
 
       if (existing) {
         const { error } = await supabase
           .from('gallery_settings')
-          .update(filteredData)
+          .update(updateData)
           .eq('user_id', user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('gallery_settings')
-          .insert({ user_id: user.id, ...filteredData });
+          .insert({ user_id: user.id, ...updateData });
         if (error) throw error;
       }
     },

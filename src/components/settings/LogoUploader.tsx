@@ -66,14 +66,14 @@ export function LogoUploader({ logo, onLogoChange }: LogoUploaderProps) {
         </div>
       </div>
 
-      <div className="flex items-start gap-6">
-        {/* Preview */}
+      <div className="flex flex-col gap-4">
+        {/* Preview - Container maior para mostrar logo completo */}
         <div
           className={`
-            relative h-24 w-24 rounded-xl border-2 border-dashed transition-all duration-200
+            relative h-32 w-full max-w-[320px] rounded-xl border-2 border-dashed transition-all duration-200
             flex items-center justify-center overflow-hidden
             ${isDragging ? 'border-primary bg-primary/5' : 'border-border'}
-            ${logo ? 'border-solid' : ''}
+            ${logo ? 'border-solid bg-muted/30' : ''}
           `}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -81,24 +81,28 @@ export function LogoUploader({ logo, onLogoChange }: LogoUploaderProps) {
         >
           {logo ? (
             <>
-              <img src={logo} alt="Logo" className="h-full w-full object-contain p-2" />
+              <img src={logo} alt="Logo" className="h-full w-full object-contain p-3" />
               <button
                 onClick={() => onLogoChange(undefined)}
-                className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:bg-destructive/90 transition-colors"
+                className="absolute top-2 right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:bg-destructive/90 transition-colors"
               >
                 <X className="h-3 w-3" />
               </button>
             </>
           ) : (
-            <Upload className="h-8 w-8 text-muted-foreground/50" />
+            <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
+              <Upload className="h-8 w-8" />
+              <span className="text-xs">Arraste ou clique para enviar</span>
+            </div>
           )}
         </div>
 
-        {/* Upload Button */}
+        {/* Upload Button e Informações */}
         <div className="flex flex-col gap-2">
           <Button
             variant="outline"
             size="sm"
+            className="w-fit"
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="h-4 w-4 mr-2" />
@@ -106,6 +110,8 @@ export function LogoUploader({ logo, onLogoChange }: LogoUploaderProps) {
           </Button>
           <p className="text-xs text-muted-foreground">
             PNG, JPG ou SVG. Máx. 2MB.
+            <br />
+            <span className="text-primary/70">Recomendado: 600x200px ou maior</span>
           </p>
           <input
             ref={fileInputRef}
