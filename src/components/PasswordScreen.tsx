@@ -55,7 +55,7 @@ export function PasswordScreen({
           <img 
             src={studioLogo} 
             alt={studioName || 'Studio'} 
-            className="h-10 max-w-[200px] object-contain"
+            className="h-16 sm:h-20 md:h-24 lg:h-[135px] max-w-[200px] sm:max-w-[260px] md:max-w-[320px] lg:max-w-[400px] object-contain"
           />
         ) : (
           <Logo size="sm" />
