@@ -51,12 +51,27 @@ export default function Auth() {
     }
   }, [navigate]);
 
-  // Check for password reset callback
+  // Check for password reset callback - wait for user session
   useEffect(() => {
-    if (searchParams.get('reset') === 'true') {
-      setShowUpdatePassword(true);
+    const hash = window.location.hash;
+    const resetParam = searchParams.get('reset');
+    
+    // If there's a recovery hash, wait for Supabase to process it
+    if (hash && hash.includes('type=recovery')) {
+      console.log('🔄 Recovery callback detected, waiting for session...');
+      return;
     }
-  }, [searchParams]);
+    
+    // Only show password form if reset param is present AND user is authenticated
+    if (resetParam === 'true' && user) {
+      console.log('✅ User session ready, showing password update form');
+      setShowUpdatePassword(true);
+      // Clean the hash after session is established
+      if (hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  }, [searchParams, user]);
 
   useEffect(() => {
     console.log('🔍 Auth page state:', { 
@@ -102,8 +117,40 @@ export default function Auth() {
     );
   }
 
-  // Render update password form if needed
-  if (showUpdatePassword) {
+  // Show loading while waiting for recovery session
+  if (searchParams.get('reset') === 'true' && !user && loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show expired link message if reset param but no user after loading
+  if (searchParams.get('reset') === 'true' && !user && !loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
+        <Card className="w-full max-w-md shadow-xl border-border/50 bg-card/95 backdrop-blur">
+          <CardHeader className="text-center space-y-4 pb-2">
+            <div className="flex justify-center">
+              <Logo size="lg" variant="gallery" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 text-center space-y-4">
+            <p className="text-muted-foreground">
+              Link expirado ou inválido. Solicite um novo link de recuperação.
+            </p>
+            <Button onClick={() => setShowResetPassword(true)} className="w-full">
+              Solicitar novo link
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render update password form if user is authenticated
+  if (showUpdatePassword && user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
         <Card className="w-full max-w-md shadow-xl border-border/50 bg-card/95 backdrop-blur">
