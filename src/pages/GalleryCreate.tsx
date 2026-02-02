@@ -34,6 +34,7 @@ import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaix
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemePreviewCard } from '@/components/ThemePreviewCard';
+import { FontSelect, getFontFamilyById } from '@/components/FontSelect';
 
 // Helper to extract the initial extra photo price from frozen rules
 // Handles progressive pricing by getting the first tier price
@@ -124,6 +125,7 @@ export default function GalleryCreate() {
   const [passwordDisabled, setPasswordDisabled] = useState(false);
   const [savePasswordToClient, setSavePasswordToClient] = useState(true);
   const [sessionName, setSessionName] = useState('');
+  const [sessionFont, setSessionFont] = useState('playfair');
   const [packageName, setPackageName] = useState('');
   const [includedPhotos, setIncludedPhotos] = useState(30);
 
@@ -662,6 +664,7 @@ export default function GalleryCreate() {
               saleSettings: getSaleSettings(),
               themeId: selectedThemeId,
               clientMode: clientMode,
+              sessionFont: sessionFont,
             },
             ...(finalRegrasCongeladas && { regrasCongeladas: finalRegrasCongeladas }),
           }
@@ -716,6 +719,7 @@ export default function GalleryCreate() {
             saleSettings: getSaleSettings(),
             themeId: selectedThemeId,
             clientMode: clientMode,
+            sessionFont: sessionFont,
           },
         });
         
@@ -1077,6 +1081,15 @@ export default function GalleryCreate() {
             <div className="space-y-2">
               <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
               <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={e => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Fonte do Título</Label>
+              <FontSelect
+                value={sessionFont}
+                onChange={setSessionFont}
+                previewText={sessionName || 'Ensaio Gestante'}
+              />
             </div>
 
             <ClientModal open={isClientModalOpen} onOpenChange={setIsClientModalOpen} onSave={handleSaveClient} />

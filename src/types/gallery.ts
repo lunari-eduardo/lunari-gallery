@@ -68,6 +68,7 @@ export interface GallerySettings {
   allowComments: boolean;
   allowDownload: boolean;
   allowExtraPhotos: boolean;
+  sessionFont?: string;
 }
 
 export interface GalleryPhoto {

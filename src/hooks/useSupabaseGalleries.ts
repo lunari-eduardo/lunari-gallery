@@ -49,6 +49,8 @@ export interface GaleriaConfiguracoes {
   // Theme settings for client gallery
   themeId?: string;
   clientMode?: 'light' | 'dark';
+  // Session title font
+  sessionFont?: string;
 }
 
 export interface Galeria {
