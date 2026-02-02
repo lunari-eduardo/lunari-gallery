@@ -1094,7 +1094,7 @@ export default function ClientGallery() {
       />
 
       {/* Main Content - Full width gallery */}
-      <main className="flex-1 px-1 sm:px-2 py-2 pb-20">
+      <main className="flex-1 py-2 pb-20">
         <MasonryGrid>
           {localPhotos.map((photo, index) => (
             <MasonryItem key={photo.id}>

@@ -8,8 +8,10 @@ interface MasonryGridProps {
 
 export function MasonryGrid({ children, className }: MasonryGridProps) {
   return (
-    <div className={cn('masonry-grid', className)}>
-      {children}
+    <div className="masonry-container">
+      <div className={cn('masonry-grid', className)}>
+        {children}
+      </div>
     </div>
   );
 }

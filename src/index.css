@@ -182,6 +182,25 @@
     @apply bg-background border border-input rounded-lg px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all duration-200;
   }
 
+  .masonry-container {
+    width: 100%;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 0 0.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .masonry-container {
+      padding: 0 1rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .masonry-container {
+      padding: 0 1.5rem;
+    }
+  }
+
   .masonry-grid {
     column-count: 2;
     column-gap: 0.5rem;
