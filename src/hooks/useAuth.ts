@@ -26,21 +26,28 @@ export function useAuth() {
       }
     );
     
-    // Process auth tokens from URL hash (email change, signup, recovery)
-    const processAuthTokens = () => {
-      const hash = window.location.hash;
-      if (hash) {
-        const hashParams = new URLSearchParams(hash.substring(1));
-        const type = hashParams.get('type');
-        
-        if (type === 'email_change' || type === 'signup' || type === 'recovery') {
-          console.log('🔄 Processing auth token of type:', type);
-          // Supabase client processes automatically via onAuthStateChange
-          // Clean the hash after processing
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        }
+  // Process auth tokens from URL hash (email change, signup, recovery)
+  const processAuthTokens = () => {
+    const hash = window.location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.substring(1));
+      const type = hashParams.get('type');
+      
+      // For recovery tokens, DON'T clear the hash immediately
+      // Let Supabase process the token first via onAuthStateChange
+      if (type === 'recovery') {
+        console.log('🔄 Recovery token detected - letting Supabase process first');
+        return;
       }
-    };
+      
+      if (type === 'email_change' || type === 'signup') {
+        console.log('🔄 Processing auth token of type:', type);
+        // Supabase client processes automatically via onAuthStateChange
+        // Clean the hash after processing
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  };
     
     processAuthTokens();
 
