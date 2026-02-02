@@ -1,144 +1,151 @@
 
-# Tela de Seleção Concluída para Galerias Finalizadas
+# Correção: Estado de Seleção Perdido ao Minimizar Página
 
-## Situação Atual
+## Problema Identificado
 
-Quando o cliente tenta acessar uma galeria já finalizada:
-- O Edge Function `gallery-access` permite acesso (status `selecao_completa` está na lista de válidos)
-- O frontend mostra as fotos selecionadas em modo "read-only"
-- O cliente ainda vê a galeria completa (filtrando apenas fotos selecionadas)
+O React Query está configurado com `staleTime: 0` (padrão) e `refetchOnWindowFocus: true` (padrão). Isso significa que:
 
-## Novo Comportamento Desejado
-
-Após a finalização, o cliente deve ver **apenas uma tela de mensagem simples**:
+1. Quando o usuário minimiza e volta à página, um **refetch automático** é disparado
+2. O `useEffect` sobrescreve `localPhotos` com os dados do refetch
+3. Se houver qualquer inconsistência de timing ou cache, as alterações visuais são perdidas
 
 ```text
-[Logo do Fotógrafo]
-
-✓ Seleção de fotos enviada com sucesso
-
-Sua seleção de fotos foi enviada com sucesso.
-A partir de agora, o fotógrafo dará continuidade ao processo.
-
-Em caso de dúvidas ou ajustes, fale diretamente com o fotógrafo.
+┌─────────────────────────────────────────────────────────────────────┐
+│ Fluxo atual (com bug)                                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. Seleciona foto → Mutation salva no banco → localPhotos = ✓     │
+│                                                                     │
+│  2. Minimiza página                                                 │
+│                                                                     │
+│  3. Restaura página → React Query refetch → useEffect sobrescreve  │
+│                                                                     │
+│  4. Se dados do refetch forem "antigos" → Seleção "desaparece"     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-A tela deve respeitar:
-- O tema (claro/escuro) configurado pelo fotógrafo
-- As cores personalizadas do tema (se houver)
-- O logo do estúdio
+## Solução
+
+Atualizar o cache do React Query **após cada mutation bem-sucedida** em vez de depender apenas do estado local. Assim, quando o refetch ocorrer, o cache já terá os dados corretos.
+
+### Estratégia: Invalidate + setQueryData
+
+```typescript
+// Após mutation bem-sucedida, atualizar o cache do React Query
+onSuccess: (data) => {
+  // 1. Atualizar estado local (feedback imediato)
+  setLocalPhotos(prev => prev.map(p => ...));
+  
+  // 2. Atualizar cache do React Query (previne sobrescrita no refetch)
+  queryClient.setQueryData(['client-gallery-photos', galleryId], (old) => {
+    if (!old) return old;
+    return old.map((p) => 
+      p.id === data.photo.id 
+        ? { ...p, is_selected: data.photo.is_selected, ... }
+        : p
+    );
+  });
+}
+```
 
 ---
 
 ## Mudanças Técnicas
 
-### 1. Edge Function `gallery-access` (linhas 44-51)
+### Arquivo: `src/pages/ClientGallery.tsx`
 
-Alterar a lógica para retornar um status especial quando a galeria está finalizada:
+#### 1. Atualizar `selectionMutation.onSuccess` (linhas 357-368)
 
+**Antes:**
 ```typescript
-// Substituir validação atual por verificação de finalização
-const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
-
-if (isFinalized) {
-  // Galeria finalizada - retornar apenas dados mínimos para tela de conclusão
-  return new Response(
-    JSON.stringify({ 
-      finalized: true,
-      sessionName: gallery.nome_sessao,
-      studioSettings: settings,  // Para logo
-      theme: themeData,          // Para cores/modo
-      clientMode: clientMode,
-    }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
-
-// Depois, verificar se está em status válido para seleção
-const validStatuses = ["enviado", "selecao_iniciada"];
-if (!validStatuses.includes(gallery.status)) {
-  return new Response(
-    JSON.stringify({ error: "Galeria não disponível", code: "NOT_AVAILABLE" }),
-    { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
+onSuccess: (data) => {
+  setLocalPhotos(prev => prev.map(p => 
+    p.id === data.photo.id 
+      ? { ...p, isSelected: data.photo.is_selected, ... } 
+      : p
+  ));
+},
 ```
 
-### 2. ClientGallery.tsx - Nova Tela de Conclusão
-
-Adicionar verificação logo após o loading, antes de qualquer outra tela:
-
+**Depois:**
 ```typescript
-// Verificar se galeria está finalizada (logo após loading)
-if (galleryResponse?.finalized) {
-  return (
-    <FinalizedGalleryScreen
-      sessionName={galleryResponse.sessionName}
-      studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-      studioName={galleryResponse.studioSettings?.studio_name}
-      themeStyles={themeStyles}
-      backgroundMode={effectiveBackgroundMode}
-    />
-  );
-}
+onSuccess: (data) => {
+  // 1. Atualizar estado local para feedback visual imediato
+  setLocalPhotos(prev => prev.map(p => 
+    p.id === data.photo.id 
+      ? { 
+          ...p, 
+          isSelected: data.photo.is_selected, 
+          isFavorite: data.photo.is_favorite ?? p.isFavorite,
+          comment: data.photo.comment || p.comment 
+        } 
+      : p
+  ));
+  
+  // 2. Sincronizar cache do React Query para prevenir sobrescrita no refetch
+  queryClient.setQueryData(['client-gallery-photos', galleryId], (oldData: any[]) => {
+    if (!oldData) return oldData;
+    return oldData.map((p) => 
+      p.id === data.photo.id 
+        ? { 
+            ...p, 
+            is_selected: data.photo.is_selected,
+            is_favorite: data.photo.is_favorite ?? p.is_favorite,
+            comment: data.photo.comment ?? p.comment,
+          } 
+        : p
+    );
+  });
+},
 ```
 
-### 3. Novo Componente: `FinalizedGalleryScreen`
+#### 2. Adicionar proteção no useEffect (linha 446)
 
-Criar novo componente em `src/components/FinalizedGalleryScreen.tsx`:
+Evitar sobrescrever `localPhotos` se já tiver dados e não houver mudança real:
 
+**Antes:**
 ```typescript
-interface FinalizedGalleryScreenProps {
-  sessionName?: string;
-  studioLogoUrl?: string;
-  studioName?: string;
-  themeStyles?: React.CSSProperties;
-  backgroundMode?: 'light' | 'dark';
-}
+useEffect(() => {
+  if (photos.length > 0) {
+    setLocalPhotos(photos);
+    // ...
+  }
+}, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
+```
 
-export function FinalizedGalleryScreen({ ... }: FinalizedGalleryScreenProps) {
-  return (
-    <div className={cn("min-h-screen", backgroundMode === 'dark' && 'dark')} style={themeStyles}>
-      {/* Centralizado vertical e horizontalmente */}
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        {/* Logo do estúdio */}
-        {studioLogoUrl ? (
-          <img src={studioLogoUrl} alt={studioName} className="h-12 max-w-[200px] object-contain mb-8" />
-        ) : (
-          <Logo size="md" variant="gallery" className="mb-8" />
-        )}
-        
-        {/* Ícone de sucesso */}
-        <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-6">
-          <Check className="h-8 w-8 text-primary" />
-        </div>
-        
-        {/* Título */}
-        <h1 className="font-display text-2xl font-semibold text-center mb-4">
-          Seleção de fotos enviada com sucesso
-        </h1>
-        
-        {/* Mensagem */}
-        <div className="max-w-md text-center space-y-3">
-          <p className="text-muted-foreground">
-            Sua seleção de fotos foi enviada com sucesso.
-            A partir de agora, o fotógrafo dará continuidade ao processo.
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Em caso de dúvidas ou ajustes, fale diretamente com o fotógrafo.
-          </p>
-        </div>
-        
-        {/* Nome da sessão (sutil) */}
-        {sessionName && (
-          <p className="text-xs text-muted-foreground mt-8">
-            {sessionName}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
+**Depois:**
+```typescript
+useEffect(() => {
+  if (photos.length > 0) {
+    // Só sobrescrever se ainda não tiver fotos locais (primeira carga)
+    // ou se for realmente uma mudança estrutural (quantidade diferente)
+    setLocalPhotos(prev => {
+      if (prev.length === 0 || prev.length !== photos.length) {
+        return photos;
+      }
+      // Atualizar apenas campos não-editáveis (URLs, dimensions)
+      // mantendo is_selected, is_favorite, comment do estado local
+      return prev.map(localPhoto => {
+        const serverPhoto = photos.find(p => p.id === localPhoto.id);
+        return serverPhoto ? {
+          ...serverPhoto,
+          isSelected: localPhoto.isSelected,
+          isFavorite: localPhoto.isFavorite,
+          comment: localPhoto.comment,
+        } : localPhoto;
+      });
+    });
+    
+    const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'confirmado' || 
+                               supabaseGallery?.finalized_at;
+    setIsConfirmed(!!isAlreadyConfirmed);
+    if (isAlreadyConfirmed) {
+      setCurrentStep('confirmed');
+      setShowWelcome(false);
+    }
+  }
+}, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
 ```
 
 ---
@@ -147,33 +154,34 @@ export function FinalizedGalleryScreen({ ... }: FinalizedGalleryScreenProps) {
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/gallery-access/index.ts` | Retornar `finalized: true` para galerias confirmadas |
-| `src/pages/ClientGallery.tsx` | Detectar `galleryResponse?.finalized` e mostrar nova tela |
-| `src/components/FinalizedGalleryScreen.tsx` | **Novo arquivo** - Componente da tela de conclusão |
+| `src/pages/ClientGallery.tsx` | Sincronizar cache após mutation + proteger useEffect |
 
 ---
 
-## Fluxo Resultante
+## Resultado Esperado
 
 ```text
-Cliente acessa link → Edge Function verifica token
-                          ↓
-         ┌─────────────────┴─────────────────┐
-         ↓                                   ↓
-   Galeria finalizada?                 Galeria ativa?
-   (confirmado/finalized_at)           (enviado/selecao_iniciada)
-         ↓                                   ↓
-   Retorna { finalized: true }         Retorna dados completos
-         ↓                                   ↓
-   Tela de "Seleção Enviada"           Galeria interativa normal
-   (apenas mensagem + logo)
+┌─────────────────────────────────────────────────────────────────────┐
+│ Fluxo corrigido                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. Seleciona foto → Mutation salva no banco                        │
+│                    → localPhotos atualizado ✓                       │
+│                    → Cache do React Query atualizado ✓              │
+│                                                                     │
+│  2. Minimiza página                                                 │
+│                                                                     │
+│  3. Restaura página → React Query refetch → Cache já está correto   │
+│                     → useEffect preserva seleções locais            │
+│                                                                     │
+│  4. Estado permanece consistente ✓                                  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ## Benefícios
 
-1. **Privacidade**: Cliente não vê mais as fotos após finalização
-2. **Clareza**: Mensagem objetiva sobre próximos passos
-3. **Consistência**: Tema e logo do fotógrafo respeitados
-4. **Performance**: Menos dados trafegados (não carrega fotos)
+1. **Consistência**: Estado local e cache do React Query sempre sincronizados
+2. **Resiliência**: Refetch automático não sobrescreve alterações do usuário
+3. **Performance**: Sem necessidade de desabilitar `refetchOnWindowFocus` globalmente
+4. **Offline-friendly**: Estado local é preservado mesmo se o refetch falhar
