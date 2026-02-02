@@ -1,9 +1,10 @@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Smartphone, Zap, CreditCard } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentIntegration, PixManualData, InfinitePayData } from '@/hooks/usePaymentIntegration';
+import { pixLogo, infinitepayLogo, mercadopagoLogo } from '@/assets/payment-logos';
 
 interface PaymentMethodSelectorProps {
   integrations: PaymentIntegration[];
@@ -29,6 +30,15 @@ export function PaymentMethodSelector({
       </div>
     );
   }
+
+  const getProviderLogo = (provedor: string) => {
+    const logos: Record<string, string> = {
+      pix_manual: pixLogo,
+      infinitepay: infinitepayLogo,
+      mercadopago: mercadopagoLogo,
+    };
+    return logos[provedor];
+  };
 
   return (
     <div className="space-y-3">
@@ -62,8 +72,8 @@ export function PaymentMethodSelector({
               >
                 {isPixManual && (
                   <>
-                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                      <Smartphone className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
+                      <img src={getProviderLogo('pix_manual')} alt="PIX" className="h-full w-full object-contain" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">PIX Manual</p>
@@ -76,8 +86,8 @@ export function PaymentMethodSelector({
                 
                 {isInfinitePay && (
                   <>
-                    <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                      <Zap className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
+                      <img src={getProviderLogo('infinitepay')} alt="InfinitePay" className="h-full w-full object-contain" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">InfinitePay</p>
@@ -90,8 +100,8 @@ export function PaymentMethodSelector({
                 
                 {isMercadoPago && (
                   <>
-                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                      <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
+                      <img src={getProviderLogo('mercadopago')} alt="Mercado Pago" className="h-full w-full object-contain" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">Mercado Pago</p>
