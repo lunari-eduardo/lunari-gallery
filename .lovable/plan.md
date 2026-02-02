@@ -1,210 +1,192 @@
 
 
-# Correção: Fonte Personalizada Não Aparece na Galeria do Cliente
+# Plano: Ajustes de Logo e Correção de Bug no Painel de Personalização
 
-## Problema Identificado
+## Problemas Identificados
 
-A fonte selecionada pelo fotógrafo só aparece na **configuração da galeria** (GalleryCreate), mas **não aparece em nenhuma tela do cliente**:
-- Tela de senha
-- Tela de boas-vindas
-- Header durante seleção
-- Tela de confirmação
+### 1. Tamanho do Logo nas Telas do Cliente
+O logo atual usa `h-16` (64px) no mobile e `lg:h-[135px]` (135px) no desktop.
 
-## Diagnóstico
+**Solicitação:**
+- **Desktop**: 50% maior → de 135px para **~200px**
+- **Mobile**: 3x maior → de 64px para **~192px**
 
-Existem **3 problemas** que impedem a fonte de aparecer:
-
-### Problema 1: Edge Function não retorna `settings` para tela de senha
-
-Quando a galeria requer senha, o Edge Function retorna apenas:
-```json
-{
-  "requiresPassword": true,
-  "sessionName": "...",
-  "clientMode": "light"
-}
-```
-
-O código tenta acessar:
-```typescript
-getFontFamilyById(galleryResponse?.settings?.sessionFont)
-```
-
-Mas `galleryResponse.settings` é `undefined` nesse cenário.
-
-### Problema 2: Fonte padrão não está carregada no Google Fonts
-
-O `index.html` carrega as 10 fontes customizáveis, mas **não inclui Playfair Display** (a fonte padrão). Quando uma galeria não tem fonte customizada, o fallback falha porque a fonte não está disponível:
+### 2. Bug: Configurar Logo Apaga Favicon (e vice-versa)
+**Causa raiz encontrada no hook `useGallerySettings.ts` (linhas 202-211):**
 
 ```typescript
-// FontSelect.tsx
-return font?.family || GALLERY_FONTS[0].family; // '"Playfair Display", serif'
+const baseData = {
+  studio_logo_url: data.studioLogo || null,  // ❌
+  favicon_url: data.faviconUrl || null,      // ❌ Problema aqui!
+  // ...
+};
 ```
 
-Porém Playfair Display não está no link do Google Fonts.
+Quando o usuário atualiza apenas o logo (`{ studioLogo: "..." }`), o campo `data.faviconUrl` é `undefined`. A expressão `undefined || null` resulta em `null`, sobrescrevendo o favicon existente no banco de dados.
 
-### Problema 3: Tela finalizada também não recebe dados corretos
+### 3. Preview do Logo Muito Pequeno
+O container atual no `LogoUploader.tsx` usa `h-24 w-24` (96x96px), cortando logos maiores ou horizontais.
 
-Quando a galeria está finalizada, o Edge Function retorna:
-```json
-{
-  "finalized": true,
-  "sessionName": "...",
-  "theme": {...}
-}
-```
-
-Mas não inclui `settings.sessionFont` nem `settings.titleCaseMode`.
+### 4. Falta Recomendação de Tamanho
+Não há indicação do tamanho ideal para upload do logo.
 
 ---
 
-## Solução
+## Solução Proposta
 
-### Mudança 1: Adicionar Playfair Display ao Google Fonts
+### Parte 1: Aumentar Tamanho do Logo nas Telas do Cliente
 
-**Arquivo**: `index.html`
+**Cálculo dos novos valores:**
 
-Atualizar o link para incluir Playfair Display:
+| Breakpoint | Atual | Novo | Fator |
+|------------|-------|------|-------|
+| Mobile (base) | h-16 (64px) | h-48 (192px) | 3x |
+| sm (640px+) | h-20 (80px) | h-48 (192px) | ~2.4x |
+| md (768px+) | h-24 (96px) | h-40 (160px) | ~1.7x |
+| lg (1024px+) | h-[135px] | h-[200px] | 1.5x |
 
-```html
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Imperial+Script&family=League+Script&family=Allura&family=Amatic+SC:wght@400;700&family=Shadows+Into+Light&family=Source+Serif+4:wght@400;600;700&family=Cormorant:wght@400;500;600;700&family=Bodoni+Moda:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+**Nova classe CSS:**
+```css
+h-48 sm:h-48 md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain
 ```
 
-### Mudança 2: Edge Function deve retornar settings para tela de senha
+**Arquivos a modificar:**
+- `src/components/ClientGalleryHeader.tsx` (linha 74)
+- `src/pages/ClientGallery.tsx` (linha 989)
+- `src/components/PasswordScreen.tsx` (linha 58)
+- `src/components/FinalizedGalleryScreen.tsx` (linha 38)
 
-**Arquivo**: `supabase/functions/gallery-access/index.ts`
+---
 
-Na resposta `requiresPassword`, incluir os campos de configuração visual:
+### Parte 2: Corrigir Bug que Apaga Configurações
 
-**Antes** (linhas 118-131):
+**Arquivo:** `src/hooks/useGallerySettings.ts`
+
+**Mudança na função `updateSettings` (linhas 202-217):**
+
+Atualmente, campos não enviados são definidos como `null`. A correção é **não incluir campos `undefined`** no objeto de atualização:
+
 ```typescript
-if (!password) {
-  return new Response(
-    JSON.stringify({ 
-      requiresPassword: true, 
-      galleryId: gallery.id,
-      sessionName: gallery.nome_sessao,
-      clientMode: clientMode,
-    }),
-    ...
-  );
+// ANTES (problemático):
+const baseData = {
+  studio_logo_url: data.studioLogo || null,
+  favicon_url: data.faviconUrl || null,
+  // ...
+};
+
+// DEPOIS (corrigido):
+const baseData: Record<string, any> = {};
+
+// Só adiciona se o campo foi explicitamente passado
+if (data.studioLogo !== undefined) {
+  baseData.studio_logo_url = data.studioLogo || null;
 }
-```
-
-**Depois**:
-```typescript
-if (!password) {
-  const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
-  
-  return new Response(
-    JSON.stringify({ 
-      requiresPassword: true, 
-      galleryId: gallery.id,
-      sessionName: gallery.nome_sessao,
-      clientMode: clientMode,
-      // Include font settings for password screen styling
-      settings: {
-        sessionFont: galleryConfig?.sessionFont || undefined,
-        titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-      },
-    }),
-    ...
-  );
+if (data.faviconUrl !== undefined) {
+  baseData.favicon_url = data.faviconUrl || null;
 }
+// ... mesmo padrão para outros campos
 ```
 
-### Mudança 3: Edge Function deve retornar settings para tela finalizada
+Isso garante que atualizar o logo **não afete** o favicon e vice-versa.
 
-**Arquivo**: `supabase/functions/gallery-access/index.ts`
+---
 
-Na resposta `finalized`, incluir os campos de fonte:
+### Parte 3: Melhorar Preview do Logo no Painel
 
-**Antes** (linhas 92-103):
-```typescript
-return new Response(
-  JSON.stringify({ 
-    finalized: true,
-    sessionName: gallery.nome_sessao,
-    studioSettings: settings || null,
-    theme: themeData,
-    clientMode: clientMode,
-  }),
-  ...
-);
-```
+**Arquivo:** `src/components/settings/LogoUploader.tsx`
 
-**Depois**:
-```typescript
-const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+**Mudanças:**
+1. Aumentar container de preview de `h-24 w-24` para `h-32 w-full max-w-[280px]`
+2. Manter proporção do logo visível por completo
+3. Adicionar recomendação de tamanho
 
-return new Response(
-  JSON.stringify({ 
-    finalized: true,
-    sessionName: gallery.nome_sessao,
-    studioSettings: settings || null,
-    theme: themeData,
-    clientMode: clientMode,
-    // Include font settings for finalized screen styling
-    settings: {
-      sessionFont: galleryConfig?.sessionFont || undefined,
-      titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-    },
-  }),
-  ...
-);
+**Nova UI:**
+```tsx
+{/* Preview - maior e flexível */}
+<div className="relative h-32 w-full max-w-[280px] rounded-xl border-2 ...">
+  <img src={logo} alt="Logo" className="h-full w-full object-contain p-3" />
+</div>
+
+{/* Recomendação de tamanho */}
+<p className="text-xs text-muted-foreground">
+  PNG, JPG ou SVG. Máx. 2MB.
+  <br />
+  <span className="text-primary/70">Recomendado: 600x200px ou maior</span>
+</p>
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Mudança |
-|---------|---------|
-| `index.html` | Adicionar Playfair Display ao link do Google Fonts |
-| `supabase/functions/gallery-access/index.ts` | Incluir `settings` na resposta de password e finalized |
+| Arquivo | Mudanças |
+|---------|----------|
+| `src/hooks/useGallerySettings.ts` | Corrigir lógica de update para não sobrescrever campos não enviados |
+| `src/components/settings/LogoUploader.tsx` | Aumentar preview e adicionar recomendação de tamanho |
+| `src/components/ClientGalleryHeader.tsx` | Aumentar tamanho do logo |
+| `src/pages/ClientGallery.tsx` | Aumentar tamanho do logo na tela de boas-vindas |
+| `src/components/PasswordScreen.tsx` | Aumentar tamanho do logo |
+| `src/components/FinalizedGalleryScreen.tsx` | Aumentar tamanho do logo |
 
 ---
 
-## Fluxo Corrigido
+## Detalhes Técnicos
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ ANTES (quebrado)                                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Tela de senha → galleryResponse.settings = undefined               │
-│                → getFontFamilyById(undefined) = Playfair (fallback) │
-│                → Playfair não carregada = fonte do sistema          │
-│                                                                     │
-│  Tela principal → gallery.settings.sessionFont = "imperial"        │
-│                 → getFontFamilyById("imperial") = Imperial Script   │
-│                 → Imperial Script carregada ✓ (funciona)            │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+### Nova Classe de Logo (todas as telas cliente):
+```css
+h-48 sm:h-48 md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain
+```
 
-┌─────────────────────────────────────────────────────────────────────┐
-│ DEPOIS (corrigido)                                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Tela de senha → galleryResponse.settings.sessionFont = "imperial" │
-│                → getFontFamilyById("imperial") = Imperial Script    │
-│                → Imperial Script carregada ✓ (funciona)             │
-│                                                                     │
-│  Fallback      → getFontFamilyById(undefined) = Playfair Display   │
-│                → Playfair Display agora carregada ✓ (funciona)      │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+### Lógica Corrigida no Hook:
+```typescript
+const updateSettings = useMutation({
+  mutationFn: async (data: Partial<GlobalSettings>) => {
+    if (!user?.id) throw new Error('User not authenticated');
+
+    const { data: existing } = await supabase
+      .from('gallery_settings')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    // Build update object only with provided fields
+    const updateData: Record<string, unknown> = {};
+    
+    if (data.studioName !== undefined) updateData.studio_name = data.studioName;
+    if (data.studioLogo !== undefined) updateData.studio_logo_url = data.studioLogo || null;
+    if (data.faviconUrl !== undefined) updateData.favicon_url = data.faviconUrl || null;
+    if (data.defaultGalleryPermission !== undefined) updateData.default_gallery_permission = data.defaultGalleryPermission;
+    if (data.clientTheme !== undefined) updateData.client_theme = data.clientTheme;
+    if (data.defaultExpirationDays !== undefined) updateData.default_expiration_days = data.defaultExpirationDays;
+    if (data.activeThemeId !== undefined) updateData.active_theme_id = data.activeThemeId || null;
+    if (data.themeType !== undefined) updateData.theme_type = data.themeType;
+    if (data.defaultWatermark !== undefined) updateData.default_watermark = data.defaultWatermark as unknown as Json;
+
+    if (Object.keys(updateData).length === 0) return; // Nothing to update
+
+    if (existing) {
+      const { error } = await supabase
+        .from('gallery_settings')
+        .update(updateData)
+        .eq('user_id', user.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('gallery_settings')
+        .insert({ user_id: user.id, ...updateData });
+      if (error) throw error;
+    }
+  },
+  // ...
+});
 ```
 
 ---
 
 ## Resultado Esperado
 
-Após a correção, a fonte selecionada pelo fotógrafo será exibida consistentemente em:
-
-1. **Tela de senha** - Nome da sessão com fonte personalizada
-2. **Tela de boas-vindas** - Título com fonte personalizada  
-3. **Header da galeria** - Nome da sessão com fonte personalizada
-4. **Tela de confirmação** - Nome da sessão com fonte personalizada
-5. **Tela finalizada** - Nome da sessão com fonte personalizada
+1. **Logo 50% maior no desktop** (200px) e **3x maior no mobile** (192px)
+2. **Configurar logo não apaga favicon** e vice-versa
+3. **Preview do logo mostra imagem completa** no painel de personalização
+4. **Recomendação clara**: "600x200px ou maior" para upload
 
