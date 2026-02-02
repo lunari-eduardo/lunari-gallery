@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Smartphone, Zap, Link2, RefreshCw } from 'lucide-react';
+import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Link2, RefreshCw, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { pixLogo, infinitepayLogo, mercadopagoLogo } from '@/assets/payment-logos';
 
 export function PaymentSettings() {
   const location = useLocation();
@@ -160,20 +161,19 @@ export function PaymentSettings() {
     setShowMpSettings(false);
   };
 
-  const getProviderIcon = (provedor: PaymentProvider) => {
-    switch (provedor) {
-      case 'pix_manual': return <Smartphone className="h-5 w-5" />;
-      case 'infinitepay': return <Zap className="h-5 w-5" />;
-      case 'mercadopago': return <CreditCard className="h-5 w-5" />;
-    }
-  };
-
-  const getProviderColor = (provedor: PaymentProvider) => {
-    switch (provedor) {
-      case 'pix_manual': return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-      case 'infinitepay': return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
-      case 'mercadopago': return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
-    }
+  const getProviderLogo = (provedor: PaymentProvider) => {
+    const logos = {
+      pix_manual: pixLogo,
+      infinitepay: infinitepayLogo,
+      mercadopago: mercadopagoLogo,
+    };
+    return (
+      <img 
+        src={logos[provedor]} 
+        alt={getProviderLabel(provedor)}
+        className="h-6 w-6 object-contain"
+      />
+    );
   };
 
   if (isLoading || connectMercadoPago.isPending) {
@@ -215,8 +215,8 @@ export function PaymentSettings() {
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", getProviderColor(integration.provedor))}>
-                    {getProviderIcon(integration.provedor)}
+                  <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center p-1.5">
+                    {getProviderLogo(integration.provedor)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -286,10 +286,7 @@ export function PaymentSettings() {
       {/* Mercado Pago OAuth */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-blue-600" />
-            Mercado Pago
-          </CardTitle>
+          <CardTitle>Mercado Pago</CardTitle>
           <CardDescription>
             Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
           </CardDescription>
@@ -389,8 +386,8 @@ export function PaymentSettings() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
-                    <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center p-1.5">
+                    <img src={mercadopagoLogo} alt="Mercado Pago" className="h-full w-full object-contain" />
                   </div>
                   <div>
                     <p className="font-medium">Conta Conectada</p>
@@ -486,10 +483,7 @@ export function PaymentSettings() {
       {/* Add PIX Manual */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-green-600" />
-            PIX Manual
-          </CardTitle>
+          <CardTitle>PIX Manual</CardTitle>
           <CardDescription>
             Receba pagamentos via PIX com confirmação manual
           </CardDescription>
@@ -562,13 +556,17 @@ export function PaymentSettings() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center",
-                  pixIntegration.status === 'ativo' ? "bg-green-100 dark:bg-green-900/30" : "bg-muted"
+                  "w-10 h-10 rounded-lg flex items-center justify-center p-1.5",
+                  pixIntegration.status === 'ativo' ? "bg-muted/50" : "bg-muted"
                 )}>
-                  <Smartphone className={cn(
-                    "h-5 w-5",
-                    pixIntegration.status === 'ativo' ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                  )} />
+                  <img 
+                    src={pixLogo} 
+                    alt="PIX" 
+                    className={cn(
+                      "h-full w-full object-contain",
+                      pixIntegration.status !== 'ativo' && "opacity-50"
+                    )} 
+                  />
                 </div>
                 <div>
                   <p className="font-medium">{(pixIntegration.dadosExtras as PixManualData)?.nomeTitular}</p>
@@ -596,10 +594,7 @@ export function PaymentSettings() {
       {/* Add InfinitePay */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-purple-600" />
-            InfinitePay
-          </CardTitle>
+          <CardTitle>InfinitePay</CardTitle>
           <CardDescription>
             Receba pagamentos com confirmação automática via checkout
           </CardDescription>
@@ -663,28 +658,52 @@ export function PaymentSettings() {
               </div>
             </div>
           ) : ipIntegration ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center",
-                  ipIntegration.status === 'ativo' ? "bg-purple-100 dark:bg-purple-900/30" : "bg-muted"
-                )}>
-                  <Zap className={cn(
-                    "h-5 w-5",
-                    ipIntegration.status === 'ativo' ? "text-purple-600 dark:text-purple-400" : "text-muted-foreground"
-                  )} />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center p-1.5",
+                    ipIntegration.status === 'ativo' ? "bg-muted/50" : "bg-muted"
+                  )}>
+                    <img 
+                      src={infinitepayLogo} 
+                      alt="InfinitePay" 
+                      className={cn(
+                        "h-full w-full object-contain",
+                        ipIntegration.status !== 'ativo' && "opacity-50"
+                      )} 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium">@{(ipIntegration.dadosExtras as InfinitePayData)?.handle}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {ipIntegration.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">@{(ipIntegration.dadosExtras as InfinitePayData)?.handle}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {ipIntegration.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                  </p>
-                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowIpForm(true)}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setShowIpForm(true)}>
-                <Edit2 className="h-4 w-4 mr-2" />
-                Editar
-              </Button>
+
+              {/* InfinitePay fee warning */}
+              {ipIntegration.status === 'ativo' && (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      Quando as taxas da InfinitePay estiverem configuradas para serem absorvidas pelo fotógrafo, 
+                      o sistema exibirá apenas o valor cobrado do cliente. 
+                      O valor líquido recebido deve ser consultado diretamente na InfinitePay.
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    <HelpCircle className="h-4 w-4 mr-2" />
+                    Como configurar
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <Button variant="outline" onClick={() => setShowIpForm(true)}>
