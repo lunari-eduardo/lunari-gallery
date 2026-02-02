@@ -35,7 +35,7 @@ export function FinalizedGalleryScreen({
           <img 
             src={studioLogoUrl} 
             alt={studioName || 'Logo do estúdio'} 
-            className="h-12 max-w-[200px] object-contain mb-8" 
+            className="h-16 sm:h-20 md:h-24 lg:h-[135px] max-w-[200px] sm:max-w-[260px] md:max-w-[320px] lg:max-w-[400px] object-contain mb-8" 
           />
         ) : (
           <Logo size="md" variant="gallery" className="mb-8" />
