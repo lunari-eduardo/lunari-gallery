@@ -986,7 +986,7 @@ export default function ClientGallery() {
             <img 
               src={galleryResponse.studioSettings.studio_logo_url} 
               alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-              className="h-16 sm:h-20 md:h-24 lg:h-[135px] max-w-[200px] sm:max-w-[260px] md:max-w-[320px] lg:max-w-[400px] object-contain"
+              className="h-48 sm:h-48 md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain"
             />
           ) : (
             <Logo size="sm" variant="gallery" />
