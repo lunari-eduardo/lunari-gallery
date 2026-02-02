@@ -225,7 +225,7 @@ export default function ClientGallery() {
         .from('galeria_fotos')
         .select('*')
         .eq('galeria_id', galleryId)
-        .order('order_index');
+        .order('original_filename', { ascending: true });
       
       if (error) {
         console.error('Photos fetch error:', error);
