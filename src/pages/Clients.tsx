@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -32,6 +33,7 @@ import { Client, ClientGalleryStatus } from '@/types/gallery';
 import { toast } from 'sonner';
 
 export default function Clients() {
+  const navigate = useNavigate();
   const { clients, isLoading, createClient, updateClient } = useGalleryClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,11 +67,7 @@ export default function Clients() {
   };
 
   const handleViewGalleries = (client: Client) => {
-    if (client.totalGalleries === 0) {
-      toast.info('Este cliente não possui galerias vinculadas.');
-    } else {
-      toast.info(`${client.totalGalleries} galeria(s) vinculada(s).`);
-    }
+    navigate(`/clients/${client.id}`);
   };
 
   const handleResetPassword = (client: Client) => {

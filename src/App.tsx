@@ -9,6 +9,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Clients from "./pages/Clients";
+import ClientProfile from "./pages/ClientProfile";
 import GalleryCreate from "./pages/GalleryCreate";
 import GalleryDetail from "./pages/GalleryDetail";
 import GalleryEdit from "./pages/GalleryEdit";
@@ -58,6 +59,11 @@ const App = () => (
               <Route path="/clients" element={
                 <ProtectedRoute>
                   <Layout><Clients /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/clients/:clientId" element={
+                <ProtectedRoute>
+                  <Layout><ClientProfile /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/gallery/new" element={
