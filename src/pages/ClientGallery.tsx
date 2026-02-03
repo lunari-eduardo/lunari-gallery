@@ -91,6 +91,7 @@ export default function ClientGallery() {
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [hasAutoOpenedDownload, setHasAutoOpenedDownload] = useState(false);
   
   
   // Payment state
@@ -423,10 +424,9 @@ export default function ClientGallery() {
       return response.json();
     },
     onSuccess: (data) => {
-      setIsConfirmed(true);
-      
       // PIX Manual - show internal payment screen
       if (data.requiresPayment && data.paymentMethod === 'pix_manual' && data.pixData) {
+        setIsConfirmed(true);
         setPixPaymentData({
           chavePix: data.pixData.chavePix || '',
           nomeTitular: data.pixData.nomeTitular || '',
@@ -440,8 +440,9 @@ export default function ClientGallery() {
         return;
       }
       
-      // Checkout externo (InfinitePay/MercadoPago) - redirect
+      // Checkout externo (InfinitePay/MercadoPago) - redirect BEFORE confirming
       if (data.requiresPayment && data.checkoutUrl) {
+        setIsConfirmed(true);
         setPaymentInfo({
           checkoutUrl: data.checkoutUrl,
           provedor: data.provedor || 'pagamento',
@@ -454,7 +455,8 @@ export default function ClientGallery() {
         return;
       }
       
-      // Sem pagamento
+      // No payment required - go directly to confirmed
+      setIsConfirmed(true);
       setCurrentStep('confirmed');
       toast.success('Seleção confirmada com sucesso!', {
         description: 'O fotógrafo receberá sua seleção.',
@@ -563,13 +565,39 @@ export default function ClientGallery() {
     }
   }, [galleryId, sessionId, isProcessingPaymentReturn]);
 
-  // Theme mode derived from gallery settings (source of truth)
   // Priority: theme.backgroundMode > clientMode > 'light'
   const effectiveBackgroundMode = useMemo(() => {
     return galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
   }, [galleryResponse?.theme?.backgroundMode, galleryResponse?.clientMode]);
   const gallery = transformedGallery;
   const isLoading = isLoadingGallery || isLoadingPhotos;
+
+  // Auto-open download modal after confirmation (if allowDownload is enabled)
+  // Only triggers on first confirmation, not on page reloads
+  useEffect(() => {
+    // Only auto-open if:
+    // 1. Gallery is confirmed
+    // 2. We're on the confirmed step (not payment or confirmation)
+    // 3. Download is allowed
+    // 4. There are selected photos
+    // 5. We haven't already auto-opened (prevents reopen on navigation)
+    const shouldAutoOpen = 
+      isConfirmed && 
+      currentStep === 'confirmed' && 
+      gallery?.settings?.allowDownload &&
+      localPhotos.some(p => p.isSelected) &&
+      !hasAutoOpenedDownload &&
+      !showDownloadModal;
+    
+    if (shouldAutoOpen) {
+      // Delay to allow confirmation animation to complete
+      const timer = setTimeout(() => {
+        setShowDownloadModal(true);
+        setHasAutoOpenedDownload(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConfirmed, currentStep, gallery?.settings?.allowDownload, localPhotos, hasAutoOpenedDownload, showDownloadModal]);
 
   // Build dynamic CSS variables from custom theme - MUST be before early returns
   // Now always applies base colors based on backgroundMode, even for system theme
@@ -762,7 +790,12 @@ export default function ClientGallery() {
     || (supabaseGallery?.regras_congeladas as unknown as RegrasCongeladas | null);
 
   const selectedCount = localPhotos.filter(p => p.isSelected).length;
-  const extrasNecessarias = Math.max(0, selectedCount - gallery.includedPhotos);
+  
+  // Respect chargeType from saleSettings
+  const chargeType = gallery.saleSettings?.chargeType || 'only_extras';
+  const extrasNecessarias = chargeType === 'all_selected'
+    ? selectedCount  // ALL selected photos are chargeable
+    : Math.max(0, selectedCount - gallery.includedPhotos);  // Only extras
   
   // Credit system: Get extras already paid from Edge Function response
   const extrasPagasTotal = supabaseGallery?.extrasPagasTotal || supabaseGallery?.total_fotos_extras_vendidas || 0;
@@ -827,7 +860,13 @@ export default function ClientGallery() {
 
   const handleConfirm = () => {
     const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
-    const currentExtrasNecessarias = Math.max(0, currentSelectedCount - gallery.includedPhotos);
+    
+    // Respect chargeType from saleSettings (same logic as extras calculation)
+    const currentChargeType = gallery.saleSettings?.chargeType || 'only_extras';
+    const currentExtrasNecessarias = currentChargeType === 'all_selected'
+      ? currentSelectedCount  // ALL selected photos
+      : Math.max(0, currentSelectedCount - gallery.includedPhotos);  // Only extras
+      
     const currentExtrasACobrar = Math.max(0, currentExtrasNecessarias - extrasPagasTotal);
     
     // Use credit-based pricing

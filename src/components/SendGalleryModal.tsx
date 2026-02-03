@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { GlobalSettings } from '@/types/gallery';
 import { Galeria } from '@/hooks/useSupabaseGalleries';
+import { getGalleryUrl } from '@/lib/galleryUrl';
 
 interface SendGalleryModalProps {
   isOpen: boolean;
@@ -44,9 +45,9 @@ export function SendGalleryModal({
   const [isCopied, setIsCopied] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
 
-  // Build the client link - gallery should always be published now
+  // Build the client link using production domain
   const clientLink = gallery.publicToken
-    ? `${window.location.origin}/g/${gallery.publicToken}`
+    ? getGalleryUrl(gallery.publicToken)
     : null;
 
   // Get the gallery_sent template

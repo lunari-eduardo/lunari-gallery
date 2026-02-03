@@ -35,6 +35,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
+import { getGalleryUrl } from '@/lib/galleryUrl';
 
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
@@ -612,7 +613,7 @@ export default function GalleryEdit() {
               <CardContent>
                 <ReactivateGalleryDialog
                   galleryName={gallery.nomeSessao || 'Esta galeria'}
-                  clientLink={gallery.publicToken ? `${window.location.origin}/g/${gallery.publicToken}` : null}
+                  clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
                   onReactivate={handleReactivate}
                 />
               </CardContent>

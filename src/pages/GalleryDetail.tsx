@@ -41,6 +41,7 @@ import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getGalleryUrl } from '@/lib/galleryUrl';
 
 // Polling interval for pending payments (30 seconds)
 const PAYMENT_POLL_INTERVAL = 30000;
@@ -313,7 +314,7 @@ export default function GalleryDetail() {
   // Use public_token for client link if available, otherwise show warning
   const hasPublicToken = !!supabaseGallery.publicToken;
   const clientLink = hasPublicToken
-    ? `${window.location.origin}/g/${supabaseGallery.publicToken}`
+    ? getGalleryUrl(supabaseGallery.publicToken)
     : null;
   
   // Calculate deadline
