@@ -41,7 +41,7 @@ serve(async (req) => {
       );
     }
 
-    // 2. Check if gallery is finalized (show completion screen instead of gallery)
+    // 2. Check if gallery is finalized (show preview of selected photos)
     const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
     
     if (isFinalized) {
@@ -90,42 +90,22 @@ serve(async (req) => {
         };
       }
       
-      // If download is allowed, fetch selected photos for download screen
-      if (allowDownload) {
-        const { data: selectedPhotos } = await supabase
-          .from("galeria_fotos")
-          .select("id, storage_key, original_filename, filename")
-          .eq("galeria_id", gallery.id)
-          .eq("is_selected", true)
-          .order("original_filename", { ascending: true });
-        
-        console.log("🔒 Gallery finalized with download enabled - returning photos for download");
-        
-        return new Response(
-          JSON.stringify({ 
-            finalized: true,
-            allowDownload: true,
-            sessionName: gallery.nome_sessao,
-            photos: selectedPhotos || [],
-            studioSettings: settings || null,
-            theme: themeData,
-            clientMode: clientMode,
-            settings: {
-              sessionFont: galleryConfig?.sessionFont || undefined,
-              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-            },
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      // ALWAYS fetch selected photos for preview (regardless of download permission)
+      const { data: selectedPhotos } = await supabase
+        .from("galeria_fotos")
+        .select("id, storage_key, original_filename, filename")
+        .eq("galeria_id", gallery.id)
+        .eq("is_selected", true)
+        .order("original_filename", { ascending: true });
       
-      console.log("🔒 Gallery finalized - returning minimal data for completion screen");
+      console.log("🔒 Gallery finalized - returning selected photos for preview, allowDownload:", allowDownload);
       
       return new Response(
         JSON.stringify({ 
           finalized: true,
-          allowDownload: false,
+          allowDownload: allowDownload,
           sessionName: gallery.nome_sessao,
+          photos: selectedPhotos || [],
           studioSettings: settings || null,
           theme: themeData,
           clientMode: clientMode,
