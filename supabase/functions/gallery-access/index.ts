@@ -56,6 +56,7 @@ serve(async (req) => {
       const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
       const themeId = galleryConfig?.themeId as string | undefined;
       const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+      const allowDownload = galleryConfig?.allowDownload === true;
       
       let themeData = null;
       if (themeId) {
@@ -89,16 +90,45 @@ serve(async (req) => {
         };
       }
       
+      // If download is allowed, fetch selected photos for download screen
+      if (allowDownload) {
+        const { data: selectedPhotos } = await supabase
+          .from("galeria_fotos")
+          .select("id, storage_key, original_filename, filename")
+          .eq("galeria_id", gallery.id)
+          .eq("is_selected", true)
+          .order("original_filename", { ascending: true });
+        
+        console.log("🔒 Gallery finalized with download enabled - returning photos for download");
+        
+        return new Response(
+          JSON.stringify({ 
+            finalized: true,
+            allowDownload: true,
+            sessionName: gallery.nome_sessao,
+            photos: selectedPhotos || [],
+            studioSettings: settings || null,
+            theme: themeData,
+            clientMode: clientMode,
+            settings: {
+              sessionFont: galleryConfig?.sessionFont || undefined,
+              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+            },
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       console.log("🔒 Gallery finalized - returning minimal data for completion screen");
       
       return new Response(
         JSON.stringify({ 
           finalized: true,
+          allowDownload: false,
           sessionName: gallery.nome_sessao,
           studioSettings: settings || null,
           theme: themeData,
           clientMode: clientMode,
-          // Include font settings for finalized screen styling
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
