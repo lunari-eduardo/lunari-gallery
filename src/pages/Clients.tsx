@@ -144,7 +144,12 @@ export default function Clients() {
                 <TableRow key={client.id}>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{client.name}</p>
+                      <p 
+                        className="font-medium text-primary hover:underline cursor-pointer"
+                        onClick={() => handleViewGalleries(client)}
+                      >
+                        {client.name}
+                      </p>
                       <p className="text-sm text-muted-foreground">{client.email}</p>
                     </div>
                   </TableCell>

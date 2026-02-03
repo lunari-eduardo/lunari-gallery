@@ -7,14 +7,40 @@ import {
   CheckCircle, 
   Clock, 
   XCircle,
-  Loader2
+  Loader2,
+  HelpCircle
 } from 'lucide-react';
 
 interface StatusBadgeProps {
-  status: GalleryStatus | SelectionStatus;
+  status: GalleryStatus | SelectionStatus | string;
   type?: 'gallery' | 'selection';
   className?: string;
 }
+
+// Mapeamento de status em português (banco) para inglês (código)
+const statusTranslation: Record<string, GalleryStatus | SelectionStatus> = {
+  // Português → Inglês (Gallery)
+  'rascunho': 'created',
+  'enviado': 'sent',
+  'selecao_iniciada': 'selection_started',
+  'selecao_concluida': 'selection_completed',
+  'expirado': 'expired',
+  'cancelado': 'cancelled',
+  // Inglês → Inglês (já corretos)
+  'created': 'created',
+  'sent': 'sent',
+  'selection_started': 'selection_started',
+  'selection_completed': 'selection_completed',
+  'expired': 'expired',
+  'cancelled': 'cancelled',
+  // Selection status
+  'in_progress': 'in_progress',
+  'confirmed': 'confirmed',
+  'blocked': 'blocked',
+  'em_andamento': 'in_progress',
+  'confirmado': 'confirmed',
+  'bloqueado': 'blocked',
+};
 
 const galleryStatusConfig: Record<GalleryStatus, { label: string; className: string; icon: React.ElementType }> = {
   created: { label: 'Criada', className: 'status-created', icon: Circle },
@@ -31,10 +57,15 @@ const selectionStatusConfig: Record<SelectionStatus, { label: string; className:
   blocked: { label: 'Bloqueada', className: 'status-expired', icon: XCircle },
 };
 
+const defaultConfig = { label: 'Desconhecido', className: 'status-created', icon: HelpCircle };
+
 export function StatusBadge({ status, type = 'gallery', className }: StatusBadgeProps) {
+  // Normalizar status usando mapeamento
+  const normalizedStatus = statusTranslation[status] || status;
+  
   const config = type === 'gallery' 
-    ? galleryStatusConfig[status as GalleryStatus]
-    : selectionStatusConfig[status as SelectionStatus];
+    ? galleryStatusConfig[normalizedStatus as GalleryStatus] || defaultConfig
+    : selectionStatusConfig[normalizedStatus as SelectionStatus] || defaultConfig;
 
   const Icon = config.icon;
 
