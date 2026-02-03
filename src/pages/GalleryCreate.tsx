@@ -40,20 +40,19 @@ import { FontSelect, getFontFamilyById } from '@/components/FontSelect';
 // Handles progressive pricing by getting the first tier price
 function getInitialExtraPrice(regras: RegrasCongeladas | null): number {
   if (!regras) return 0;
-  
   const precificacao = regras.precificacaoFotoExtra;
-  
+
   // Fixed model: use package price
   if (!precificacao || precificacao.modelo === 'fixo') {
     return regras.pacote?.valorFotoExtra || 0;
   }
-  
+
   // Global model: get first tier price
   if (precificacao.modelo === 'global' && precificacao.tabelaGlobal?.faixas?.length) {
     const sortedFaixas = [...precificacao.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
     return sortedFaixas[0]?.valor || regras.pacote?.valorFotoExtra || 0;
   }
-  
+
   // Category model: check if should use fixed price
   if (precificacao.modelo === 'categoria') {
     if (precificacao.tabelaCategoria?.usar_valor_fixo_pacote) {
@@ -64,11 +63,10 @@ function getInitialExtraPrice(regras: RegrasCongeladas | null): number {
       return sortedFaixas[0]?.valor || regras.pacote?.valorFotoExtra || 0;
     }
   }
-  
+
   // Fallback
   return regras.pacote?.valorFotoExtra || 0;
 }
-
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -92,14 +90,28 @@ const steps = [{
 }];
 export default function GalleryCreate() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { hasGestaoIntegration, accessLevel } = useGalleryAccess(user);
-  const { gestaoParams, hasGestaoParams, isAssistedMode: hasGestaoSession, paramsProcessed, markAsProcessed, clearParams } = useGestaoParams();
-  const { packages: gestaoPackages, isLoading: isLoadingPackages } = useGestaoPackages();
-  
+  const {
+    user
+  } = useAuth();
+  const {
+    hasGestaoIntegration,
+    accessLevel
+  } = useGalleryAccess(user);
+  const {
+    gestaoParams,
+    hasGestaoParams,
+    isAssistedMode: hasGestaoSession,
+    paramsProcessed,
+    markAsProcessed,
+    clearParams
+  } = useGestaoParams();
+  const {
+    packages: gestaoPackages,
+    isLoading: isLoadingPackages
+  } = useGestaoPackages();
+
   // Assisted mode: has Gestão params AND user has integration
   const isAssistedMode = hasGestaoSession && hasGestaoIntegration;
-  
   const {
     clients,
     isLoading: isLoadingClients,
@@ -137,26 +149,32 @@ export default function GalleryCreate() {
   const [fixedPrice, setFixedPrice] = useState(25);
   const [discountPackages, setDiscountPackages] = useState<DiscountPackage[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
-  
+
   // Payment integration hook
-  const { data: paymentData } = usePaymentIntegration();
+  const {
+    data: paymentData
+  } = usePaymentIntegration();
 
   // Step 3: Photos
   const [uploadedCount, setUploadedCount] = useState(0);
   const [supabaseGalleryId, setSupabaseGalleryId] = useState<string | null>(null);
   const [isCreatingGallery, setIsCreatingGallery] = useState(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
-  
+
   // Frozen pricing rules from Gestão session (for PRO+Gallery users)
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
   const [isLoadingRegras, setIsLoadingRegras] = useState(false);
   const [regrasLoaded, setRegrasLoaded] = useState(false);
-  
+
   // Override pricing: when true, user wants to customize prices instead of using regrasCongeladas
   const [overridePricing, setOverridePricing] = useState(false);
-  
+
   // Supabase galleries hook
-  const { createGallery: createSupabaseGallery, updateGallery, sendGallery: sendSupabaseGallery } = useSupabaseGalleries();
+  const {
+    createGallery: createSupabaseGallery,
+    updateGallery,
+    sendGallery: sendSupabaseGallery
+  } = useSupabaseGalleries();
 
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
@@ -168,7 +186,7 @@ export default function GalleryCreate() {
   const [allowComments, setAllowComments] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
   const [allowExtraPhotos, setAllowExtraPhotos] = useState(true);
-  
+
   // Theme selection for client gallery
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
@@ -199,45 +217,39 @@ export default function GalleryCreate() {
   // Now fetches ALWAYS when session_id is present, regardless of hasGestaoIntegration
   useEffect(() => {
     const sessionId = gestaoParams?.session_id;
-    
+
     // No session_id = no rules to fetch
     if (!sessionId) {
       setRegrasLoaded(true);
       return;
     }
-
     const fetchSessionData = async () => {
       setIsLoadingRegras(true);
       try {
         console.log('🔗 Fetching session data for:', sessionId);
         // Query by 'session_id' (workflow string) - the session_id param from URL is the workflow string
-        const { data, error } = await supabase
-          .from('clientes_sessoes')
-          .select('id, session_id, regras_congeladas, valor_foto_extra')
-          .eq('session_id', sessionId)
-          .single();
-
+        const {
+          data,
+          error
+        } = await supabase.from('clientes_sessoes').select('id, session_id, regras_congeladas, valor_foto_extra').eq('session_id', sessionId).single();
         if (error) {
           console.warn('Session not found or error:', error.message);
         } else {
           console.log('🔗 Session data found:', data);
-          
           if (data?.regras_congeladas) {
             const regras = data.regras_congeladas as unknown as RegrasCongeladas;
             console.log('🔗 regrasCongeladas loaded:', {
               fotosIncluidas: regras.pacote?.fotosIncluidas,
               valorFotoExtra: regras.pacote?.valorFotoExtra,
               pacoteNome: regras.pacote?.nome,
-              categoria: regras.pacote?.categoria,
+              categoria: regras.pacote?.categoria
             });
             setRegrasCongeladas(regras);
           }
-          
+
           // Use session's valor_foto_extra as fallback (normalized)
           if (data?.valor_foto_extra && data.valor_foto_extra > 0) {
-            const valorNormalizado = data.valor_foto_extra > 1000 
-              ? data.valor_foto_extra / 100 
-              : data.valor_foto_extra;
+            const valorNormalizado = data.valor_foto_extra > 1000 ? data.valor_foto_extra / 100 : data.valor_foto_extra;
             setFixedPrice(valorNormalizado);
           }
         }
@@ -248,7 +260,6 @@ export default function GalleryCreate() {
         setRegrasLoaded(true);
       }
     };
-
     fetchSessionData();
   }, [gestaoParams?.session_id]);
 
@@ -258,36 +269,34 @@ export default function GalleryCreate() {
   useEffect(() => {
     // Only run when regras are loaded and we have a session
     if (!regrasLoaded || !regrasCongeladas || !gestaoParams?.session_id) return;
-    
-    const { pacote } = regrasCongeladas;
-    
+    const {
+      pacote
+    } = regrasCongeladas;
+
     // fotosIncluidas from frozen rules is the source of truth - ALWAYS use it when available
     if (pacote?.fotosIncluidas !== undefined && pacote.fotosIncluidas > 0) {
       console.log('🔗 Syncing includedPhotos from regrasCongeladas:', pacote.fotosIncluidas);
       setIncludedPhotos(pacote.fotosIncluidas);
     }
-    
+
     // Package name from frozen rules (if not already set by URL params)
     if (pacote?.nome && !packageName) {
       console.log('🔗 Syncing packageName from regrasCongeladas:', pacote.nome);
       setPackageName(pacote.nome);
     }
-    
+
     // Session name from category (if not already set by URL params)
     if (pacote?.categoria && !sessionName) {
       console.log('🔗 Syncing sessionName from regrasCongeladas:', pacote.categoria);
       setSessionName(pacote.categoria);
     }
-    
+
     // valorFotoExtra from frozen rules - normalize if in cents
     if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
-      const valorNormalizado = pacote.valorFotoExtra > 1000 
-        ? pacote.valorFotoExtra / 100 
-        : pacote.valorFotoExtra;
+      const valorNormalizado = pacote.valorFotoExtra > 1000 ? pacote.valorFotoExtra / 100 : pacote.valorFotoExtra;
       console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorNormalizado);
       setFixedPrice(valorNormalizado);
     }
-    
   }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, packageName, sessionName]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
@@ -311,13 +320,12 @@ export default function GalleryCreate() {
         return;
       }
     }
-    
+
     // Wait for packages to load if we have a pacote_nome (to lookup fotos_incluidas)
     if (gestaoParams.pacote_nome && isLoadingPackages) {
       console.log('🔗 Waiting for packages to load...');
       return;
     }
-
     console.log('🔗 Assisted Mode - Processing params:', gestaoParams);
     console.log('🔗 Clients available:', clients.length);
     console.log('🔗 Packages available:', gestaoPackages.length);
@@ -326,19 +334,16 @@ export default function GalleryCreate() {
     if (gestaoParams.pacote_categoria) {
       setSessionName(gestaoParams.pacote_categoria);
     }
-    
+
     // Step 2: Package name and lookup package data
     if (gestaoParams.pacote_nome) {
       setPackageName(gestaoParams.pacote_nome);
-      
+
       // Lookup package to get fotos_incluidas and valor_foto_extra
-      const packageFromGestao = gestaoPackages.find(
-        pkg => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase()
-      );
-      
+      const packageFromGestao = gestaoPackages.find(pkg => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
       if (packageFromGestao) {
         console.log('🔗 Found package:', packageFromGestao);
-        
+
         // Use package fotos_incluidas ONLY if:
         // 1. Not explicitly provided in URL
         // 2. This is a TEMPORARY value - regrasCongeladas useEffect will override when loaded
@@ -347,7 +352,7 @@ export default function GalleryCreate() {
           console.log('🔗 Setting temporary includedPhotos from package (will be overridden by regrasCongeladas if available):', packageFromGestao.fotosIncluidas);
           setIncludedPhotos(packageFromGestao.fotosIncluidas);
         }
-        
+
         // Only use package valor_foto_extra if:
         // 1. Not explicitly provided in URL
         // 2. No frozen rules exist (regrasCongeladas will be the source of truth if present)
@@ -358,7 +363,7 @@ export default function GalleryCreate() {
         }
       }
     }
-    
+
     // Explicit URL values take priority
     if (gestaoParams.fotos_incluidas_no_pacote) {
       setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
@@ -392,7 +397,6 @@ export default function GalleryCreate() {
     console.log('🔗 Marking params as processed and clearing URL');
     markAsProcessed();
     clearParams();
-    
   }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams]);
   // Initialize payment method with default when data loads
   useEffect(() => {
@@ -400,14 +404,13 @@ export default function GalleryCreate() {
       setSelectedPaymentMethod(paymentData.defaultIntegration.provedor as PaymentMethod);
     }
   }, [paymentData?.defaultIntegration, selectedPaymentMethod]);
-
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
     chargeType,
     fixedPrice,
     discountPackages,
-    paymentMethod: saleMode === 'sale_with_payment' ? selectedPaymentMethod || undefined : undefined,
+    paymentMethod: saleMode === 'sale_with_payment' ? selectedPaymentMethod || undefined : undefined
   });
   // Create Supabase gallery when entering step 3 (for uploads)
   const createSupabaseGalleryForUploads = async () => {
@@ -417,7 +420,6 @@ export default function GalleryCreate() {
       return;
     }
     if (supabaseGalleryId) return;
-    
     setIsCreatingGallery(true);
     try {
       // Determine password for private gallery
@@ -427,11 +429,13 @@ export default function GalleryCreate() {
           passwordToUse = selectedClient.galleryPassword;
         } else if (newPassword) {
           passwordToUse = newPassword;
-          
+
           // Save new password to client if option is checked
           if (savePasswordToClient && selectedClient) {
             try {
-              await updateClient(selectedClient.id, { galleryPassword: newPassword });
+              await updateClient(selectedClient.id, {
+                galleryPassword: newPassword
+              });
             } catch (error) {
               console.error('Error saving password to client:', error);
             }
@@ -448,10 +452,8 @@ export default function GalleryCreate() {
       // When we have frozen rules from Gestão and no override, use them
       const hasSessionRegras = regrasCongeladas && !overridePricing;
       const hasSessionId = !!gestaoParams?.session_id;
-      
       let valorFotoExtraFinal = fixedPrice;
       let finalRegrasCongeladas: RegrasCongeladas | null = null;
-      
       if (hasSessionRegras) {
         // Assisted mode with Gestão rules - use frozen rules
         const valorRaw = regrasCongeladas.pacote?.valorFotoExtra || 0;
@@ -460,19 +462,13 @@ export default function GalleryCreate() {
       } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
         // Standalone mode with discount packages - generate regrasCongeladas
         console.log('📦 Generating regrasCongeladas from standalone discount packages');
-        finalRegrasCongeladas = buildRegrasFromDiscountPackages(
-          discountPackages,
-          fixedPrice,
-          includedPhotos,
-          packageName
-        );
+        finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
         // Use first tier price for the valorFotoExtra field
         if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
           const sortedFaixas = [...finalRegrasCongeladas.precificacaoFotoExtra.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
           valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
         }
       }
-
       const result = await createSupabaseGallery({
         clienteId: selectedClient?.id || null,
         clienteNome: clientName,
@@ -495,7 +491,7 @@ export default function GalleryCreate() {
           watermark: {
             type: watermarkType,
             opacity: watermarkOpacity,
-            position: 'center',
+            position: 'center'
           },
           watermarkDisplay: watermarkDisplay,
           imageResizeOption: imageResizeOption,
@@ -506,10 +502,9 @@ export default function GalleryCreate() {
           themeId: selectedThemeId,
           clientMode: clientMode,
           sessionFont: sessionFont,
-          titleCaseMode: titleCaseMode,
-        },
+          titleCaseMode: titleCaseMode
+        }
       });
-      
       if (result?.id) {
         setSupabaseGalleryId(result.id);
       }
@@ -520,7 +515,6 @@ export default function GalleryCreate() {
       setIsCreatingGallery(false);
     }
   };
-  
   const handleNext = async () => {
     if (currentStep < 5) {
       // When going to step 4 (Fotos), create Supabase gallery first with configurations
@@ -531,13 +525,14 @@ export default function GalleryCreate() {
           setCurrentStep(1);
           return;
         }
-        
+
         // For assisted mode, wait for pricing rules to load
         if (isAssistedMode && !regrasLoaded) {
-          toast.loading('Carregando configurações de preços...', { duration: 2000 });
+          toast.loading('Carregando configurações de preços...', {
+            duration: 2000
+          });
           return;
         }
-        
         await createSupabaseGalleryForUploads();
       }
       setCurrentStep(currentStep + 1);
@@ -548,27 +543,20 @@ export default function GalleryCreate() {
           // Determine regrasCongeladas and valorFotoExtra for final update
           const hasSessionRegras = regrasCongeladas && !overridePricing;
           const hasSessionId = !!gestaoParams?.session_id;
-          
           let valorFotoExtraFinal = fixedPrice;
           let finalRegrasCongeladas: RegrasCongeladas | null = null;
-          
           if (hasSessionRegras) {
             valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
             finalRegrasCongeladas = regrasCongeladas;
           } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
             // Standalone mode with discount packages - generate regrasCongeladas
-            finalRegrasCongeladas = buildRegrasFromDiscountPackages(
-              discountPackages,
-              fixedPrice,
-              includedPhotos,
-              packageName
-            );
+            finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
             if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
               const sortedFaixas = [...finalRegrasCongeladas.precificacaoFotoExtra.tabelaGlobal.faixas].sort((a, b) => a.min - b.min);
               valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
             }
           }
-          
+
           // Update gallery with all settings from Step 4
           await updateGallery({
             id: supabaseGalleryId,
@@ -577,7 +565,7 @@ export default function GalleryCreate() {
                 watermark: {
                   type: watermarkType,
                   opacity: watermarkOpacity,
-                  position: 'center',
+                  position: 'center'
                 },
                 watermarkDisplay: watermarkDisplay,
                 imageResizeOption: imageResizeOption,
@@ -591,19 +579,20 @@ export default function GalleryCreate() {
                 clientMode: clientMode,
                 // Font settings for session title
                 sessionFont: sessionFont,
-                titleCaseMode: titleCaseMode,
+                titleCaseMode: titleCaseMode
               },
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
               valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
               // Include regrasCongeladas for standalone progressive pricing
-              ...(finalRegrasCongeladas && { regrasCongeladas: finalRegrasCongeladas }),
+              ...(finalRegrasCongeladas && {
+                regrasCongeladas: finalRegrasCongeladas
+              })
             }
           });
-          
+
           // Auto-publish gallery so it's ready to be shared
           await sendSupabaseGallery(supabaseGalleryId);
-          
           toast.success('Galeria criada e publicada!', {
             description: 'Agora você pode compartilhar o link com o cliente.'
           });
@@ -614,7 +603,7 @@ export default function GalleryCreate() {
         }
         return;
       }
-      
+
       // No gallery created yet - shouldn't happen if flow is correct
       toast.error('Erro ao criar galeria. Tente novamente.');
     }
@@ -626,7 +615,7 @@ export default function GalleryCreate() {
       navigate('/');
     }
   };
-  
+
   // Save draft function - can be called at any step
   const handleSaveDraft = async () => {
     try {
@@ -639,15 +628,12 @@ export default function GalleryCreate() {
           passwordToUse = newPassword;
         }
       }
-
       if (supabaseGalleryId) {
         // Determine regrasCongeladas for draft update
         const hasSessionRegras = regrasCongeladas && !overridePricing;
         const hasSessionId = !!gestaoParams?.session_id;
-        
         let valorFotoExtraFinal = fixedPrice;
         let finalRegrasCongeladas: RegrasCongeladas | null = null;
-        
         if (hasSessionRegras) {
           valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
           finalRegrasCongeladas = regrasCongeladas;
@@ -658,7 +644,7 @@ export default function GalleryCreate() {
             valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
           }
         }
-        
+
         // Update existing gallery
         await updateGallery({
           id: supabaseGalleryId,
@@ -676,7 +662,7 @@ export default function GalleryCreate() {
               watermark: {
                 type: watermarkType,
                 opacity: watermarkOpacity,
-                position: 'center',
+                position: 'center'
               },
               watermarkDisplay: watermarkDisplay,
               imageResizeOption: imageResizeOption,
@@ -687,9 +673,11 @@ export default function GalleryCreate() {
               themeId: selectedThemeId,
               clientMode: clientMode,
               sessionFont: sessionFont,
-              titleCaseMode: titleCaseMode,
+              titleCaseMode: titleCaseMode
             },
-            ...(finalRegrasCongeladas && { regrasCongeladas: finalRegrasCongeladas }),
+            ...(finalRegrasCongeladas && {
+              regrasCongeladas: finalRegrasCongeladas
+            })
           }
         });
         toast.success('Rascunho salvo!');
@@ -697,10 +685,8 @@ export default function GalleryCreate() {
       } else {
         // Determine regrasCongeladas for new draft
         const hasSessionId = !!gestaoParams?.session_id;
-        
         let valorFotoExtraFinal = fixedPrice;
         let finalRegrasCongeladas: RegrasCongeladas | null = null;
-        
         if (isAssistedMode && regrasCongeladas && !overridePricing) {
           valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
           finalRegrasCongeladas = regrasCongeladas;
@@ -711,7 +697,7 @@ export default function GalleryCreate() {
             valorFotoExtraFinal = sortedFaixas[0]?.valor || fixedPrice;
           }
         }
-        
+
         // Create new gallery as draft
         const result = await createSupabaseGallery({
           clienteId: selectedClient?.id || null,
@@ -732,21 +718,20 @@ export default function GalleryCreate() {
             watermark: {
               type: watermarkType,
               opacity: watermarkOpacity,
-              position: 'center',
+              position: 'center'
             },
             watermarkDisplay: watermarkDisplay,
             imageResizeOption: imageResizeOption,
             allowComments: allowComments,
             allowDownload: allowDownload,
             allowExtraPhotos: allowExtraPhotos,
-              saleSettings: getSaleSettings(),
-              themeId: selectedThemeId,
-              clientMode: clientMode,
-              sessionFont: sessionFont,
-              titleCaseMode: titleCaseMode,
-            },
+            saleSettings: getSaleSettings(),
+            themeId: selectedThemeId,
+            clientMode: clientMode,
+            sessionFont: sessionFont,
+            titleCaseMode: titleCaseMode
+          }
         });
-        
         if (result?.id) {
           toast.success('Rascunho salvo!');
           navigate('/');
@@ -757,7 +742,6 @@ export default function GalleryCreate() {
       toast.error('Erro ao salvar rascunho');
     }
   };
-  
   const handlePhotoUploadComplete = (photos: UploadedPhoto[]) => {
     setUploadedPhotos(prev => [...prev, ...photos]);
     setUploadedCount(prev => prev + photos.length);
@@ -882,23 +866,21 @@ export default function GalleryCreate() {
                 Dados do cliente e detalhes da sessão
               </p>
               {/* Assisted Mode Badge */}
-              {isAssistedMode && (
-                <Badge variant="secondary" className="gap-1.5">
+              {isAssistedMode && <Badge variant="secondary" className="gap-1.5">
                   <Link2 className="h-3 w-3" />
                   Vinculada à sessão do Gestão
-                </Badge>
-              )}
+                </Badge>}
             </div>
 
             {/* Gallery Permission */}
             <div className="space-y-4">
               <Label className="text-base font-medium">Permissão da Galeria</Label>
-              <RadioGroup value={galleryPermission} onValueChange={(v) => {
-                setGalleryPermission(v as GalleryPermission);
-                if (v === 'public') {
-                  setSelectedClient(null);
-                }
-              }} className="grid grid-cols-2 gap-4">
+              <RadioGroup value={galleryPermission} onValueChange={v => {
+              setGalleryPermission(v as GalleryPermission);
+              if (v === 'public') {
+                setSelectedClient(null);
+              }
+            }} className="grid grid-cols-2 gap-4">
                 <div>
                   <RadioGroupItem value="public" id="gallery-public" className="peer sr-only" />
                   <Label htmlFor="gallery-public" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all", "hover:border-primary/50 hover:bg-muted/50", galleryPermission === 'public' ? "border-primary bg-primary/5" : "border-border")}>
@@ -923,50 +905,31 @@ export default function GalleryCreate() {
             </div>
 
             {/* Client Section - Only show for private galleries */}
-            {galleryPermission === 'private' && (
-              <div className="space-y-4">
+            {galleryPermission === 'private' && <div className="space-y-4">
                 {/* Client dropdown - Same for ALL plans (table accessed depends on plan via useGalleryClients) */}
                 <div className="flex items-center gap-2">
                   <div className="flex-1 space-y-2">
                     <Label>Cliente *</Label>
-                    {isLoadingClients ? (
-                      <div className="h-10 rounded-md border border-input bg-muted animate-pulse" />
-                    ) : (
-                      <ClientSelect 
-                        clients={clients} 
-                        selectedClient={selectedClient} 
-                        onSelect={handleClientSelect} 
-                        onCreateNew={() => setIsClientModalOpen(true)} 
-                      />
-                    )}
+                    {isLoadingClients ? <div className="h-10 rounded-md border border-input bg-muted animate-pulse" /> : <ClientSelect clients={clients} selectedClient={selectedClient} onSelect={handleClientSelect} onCreateNew={() => setIsClientModalOpen(true)} />}
                   </div>
                   <div className="pt-6">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="icon" 
-                      onClick={() => setIsClientModalOpen(true)}
-                      disabled={isLoadingClients}
-                    >
+                    <Button type="button" variant="outline" size="icon" onClick={() => setIsClientModalOpen(true)} disabled={isLoadingClients}>
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
 
                 {/* Password Section - Show for ANY selected client (all plans) */}
-                {selectedClient && (
-                  <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
+                {selectedClient && <div className="p-4 rounded-lg bg-muted/50 space-y-2 animate-fade-in">
                     <div className="grid gap-2 md:grid-cols-2 text-sm">
                       <div>
                         <span className="text-muted-foreground">Email: </span>
                         <span className="font-medium">{selectedClient.email}</span>
                       </div>
-                      {selectedClient.phone && (
-                        <div>
+                      {selectedClient.phone && <div>
                           <span className="text-muted-foreground">Telefone: </span>
                           <span className="font-medium">{selectedClient.phone}</span>
-                        </div>
-                      )}
+                        </div>}
                     </div>
                     
                     <div className="pt-2 space-y-3">
@@ -974,17 +937,13 @@ export default function GalleryCreate() {
                       
                       {/* Option: Disable password protection */}
                       <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="passwordDisabled" 
-                          checked={passwordDisabled} 
-                          onCheckedChange={checked => {
-                            setPasswordDisabled(checked as boolean);
-                            if (checked) {
-                              setUseExistingPassword(false);
-                              setNewPassword('');
-                            }
-                          }} 
-                        />
+                        <Checkbox id="passwordDisabled" checked={passwordDisabled} onCheckedChange={checked => {
+                    setPasswordDisabled(checked as boolean);
+                    if (checked) {
+                      setUseExistingPassword(false);
+                      setNewPassword('');
+                    }
+                  }} />
                         <label htmlFor="passwordDisabled" className="text-sm font-medium leading-none">
                           Sem proteção por senha
                         </label>
@@ -994,82 +953,50 @@ export default function GalleryCreate() {
                       </p>
                       
                       {/* Password options - only show if password is NOT disabled */}
-                      {!passwordDisabled && (
-                        <>
+                      {!passwordDisabled && <>
                           {/* Client HAS password registered */}
-                          {selectedClient.galleryPassword ? (
-                            <>
+                          {selectedClient.galleryPassword ? <>
                               <div className="flex items-center space-x-2">
-                                <Checkbox 
-                                  id="useExisting" 
-                                  checked={useExistingPassword} 
-                                  onCheckedChange={checked => setUseExistingPassword(checked as boolean)} 
-                                />
+                                <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
                                 <label htmlFor="useExisting" className="text-sm font-medium leading-none">
                                   Usar senha cadastrada
                                 </label>
                               </div>
                               
                               {/* Show password visually when using existing */}
-                              {useExistingPassword && (
-                                <div className="flex items-center gap-2 p-2 bg-muted rounded-md ml-6">
+                              {useExistingPassword && <div className="flex items-center gap-2 p-2 bg-muted rounded-md ml-6">
                                   <Lock className="h-4 w-4 text-muted-foreground" />
                                   <span className="font-mono text-sm">{selectedClient.galleryPassword}</span>
-                                </div>
-                              )}
+                                </div>}
                               
                               {/* Input for new password when unchecked */}
-                              {!useExistingPassword && (
-                                <div className="space-y-2 ml-6">
-                                  <Input 
-                                    placeholder="Nova senha para esta galeria" 
-                                    value={newPassword} 
-                                    onChange={e => setNewPassword(e.target.value)} 
-                                  />
+                              {!useExistingPassword && <div className="space-y-2 ml-6">
+                                  <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
                                   <div className="flex items-center space-x-2">
-                                    <Checkbox 
-                                      id="saveToClient" 
-                                      checked={savePasswordToClient} 
-                                      onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} 
-                                    />
+                                    <Checkbox id="saveToClient" checked={savePasswordToClient} onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} />
                                     <label htmlFor="saveToClient" className="text-xs text-muted-foreground">
                                       Salvar esta senha no cadastro do cliente
                                     </label>
                                   </div>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            /* Client has NO password registered */
-                            <div className="space-y-2">
+                                </div>}
+                            </> : (/* Client has NO password registered */
+                  <div className="space-y-2">
                               <p className="text-xs text-muted-foreground">
                                 Este cliente não possui senha cadastrada
                               </p>
-                              <Input 
-                                placeholder="Definir senha para a galeria" 
-                                value={newPassword} 
-                                onChange={e => setNewPassword(e.target.value)} 
-                              />
+                              <Input placeholder="Definir senha para a galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
                               <div className="flex items-center space-x-2">
-                                <Checkbox 
-                                  id="saveToClient" 
-                                  checked={savePasswordToClient} 
-                                  onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} 
-                                />
+                                <Checkbox id="saveToClient" checked={savePasswordToClient} onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} />
                                 <label htmlFor="saveToClient" className="text-xs text-muted-foreground">
                                   Salvar esta senha no cadastro do cliente
                                 </label>
                               </div>
-                            </div>
-                          )}
-                        </>
-                      )}
+                            </div>)}
+                        </>}
                     </div>
-                  </div>
-                )}
+                  </div>}
 
-              </div>
-            )}
+              </div>}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -1079,26 +1006,17 @@ export default function GalleryCreate() {
               <div className="space-y-2">
                 <Label htmlFor="packageName">Pacote</Label>
                 {/* PRO + Gallery: Searchable dropdown for packages */}
-                {hasGestaoIntegration && gestaoPackages.length > 0 ? (
-                  <PackageSelect 
-                    packages={gestaoPackages} 
-                    selectedPackage={packageName} 
-                    onSelect={(name, pkg) => {
-                      setPackageName(name);
-                      // Auto-fill included photos and price if available
-                      if (pkg?.fotosIncluidas) {
-                        setIncludedPhotos(pkg.fotosIncluidas);
-                      }
-                      if (pkg?.valorFotoExtra) {
-                        setFixedPrice(pkg.valorFotoExtra);
-                      }
-                    }}
-                    disabled={isLoadingPackages}
-                  />
-                ) : (
-                  /* Other plans or no packages: Simple text input */
-                  <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={e => setPackageName(e.target.value)} />
-                )}
+                {hasGestaoIntegration && gestaoPackages.length > 0 ? <PackageSelect packages={gestaoPackages} selectedPackage={packageName} onSelect={(name, pkg) => {
+                setPackageName(name);
+                // Auto-fill included photos and price if available
+                if (pkg?.fotosIncluidas) {
+                  setIncludedPhotos(pkg.fotosIncluidas);
+                }
+                if (pkg?.valorFotoExtra) {
+                  setFixedPrice(pkg.valorFotoExtra);
+                }
+              }} disabled={isLoadingPackages} /> : (/* Other plans or no packages: Simple text input */
+              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={e => setPackageName(e.target.value)} />)}
               </div>
             </div>
 
@@ -1109,13 +1027,7 @@ export default function GalleryCreate() {
             
             <div className="space-y-2">
               <Label>Fonte do Título</Label>
-              <FontSelect
-                value={sessionFont}
-                onChange={setSessionFont}
-                previewText={sessionName || 'Ensaio Gestante'}
-                titleCaseMode={titleCaseMode}
-                onTitleCaseModeChange={setTitleCaseMode}
-              />
+              <FontSelect value={sessionFont} onChange={setSessionFont} previewText={sessionName || 'Ensaio Gestante'} titleCaseMode={titleCaseMode} onTitleCaseModeChange={setTitleCaseMode} />
             </div>
 
             <ClientModal open={isClientModalOpen} onOpenChange={setIsClientModalOpen} onSave={handleSaveClient} />
@@ -1185,30 +1097,20 @@ export default function GalleryCreate() {
                 </RadioGroup>
                 
                 {/* Payment Method Selection - Only when sale_with_payment */}
-                {saleMode === 'sale_with_payment' && (
-                  <div className="mt-4 pt-4 border-t border-border/50">
-                    <PaymentMethodSelector
-                      integrations={paymentData?.allActiveIntegrations || []}
-                      selectedMethod={selectedPaymentMethod}
-                      onSelect={(method) => setSelectedPaymentMethod(method as PaymentMethod)}
-                    />
-                  </div>
-                )}
+                {saleMode === 'sale_with_payment' && <div className="mt-4 pt-4 border-t border-border/50">
+                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={method => setSelectedPaymentMethod(method as PaymentMethod)} />
+                  </div>}
               </div>
 
               {/* Right Block - Pricing Configuration (conditional) */}
               {saleMode !== 'no_sale' && <div className="space-y-6">
                   {/* Show frozen rules from Gestão when available and not overriding */}
-                  {regrasCongeladas && !overridePricing ? (
-                    <div className="space-y-4">
+                  {regrasCongeladas && !overridePricing ? <div className="space-y-4">
                       {/* Loading state */}
-                      {isLoadingRegras ? (
-                        <div className="space-y-3">
+                      {isLoadingRegras ? <div className="space-y-3">
                           <Skeleton className="h-16 w-full" />
                           <Skeleton className="h-24 w-full" />
-                        </div>
-                      ) : (
-                        <>
+                        </div> : <>
                           {/* Synced pricing banner */}
                           <div className="p-4 rounded-lg bg-accent/20 border border-accent/50">
                             <div className="flex items-center gap-2 text-accent-foreground">
@@ -1231,67 +1133,44 @@ export default function GalleryCreate() {
                             </div>
                             
                             {/* Price tiers (if progressive) */}
-                            {regrasCongeladas.precificacaoFotoExtra?.modelo !== 'fixo' && getFaixasFromRegras(regrasCongeladas).length > 0 && (
-                              <div className="space-y-2 pt-2 border-t border-border/50">
+                            {regrasCongeladas.precificacaoFotoExtra?.modelo !== 'fixo' && getFaixasFromRegras(regrasCongeladas).length > 0 && <div className="space-y-2 pt-2 border-t border-border/50">
                                 <Label className="text-xs text-muted-foreground">Faixas de desconto:</Label>
                                 <div className="grid gap-1">
-                                  {getFaixasFromRegras(regrasCongeladas).map((faixa, idx) => (
-                                    <div key={idx} className="flex justify-between text-sm py-1 px-2 rounded bg-background/50">
+                                  {getFaixasFromRegras(regrasCongeladas).map((faixa, idx) => <div key={idx} className="flex justify-between text-sm py-1 px-2 rounded bg-background/50">
                                       <span className="text-muted-foreground">{formatFaixaDisplay(faixa)}</span>
                                       <span className="font-medium">R$ {faixa.valor.toFixed(2)}</span>
-                                    </div>
-                                  ))}
+                                    </div>)}
                                 </div>
-                              </div>
-                            )}
+                              </div>}
                             
                             {/* Fixed base price (if fixed model or as fallback) */}
-                            {(regrasCongeladas.precificacaoFotoExtra?.modelo === 'fixo' || getFaixasFromRegras(regrasCongeladas).length === 0) && (
-                              <div className="flex justify-between text-sm pt-2 border-t border-border/50">
+                            {(regrasCongeladas.precificacaoFotoExtra?.modelo === 'fixo' || getFaixasFromRegras(regrasCongeladas).length === 0) && <div className="flex justify-between text-sm pt-2 border-t border-border/50">
                                 <span className="text-muted-foreground">Preço por foto extra:</span>
                                 <span className="font-medium">R$ {(regrasCongeladas.pacote?.valorFotoExtra || 0).toFixed(2)}</span>
-                              </div>
-                            )}
+                              </div>}
                           </div>
 
                           {/* Customize button */}
-                          <Button 
-                            type="button"
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => {
-                              setOverridePricing(true);
-                              // Initialize fixedPrice with the frozen value for editing
-                              setFixedPrice(regrasCongeladas.pacote?.valorFotoExtra || 25);
-                            }}
-                            className="text-muted-foreground"
-                          >
+                          <Button type="button" variant="ghost" size="sm" onClick={() => {
+                    setOverridePricing(true);
+                    // Initialize fixedPrice with the frozen value for editing
+                    setFixedPrice(regrasCongeladas.pacote?.valorFotoExtra || 25);
+                  }} className="text-muted-foreground">
                             <Pencil className="h-4 w-4 mr-2" />
                             Personalizar preços para esta galeria
                           </Button>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <>
+                        </>}
+                    </div> : <>
                       {/* Override mode banner (when user chose to customize) */}
-                      {regrasCongeladas && overridePricing && (
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                      {regrasCongeladas && overridePricing && <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/30">
                           <div className="flex items-center gap-2">
                             <Pencil className="h-4 w-4 text-destructive" />
                             <span className="text-sm font-medium text-destructive">Modo personalizado ativo</span>
                           </div>
-                          <Button 
-                            type="button"
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setOverridePricing(false)}
-                            className="text-muted-foreground h-7"
-                          >
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setOverridePricing(false)} className="text-muted-foreground h-7">
                             Reverter para Gestão
                           </Button>
-                        </div>
-                      )}
+                        </div>}
 
                       {/* Manual Pricing Model selection (default or override mode) */}
                       <div className="space-y-4">
@@ -1340,8 +1219,7 @@ export default function GalleryCreate() {
                           </div>
                         </RadioGroup>
                       </div>
-                    </>
-                  )}
+                    </>}
 
                   {/* Discount Packages Configuration - only show in manual mode or override */}
                   {pricingModel === 'packages' && (!isAssistedMode || !regrasCongeladas || overridePricing) && <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
@@ -1467,19 +1345,10 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            {isCreatingGallery ? (
-              <div className="flex flex-col items-center justify-center p-12 space-y-4">
+            {isCreatingGallery ? <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                 <p className="text-muted-foreground">Preparando galeria para uploads...</p>
-              </div>
-            ) : supabaseGalleryId ? (
-              <PhotoUploader
-                galleryId={supabaseGalleryId}
-                maxLongEdge={imageResizeOption}
-                onUploadComplete={handlePhotoUploadComplete}
-              />
-            ) : (
-              <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
+              </div> : supabaseGalleryId ? <PhotoUploader galleryId={supabaseGalleryId} maxLongEdge={imageResizeOption} onUploadComplete={handlePhotoUploadComplete} /> : <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
                 <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">
                   Preparando área de upload...
@@ -1487,8 +1356,7 @@ export default function GalleryCreate() {
                 <p className="text-sm text-muted-foreground">
                   A galeria será criada automaticamente
                 </p>
-              </div>
-            )}
+              </div>}
 
             {uploadedCount > 0 && <div className="lunari-card p-4">
                 <div className="flex items-center justify-between">
@@ -1506,13 +1374,7 @@ export default function GalleryCreate() {
                 </div>
               </div>}
 
-            <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">ℹ️ Informação técnica</p>
-              <p>
-                As fotos são comprimidas e enviadas de forma segura. 
-                As versões derivadas (thumbnail + preview) são geradas automaticamente.
-              </p>
-            </div>
+            
           </div>;
       case 3:
         return <div className="space-y-8 animate-fade-in">
@@ -1602,18 +1464,12 @@ export default function GalleryCreate() {
                   </RadioGroup>
 
                   {/* Standard Watermark Preview */}
-                  {watermarkType === 'standard' && (
-                    <div className="space-y-4 p-3 rounded-lg bg-muted/50">
+                  {watermarkType === 'standard' && <div className="space-y-4 p-3 rounded-lg bg-muted/50">
                       <div className="flex items-center gap-4">
-                        <div 
-                          className="h-12 flex items-center justify-center bg-black/80 rounded px-2"
-                        >
-                          <img 
-                            src="/watermarks/horizontal.png" 
-                            alt="Marca d'água padrão" 
-                            className="h-8 object-contain" 
-                            style={{ opacity: watermarkOpacity / 100 }}
-                          />
+                        <div className="h-12 flex items-center justify-center bg-black/80 rounded px-2">
+                          <img src="/watermarks/horizontal.png" alt="Marca d'água padrão" className="h-8 object-contain" style={{
+                        opacity: watermarkOpacity / 100
+                      }} />
                         </div>
                         <div>
                           <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
@@ -1629,21 +1485,12 @@ export default function GalleryCreate() {
                           <Label className="text-sm">Opacidade</Label>
                           <span className="text-sm font-medium text-muted-foreground">{watermarkOpacity}%</span>
                         </div>
-                        <Slider
-                          value={[watermarkOpacity]}
-                          onValueChange={(value) => setWatermarkOpacity(value[0])}
-                          min={10}
-                          max={100}
-                          step={5}
-                          className="w-full"
-                        />
+                        <Slider value={[watermarkOpacity]} onValueChange={value => setWatermarkOpacity(value[0])} min={10} max={100} step={5} className="w-full" />
                       </div>
-                    </div>
-                  )}
+                    </div>}
 
                   {/* Display setting for watermark */}
-                  {watermarkType === 'standard' && (
-                    <div className="space-y-2">
+                  {watermarkType === 'standard' && <div className="space-y-2">
                       <Label className="text-sm">Onde aplicar</Label>
                       <Select value={watermarkDisplay} onValueChange={v => setWatermarkDisplay(v as WatermarkDisplay)}>
                         <SelectTrigger>
@@ -1655,13 +1502,11 @@ export default function GalleryCreate() {
                           <SelectItem value="none">Não aplicar</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                  )}
+                    </div>}
                 </div>
 
                 {/* Theme Selection for Client Gallery - Simplified */}
-                {settings.themeType === 'custom' && settings.customTheme && (
-                  <div className="space-y-4 pt-2">
+                {settings.themeType === 'custom' && settings.customTheme && <div className="space-y-4 pt-2">
                     <div className="flex items-center gap-2">
                       <Palette className="h-4 w-4 text-primary" />
                       <h3 className="font-medium text-sm">Aparência da Galeria</h3>
@@ -1673,21 +1518,15 @@ export default function GalleryCreate() {
                     {/* Preview of custom theme */}
                     <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
                       <div className="flex gap-1.5">
-                        <div 
-                          className="w-6 h-6 rounded-full border"
-                          style={{ backgroundColor: settings.customTheme.primaryColor }}
-                          title="Cor primária"
-                        />
-                        <div 
-                          className="w-6 h-6 rounded-full border"
-                          style={{ backgroundColor: settings.customTheme.accentColor }}
-                          title="Cor de destaque"
-                        />
-                        <div 
-                          className="w-6 h-6 rounded-full border"
-                          style={{ backgroundColor: settings.customTheme.emphasisColor }}
-                          title="Cor de ênfase"
-                        />
+                        <div className="w-6 h-6 rounded-full border" style={{
+                      backgroundColor: settings.customTheme.primaryColor
+                    }} title="Cor primária" />
+                        <div className="w-6 h-6 rounded-full border" style={{
+                      backgroundColor: settings.customTheme.accentColor
+                    }} title="Cor de destaque" />
+                        <div className="w-6 h-6 rounded-full border" style={{
+                      backgroundColor: settings.customTheme.emphasisColor
+                    }} title="Cor de ênfase" />
                       </div>
                       <span className="text-sm text-muted-foreground">
                         Fundo {settings.customTheme.backgroundMode === 'dark' ? 'escuro' : 'claro'}
@@ -1698,30 +1537,17 @@ export default function GalleryCreate() {
                     <div className="flex items-center gap-3 pt-2">
                       <Label className="text-sm">Modo para esta galeria:</Label>
                       <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant={clientMode === 'light' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setClientMode('light')}
-                          className="gap-1"
-                        >
+                        <Button type="button" variant={clientMode === 'light' ? 'default' : 'outline'} size="sm" onClick={() => setClientMode('light')} className="gap-1">
                           <Sun className="h-3.5 w-3.5" />
                           Claro
                         </Button>
-                        <Button
-                          type="button"
-                          variant={clientMode === 'dark' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setClientMode('dark')}
-                          className="gap-1"
-                        >
+                        <Button type="button" variant={clientMode === 'dark' ? 'default' : 'outline'} size="sm" onClick={() => setClientMode('dark')} className="gap-1">
                           <Moon className="h-3.5 w-3.5" />
                           Escuro
                         </Button>
                       </div>
                     </div>
-                  </div>
-                )}
+                  </div>}
 
                 {/* Client Interactions */}
                 <div className="space-y-3 pt-2">
