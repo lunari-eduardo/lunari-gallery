@@ -1,215 +1,271 @@
 
-# Plano: Correção de Bugs na Contagem de Fotos e Tela de Download
 
-## Problemas Identificados
+# Plano: Padronização da Tela Pós-Finalização da Galeria
 
-Após análise completa do código e banco de dados, encontrei **3 bugs críticos**:
+## Visão Geral
 
----
-
-## Bug 1: Fallback `|| 10` Converte Zero para Dez
-
-### Localização
-`src/pages/ClientGallery.tsx`, linha 272
-
-### Código Atual
-```typescript
-includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) || 10,
-```
-
-### Problema
-Em JavaScript, `0 || 10` retorna `10` porque `0` é um valor falsy. Quando o fotógrafo configura "0 fotos incluídas" no pacote, o sistema mostra "10 fotos incluídas" para o cliente.
-
-### Evidência
-O banco de dados mostra `fotos_incluidas: 0` corretamente salvo, mas a tela de boas-vindas mostra "10 fotos incluídas".
-
-### Solução
-Usar nullish coalescing (`??`) que só aplica o fallback para `null` ou `undefined`:
-```typescript
-includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) ?? 0,
-```
+Refatorar o comportamento de galerias finalizadas para um padrão único e simples:
+- Cliente SEMPRE vê a **preview das fotos selecionadas** (miniaturas + fullscreen)
+- **NUNCA** há mensagem de bloqueio ou tela estática
+- Se **download ativado**: botão "Baixar Todas" no header + botão de download individual no Lightbox
+- Se **download desativado**: apenas visualização (sem botões de download)
 
 ---
 
-## Bug 2: Tela de Finalização Ignora `allowDownload`
+## Comportamento Atual (Problemático)
 
-### Localização
-- `supabase/functions/gallery-access/index.ts`, linhas 44-109
-- `src/pages/ClientGallery.tsx`, linhas 728-739
-
-### Fluxo Atual (Problemático)
 ```text
-1. Cliente retorna do pagamento com ?payment=success
-2. Edge Function detecta gallery.finalized_at → retorna { finalized: true }
-3. Frontend detecta finalized=true → mostra FinalizedGalleryScreen
-4. NÃO VERIFICA allowDownload → cliente não consegue baixar fotos
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                      FLUXO ATUAL (CONFUSO)                                    │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  Galeria Finalizada + allowDownload=false                                     │
+│    → FinalizedGalleryScreen (tela estática com mensagem de bloqueio)          │
+│    → Nenhuma preview das fotos                                                │
+│                                                                               │
+│  Galeria Finalizada + allowDownload=true                                      │
+│    → FinalizedGalleryScreen + DownloadModal sobre ela                         │
+│    → Modal não pode ser fechado (onClose vazio)                               │
+│    → Experiência confusa e não intuitiva                                      │
+│                                                                               │
+│  Galeria Confirmada internamente (isConfirmed=true via state)                 │
+│    → Tela de preview com fotos selecionadas (correto!)                        │
+│    → Mas só funciona se o cliente NÃO recarregar a página                     │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
-
-### Problema
-Quando uma galeria é finalizada, o Edge Function retorna **apenas** dados mínimos (nome da sessão, logo, tema) e **omite**:
-- `allowDownload` (se downloads estão liberados)
-- Lista de fotos selecionadas (necessária para download)
-- Configurações de saleSettings
-
-O frontend então mostra imediatamente a `FinalizedGalleryScreen` genérica, sem verificar se deveria mostrar a tela de download.
-
-### Fluxo Correto (Proposto)
-```text
-1. Cliente retorna do pagamento com ?payment=success
-2. Edge Function detecta gallery.finalized_at
-3. SE allowDownload=true:
-   → Retorna fotos selecionadas + flag allowDownload
-   → Frontend mostra tela COM opções de download
-4. SE allowDownload=false:
-   → Retorna dados mínimos
-   → Frontend mostra FinalizedGalleryScreen padrão
-```
-
-### Solução
-Modificar o Edge Function `gallery-access` para:
-1. Quando `finalized=true` E `allowDownload=true`:
-   - Retornar `finalized: true`
-   - Retornar `allowDownload: true`
-   - Retornar lista de fotos **selecionadas** (com `storage_key` para download)
-   - O frontend renderiza a tela de download
-
-2. Quando `finalized=true` E `allowDownload=false`:
-   - Comportamento atual (apenas dados mínimos)
 
 ---
 
-## Bug 3: Auto-Open do Modal Não Funciona na Primeira Carga
+## Comportamento Novo (Padronizado)
 
-### Localização
-`src/pages/ClientGallery.tsx`, linhas 577-600
-
-### Problema
-O useEffect que auto-abre o DownloadModal verifica `localPhotos.some(p => p.isSelected)`. No entanto, quando o cliente retorna do pagamento:
-
-1. A galeria já está finalizada (Edge Function retorna `finalized: true`)
-2. O frontend mostra `FinalizedGalleryScreen` imediatamente
-3. O useEffect nunca roda porque `localPhotos` está vazio (fotos não foram carregadas)
-
-### Solução
-Quando `allowDownload=true` e galeria finalizada, o Edge Function deve retornar as fotos, e o frontend deve:
-1. NÃO mostrar `FinalizedGalleryScreen`
-2. Mostrar uma tela de download dedicada com as fotos selecionadas
-3. Auto-abrir o `DownloadModal`
+```text
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                     FLUXO NOVO (ÚNICO E SIMPLES)                              │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  QUALQUER galeria finalizada (pública, privada, Gestão):                      │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │  Header: Logo do estúdio                                                │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │  │  "Seleção Confirmada" + {X} fotos                               │    │  │
+│  │  │  [Baixar Todas] ← Apenas se allowDownload=true                  │    │  │
+│  │  └─────────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                         │  │
+│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                                   │  │
+│  │  │ Foto │ │ Foto │ │ Foto │ │ Foto │  ← Clicável para fullscreen       │  │
+│  │  │  1   │ │  2   │ │  3   │ │  4   │     SEM watermark                 │  │
+│  │  └──────┘ └──────┘ └──────┘ └──────┘                                   │  │
+│  │                                                                         │  │
+│  │  Lightbox:                                                              │  │
+│  │    - Foto original SEM watermark                                        │  │
+│  │    - Botão [⬇️] apenas se allowDownload=true                           │  │
+│  │    - Navegação com setas                                                │  │
+│  │    - SEM botões de seleção/favorito/comentário                         │  │
+│  │                                                                         │  │
+│  └─────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/ClientGallery.tsx` | Corrigir fallback `\|\| 10` → `?? 0`; Adicionar lógica para tela de download quando finalizada |
-| `supabase/functions/gallery-access/index.ts` | Retornar fotos + allowDownload quando galeria finalizada tem download habilitado |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/FinalizedGalleryScreen.tsx` | **Deletar** | Tela de bloqueio não mais usada |
+| `src/components/FinalizedPreviewScreen.tsx` | **Criar** | Nova tela de preview padronizada |
+| `src/pages/ClientGallery.tsx` | **Modificar** | Usar nova tela para TODAS galerias finalizadas |
+| `supabase/functions/gallery-access/index.ts` | **Modificar** | SEMPRE retornar fotos quando finalized=true |
 
 ---
 
 ## Implementação Detalhada
 
-### 1. Corrigir Fallback de Fotos Incluídas
+### 1. Deletar `FinalizedGalleryScreen.tsx`
+
+Este componente mostra apenas uma mensagem de bloqueio sem fotos. Será substituído pelo novo componente.
+
+### 2. Criar `FinalizedPreviewScreen.tsx`
+
+Novo componente que mostra:
+- Header com logo do estúdio
+- Banner informativo "Seleção Confirmada - X fotos"
+- Botão "Baixar Todas (ZIP)" se `allowDownload=true`
+- Grid de miniaturas clicáveis (MasonryGrid)
+- Lightbox integrado para fullscreen
+- Download individual no Lightbox se `allowDownload=true`
 
 ```typescript
-// Linha 272 - ANTES
-includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) || 10,
-
-// DEPOIS
-includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) ?? 0,
-```
-
-Também revisar linha 273 para `extraPhotoPrice`:
-```typescript
-// Linha 273 - ANTES
-extraPhotoPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
-
-// DEPOIS (usar ?? para permitir 0 como valor válido)
-extraPhotoPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) ?? 0,
-```
-
-### 2. Edge Function: Retornar Fotos para Download
-
-```typescript
-// Quando galeria finalizada E allowDownload=true
-if (isFinalized) {
-  const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
-  const allowDownload = galleryConfig?.allowDownload === true;
-  
-  // Se download está habilitado, retornar fotos selecionadas
-  if (allowDownload) {
-    const { data: selectedPhotos } = await supabase
-      .from("galeria_fotos")
-      .select("id, storage_key, original_filename, filename")
-      .eq("galeria_id", gallery.id)
-      .eq("is_selected", true);
-    
-    return new Response(JSON.stringify({
-      finalized: true,
-      allowDownload: true,
-      sessionName: gallery.nome_sessao,
-      photos: selectedPhotos || [],
-      studioSettings: settings || null,
-      theme: themeData,
-      clientMode: clientMode,
-      settings: {
-        sessionFont: galleryConfig?.sessionFont,
-        titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-      },
-    }));
-  }
-  
-  // Se download não está habilitado, retornar dados mínimos
-  return new Response(JSON.stringify({
-    finalized: true,
-    allowDownload: false,
-    // ... dados mínimos atuais
-  }));
+interface FinalizedPreviewScreenProps {
+  photos: Array<{
+    id: string;
+    storageKey: string;
+    filename: string;
+    originalFilename: string;
+  }>;
+  sessionName: string;
+  sessionFont?: string;
+  titleCaseMode?: TitleCaseMode;
+  studioLogoUrl?: string;
+  studioName?: string;
+  allowDownload: boolean;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 ```
 
-### 3. Frontend: Tela de Download para Galerias Finalizadas
+### 3. Modificar Edge Function `gallery-access`
+
+Atualmente, a Edge Function só retorna fotos quando `allowDownload=true`. 
+Precisamos **SEMPRE** retornar as fotos selecionadas para galerias finalizadas:
 
 ```typescript
-// Linha ~728 - Substituir verificação simples
+// ANTES: só retorna fotos se allowDownload
+if (allowDownload) {
+  const { data: selectedPhotos } = await supabase.from("galeria_fotos")...
+  return { finalized: true, allowDownload: true, photos: selectedPhotos };
+}
+return { finalized: true, allowDownload: false }; // SEM FOTOS
+
+// DEPOIS: sempre retorna fotos
+const { data: selectedPhotos } = await supabase.from("galeria_fotos")...
+return { 
+  finalized: true, 
+  allowDownload: allowDownload, // true ou false
+  photos: selectedPhotos || []   // SEMPRE inclui fotos
+};
+```
+
+### 4. Modificar `ClientGallery.tsx`
+
+Substituir a lógica atual de `galleryResponse?.finalized`:
+
+```typescript
+// ANTES (linhas 728-765)
 if (galleryResponse?.finalized) {
-  // SE allowDownload=true, mostrar tela de download
-  if (galleryResponse.allowDownload) {
-    return (
-      <FinalizedDownloadScreen
-        sessionName={galleryResponse.sessionName}
-        photos={galleryResponse.photos}
-        studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-        // ... props
-      />
-    );
-  }
-  
-  // SENÃO, mostrar tela padrão
+  // Lógica complexa com FinalizedGalleryScreen + DownloadModal
+}
+
+// DEPOIS
+if (galleryResponse?.finalized) {
   return (
-    <FinalizedGalleryScreen ... />
+    <FinalizedPreviewScreen
+      photos={galleryResponse.photos || []}
+      sessionName={galleryResponse.sessionName}
+      sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
+      titleCaseMode={galleryResponse?.settings?.titleCaseMode || 'normal'}
+      studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+      studioName={galleryResponse.studioSettings?.studio_name}
+      allowDownload={galleryResponse.allowDownload}
+      themeStyles={themeStyles}
+      backgroundMode={effectiveBackgroundMode}
+    />
   );
 }
 ```
 
-Alternativa (mais simples): Reutilizar o componente `DownloadModal` e mostrar automaticamente:
+### 5. Limpar código desnecessário
+
+- Remover `FinalizedGalleryScreen` de imports
+- Remover lógica duplicada de "confirmed mode" após confirmação interna
+- Simplificar fluxo unificando visualização pós-confirmação com visualização de galeria finalizada
+
+---
+
+## Estrutura do Novo Componente
 
 ```typescript
-if (galleryResponse?.finalized) {
-  // Se tem download, mostrar modal automaticamente sobre tela de sucesso
-  const showDownloadOnFinalized = galleryResponse.allowDownload && 
-                                  galleryResponse.photos?.length > 0;
-  
+// src/components/FinalizedPreviewScreen.tsx
+
+export function FinalizedPreviewScreen({
+  photos,
+  sessionName,
+  sessionFont,
+  titleCaseMode = 'normal',
+  studioLogoUrl,
+  studioName,
+  allowDownload,
+  themeStyles,
+  backgroundMode = 'light',
+}: FinalizedPreviewScreenProps) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+
+  // Transform photos for display
+  const transformedPhotos = photos.map(p => ({
+    id: p.id,
+    storageKey: p.storageKey || p.storage_key,
+    filename: p.filename,
+    originalFilename: p.originalFilename || p.original_filename,
+    // Use original URL (no watermark) for thumbnails
+    thumbnailUrl: getOriginalPhotoUrl(p.storageKey || p.storage_key),
+    previewUrl: getOriginalPhotoUrl(p.storageKey || p.storage_key),
+  }));
+
+  const handleDownloadAll = async () => {
+    // Lógica de download em lote (similar ao DownloadModal)
+  };
+
   return (
-    <div>
-      <FinalizedGalleryScreen ... />
-      {showDownloadOnFinalized && (
-        <DownloadModal
-          isOpen={true}
+    <div className={cn("min-h-screen bg-background", backgroundMode === 'dark' && 'dark')} style={themeStyles}>
+      {/* Header com logo */}
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b">
+        <div className="flex items-center justify-center px-4 py-4">
+          {studioLogoUrl ? <img src={studioLogoUrl} ... /> : <Logo />}
+        </div>
+      </header>
+
+      {/* Banner informativo */}
+      <div className="bg-primary/10 border-b p-4 text-center">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <Check className="h-5 w-5 text-primary" />
+          <h2 className="font-medium">Seleção Confirmada</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-3">
+          {photos.length} fotos selecionadas
+        </p>
+        
+        {/* Botão de download - apenas se permitido */}
+        {allowDownload && photos.length > 0 && (
+          <Button onClick={handleDownloadAll} disabled={isDownloading}>
+            <Download className="h-4 w-4 mr-2" />
+            {isDownloading ? `Baixando... ${progressPercent}%` : 'Baixar Todas (ZIP)'}
+          </Button>
+        )}
+      </div>
+
+      {/* Grid de fotos */}
+      <main className="p-4">
+        <MasonryGrid>
+          {transformedPhotos.map((photo, index) => (
+            <MasonryItem key={photo.id}>
+              <div 
+                className="cursor-pointer rounded-lg overflow-hidden"
+                onClick={() => setLightboxIndex(index)}
+              >
+                <img src={photo.thumbnailUrl} alt="" className="w-full" />
+              </div>
+            </MasonryItem>
+          ))}
+        </MasonryGrid>
+      </main>
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <Lightbox
           photos={transformedPhotos}
-          sessionName={galleryResponse.sessionName}
-          onClose={() => {}}
-          // Não permitir fechar para garantir download
+          currentIndex={lightboxIndex}
+          allowComments={false}
+          allowDownload={allowDownload}
+          disabled={true}
+          isConfirmedMode={true}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+          onSelect={() => {}}
         />
       )}
     </div>
@@ -219,21 +275,51 @@ if (galleryResponse?.finalized) {
 
 ---
 
-## Resultado Esperado
+## Fluxo Simplificado Final
 
-1. **Galeria com 0 fotos incluídas** mostra "0 fotos incluídas" (não "10")
-2. **Contador de extras** funciona corretamente quando `chargeType: all_selected`
-3. **Tela de download** aparece após pagamento quando `allowDownload=true`
-4. **Modal de download** abre automaticamente com fotos selecionadas
-5. **Cliente pode baixar** fotos originais sem watermark
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FLUXO ÚNICO PÓS-FINALIZAÇÃO                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Cliente finaliza seleção (com ou sem pagamento)                         │
+│     └─> status_selecao = 'confirmado'                                       │
+│     └─> finalized_at = now()                                                │
+│                                                                             │
+│  2. Cliente retorna à galeria (qualquer momento)                            │
+│     └─> Edge Function detecta finalized=true                                │
+│     └─> Retorna fotos selecionadas + allowDownload flag                     │
+│                                                                             │
+│  3. Frontend renderiza FinalizedPreviewScreen                               │
+│     └─> Grid de miniaturas SEM watermark                                    │
+│     └─> Lightbox SEM watermark                                              │
+│     └─> SE allowDownload=true:                                              │
+│         ├─> Botão "Baixar Todas" no banner                                  │
+│         └─> Botão download no Lightbox                                      │
+│                                                                             │
+│  4. Cliente pode visualizar e baixar (se permitido)                         │
+│     └─> Sem mensagens de bloqueio                                           │
+│     └─> Sem modais obrigatórios                                             │
+│     └─> Experiência limpa e intuitiva                                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Nota de Segurança
+## Códigos a Remover
 
-As URLs de download (B2 direto) só são expostas quando:
-1. Galeria está finalizada (`status_selecao = 'confirmado'`)
-2. Pagamento foi confirmado (se aplicável)
-3. `allowDownload = true` está configurado
+1. **FinalizedGalleryScreen.tsx** - Arquivo inteiro (tela de bloqueio)
+2. **DownloadModal** na renderização de galeria finalizada - O download agora é integrado na tela
+3. **Lógica duplicada** em ClientGallery.tsx para "confirmed mode" interno vs "finalized" do backend
 
-O Edge Function garante que o `storage_key` só é retornado nestas condições, prevenindo acesso não autorizado às fotos originais.
+---
+
+## Resultado Esperado
+
+1. **Comportamento único** para todas galerias finalizadas
+2. **Preview sempre disponível** - cliente vê suas fotos selecionadas
+3. **Download condicional** - botão aparece apenas se configurado
+4. **Sem bloqueios** - experiência fluida e profissional
+5. **Fotos sem watermark** - visualização premium após confirmação
+
