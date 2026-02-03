@@ -18,7 +18,7 @@ interface DownloadModalProps {
   onClose: () => void;
   photos: GalleryPhoto[];
   sessionName: string;
-  onViewIndividual: () => void;
+  onViewIndividual?: () => void; // Optional - not available on finalized galleries
 }
 
 export function DownloadModal({
@@ -149,28 +149,32 @@ export function DownloadModal({
             Recomendado - Todas as fotos em um único arquivo
           </p>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">ou</span>
-            </div>
-          </div>
+          {/* Divider - only show if individual view is available */}
+          {onViewIndividual && (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">ou</span>
+                </div>
+              </div>
 
-          {/* View individually */}
-          <Button
-            variant="outline"
-            onClick={() => {
-              onClose();
-              onViewIndividual();
-            }}
-            className="w-full gap-2"
-            disabled={isDownloading}
-          >
-            Ver fotos e baixar individualmente
-          </Button>
+              {/* View individually */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onClose();
+                  onViewIndividual();
+                }}
+                className="w-full gap-2"
+                disabled={isDownloading}
+              >
+                Ver fotos e baixar individualmente
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
