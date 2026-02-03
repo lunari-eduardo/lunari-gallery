@@ -8,13 +8,17 @@ import {
   ZoomIn,
   ZoomOut,
   Download,
-  Heart
+  Heart,
+  Loader2
 } from 'lucide-react';
 import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { getOriginalPhotoUrl } from '@/lib/cloudinaryUrl';
+import { downloadPhoto } from '@/lib/downloadUtils';
+import { toast } from 'sonner';
 
 interface LightboxProps {
   photos: GalleryPhoto[];
@@ -24,6 +28,7 @@ interface LightboxProps {
   allowComments: boolean;
   allowDownload?: boolean;
   disabled?: boolean;
+  isConfirmedMode?: boolean; // When true, shows original photos (no watermark) and enables download
   onClose: () => void;
   onNavigate: (index: number) => void;
   onSelect: (photoId: string) => void;
@@ -39,6 +44,7 @@ export function Lightbox({
   allowComments,
   allowDownload = false,
   disabled,
+  isConfirmedMode = false,
   onClose, 
   onNavigate,
   onSelect,
@@ -69,9 +75,15 @@ export function Lightbox({
   const [, forceUpdate] = useState({});
 
   const currentPhoto = photos[currentIndex];
+  const [isDownloadingPhoto, setIsDownloadingPhoto] = useState(false);
   
   // Show watermark in fullscreen if watermarkDisplay is 'all' or 'fullscreen'
   const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay !== 'none';
+
+  // In confirmed mode, use original URL (no watermark) for display and download
+  const displayUrl = isConfirmedMode && currentPhoto?.storageKey
+    ? getOriginalPhotoUrl(currentPhoto.storageKey)
+    : currentPhoto?.previewUrl;
 
   // Utility function for clamping values
   const clamp = (value: number, min: number, max: number) => 
@@ -85,8 +97,28 @@ export function Lightbox({
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!currentPhoto || !allowDownload) return;
+    
+    // In confirmed mode with storageKey, download original (no watermark)
+    if (isConfirmedMode && currentPhoto.storageKey) {
+      setIsDownloadingPhoto(true);
+      try {
+        await downloadPhoto(
+          currentPhoto.storageKey,
+          currentPhoto.originalFilename || currentPhoto.filename
+        );
+        toast.success('Download iniciado!');
+      } catch (error) {
+        console.error('Download error:', error);
+        toast.error('Erro no download. Tente novamente.');
+      } finally {
+        setIsDownloadingPhoto(false);
+      }
+      return;
+    }
+    
+    // Fallback: simple link download (may have watermark)
     const link = document.createElement('a');
     link.href = currentPhoto.previewUrl;
     link.download = currentPhoto.originalFilename || currentPhoto.filename;
@@ -388,7 +420,7 @@ export function Lightbox({
           onWheel={handleWheel}
         >
           <img
-            src={currentPhoto.previewUrl}
+            src={displayUrl}
             alt={currentPhoto.filename}
             className="select-none"
             draggable={false}
@@ -461,6 +493,7 @@ export function Lightbox({
           {allowDownload && (
             <Button
               onClick={handleDownload}
+              disabled={isDownloadingPhoto}
               variant="outline"
               size={isMobile ? 'icon' : 'default'}
               className={cn(
@@ -468,8 +501,12 @@ export function Lightbox({
                 'bg-transparent text-white border-white/40 hover:bg-white/10 hover:text-white'
               )}
             >
-              <Download className="h-4 w-4" />
-              {!isMobile && 'Baixar'}
+              {isDownloadingPhoto ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {!isMobile && (isDownloadingPhoto ? 'Baixando...' : 'Baixar')}
             </Button>
           )}
         </div>

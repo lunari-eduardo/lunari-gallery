@@ -81,6 +81,7 @@ export interface GalleryPhoto {
   thumbnailUrl: string;
   previewUrl: string;
   originalUrl: string;
+  storageKey?: string;        // B2 storage path for original download (without watermark)
   width: number;
   height: number;
   isSelected: boolean;

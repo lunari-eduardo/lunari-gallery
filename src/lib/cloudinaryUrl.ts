@@ -127,3 +127,20 @@ export function getCloudinaryPhotoUrl(
     photoHeight,
   });
 }
+
+/**
+ * Get the original photo URL directly from B2 (NO watermark, NO Cloudinary transformations)
+ * Use this for downloads after payment/confirmation
+ * @param storagePath - Path to image in B2
+ */
+export function getOriginalPhotoUrl(storagePath: string | null | undefined): string {
+  if (!storagePath) return '/placeholder.svg';
+  
+  if (!B2_BUCKET_URL) {
+    console.warn('B2 bucket URL not configured');
+    return '/placeholder.svg';
+  }
+  
+  // Return direct B2 URL (no Cloudinary = no watermark)
+  return `${B2_BUCKET_URL}/${storagePath}`;
+}
