@@ -20,7 +20,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
 import { PasswordScreen } from '@/components/PasswordScreen';
-import { FinalizedGalleryScreen } from '@/components/FinalizedGalleryScreen';
+import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
@@ -724,43 +724,20 @@ export default function ClientGallery() {
     );
   }
 
-  // Finalized gallery screen - show completion message OR download screen
+  // Finalized gallery screen - show preview of selected photos
   if (galleryResponse?.finalized) {
-    // If download is enabled and we have photos, show download screen
-    const hasDownloadPhotos = galleryResponse.allowDownload && galleryResponse.photos?.length > 0;
-    
-    // Transform photos for DownloadModal
-    const downloadPhotos = hasDownloadPhotos 
-      ? galleryResponse.photos.map((p: { id: string; storage_key: string; original_filename: string; filename: string }) => ({
-          id: p.id,
-          storageKey: p.storage_key,
-          filename: p.original_filename || p.filename,
-          originalFilename: p.original_filename || p.filename,
-          isSelected: true,
-        }))
-      : [];
-    
     return (
-      <>
-        <FinalizedGalleryScreen
-          sessionName={galleryResponse.sessionName}
-          sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
-          titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
-          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-          studioName={galleryResponse.studioSettings?.studio_name}
-          themeStyles={themeStyles}
-          backgroundMode={effectiveBackgroundMode}
-        />
-        {/* Download modal auto-opens on top of finalized screen */}
-        {hasDownloadPhotos && (
-          <DownloadModal
-            isOpen={true}
-            onClose={() => {}} // Cannot close - must download
-            photos={downloadPhotos}
-            sessionName={galleryResponse.sessionName || 'Galeria'}
-          />
-        )}
-      </>
+      <FinalizedPreviewScreen
+        photos={galleryResponse.photos || []}
+        sessionName={galleryResponse.sessionName}
+        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
+        studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+        studioName={galleryResponse.studioSettings?.studio_name}
+        allowDownload={galleryResponse.allowDownload || false}
+        themeStyles={themeStyles}
+        backgroundMode={effectiveBackgroundMode}
+      />
     );
   }
 
