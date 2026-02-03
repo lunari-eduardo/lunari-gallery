@@ -10,6 +10,7 @@ import {
   AlertTriangle, 
   Clock,
   AlertCircle,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
@@ -23,6 +24,7 @@ import { FinalizedGalleryScreen } from '@/components/FinalizedGalleryScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
+import { DownloadModal } from '@/components/DownloadModal';
 import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings, DiscountPackage, TitleCaseMode } from '@/types/gallery';
@@ -88,7 +90,7 @@ export default function ClientGallery() {
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
-  
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   
   
   // Payment state
@@ -332,6 +334,7 @@ export default function ClientGallery() {
         thumbnailUrl: getCloudinaryPhotoUrl(storagePath, 'thumbnail', null),
         previewUrl: getCloudinaryPhotoUrl(storagePath, 'preview', watermarkSettings, photoWidth, photoHeight),
         originalUrl: getCloudinaryPhotoUrl(storagePath, 'full', watermarkSettings, photoWidth, photoHeight),
+        storageKey: storagePath, // For download without watermark
         width: photoWidth,
         height: photoHeight,
         isSelected: photo.is_selected || false,
@@ -900,6 +903,17 @@ export default function ClientGallery() {
               Você selecionou {confirmedSelectedPhotos.length} fotos. 
               Para alterações, entre em contato com o fotógrafo.
             </p>
+            
+            {/* Download button - only if allowDownload is enabled */}
+            {gallery.settings.allowDownload && confirmedSelectedPhotos.length > 0 && (
+              <Button
+                onClick={() => setShowDownloadModal(true)}
+                className="mt-4 gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Baixar Fotos
+              </Button>
+            )}
           </div>
 
           {/* Grid de APENAS fotos selecionadas */}
@@ -952,7 +966,7 @@ export default function ClientGallery() {
           )}
         </main>
 
-        {/* Lightbox read-only - apenas fotos selecionadas */}
+        {/* Lightbox read-only - apenas fotos selecionadas (shows original without watermark) */}
         {lightboxIndex !== null && (
           <Lightbox
             photos={confirmedSelectedPhotos}
@@ -962,11 +976,26 @@ export default function ClientGallery() {
             allowComments={false}
             allowDownload={gallery.settings.allowDownload}
             disabled={true}
+            isConfirmedMode={true}
             onClose={() => setLightboxIndex(null)}
             onNavigate={setLightboxIndex}
             onSelect={() => {}}
           />
         )}
+        
+        {/* Download Modal */}
+        <DownloadModal
+          isOpen={showDownloadModal}
+          onClose={() => setShowDownloadModal(false)}
+          photos={confirmedSelectedPhotos}
+          sessionName={gallery.sessionName}
+          onViewIndividual={() => {
+            setShowDownloadModal(false);
+            if (confirmedSelectedPhotos.length > 0) {
+              setLightboxIndex(0);
+            }
+          }}
+        />
       </div>
     );
   }
