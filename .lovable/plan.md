@@ -1,334 +1,232 @@
 
-# Plano: Funcionalidade de Download Premium (Fotos Originais sem Watermark)
+# Plano: Correção do Fluxo de Checkout e Download para Galerias Públicas
 
-## Visão Geral
+## Problemas Identificados
 
-Implementar a liberação de download de fotos originais (SEM watermark) após pagamento ou confirmação de seleção, com experiência premium que inclui modal informativo e opções de download individual ou em lote.
+Após análise detalhada do código, identifiquei **4 bugs críticos** que impedem o redirecionamento correto para checkout:
 
 ---
 
-## Arquitetura Proposta
+## Bug 1: `chargeType: 'all_selected'` Ignorado no Backend
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                        FLUXO DE DOWNLOAD PÓS-CONFIRMAÇÃO                             │
-├──────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  ┌─────────────────────────┐    ┌─────────────────────────────────────────────────┐ │
-│  │    TELA CONFIRMAÇÃO     │    │              MODAL DE DOWNLOAD                  │ │
-│  │    (isConfirmed=true)   │    │                                                 │ │
-│  │                         │    │  ┌───────────────────────────────────────────┐  │ │
-│  │  [Ver Fotos Selecionadas]│───►│  │ 🎉 Suas fotos estão prontas!             │  │ │
-│  │                         │    │  │                                           │  │ │
-│  │  [Botão: Baixar Fotos]──┼───►│  │ ⚠️ Importante: Esta é a única vez que    │  │ │
-│  │                         │    │  │ você poderá acessar suas fotos originais  │  │ │
-│  └─────────────────────────┘    │  │ em alta resolução sem marca d'água.       │  │ │
-│                                 │  │                                           │  │ │
-│                                 │  │ 📁 12 fotos selecionadas                  │  │ │
-│                                 │  │                                           │  │ │
-│                                 │  │ ┌───────────────────────────────────────┐ │  │ │
-│                                 │  │ │ [Baixar Todas] [ZIP] (Recomendado)    │ │  │ │
-│                                 │  │ └───────────────────────────────────────┘ │  │ │
-│                                 │  │                                           │  │ │
-│                                 │  │ Ou baixe individualmente no Lightbox      │  │ │
-│                                 │  └───────────────────────────────────────────┘  │ │
-│                                 └─────────────────────────────────────────────────┘ │
-│                                                                                      │
-│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
-│  │                       LIGHTBOX (Modo Confirmado)                                ││
-│  │                                                                                 ││
-│  │   [Foto sem watermark - originalUrl direto do B2]                               ││
-│  │                                                                                 ││
-│  │   Botões: [⬇️ Baixar] - faz download da foto original                          ││
-│  │                                                                                 ││
-│  └─────────────────────────────────────────────────────────────────────────────────┘│
-└──────────────────────────────────────────────────────────────────────────────────────┘
+### Causa
+O Edge Function `confirm-selection` **sempre** calcula extras como:
+```typescript
+// Linha 211 - PROBLEMA
+const extrasNecessarias = Math.max(0, selectedCount - fotos_incluidas);
+```
+
+Isso assume que apenas fotos **além do limite** são cobradas, ignorando o `chargeType: 'all_selected'` que deveria cobrar **TODAS** as fotos selecionadas.
+
+### Impacto
+Se a galeria tem `chargeType: 'all_selected'` e `fotos_incluidas = 0`, funcionaria. Mas se `fotos_incluidas > 0`, o cálculo descarta fotos que deveriam ser cobradas.
+
+### Solução
+Adicionar lógica para ler `chargeType` das configurações:
+
+```typescript
+const chargeType = configuracoes?.saleSettings?.chargeType || 'only_extras';
+
+const extrasNecessarias = chargeType === 'all_selected'
+  ? selectedCount  // TODAS as selecionadas
+  : Math.max(0, selectedCount - (gallery.fotos_incluidas || 0));  // Apenas extras
 ```
 
 ---
 
-## Lógica de URL de Download (SEM Watermark)
+## Bug 2: `chargeType` Ignorado no Cliente
 
-### Atual (COM Watermark)
+### Causa
+Em `ClientGallery.tsx`, linhas 765-774 e 829-831, o cálculo também ignora `chargeType`:
+
 ```typescript
-// src/lib/cloudinaryUrl.ts
-getCloudinaryPhotoUrl(storagePath, 'full', watermarkSettings)
-// → Cloudinary transforma + adiciona watermark
+// PROBLEMA - sempre calcula como "only_extras"
+const extrasNecessarias = Math.max(0, selectedCount - gallery.includedPhotos);
 ```
 
-### Nova Função (SEM Watermark)
+### Solução
+Usar o mesmo padrão consistente:
+
 ```typescript
-// Adicionar em cloudinaryUrl.ts
-export function getOriginalPhotoUrl(storagePath: string): string {
-  if (!storagePath) return '/placeholder.svg';
-  
-  // Retorna URL direta do B2 (sem Cloudinary = sem watermark)
-  return `${B2_BUCKET_URL}/${storagePath}`;
-}
+const chargeType = gallery.saleSettings?.chargeType || 'only_extras';
+const extrasNecessarias = chargeType === 'all_selected'
+  ? selectedCount
+  : Math.max(0, selectedCount - gallery.includedPhotos);
 ```
 
-Alternativamente, para otimização (qualidade + CDN):
+---
+
+## Bug 3: Ordem de State Updates no `onSuccess`
+
+### Causa
+Em `ClientGallery.tsx`, linha 425-426:
+
 ```typescript
-export function getOriginalPhotoUrl(storagePath: string): string {
-  if (!storagePath) return '/placeholder.svg';
+onSuccess: (data) => {
+  setIsConfirmed(true);  // ← Define ANTES de verificar pagamento
+  // ...
+```
+
+Isso pode causar um flash na tela de confirmação antes de ir para pagamento em cenários de edge case.
+
+### Solução
+Mover `setIsConfirmed(true)` para DEPOIS de determinar se vai para pagamento ou confirmação:
+
+```typescript
+onSuccess: (data) => {
+  // PIX Manual - vai para tela de pagamento
+  if (data.requiresPayment && data.paymentMethod === 'pix_manual' && data.pixData) {
+    setIsConfirmed(true);  // ← Depois de determinar destino
+    setPixPaymentData({...});
+    setCurrentStep('payment');
+    return;
+  }
   
-  // Cloudinary fetch SEM overlay de watermark (qualidade original)
-  const sourceUrl = `${B2_BUCKET_URL}/${storagePath}`;
-  return `https://res.cloudinary.com/${CLOUD_NAME}/image/fetch/f_auto,q_100/${sourceUrl}`;
+  // Checkout externo - redireciona
+  if (data.requiresPayment && data.checkoutUrl) {
+    setIsConfirmed(true);  // ← Depois de determinar destino
+    setPaymentInfo({...});
+    setCurrentStep('payment');
+    return;
+  }
+  
+  // Sem pagamento - confirmação final
+  setIsConfirmed(true);
+  setCurrentStep('confirmed');
 }
 ```
 
 ---
 
-## Componentes a Criar/Modificar
+## Bug 4: Modal de Download Não Abre Automaticamente
 
-### 1. NOVO: `src/components/DownloadModal.tsx`
+### Causa
+O plano de implementação do Premium Download mencionava um `useEffect` para abrir o modal automaticamente após confirmação, mas isso não foi implementado.
 
-Modal premium que aparece após confirmação/pagamento informando que as fotos estão disponíveis para download:
-
-| Elemento | Descrição |
-|----------|-----------|
-| Título | "Suas fotos estão prontas!" com ícone celebratório |
-| Aviso | Mensagem alertando que esta é a única oportunidade de acessar as fotos |
-| Contagem | Número de fotos selecionadas disponíveis |
-| Botão Principal | "Baixar Todas" - download em lote (ZIP) |
-| Botão Secundário | Link para visualizar no grid e baixar individualmente |
+### Solução
+Adicionar `useEffect` para abrir modal após confirmação quando `allowDownload` está ativo:
 
 ```typescript
-interface DownloadModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  photos: GalleryPhoto[];  // Apenas fotos selecionadas
-  sessionName: string;
-  onDownloadAll: () => void;
-  onDownloadIndividual: () => void;
-}
-```
-
-### 2. NOVO: `src/lib/downloadUtils.ts`
-
-Utilitários para download de fotos:
-
-```typescript
-// Download individual (direto do B2 sem watermark)
-export async function downloadPhoto(
-  storageKey: string, 
-  filename: string
-): Promise<void> {
-  const url = getOriginalPhotoUrl(storageKey);
-  const response = await fetch(url);
-  const blob = await response.blob();
-  
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-// Download em lote (cria ZIP no cliente)
-export async function downloadAllPhotos(
-  photos: Array<{ storageKey: string; filename: string }>,
-  zipFilename: string,
-  onProgress?: (current: number, total: number) => void
-): Promise<void> {
-  // Usar JSZip ou similar para criar ZIP no cliente
-  // Ou chamar Edge Function para gerar ZIP no servidor
-}
-```
-
-### 3. MODIFICAR: `src/components/Lightbox.tsx`
-
-Quando em modo confirmado + allowDownload:
-- Exibir foto **SEM watermark** (usar `originalUrl` do B2 direto)
-- Botão de download baixa a foto original
-
-```typescript
-// Prop adicional
-isConfirmedMode?: boolean;  // true = fotos pagas/confirmadas
-
-// Lógica de URL
-const displayUrl = isConfirmedMode && allowDownload 
-  ? getOriginalPhotoUrl(currentPhoto.storageKey)  // Sem watermark
-  : currentPhoto.previewUrl;                       // Com watermark
-
-// Download handler atualizado
-const handleDownload = async () => {
-  if (!currentPhoto || !allowDownload) return;
-  
-  // Download da original SEM watermark
-  await downloadPhoto(
-    currentPhoto.storageKey,
-    currentPhoto.originalFilename
-  );
-};
-```
-
-### 4. MODIFICAR: `src/pages/ClientGallery.tsx`
-
-Na seção de galeria confirmada (linha ~856-972):
-
-```typescript
-// Estado do modal
-const [showDownloadModal, setShowDownloadModal] = useState(false);
-
-// Exibir modal automaticamente após confirmação quando allowDownload=true
+// Auto-open download modal after confirmation (if allowed)
 useEffect(() => {
-  if (isConfirmed && gallery?.settings.allowDownload && currentStep === 'confirmed') {
-    // Delay curto para dar tempo da animação de confirmação
-    const timer = setTimeout(() => setShowDownloadModal(true), 1000);
+  // Só abre se acabou de confirmar E download está liberado
+  const shouldAutoOpen = isConfirmed && 
+                         currentStep === 'confirmed' && 
+                         gallery?.settings.allowDownload &&
+                         localPhotos.some(p => p.isSelected);
+  
+  if (shouldAutoOpen && !showDownloadModal) {
+    // Delay para animação de sucesso terminar
+    const timer = setTimeout(() => setShowDownloadModal(true), 800);
     return () => clearTimeout(timer);
   }
-}, [isConfirmed, gallery?.settings.allowDownload, currentStep]);
-
-// Botão "Baixar Fotos" no header da tela de confirmação
-{gallery.settings.allowDownload && (
-  <Button 
-    variant="terracotta" 
-    onClick={() => setShowDownloadModal(true)}
-    className="gap-2"
-  >
-    <Download className="h-4 w-4" />
-    Baixar Fotos
-  </Button>
-)}
-
-// Modal
-<DownloadModal 
-  isOpen={showDownloadModal}
-  onClose={() => setShowDownloadModal(false)}
-  photos={confirmedSelectedPhotos}
-  sessionName={gallery.sessionName}
-  onDownloadAll={handleDownloadAll}
-  onDownloadIndividual={() => {
-    setShowDownloadModal(false);
-    // Abre lightbox na primeira foto
-    setLightboxIndex(0);
-  }}
-/>
+}, [isConfirmed, currentStep, gallery?.settings.allowDownload]);
 ```
 
-### 5. MODIFICAR: `src/types/gallery.ts`
-
-Adicionar `storageKey` ao tipo `GalleryPhoto` para acesso direto ao B2:
-
-```typescript
-export interface GalleryPhoto {
-  // ... existentes
-  storageKey?: string;  // storage_key do B2 para download original
-}
-```
-
-### 6. MODIFICAR: Transformação de fotos em `ClientGallery.tsx`
-
-Incluir `storageKey` na transformação:
-
-```typescript
-return {
-  id: photo.id,
-  filename: photo.original_filename || photo.filename,
-  // ... existentes
-  storageKey: photo.storage_key,  // ADICIONAR
-};
-```
+**Nota**: Precisa de flag adicional para evitar reabrir em reloads.
 
 ---
 
-## Experiência de Usuário Premium
+## Arquivos a Modificar
 
-### Fluxo Completo
+| Arquivo | Bug | Alteração |
+|---------|-----|-----------|
+| `supabase/functions/confirm-selection/index.ts` | Bug 1 | Adicionar suporte a `chargeType` no cálculo de extras |
+| `src/pages/ClientGallery.tsx` | Bug 2, 3, 4 | Corrigir cálculo de extras, ordem de states, auto-open modal |
 
-1. **Cliente confirma seleção** → Pagamento (se aplicável)
-2. **Pagamento aprovado** → Tela de confirmação aparece
-3. **Modal de Download surge** automaticamente (se `allowDownload=true`)
-   - Mensagem celebratória
-   - Aviso sobre acesso único
-   - Opções de download
-4. **Download em lote** → Cria ZIP com todas as fotos originais
-5. **Download individual** → Lightbox mostra fotos SEM watermark, botão baixa cada uma
+---
 
-### Design do Modal
+## Fluxo Corrigido
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│            🎉                                                           │
-│                                                                         │
-│            Suas fotos estão prontas!                                   │
-│                                                                         │
-│  ─────────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│     ⚠️  Importante                                                     │
-│     Este é o momento para baixar suas fotos em alta resolução          │
-│     sem marca d'água. Guarde-as com carinho!                           │
-│                                                                         │
-│     Após sair desta página, você não terá mais acesso ao               │
-│     download das fotos originais.                                      │
-│                                                                         │
-│  ─────────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│     📸  12 fotos selecionadas                                          │
-│                                                                         │
-│     ┌───────────────────────────────────────────────────────────────┐  │
-│     │                                                               │  │
-│     │   ⬇️  Baixar Todas (ZIP)                                      │  │
-│     │      Recomendado - Todas as fotos em um único arquivo         │  │
-│     │                                                               │  │
-│     └───────────────────────────────────────────────────────────────┘  │
-│                                                                         │
-│     OU                                                                  │
-│                                                                         │
-│     [Ver fotos e baixar individualmente →]                             │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FLUXO CORRETO PÓS-CORREÇÃO                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Cliente seleciona fotos                                                 │
+│     └─> chargeType='all_selected' → conta TODAS as fotos                    │
+│     └─> chargeType='only_extras' → conta apenas extras                      │
+│                                                                             │
+│  2. Cliente clica "Confirmar e Pagar"                                       │
+│     └─> handleConfirm() com cálculo correto de extras                       │
+│                                                                             │
+│  3. Edge Function processa                                                  │
+│     └─> Lê chargeType das configurações                                     │
+│     └─> Calcula valor correto                                               │
+│     └─> Cria link de pagamento InfinitePay/MP                               │
+│     └─> Retorna { requiresPayment: true, checkoutUrl: '...' }               │
+│                                                                             │
+│  4. onSuccess no cliente                                                    │
+│     └─> Detecta checkoutUrl → setCurrentStep('payment')                     │
+│     └─> Renderiza PaymentRedirect com countdown                             │
+│     └─> Redireciona para checkout                                           │
+│                                                                             │
+│  5. Após pagamento (retorno)                                                │
+│     └─> Detecta ?payment=success                                            │
+│     └─> Confirma via check-payment-status                                   │
+│     └─> setIsConfirmed(true) + setCurrentStep('confirmed')                  │
+│     └─> Auto-abre DownloadModal (se allowDownload=true)                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Dependências
+## Seção Técnica Detalhada
 
-Para download em lote (ZIP):
+### Alterações no Edge Function (confirm-selection)
 
-```bash
-npm install jszip file-saver
-npm install -D @types/file-saver
+**Linha ~268-272** - Adicionar leitura de `chargeType`:
+
+```typescript
+const saleMode = configuracoes?.saleSettings?.mode;
+const chargeType = configuracoes?.saleSettings?.chargeType || 'only_extras';
+const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod;
 ```
 
-Ou implementar via Edge Function para gerar ZIP no servidor.
+**Linha ~211** - Corrigir cálculo de extras:
 
----
+```typescript
+// Calculate extras based on chargeType
+const chargeType = configuracoes?.saleSettings?.chargeType || 'only_extras';
 
-## Arquivos a Criar/Modificar
+const extrasNecessarias = chargeType === 'all_selected'
+  ? (selectedCount || 0)  // ALL selected photos are chargeable
+  : Math.max(0, (selectedCount || 0) - (gallery.fotos_incluidas || 0));  // Only extras
+```
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/DownloadModal.tsx` | **Criar** | Modal de download premium |
-| `src/lib/downloadUtils.ts` | **Criar** | Funções de download individual e lote |
-| `src/lib/cloudinaryUrl.ts` | **Modificar** | Adicionar `getOriginalPhotoUrl()` |
-| `src/components/Lightbox.tsx` | **Modificar** | Suporte a modo confirmado (sem watermark) |
-| `src/pages/ClientGallery.tsx` | **Modificar** | Integrar modal e lógica de download |
-| `src/types/gallery.ts` | **Modificar** | Adicionar `storageKey` ao GalleryPhoto |
+### Alterações no ClientGallery.tsx
 
----
+**Linha ~765** - Cálculo corrigido:
 
-## Segurança
+```typescript
+const chargeType = gallery.saleSettings?.chargeType || 'only_extras';
+const extrasNecessarias = chargeType === 'all_selected'
+  ? selectedCount
+  : Math.max(0, selectedCount - gallery.includedPhotos);
+```
 
-1. **Download condicionado a confirmação**: Fotos originais SEM watermark só são acessíveis quando:
-   - `allowDownload = true` (configuração da galeria)
-   - `isConfirmed = true` (seleção confirmada)
-   - Pagamento aprovado (se `sale_with_payment`)
+**Linha ~828-848** - handleConfirm corrigido:
 
-2. **URLs diretas do B2**: Tecnicamente acessíveis se souber o path, mas:
-   - Paths são UUIDs aleatórios
-   - Bucket pode ter política de referer
-   - Opcional: Criar Edge Function para gerar URLs assinadas temporárias
+```typescript
+const handleConfirm = () => {
+  const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
+  const chargeType = gallery.saleSettings?.chargeType || 'only_extras';
+  
+  const currentExtrasNecessarias = chargeType === 'all_selected'
+    ? currentSelectedCount
+    : Math.max(0, currentSelectedCount - gallery.includedPhotos);
+    
+  const currentExtrasACobrar = Math.max(0, currentExtrasNecessarias - extrasPagasTotal);
+  // ... resto do código
+};
+```
 
 ---
 
 ## Resultado Esperado
 
-1. **Modal informativo premium** aparece após confirmação/pagamento
-2. **Download em lote** com ZIP de todas as fotos originais
-3. **Download individual** foto a foto no Lightbox (sem watermark)
-4. **Experiência clara**: Cliente entende que é o momento de baixar
-5. **Fotos originais**: Alta resolução, sem marca d'água, como configurado pelo fotógrafo
+1. **Galerias `chargeType: 'all_selected'`** cobram corretamente TODAS as fotos selecionadas
+2. **Checkout é exibido** antes da tela de confirmação quando há valor a pagar
+3. **Modal de download abre automaticamente** após pagamento confirmado
+4. **Sem flash de tela** entre confirmação e pagamento
