@@ -207,8 +207,18 @@ Deno.serve(async (req) => {
     let valorUnitario = 0;
     let valorTotal = 0;
     
-    // Calculate extras needed based on selection vs included photos
-    const extrasNecessarias = Math.max(0, (selectedCount || 0) - (gallery.fotos_incluidas || 0));
+    // Parse sale settings to get chargeType
+    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string; chargeType?: string } } | null;
+    const chargeType = configuracoes?.saleSettings?.chargeType || 'only_extras';
+    
+    // Calculate extras needed based on chargeType:
+    // - 'all_selected': charge for ALL selected photos (for public/paid galleries)
+    // - 'only_extras': charge only for photos beyond the included limit (default)
+    const extrasNecessarias = chargeType === 'all_selected'
+      ? (selectedCount || 0)  // ALL selected photos are chargeable
+      : Math.max(0, (selectedCount || 0) - (gallery.fotos_incluidas || 0));  // Only extras
+    
+    console.log(`📊 ChargeType: ${chargeType}, selectedCount=${selectedCount}, fotosIncluidas=${gallery.fotos_incluidas}, extrasNecessarias=${extrasNecessarias}`);
     
     // Get previously paid extras from gallery record
     const extrasPagasTotal = gallery.total_fotos_extras_vendidas || 0;
@@ -265,7 +275,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Credit-based pricing: modelo=${regrasCongeladasSource ? 'progressivo' : 'fixo'}, valorTotalIdeal=R$${resultado.valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
 
     // 4. Parse sale settings to determine if payment is required
-    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string } } | null;
+    // (configuracoes already parsed above for chargeType)
     const saleMode = configuracoes?.saleSettings?.mode;
     const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod;
     // Only create payment if there are extras to charge (respects credit system)
