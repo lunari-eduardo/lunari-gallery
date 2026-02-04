@@ -1235,6 +1235,7 @@ export type Database = {
           original_path: string | null
           preview_path: string | null
           preview_wm_path: string | null
+          processing_status: string | null
           storage_key: string
           thumb_path: string | null
           updated_at: string
@@ -1258,6 +1259,7 @@ export type Database = {
           original_path?: string | null
           preview_path?: string | null
           preview_wm_path?: string | null
+          processing_status?: string | null
           storage_key: string
           thumb_path?: string | null
           updated_at?: string
@@ -1281,6 +1283,7 @@ export type Database = {
           original_path?: string | null
           preview_path?: string | null
           preview_wm_path?: string | null
+          processing_status?: string | null
           storage_key?: string
           thumb_path?: string | null
           updated_at?: string

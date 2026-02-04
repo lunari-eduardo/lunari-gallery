@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
+import { getPhotoUrlWithFallback, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { WatermarkSettings, TitleCaseMode } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
 import { RegrasCongeladas } from '@/lib/pricingUtils';
@@ -585,19 +585,31 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Get photo URL helper - uses Cloudinary for transformations on B2 images
+  // Get photo URL helper - uses R2 for transformed images (with B2 fallback for legacy)
   const getPhotoUrl = useCallback(
-    (photo: GaleriaPhoto, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', _b2BaseUrl?: string): string => {
+    (photo: GaleriaPhoto & { processingStatus?: string; thumbPath?: string; previewPath?: string; previewWmPath?: string }, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', _b2BaseUrl?: string): string => {
       const photoPath = photo.storageKey;
       
       if (!photoPath) return '/placeholder.svg';
       
-      // Get watermark settings from gallery configuration
+      // Check if watermark should be applied
       const watermarkSettings = gallery?.configuracoes?.watermark;
+      const shouldApplyWatermark = watermarkSettings && watermarkSettings.type !== 'none' && size === 'preview';
       
-      // Use Cloudinary for image transformations (resize + watermark)
-      // Pass photo dimensions for orientation-based watermark selection
-      return getCloudinaryPhotoUrl(photoPath, size, watermarkSettings, photo.width, photo.height);
+      // Use new R2-based URL function with fallback to B2 for legacy photos
+      return getPhotoUrlWithFallback(
+        {
+          storageKey: photoPath,
+          thumbPath: photo.thumbPath,
+          previewPath: photo.previewPath,
+          previewWmPath: photo.previewWmPath,
+          processingStatus: photo.processingStatus,
+          width: photo.width,
+          height: photo.height,
+        },
+        size === 'full' ? 'original' : size,
+        shouldApplyWatermark
+      );
     },
     []
   );

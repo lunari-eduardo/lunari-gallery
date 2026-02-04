@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300" fill="none">
+  <rect width="400" height="300" fill="#f5f5f5"/>
+  <g transform="translate(200, 130)">
+    <circle cx="0" cy="0" r="24" stroke="#d4d4d4" stroke-width="4" fill="none" stroke-dasharray="50 50">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="1s"
+        repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <text x="200" y="180" font-family="system-ui, sans-serif" font-size="14" fill="#737373" text-anchor="middle">Processando...</text>
+</svg>

@@ -1,325 +1,115 @@
+# Plano: Migração de Cloudinary para Cloudflare R2
 
+## Status: ✅ IMPLEMENTADO
 
-# Plano: Padronização da Tela Pós-Finalização da Galeria
-
-## Visão Geral
-
-Refatorar o comportamento de galerias finalizadas para um padrão único e simples:
-- Cliente SEMPRE vê a **preview das fotos selecionadas** (miniaturas + fullscreen)
-- **NUNCA** há mensagem de bloqueio ou tela estática
-- Se **download ativado**: botão "Baixar Todas" no header + botão de download individual no Lightbox
-- Se **download desativado**: apenas visualização (sem botões de download)
-
----
-
-## Comportamento Atual (Problemático)
+## Arquitetura Final
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                      FLUXO ATUAL (CONFUSO)                                    │
-├───────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
-│  Galeria Finalizada + allowDownload=false                                     │
-│    → FinalizedGalleryScreen (tela estática com mensagem de bloqueio)          │
-│    → Nenhuma preview das fotos                                                │
-│                                                                               │
-│  Galeria Finalizada + allowDownload=true                                      │
-│    → FinalizedGalleryScreen + DownloadModal sobre ela                         │
-│    → Modal não pode ser fechado (onClose vazio)                               │
-│    → Experiência confusa e não intuitiva                                      │
-│                                                                               │
-│  Galeria Confirmada internamente (isConfirmed=true via state)                 │
-│    → Tela de preview com fotos selecionadas (correto!)                        │
-│    → Mas só funciona se o cliente NÃO recarregar a página                     │
-│                                                                               │
-└───────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        ARQUITETURA DE IMAGENS                                       │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│   ┌─────────────┐    ┌──────────────────┐    ┌─────────────────────┐               │
+│   │   Frontend  │───>│  b2-upload       │───>│  Backblaze B2       │               │
+│   │   (Upload)  │    │  (Edge Function) │    │  (Originais)        │               │
+│   └─────────────┘    └──────────────────┘    └─────────────────────┘               │
+│         │                     │                                                     │
+│         │                     │ processing_status='uploaded'                        │
+│         │                     ▼                                                     │
+│         │            ┌──────────────────┐                                          │
+│         │            │   galeria_fotos  │                                          │
+│         │            │   (Supabase)     │                                          │
+│         │            └──────────────────┘                                          │
+│         │                     │                                                     │
+│         │                     │ pg_cron (cada 1 min)                               │
+│         │                     ▼                                                     │
+│         │            ┌──────────────────┐    ┌─────────────────────┐               │
+│         │            │  process-photos  │───>│  Cloudflare R2      │               │
+│         │            │  (Edge Function) │    │  cdn.lunarihub.com  │               │
+│         │            └──────────────────┘    └─────────────────────┘               │
+│         │                     │                                                     │
+│         │                     │ processing_status='ready'                           │
+│         │                     │ thumb_path, preview_path, preview_wm_path          │
+│         │                     ▼                                                     │
+│   ┌─────────────┐    ┌──────────────────┐                                          │
+│   │   Frontend  │<───│  R2 Public URLs  │                                          │
+│   │(Visualizar) │    │  (CDN Global)    │                                          │
+│   └─────────────┘    └──────────────────┘                                          │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Comportamento Novo (Padronizado)
+## Componentes Implementados
 
-```text
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                     FLUXO NOVO (ÚNICO E SIMPLES)                              │
-├───────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
-│  QUALQUER galeria finalizada (pública, privada, Gestão):                      │
-│                                                                               │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │  Header: Logo do estúdio                                                │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐    │  │
-│  │  │  "Seleção Confirmada" + {X} fotos                               │    │  │
-│  │  │  [Baixar Todas] ← Apenas se allowDownload=true                  │    │  │
-│  │  └─────────────────────────────────────────────────────────────────┘    │  │
-│  │                                                                         │  │
-│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                                   │  │
-│  │  │ Foto │ │ Foto │ │ Foto │ │ Foto │  ← Clicável para fullscreen       │  │
-│  │  │  1   │ │  2   │ │  3   │ │  4   │     SEM watermark                 │  │
-│  │  └──────┘ └──────┘ └──────┘ └──────┘                                   │  │
-│  │                                                                         │  │
-│  │  Lightbox:                                                              │  │
-│  │    - Foto original SEM watermark                                        │  │
-│  │    - Botão [⬇️] apenas se allowDownload=true                           │  │
-│  │    - Navegação com setas                                                │  │
-│  │    - SEM botões de seleção/favorito/comentário                         │  │
-│  │                                                                         │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-│                                                                               │
-└───────────────────────────────────────────────────────────────────────────────┘
-```
+### 1. Database
+- ✅ Coluna `processing_status` adicionada à `galeria_fotos`
+- ✅ Índice otimizado para busca de fotos pendentes
+
+### 2. Edge Functions
+- ✅ `b2-upload`: Atualizado para definir `processing_status = 'uploaded'`
+- ✅ `process-photos`: Nova função para processamento assíncrono (MVP - passa imagem sem transformações)
+
+### 3. Frontend
+- ✅ `src/lib/photoUrl.ts`: Novo módulo de URLs (substitui cloudinaryUrl.ts)
+- ✅ `public/placeholder-processing.svg`: Placeholder animado para fotos em processamento
+- ✅ Componentes atualizados para usar `getPhotoUrlWithFallback`
+
+### 4. Secrets Configurados
+- ✅ R2_ACCESS_KEY_ID
+- ✅ R2_SECRET_ACCESS_KEY  
+- ✅ R2_ACCOUNT_ID
+- ✅ R2_BUCKET_NAME
+- ✅ R2_PUBLIC_URL
+
+### 5. Variáveis de Ambiente
+- ✅ `VITE_R2_PUBLIC_URL`: https://cdn.lunarihub.com
+- ❌ `VITE_CLOUDINARY_CLOUD_NAME`: Removido
 
 ---
 
-## Arquivos a Modificar
+## Próximos Passos (Fase 2 - Opcional)
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/FinalizedGalleryScreen.tsx` | **Deletar** | Tela de bloqueio não mais usada |
-| `src/components/FinalizedPreviewScreen.tsx` | **Criar** | Nova tela de preview padronizada |
-| `src/pages/ClientGallery.tsx` | **Modificar** | Usar nova tela para TODAS galerias finalizadas |
-| `supabase/functions/gallery-access/index.ts` | **Modificar** | SEMPRE retornar fotos quando finalized=true |
+### Configurar pg_cron para execução automática
+
+1. **Habilitar extensões no Supabase Dashboard:**
+   - Database > Extensions > Habilitar `pg_cron` e `pg_net`
+
+2. **Executar SQL para criar o job:**
+```sql
+SELECT cron.schedule(
+  'process-photos-job',
+  '* * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
+    body := '{"batchSize": 10}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
+
+### Implementar processamento real de imagens
+
+A Edge Function `process-photos` atualmente:
+- ✅ Busca fotos pendentes
+- ✅ Baixa do B2
+- ✅ Faz upload para R2
+- ⏳ **Placeholder**: Resize/watermark retornam imagem original
+
+Para processamento real, considerar:
+- Cloudflare Image Resizing (via URL transforms)
+- Worker dedicado com Sharp/Canvas
+- Serviço externo de processamento
 
 ---
 
-## Implementação Detalhada
+## Fallback para Fotos Legadas
 
-### 1. Deletar `FinalizedGalleryScreen.tsx`
+O sistema usa `getPhotoUrlWithFallback` que:
+1. Se `processing_status === 'ready'` → Usa URLs do R2
+2. Caso contrário → Usa URL direta do B2 (sem transformações)
 
-Este componente mostra apenas uma mensagem de bloqueio sem fotos. Será substituído pelo novo componente.
-
-### 2. Criar `FinalizedPreviewScreen.tsx`
-
-Novo componente que mostra:
-- Header com logo do estúdio
-- Banner informativo "Seleção Confirmada - X fotos"
-- Botão "Baixar Todas (ZIP)" se `allowDownload=true`
-- Grid de miniaturas clicáveis (MasonryGrid)
-- Lightbox integrado para fullscreen
-- Download individual no Lightbox se `allowDownload=true`
-
-```typescript
-interface FinalizedPreviewScreenProps {
-  photos: Array<{
-    id: string;
-    storageKey: string;
-    filename: string;
-    originalFilename: string;
-  }>;
-  sessionName: string;
-  sessionFont?: string;
-  titleCaseMode?: TitleCaseMode;
-  studioLogoUrl?: string;
-  studioName?: string;
-  allowDownload: boolean;
-  themeStyles?: React.CSSProperties;
-  backgroundMode?: 'light' | 'dark';
-}
-```
-
-### 3. Modificar Edge Function `gallery-access`
-
-Atualmente, a Edge Function só retorna fotos quando `allowDownload=true`. 
-Precisamos **SEMPRE** retornar as fotos selecionadas para galerias finalizadas:
-
-```typescript
-// ANTES: só retorna fotos se allowDownload
-if (allowDownload) {
-  const { data: selectedPhotos } = await supabase.from("galeria_fotos")...
-  return { finalized: true, allowDownload: true, photos: selectedPhotos };
-}
-return { finalized: true, allowDownload: false }; // SEM FOTOS
-
-// DEPOIS: sempre retorna fotos
-const { data: selectedPhotos } = await supabase.from("galeria_fotos")...
-return { 
-  finalized: true, 
-  allowDownload: allowDownload, // true ou false
-  photos: selectedPhotos || []   // SEMPRE inclui fotos
-};
-```
-
-### 4. Modificar `ClientGallery.tsx`
-
-Substituir a lógica atual de `galleryResponse?.finalized`:
-
-```typescript
-// ANTES (linhas 728-765)
-if (galleryResponse?.finalized) {
-  // Lógica complexa com FinalizedGalleryScreen + DownloadModal
-}
-
-// DEPOIS
-if (galleryResponse?.finalized) {
-  return (
-    <FinalizedPreviewScreen
-      photos={galleryResponse.photos || []}
-      sessionName={galleryResponse.sessionName}
-      sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
-      titleCaseMode={galleryResponse?.settings?.titleCaseMode || 'normal'}
-      studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-      studioName={galleryResponse.studioSettings?.studio_name}
-      allowDownload={galleryResponse.allowDownload}
-      themeStyles={themeStyles}
-      backgroundMode={effectiveBackgroundMode}
-    />
-  );
-}
-```
-
-### 5. Limpar código desnecessário
-
-- Remover `FinalizedGalleryScreen` de imports
-- Remover lógica duplicada de "confirmed mode" após confirmação interna
-- Simplificar fluxo unificando visualização pós-confirmação com visualização de galeria finalizada
-
----
-
-## Estrutura do Novo Componente
-
-```typescript
-// src/components/FinalizedPreviewScreen.tsx
-
-export function FinalizedPreviewScreen({
-  photos,
-  sessionName,
-  sessionFont,
-  titleCaseMode = 'normal',
-  studioLogoUrl,
-  studioName,
-  allowDownload,
-  themeStyles,
-  backgroundMode = 'light',
-}: FinalizedPreviewScreenProps) {
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
-
-  // Transform photos for display
-  const transformedPhotos = photos.map(p => ({
-    id: p.id,
-    storageKey: p.storageKey || p.storage_key,
-    filename: p.filename,
-    originalFilename: p.originalFilename || p.original_filename,
-    // Use original URL (no watermark) for thumbnails
-    thumbnailUrl: getOriginalPhotoUrl(p.storageKey || p.storage_key),
-    previewUrl: getOriginalPhotoUrl(p.storageKey || p.storage_key),
-  }));
-
-  const handleDownloadAll = async () => {
-    // Lógica de download em lote (similar ao DownloadModal)
-  };
-
-  return (
-    <div className={cn("min-h-screen bg-background", backgroundMode === 'dark' && 'dark')} style={themeStyles}>
-      {/* Header com logo */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b">
-        <div className="flex items-center justify-center px-4 py-4">
-          {studioLogoUrl ? <img src={studioLogoUrl} ... /> : <Logo />}
-        </div>
-      </header>
-
-      {/* Banner informativo */}
-      <div className="bg-primary/10 border-b p-4 text-center">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Check className="h-5 w-5 text-primary" />
-          <h2 className="font-medium">Seleção Confirmada</h2>
-        </div>
-        <p className="text-sm text-muted-foreground mb-3">
-          {photos.length} fotos selecionadas
-        </p>
-        
-        {/* Botão de download - apenas se permitido */}
-        {allowDownload && photos.length > 0 && (
-          <Button onClick={handleDownloadAll} disabled={isDownloading}>
-            <Download className="h-4 w-4 mr-2" />
-            {isDownloading ? `Baixando... ${progressPercent}%` : 'Baixar Todas (ZIP)'}
-          </Button>
-        )}
-      </div>
-
-      {/* Grid de fotos */}
-      <main className="p-4">
-        <MasonryGrid>
-          {transformedPhotos.map((photo, index) => (
-            <MasonryItem key={photo.id}>
-              <div 
-                className="cursor-pointer rounded-lg overflow-hidden"
-                onClick={() => setLightboxIndex(index)}
-              >
-                <img src={photo.thumbnailUrl} alt="" className="w-full" />
-              </div>
-            </MasonryItem>
-          ))}
-        </MasonryGrid>
-      </main>
-
-      {/* Lightbox */}
-      {lightboxIndex !== null && (
-        <Lightbox
-          photos={transformedPhotos}
-          currentIndex={lightboxIndex}
-          allowComments={false}
-          allowDownload={allowDownload}
-          disabled={true}
-          isConfirmedMode={true}
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={setLightboxIndex}
-          onSelect={() => {}}
-        />
-      )}
-    </div>
-  );
-}
-```
-
----
-
-## Fluxo Simplificado Final
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         FLUXO ÚNICO PÓS-FINALIZAÇÃO                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Cliente finaliza seleção (com ou sem pagamento)                         │
-│     └─> status_selecao = 'confirmado'                                       │
-│     └─> finalized_at = now()                                                │
-│                                                                             │
-│  2. Cliente retorna à galeria (qualquer momento)                            │
-│     └─> Edge Function detecta finalized=true                                │
-│     └─> Retorna fotos selecionadas + allowDownload flag                     │
-│                                                                             │
-│  3. Frontend renderiza FinalizedPreviewScreen                               │
-│     └─> Grid de miniaturas SEM watermark                                    │
-│     └─> Lightbox SEM watermark                                              │
-│     └─> SE allowDownload=true:                                              │
-│         ├─> Botão "Baixar Todas" no banner                                  │
-│         └─> Botão download no Lightbox                                      │
-│                                                                             │
-│  4. Cliente pode visualizar e baixar (se permitido)                         │
-│     └─> Sem mensagens de bloqueio                                           │
-│     └─> Sem modais obrigatórios                                             │
-│     └─> Experiência limpa e intuitiva                                       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Códigos a Remover
-
-1. **FinalizedGalleryScreen.tsx** - Arquivo inteiro (tela de bloqueio)
-2. **DownloadModal** na renderização de galeria finalizada - O download agora é integrado na tela
-3. **Lógica duplicada** em ClientGallery.tsx para "confirmed mode" interno vs "finalized" do backend
-
----
-
-## Resultado Esperado
-
-1. **Comportamento único** para todas galerias finalizadas
-2. **Preview sempre disponível** - cliente vê suas fotos selecionadas
-3. **Download condicional** - botão aparece apenas se configurado
-4. **Sem bloqueios** - experiência fluida e profissional
-5. **Fotos sem watermark** - visualização premium após confirmação
-
+Isso garante que fotos existentes continuem funcionando durante a transição.

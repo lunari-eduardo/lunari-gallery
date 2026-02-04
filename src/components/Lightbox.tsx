@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getOriginalPhotoUrl } from '@/lib/cloudinaryUrl';
+import { getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { downloadPhoto } from '@/lib/downloadUtils';
 import { toast } from 'sonner';
 

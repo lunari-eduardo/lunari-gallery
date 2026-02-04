@@ -4,7 +4,7 @@
 
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { getOriginalPhotoUrl } from './cloudinaryUrl';
+import { getOriginalPhotoUrl } from './photoUrl';
 
 export interface DownloadablePhoto {
   storageKey: string;

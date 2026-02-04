@@ -391,7 +391,7 @@ Deno.serve(async (req) => {
     const uploadDuration = Date.now() - startTime;
     console.log(`[${requestId}] B2 upload complete in ${uploadDuration}ms: ${uploadResult.fileId}`);
 
-    // Save metadata to Supabase
+    // Save metadata to Supabase with processing_status = 'uploaded'
     const { data: photo, error: insertError } = await supabase
       .from("galeria_fotos")
       .insert({
@@ -406,6 +406,7 @@ Deno.serve(async (req) => {
         height: height,
         is_selected: false,
         order_index: 0,
+        processing_status: 'uploaded', // NEW: mark for async processing
       })
       .select()
       .single();
