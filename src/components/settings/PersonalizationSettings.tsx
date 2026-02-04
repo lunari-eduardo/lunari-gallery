@@ -1,7 +1,7 @@
 import { useGallerySettings } from '@/hooks/useGallerySettings';
 import { LogoUploader } from './LogoUploader';
 import { ThemeConfig } from './ThemeConfig';
-import { WatermarkDefaults } from './WatermarkDefaults';
+import { WatermarkSettings } from './WatermarkSettings';
 import { EmailTemplates } from './EmailTemplates';
 import { FaviconUploader } from './FaviconUploader';
 
@@ -56,10 +56,7 @@ export function PersonalizationSettings() {
 
         {/* Watermark */}
         <div className="lunari-card p-6">
-          <WatermarkDefaults
-            watermark={settings.defaultWatermark}
-            onWatermarkChange={(watermark) => updateSettings({ defaultWatermark: watermark })}
-          />
+          <WatermarkSettings />
         </div>
       </div>
 

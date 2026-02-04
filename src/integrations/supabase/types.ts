@@ -1882,6 +1882,10 @@ export type Database = {
           photo_credits: number
           updated_at: string
           user_id: string
+          watermark_mode: string | null
+          watermark_opacity: number | null
+          watermark_path: string | null
+          watermark_scale: number | null
         }
         Insert: {
           account_status?: Database["public"]["Enums"]["account_status"]
@@ -1895,6 +1899,10 @@ export type Database = {
           photo_credits?: number
           updated_at?: string
           user_id: string
+          watermark_mode?: string | null
+          watermark_opacity?: number | null
+          watermark_path?: string | null
+          watermark_scale?: number | null
         }
         Update: {
           account_status?: Database["public"]["Enums"]["account_status"]
@@ -1908,6 +1916,10 @@ export type Database = {
           photo_credits?: number
           updated_at?: string
           user_id?: string
+          watermark_mode?: string | null
+          watermark_opacity?: number | null
+          watermark_path?: string | null
+          watermark_scale?: number | null
         }
         Relationships: []
       }
