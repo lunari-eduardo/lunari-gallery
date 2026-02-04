@@ -50,7 +50,7 @@ function parseWatermark(json: Json | null): WatermarkSettings {
   }
   const obj = json as Record<string, unknown>;
   let type = (obj.type as WatermarkSettings['type']) || 'standard';
-  if (type !== 'none' && type !== 'standard') {
+  if (type !== 'none' && type !== 'standard' && type !== 'custom') {
     type = 'standard';
   }
   
@@ -58,6 +58,9 @@ function parseWatermark(json: Json | null): WatermarkSettings {
     type,
     opacity: (obj.opacity as number) || 40,
     position: 'center',
+    // Campos opcionais para watermark customizada (futuro)
+    customHorizontalUrl: obj.customHorizontalUrl as string | undefined,
+    customVerticalUrl: obj.customVerticalUrl as string | undefined,
   };
 }
 

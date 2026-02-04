@@ -108,6 +108,28 @@ export function WatermarkDefaults({ watermark, onWatermarkChange }: WatermarkDef
             </p>
           </div>
         )}
+
+        {/* PREPARAÇÃO PARA FUTURO: Upload de watermark customizada
+        {watermark.type === 'custom' && (
+          <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+            <p className="text-sm font-medium">Suas marcas d'água personalizadas</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Horizontal (fotos paisagem)</Label>
+                <WatermarkUploader 
+                  onUpload={(url) => onWatermarkChange({ ...watermark, customHorizontalUrl: url })} 
+                />
+              </div>
+              <div>
+                <Label>Vertical (fotos retrato)</Label>
+                <WatermarkUploader 
+                  onUpload={(url) => onWatermarkChange({ ...watermark, customVerticalUrl: url })} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        */}
       </div>
     </div>
   );
