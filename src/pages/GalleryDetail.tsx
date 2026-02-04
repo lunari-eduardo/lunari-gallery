@@ -232,7 +232,7 @@ export default function GalleryDetail() {
     };
   }, [cobrancaData?.status, cobrancaData?.provedor, checkPaymentStatus]);
 
-  // Transform Supabase photos to GalleryPhoto format (uses Cloudinary)
+  // Transform Supabase photos to GalleryPhoto format (uses R2 for previews, B2 for originals)
   const transformedPhotos: GalleryPhoto[] = useMemo(() => {
     return supabasePhotos.map((photo: GaleriaPhoto, index: number) => ({
       id: photo.id,

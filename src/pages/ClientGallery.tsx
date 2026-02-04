@@ -25,7 +25,7 @@ import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
 import { DownloadModal } from '@/components/DownloadModal';
-import { getCloudinaryPhotoUrl } from '@/lib/cloudinaryUrl';
+import { getPhotoUrlWithFallback, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings, DiscountPackage, TitleCaseMode } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
@@ -322,19 +322,31 @@ export default function ClientGallery() {
     
     // Get watermark settings from gallery
     const watermarkSettings = transformedGallery.settings?.watermark;
+    const shouldApplyWatermark = watermarkSettings && watermarkSettings.type !== 'none';
     
     return supabasePhotos.map((photo) => {
       const photoWidth = photo.width || 800;
       const photoHeight = photo.height || 600;
       const storagePath = photo.storage_key;
       
+      // Build photo paths object for URL generation
+      const photoPaths = {
+        storageKey: storagePath,
+        thumbPath: photo.thumb_path,
+        previewPath: photo.preview_path,
+        previewWmPath: photo.preview_wm_path,
+        processingStatus: photo.processing_status || 'ready', // Default to ready for legacy photos
+        width: photoWidth,
+        height: photoHeight,
+      };
+      
       return {
         id: photo.id,
         filename: photo.original_filename || photo.filename,
         originalFilename: photo.original_filename || photo.filename,
-        thumbnailUrl: getCloudinaryPhotoUrl(storagePath, 'thumbnail', null),
-        previewUrl: getCloudinaryPhotoUrl(storagePath, 'preview', watermarkSettings, photoWidth, photoHeight),
-        originalUrl: getCloudinaryPhotoUrl(storagePath, 'full', watermarkSettings, photoWidth, photoHeight),
+        thumbnailUrl: getPhotoUrlWithFallback(photoPaths, 'thumbnail', false),
+        previewUrl: getPhotoUrlWithFallback(photoPaths, 'preview', shouldApplyWatermark),
+        originalUrl: getOriginalPhotoUrl(storagePath),
         storageKey: storagePath, // For download without watermark
         width: photoWidth,
         height: photoHeight,

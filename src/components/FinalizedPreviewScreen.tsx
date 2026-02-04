@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { Lightbox } from '@/components/Lightbox';
-import { getOriginalPhotoUrl } from '@/lib/cloudinaryUrl';
+import { getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { downloadAllPhotos } from '@/lib/downloadUtils';
 import { cn } from '@/lib/utils';
 import { TitleCaseMode, GalleryPhoto } from '@/types/gallery';
