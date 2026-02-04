@@ -1,19 +1,16 @@
 /**
- * Edge Function: process-photos
+ * Edge Function: process-photos (Orquestrador)
  * 
- * Asynchronous image processing job:
- * 1. Fetches photos with processing_status = 'uploaded'
- * 2. Downloads original from B2
- * 3. Generates thumbnail (400px), preview (original size), preview with watermark
- * 4. Uploads derivatives to Cloudflare R2
- * 5. Updates database with paths and status = 'ready'
+ * Esta função NÃO processa imagens diretamente.
+ * Ela orquestra o fluxo:
+ * 1. Busca fotos com status = 'uploaded'
+ * 2. Busca configurações de watermark do fotógrafo
+ * 3. Envia lote para Cloudflare Worker processar
  * 
  * Triggered by pg_cron every minute
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.478.0";
-import { resize } from "https://deno.land/x/deno_image@0.0.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,294 +27,35 @@ interface PhotoToProcess {
   height: number;
 }
 
-interface WatermarkSettings {
-  type: 'none' | 'standard' | 'custom';
+interface WatermarkConfig {
+  mode: 'system' | 'custom' | 'none';
+  path?: string;
   opacity: number;
-  position: 'center';
-  customHorizontalUrl?: string;
-  customVerticalUrl?: string;
+  scale: number;
 }
 
-interface ProcessResult {
-  photoId: string;
-  success: boolean;
-  error?: string;
-}
-
-// Initialize R2 client (S3-compatible)
-function getR2Client() {
-  const accountId = Deno.env.get("R2_ACCOUNT_ID");
-  const accessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
-  const secretAccessKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
-
-  if (!accountId || !accessKeyId || !secretAccessKey) {
-    throw new Error("R2 credentials not configured");
-  }
-
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-  });
-}
-
-// Fetch original image from B2
-async function fetchOriginalFromB2(storageKey: string): Promise<Uint8Array> {
-  const b2BucketUrl = Deno.env.get("B2_PUBLIC_URL") || "https://f005.backblazeb2.com/file/lunari-gallery";
-  const url = `${b2BucketUrl}/${storageKey}`;
-  
-  console.log(`Fetching original from: ${url}`);
-  
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from B2: ${response.status} ${response.statusText}`);
-  }
-  
-  return new Uint8Array(await response.arrayBuffer());
-}
-
-// Upload to R2
-async function uploadToR2(
-  r2Client: S3Client,
-  bucketName: string,
-  key: string,
-  data: Uint8Array,
-  contentType: string
-): Promise<void> {
-  await r2Client.send(new PutObjectCommand({
-    Bucket: bucketName,
-    Key: key,
-    Body: data,
-    ContentType: contentType,
-  }));
-  
-  console.log(`Uploaded to R2: ${key} (${(data.length / 1024).toFixed(0)}KB)`);
-}
-
-// Resize image to thumbnail (400px long edge)
-async function resizeToThumbnail(imageData: Uint8Array, photoWidth: number, photoHeight: number): Promise<Uint8Array> {
-  const isLandscape = photoWidth >= photoHeight;
-  const longEdge = 400;
-  
-  let targetWidth: number;
-  let targetHeight: number;
-  
-  if (isLandscape) {
-    targetWidth = longEdge;
-    targetHeight = Math.round((photoHeight / photoWidth) * longEdge);
-  } else {
-    targetHeight = longEdge;
-    targetWidth = Math.round((photoWidth / photoHeight) * longEdge);
-  }
-  
-  const resized = await resize(imageData, {
-    width: targetWidth,
-    height: targetHeight,
-  });
-  
-  return resized;
-}
-
-// Fetch watermark based on orientation and type
-async function fetchWatermark(
-  isLandscape: boolean,
-  watermarkSettings: WatermarkSettings
-): Promise<Uint8Array | null> {
-  if (watermarkSettings.type === 'none') {
-    return null;
-  }
-  
-  let watermarkUrl: string;
-  
-  if (watermarkSettings.type === 'custom') {
-    // FUTURE: Use custom URLs from photographer
-    watermarkUrl = isLandscape 
-      ? watermarkSettings.customHorizontalUrl!
-      : watermarkSettings.customVerticalUrl!;
-    
-    // If custom URL doesn't exist, fallback to standard
-    if (!watermarkUrl) {
-      const filename = isLandscape ? 'horizontal.png' : 'vertical.png';
-      watermarkUrl = `https://gallery.lunarihub.com/watermarks/${filename}`;
-    }
-  } else {
-    // Standard: Use system watermarks
-    const filename = isLandscape ? 'horizontal.png' : 'vertical.png';
-    watermarkUrl = `https://gallery.lunarihub.com/watermarks/${filename}`;
-  }
-  
-  console.log(`Fetching watermark from: ${watermarkUrl}`);
-  
-  const response = await fetch(watermarkUrl);
-  if (!response.ok) {
-    console.warn(`Failed to fetch watermark: ${response.status}`);
-    return null;
-  }
-  
-  return new Uint8Array(await response.arrayBuffer());
-}
-
-// Simple watermark application using canvas
-// Note: For full watermark composition, we'd need a more sophisticated library
-// For MVP, this applies a simple overlay - in production consider Cloudflare Image Resizing
-async function applyWatermarkOverlay(
-  imageData: Uint8Array,
-  watermarkData: Uint8Array,
-  _opacity: number
-): Promise<Uint8Array> {
-  // For MVP: We cannot do full compositing in Deno without heavy WASM libs
-  // Return original image and log that watermark was requested
-  // The frontend will handle watermark display via preview-wm path selection
-  console.log(`Watermark requested but compositing not available - using preview path separation`);
-  
-  // In production, consider:
-  // 1. Cloudflare Image Resizing with overlay transforms
-  // 2. A dedicated Cloudflare Worker with photon-wasm
-  // 3. An external image processing service
-  
-  // For now, return the original - the system uses preview-wm path to indicate 
-  // this should show watermark (frontend can handle via CSS overlay)
-  return imageData;
-}
-
-// Process a single photo
-async function processPhoto(
-  r2Client: S3Client,
-  bucketName: string,
-  photo: PhotoToProcess,
-  // deno-lint-ignore no-explicit-any
-  supabase: any
-): Promise<ProcessResult> {
-  const startTime = Date.now();
-  
-  try {
-    console.log(`Processing photo ${photo.id}: ${photo.filename}`);
-    
-    // 1. Fetch original from B2 (already at configured resolution: 1024/1920/2560)
-    const originalData = await fetchOriginalFromB2(photo.storage_key);
-    console.log(`Fetched original: ${(originalData.byteLength / 1024).toFixed(0)}KB`);
-    
-    // 2. Get watermark settings from gallery
-    const { data: gallery } = await supabase
-      .from("galerias")
-      .select("configuracoes")
-      .eq("id", photo.galeria_id)
-      .single();
-    
-    const defaultWatermark: WatermarkSettings = {
-      type: 'standard',
-      opacity: 40,
-      position: 'center',
-    };
-    
-    const watermarkSettings: WatermarkSettings = {
-      ...defaultWatermark,
-      ...((gallery?.configuracoes as Record<string, unknown>)?.watermark as Partial<WatermarkSettings> || {}),
-    };
-    
-    console.log(`Watermark settings: type=${watermarkSettings.type}, opacity=${watermarkSettings.opacity}`);
-    
-    // 3. Detect orientation from photo dimensions
-    const isLandscape = photo.width >= photo.height;
-    console.log(`Photo orientation: ${isLandscape ? 'landscape' : 'portrait'} (${photo.width}x${photo.height})`);
-    
-    // 4. Generate thumbnail (400px long edge)
-    const thumbData = await resizeToThumbnail(originalData, photo.width, photo.height);
-    console.log(`Generated thumbnail: ${(thumbData.length / 1024).toFixed(0)}KB`);
-    
-    // 5. Preview = original (no processing needed, already at configured resolution)
-    const previewData = originalData;
-    console.log(`Preview: using original (${(previewData.length / 1024).toFixed(0)}KB)`);
-    
-    // 6. Generate preview with watermark
-    let previewWmData: Uint8Array;
-    if (watermarkSettings.type !== 'none') {
-      const watermarkImage = await fetchWatermark(isLandscape, watermarkSettings);
-      if (watermarkImage) {
-        previewWmData = await applyWatermarkOverlay(
-          originalData,
-          watermarkImage,
-          watermarkSettings.opacity
-        );
-        console.log(`Generated preview-wm: ${(previewWmData.length / 1024).toFixed(0)}KB`);
-      } else {
-        previewWmData = previewData;
-        console.log(`Preview-wm fallback: watermark fetch failed`);
-      }
-    } else {
-      previewWmData = previewData;
-      console.log(`Preview-wm: watermark disabled`);
-    }
-    
-    // 7. Build R2 paths
-    const basePath = `${photo.user_id}/${photo.galeria_id}`;
-    const thumbPath = `${basePath}/thumb/${photo.filename}`;
-    const previewPath = `${basePath}/preview/${photo.filename}`;
-    const previewWmPath = `${basePath}/preview-wm/${photo.filename}`;
-    
-    // 8. Upload to R2
-    const contentType = "image/jpeg";
-    await Promise.all([
-      uploadToR2(r2Client, bucketName, thumbPath, thumbData, contentType),
-      uploadToR2(r2Client, bucketName, previewPath, previewData, contentType),
-      uploadToR2(r2Client, bucketName, previewWmPath, previewWmData, contentType),
-    ]);
-    
-    // 9. Update database with watermark info for frontend
-    const { error: updateError } = await supabase
-      .from("galeria_fotos")
-      .update({
-        thumb_path: thumbPath,
-        preview_path: previewPath,
-        preview_wm_path: previewWmPath,
-        processing_status: "ready",
-        has_watermark: watermarkSettings.type !== 'none',
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", photo.id);
-    
-    if (updateError) {
-      throw new Error(`Database update failed: ${updateError.message}`);
-    }
-    
-    const duration = Date.now() - startTime;
-    console.log(`✓ Photo ${photo.id} processed in ${duration}ms`);
-    
-    return { photoId: photo.id, success: true };
-  } catch (error) {
-    console.error(`✗ Error processing photo ${photo.id}:`, error);
-    
-    // Mark as error in database
-    await supabase
-      .from("galeria_fotos")
-      .update({
-        processing_status: "error",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", photo.id);
-    
-    return {
-      photoId: photo.id,
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+interface PhotoPayload {
+  id: string;
+  userId: string;
+  galleryId: string;
+  filename: string;
+  storageKey: string;
+  width: number;
+  height: number;
+  watermark: WatermarkConfig;
 }
 
 Deno.serve(async (req) => {
-  const requestId = crypto.randomUUID().slice(0, 8);
-  const startTime = Date.now();
-  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const requestId = crypto.randomUUID().slice(0, 8);
+  const startTime = Date.now();
+
   try {
-    console.log(`[${requestId}] Process-photos job started`);
+    console.log(`[${requestId}] Process-photos orchestrator started`);
     
     // Parse request body for batch size
     let batchSize = 10;
@@ -328,23 +66,26 @@ Deno.serve(async (req) => {
       // Use default batch size
     }
     
-    // Initialize Supabase client
+    // Initialize clients and get config
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const workerUrl = Deno.env.get("IMAGE_PROCESSOR_URL");
+    const workerSecret = Deno.env.get("IMAGE_PROCESSOR_SECRET");
+    
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Check R2 configuration
-    const bucketName = Deno.env.get("R2_BUCKET_NAME");
-    if (!bucketName) {
-      console.log(`[${requestId}] R2_BUCKET_NAME not configured, skipping`);
+    // Check if Worker is configured
+    if (!workerUrl || !workerSecret) {
+      console.log(`[${requestId}] Worker not configured (IMAGE_PROCESSOR_URL/SECRET missing)`);
       return new Response(
-        JSON.stringify({ message: "R2 not configured", processed: 0 }),
+        JSON.stringify({ 
+          message: "Worker not configured", 
+          processed: 0,
+          hint: "Set IMAGE_PROCESSOR_URL and IMAGE_PROCESSOR_SECRET in Edge Function secrets"
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    // Initialize R2 client
-    const r2Client = getR2Client();
     
     // 1. Get pending photos
     const { data: pendingPhotos, error: fetchError } = await supabase
@@ -367,59 +108,106 @@ Deno.serve(async (req) => {
     
     console.log(`[${requestId}] Found ${pendingPhotos.length} photos to process`);
     
-    // 2. Mark as "processing"
-    const photoIds = pendingPhotos.map(p => p.id);
+    // 2. Mark as "processing" to prevent duplicate processing
+    const photoIds = pendingPhotos.map((p: PhotoToProcess) => p.id);
     await supabase
       .from("galeria_fotos")
       .update({ processing_status: "processing" })
       .in("id", photoIds);
     
-    // 3. Process each photo sequentially (to avoid memory issues)
-    const results: ProcessResult[] = [];
-    for (const photo of pendingPhotos as PhotoToProcess[]) {
-      const result = await processPhoto(r2Client, bucketName, photo, supabase);
-      results.push(result);
+    // 3. Get unique user IDs to fetch watermark settings
+    const userIds = [...new Set(pendingPhotos.map((p: PhotoToProcess) => p.user_id))];
+    
+    const { data: accounts } = await supabase
+      .from("photographer_accounts")
+      .select("user_id, watermark_mode, watermark_path, watermark_opacity, watermark_scale")
+      .in("user_id", userIds);
+    
+    // Build watermark config map by user
+    const watermarkByUser = new Map<string, WatermarkConfig>();
+    for (const account of accounts || []) {
+      watermarkByUser.set(account.user_id, {
+        mode: (account.watermark_mode as WatermarkConfig['mode']) || 'system',
+        path: account.watermark_path || undefined,
+        opacity: account.watermark_opacity ?? 40,
+        scale: account.watermark_scale ?? 30,
+      });
     }
     
-    // 4. Count remaining
+    // Default watermark config for users without settings
+    const defaultWatermark: WatermarkConfig = {
+      mode: 'system',
+      opacity: 40,
+      scale: 30,
+    };
+    
+    // 4. Build payload for Worker
+    const photosPayload: PhotoPayload[] = pendingPhotos.map((photo: PhotoToProcess) => ({
+      id: photo.id,
+      userId: photo.user_id,
+      galleryId: photo.galeria_id,
+      filename: photo.filename,
+      storageKey: photo.storage_key,
+      width: photo.width || 0,
+      height: photo.height || 0,
+      watermark: watermarkByUser.get(photo.user_id) || defaultWatermark,
+    }));
+    
+    // 5. Call Cloudflare Worker
+    console.log(`[${requestId}] Calling Worker at ${workerUrl} with ${photosPayload.length} photos`);
+    
+    const workerResponse = await fetch(`${workerUrl}/process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${workerSecret}`,
+      },
+      body: JSON.stringify({ photos: photosPayload }),
+    });
+    
+    if (!workerResponse.ok) {
+      const errorText = await workerResponse.text();
+      console.error(`[${requestId}] Worker returned ${workerResponse.status}: ${errorText}`);
+      
+      // Revert status to 'uploaded' so they can be retried
+      await supabase
+        .from("galeria_fotos")
+        .update({ processing_status: "uploaded" })
+        .in("id", photoIds);
+      
+      throw new Error(`Worker failed: ${workerResponse.status} - ${errorText}`);
+    }
+    
+    const workerResult = await workerResponse.json();
+    console.log(`[${requestId}] Worker result: ${JSON.stringify(workerResult)}`);
+    
+    // 6. Count remaining photos to process
     const { count: remaining } = await supabase
       .from("galeria_fotos")
       .select("*", { count: "exact", head: true })
       .eq("processing_status", "uploaded");
     
     const duration = Date.now() - startTime;
-    const successful = results.filter(r => r.success).length;
-    const failed = results.filter(r => !r.success).length;
-    
-    console.log(`[${requestId}] ✓ Job complete in ${duration}ms: ${successful} success, ${failed} failed, ${remaining || 0} remaining`);
+    console.log(`[${requestId}] ✓ Orchestration complete in ${duration}ms: ${workerResult.successful || 0} ok, ${workerResult.failed || 0} failed, ${remaining || 0} remaining`);
     
     return new Response(
       JSON.stringify({
-        processed: results.length,
-        successful,
-        failed,
+        ...workerResult,
         remaining: remaining || 0,
         duration,
-        results,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error(`[${requestId}] ✗ Job failed after ${duration}ms:`, error);
+    console.error(`[${requestId}] ✗ Orchestration failed after ${duration}ms:`, error);
     
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : "Internal error",
         duration,
       }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

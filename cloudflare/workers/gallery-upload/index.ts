@@ -251,6 +251,82 @@ async function handleServe(
   }
 }
 
+// Handle watermark upload
+async function handleWatermarkUpload(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const user = await validateAuth(request, env);
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      return new Response(
+        JSON.stringify({ error: 'Arquivo obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate PNG
+    if (!file.type.includes('png')) {
+      return new Response(
+        JSON.stringify({ error: 'Apenas arquivos PNG são permitidos' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Max 2MB
+    if (file.size > 2 * 1024 * 1024) {
+      return new Response(
+        JSON.stringify({ error: 'Arquivo muito grande (máximo 2MB)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Build path: user-assets/{user_id}/watermark.png
+    const watermarkPath = `user-assets/${user.userId}/watermark.png`;
+    const fileBuffer = await file.arrayBuffer();
+
+    // Upload to R2 (overwrites if exists)
+    await env.GALLERY_BUCKET.put(watermarkPath, fileBuffer, {
+      httpMetadata: {
+        contentType: 'image/png',
+      },
+      customMetadata: {
+        uploadedAt: new Date().toISOString(),
+        userId: user.userId,
+      },
+    });
+
+    console.log(`Watermark uploaded: ${watermarkPath} (${fileBuffer.byteLength} bytes)`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        path: watermarkPath,
+        size: fileBuffer.byteLength,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Watermark upload error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Erro no upload da watermark' 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
 // Main request handler
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -264,6 +340,11 @@ export default {
     // Route: POST /upload
     if (request.method === 'POST' && url.pathname === '/upload') {
       return handleUpload(request, env);
+    }
+
+    // Route: POST /upload-watermark
+    if (request.method === 'POST' && url.pathname === '/upload-watermark') {
+      return handleWatermarkUpload(request, env);
     }
 
     // Route: GET /image/{path}
