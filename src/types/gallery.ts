@@ -16,7 +16,7 @@ export interface GestaoSessionParams {
   modelo_de_preco?: PricingModel;    // 'fixed' | 'packages'
 }
 export type SelectionStatus = 'in_progress' | 'confirmed' | 'blocked';
-export type WatermarkType = 'none' | 'standard';
+export type WatermarkType = 'none' | 'standard' | 'custom';
 export type DeadlinePreset = 7 | 10 | 15 | 'custom';
 export type ImageResizeOption = 1024 | 1920 | 2560;
 export type WatermarkDisplay = 'all' | 'fullscreen' | 'none';
@@ -57,6 +57,9 @@ export interface WatermarkSettings {
   type: WatermarkType;
   opacity: number;
   position: 'center'; // Standard watermark always uses center
+  // Preparação para watermarks customizadas (futuro)
+  customHorizontalUrl?: string;
+  customVerticalUrl?: string;
 }
 
 export interface GallerySettings {
