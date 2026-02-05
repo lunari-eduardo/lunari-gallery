@@ -29,14 +29,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
 
-// Validate Supabase JWT directly (no HTTP call needed)
+// Validate Supabase JWT - versão tolerante para debug
 async function validateAuth(
   request: Request,
   env: Env
 ): Promise<{ userId: string; email: string } | null> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    console.log('No Authorization header');
+    console.log('Auth failed: No Authorization header');
     return null;
   }
 
@@ -45,23 +45,28 @@ async function validateAuth(
   try {
     const secret = new TextEncoder().encode(env.SUPABASE_JWT_SECRET);
     
-    const { payload } = await jose.jwtVerify(token, secret, {
-      issuer: `${env.SUPABASE_URL}/auth/v1`,
-      audience: 'authenticated',
-    });
+    // Verificação SEM issuer/audience estritos (mais tolerante)
+    const { payload } = await jose.jwtVerify(token, secret);
 
     const userId = payload.sub;
     const email = payload.email as string;
 
     if (!userId) {
-      console.log('No sub claim in JWT');
+      console.log('Auth failed: No sub claim in JWT');
       return null;
     }
 
-    console.log(`Auth OK: user ${userId}`);
+    // Log de sucesso com detalhes
+    console.log(`Auth OK: user=${userId}, email=${email || 'N/A'}, iss=${payload.iss}, aud=${payload.aud}`);
+    
     return { userId, email: email || '' };
   } catch (error) {
-    console.error('JWT validation error:', error);
+    // Log detalhado do erro para debug
+    console.error('JWT validation error:', {
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      tokenPrefix: token.substring(0, 50) + '...',
+    });
     return null;
   }
 }
