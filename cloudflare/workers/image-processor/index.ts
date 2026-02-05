@@ -16,7 +16,7 @@ import {
   SamplingFilter, 
   resize,
   blend
-} from "@cf-wasm/photon";
+} from "@cf-wasm/photon/workerd";
 
 export interface Env {
   GALLERY_BUCKET: R2Bucket;
