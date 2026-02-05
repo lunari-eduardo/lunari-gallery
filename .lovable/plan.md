@@ -1,273 +1,157 @@
-# Plano: Migração de Cloudinary para Cloudflare R2
 
-## Status: ✅ IMPLEMENTADO (com Watermark)
+# Plano: Corrigir Validação JWT no Worker gallery-upload
 
-## Arquitetura Final
+## Diagnóstico do Problema
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                        ARQUITETURA DE IMAGENS                                       │
-├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                     │
-│   ┌─────────────┐    ┌──────────────────┐    ┌─────────────────────┐               │
-│   │   Frontend  │───>│  b2-upload       │───>│  Backblaze B2       │               │
-│   │   (Upload)  │    │  (Edge Function) │    │  (Originais)        │               │
-│   └─────────────┘    └──────────────────┘    └─────────────────────┘               │
-│         │                     │                                                     │
-│         │                     │ processing_status='uploaded'                        │
-│         │                     ▼                                                     │
-│         │            ┌──────────────────┐                                          │
-│         │            │   galeria_fotos  │                                          │
-│         │            │   (Supabase)     │                                          │
-│         │            └──────────────────┘                                          │
-│         │                     │                                                     │
-│         │                     │ pg_cron (cada 1 min)                               │
-│         │                     ▼                                                     │
-│         │            ┌──────────────────┐    ┌─────────────────────┐               │
-│         │            │  process-photos  │───>│  Cloudflare R2      │               │
-│         │            │  (Edge Function) │    │  cdn.lunarihub.com  │               │
-│         │            └──────────────────┘    └─────────────────────┘               │
-│         │                     │                                                     │
-│         │                     │ processing_status='ready'                           │
-│         │                     │ thumb_path, preview_path, preview_wm_path          │
-│         │                     ▼                                                     │
-│   ┌─────────────┐    ┌──────────────────┐                                          │
-│   │   Frontend  │<───│  R2 Public URLs  │                                          │
-│   │(Visualizar) │    │  (CDN Global)    │                                          │
-│   └─────────────┘    └──────────────────┘                                          │
-│                                                                                     │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+A validação JWT está falhando por três possíveis razões:
+
+1. **Validação estrita de claims**: O código exige `audience: "authenticated"` mas alguns tokens Supabase podem ter `aud` como array ou valor diferente
+2. **Formato do issuer**: Pode haver inconsistência entre a URL configurada e a URL real no token
+3. **Método de verificação**: O Supabase modernizou para usar JWKS (mais seguro), mas o código usa o JWT_SECRET legado
+
+---
+
+## Solução Proposta
+
+Criar uma função `validateAuth` mais tolerante que:
+
+1. **Remove validação estrita de `issuer` e `audience`** - verifica apenas a assinatura
+2. **Adiciona logging detalhado** - para debug em caso de falha
+3. **Fallback gracioso** - tenta decodificar mesmo se claims falharem
+
+### Código Corrigido para `index.ts`
+
+```typescript
+// Validate Supabase JWT - versão tolerante para debug
+async function validateAuth(
+  request: Request,
+  env: Env
+): Promise<{ userId: string; email: string } | null> {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    console.log('Auth failed: No Authorization header');
+    return null;
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+
+  try {
+    const secret = new TextEncoder().encode(env.SUPABASE_JWT_SECRET);
+    
+    // Verificação SEM issuer/audience estritos (mais tolerante)
+    const { payload } = await jose.jwtVerify(token, secret);
+
+    const userId = payload.sub;
+    const email = payload.email as string;
+
+    if (!userId) {
+      console.log('Auth failed: No sub claim in JWT');
+      return null;
+    }
+
+    // Log de sucesso com detalhes
+    console.log(`Auth OK: user=${userId}, email=${email || 'N/A'}, iss=${payload.iss}, aud=${payload.aud}`);
+    
+    return { userId, email: email || '' };
+  } catch (error) {
+    // Log detalhado do erro para debug
+    console.error('JWT validation error:', {
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      tokenPrefix: token.substring(0, 50) + '...',
+    });
+    return null;
+  }
+}
 ```
 
----
+### Alterações Principais
 
-## Componentes Implementados
-
-### 1. Database
-- ✅ Coluna `processing_status` adicionada à `galeria_fotos`
-- ✅ Índice otimizado para busca de fotos pendentes
-
-### 2. Edge Functions
-- ✅ `b2-upload`: Atualizado para definir `processing_status = 'uploaded'`
-- ✅ `process-photos`: Processamento com resize (thumbnail 400px) e preparação para watermark
-
-### 3. Frontend
-- ✅ `src/lib/photoUrl.ts`: Novo módulo de URLs (substitui cloudinaryUrl.ts)
-- ✅ `public/placeholder-processing.svg`: Placeholder animado para fotos em processamento
-- ✅ Componentes atualizados para usar `getPhotoUrlWithFallback`
-
-### 4. Secrets Configurados
-- ✅ R2_ACCESS_KEY_ID
-- ✅ R2_SECRET_ACCESS_KEY  
-- ✅ R2_ACCOUNT_ID
-- ✅ R2_BUCKET_NAME
-- ✅ R2_PUBLIC_URL
-
-### 5. Variáveis de Ambiente
-- ✅ `VITE_R2_PUBLIC_URL`: https://cdn.lunarihub.com
-- ❌ `VITE_CLOUDINARY_CLOUD_NAME`: Removido
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| Verificação de `issuer` | Obrigatório e estrito | Removido (opcional) |
+| Verificação de `audience` | Obrigatório (`authenticated`) | Removido (opcional) |
+| Logging de erro | Básico | Detalhado com contexto |
+| Logging de sucesso | Apenas userId | userId + email + iss + aud |
 
 ---
 
-## Configuração de Watermark
+## Arquivos a Modificar
 
-### Tipo `WatermarkType`
-- `'none'`: Sem marca d'água
-- `'standard'`: Usa as marcas d'água padrão do sistema
-- `'custom'`: (Futuro) Marcas d'água personalizadas do fotógrafo
+| Arquivo | Alteração |
+|---------|-----------|
+| `cloudflare/workers/gallery-upload/index.ts` | Atualizar função `validateAuth` |
 
-### Arquivos de Watermark
-Localizados em `public/watermarks/`:
-- `horizontal.png` - Para fotos paisagem (width >= height)
-- `vertical.png` - Para fotos retrato (height > width)
+---
 
-### Configuração por Galeria
-A configuração de watermark é armazenada em `galerias.configuracoes.watermark`:
+## Alternativa: Usar JWKS (Recomendado pelo Supabase)
+
+Se o problema persistir, podemos migrar para verificação via JWKS:
+
+```typescript
+import { createRemoteJWKSet, jwtVerify } from 'jose';
+
+const JWKS = createRemoteJWKSet(
+  new URL(`${env.SUPABASE_URL}/auth/v1/.well-known/jwks.json`)
+);
+
+const { payload } = await jwtVerify(token, JWKS);
+```
+
+**Vantagem**: Não precisa do JWT_SECRET como variável de ambiente.
+**Desvantagem**: Faz uma request HTTP para buscar as chaves (cache automático).
+
+---
+
+## Verificações Adicionais
+
+### 1. Confirmar JWT_SECRET
+
+O valor deve ser exatamente o mesmo encontrado em:
+- Supabase Dashboard → Project Settings → API → JWT Secret
+
+Deve ter aproximadamente 32+ caracteres e parecer com:
+```
+super-secret-jwt-token-with-at-least-32-characters
+```
+
+### 2. Testar manualmente
+
+Após deploy, verificar logs do Worker no Cloudflare Dashboard:
+- Workers & Pages → gallery-upload → Logs → Real-time Logs
+
+---
+
+## Resultado Esperado
+
+Após a correção:
+1. Upload de watermark funciona sem erro 401
+2. Logs mostram detalhes úteis para debug futuro
+3. Sistema mais tolerante a variações nos claims JWT
+
+---
+
+## Seção Técnica
+
+### Estrutura do JWT Supabase
+
 ```json
 {
-  "type": "standard",
-  "opacity": 40,
-  "position": "center"
+  "aud": "authenticated",
+  "exp": 1234567890,
+  "iat": 1234567890,
+  "iss": "https://PROJECT_ID.supabase.co/auth/v1",
+  "sub": "user-uuid-here",
+  "email": "user@example.com",
+  "role": "authenticated"
 }
 ```
 
-### Opacidade
-- Range: 10-100%
-- Default: 40%
-- Configurável pelo fotógrafo em **Configurações > Personalização > Marca D'água Padrão**
+### Possíveis Causas do 401
 
----
+1. **JWT_SECRET incorreto** → Assinatura não bate
+2. **Token expirado** → `exp` menor que timestamp atual
+3. **Issuer mismatch** → URL do Supabase diferente
+4. **Audience mismatch** → `aud` não é "authenticated"
 
-## Passo a Passo: Configurar Watermark
-
-### 1. Criar/Substituir Arquivos de Watermark
-
-Substitua os arquivos em `public/watermarks/`:
-
-```
-public/
-└── watermarks/
-    ├── horizontal.png  ← Para fotos paisagem (recomendado: 800x200px, fundo transparente)
-    └── vertical.png    ← Para fotos retrato (recomendado: 200x600px, fundo transparente)
-```
-
-**Requisitos:**
-- Formato: PNG com fundo transparente
-- Cor: Branco ou claro (para contraste em fotos)
-- Tamanho: A watermark será escalada para ~30% da menor dimensão da foto
-
-### 2. Configurar Opacidade Padrão
-
-1. Acesse **Configurações** no painel do fotógrafo
-2. Vá para **Personalização**
-3. Em **Marca D'água Padrão**, ajuste:
-   - Tipo: `Padrão` ou `Nenhuma`
-   - Opacidade: Use o slider (10-100%)
-4. Clique em **Salvar**
-
-### 3. Verificar Processamento
-
-Após upload de novas fotos:
-1. As fotos ficarão com status `uploaded`
-2. O job `process-photos` executa a cada minuto
-3. Três versões são geradas:
-   - `thumb/` - 400px (para grid)
-   - `preview/` - Tamanho original (sem watermark)
-   - `preview-wm/` - Tamanho original (para exibição com watermark)
-4. Status muda para `ready`
-
-### 4. Testar Manualmente (Opcional)
-
-Você pode chamar o endpoint manualmente:
-```bash
-curl -X POST https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos \
-  -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"batchSize": 5}'
-```
-
----
-
-## Configurar pg_cron (Execução Automática)
-
-### 1. Habilitar Extensões
-
-No Supabase Dashboard:
-1. Vá para **Database > Extensions**
-2. Habilite `pg_cron`
-3. Habilite `pg_net`
-
-### 2. Criar o Job
-
-Execute no SQL Editor:
-
-```sql
-SELECT cron.schedule(
-  'process-photos-job',
-  '* * * * *',  -- A cada minuto
-  $$
-  SELECT net.http_post(
-    url := 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-    ),
-    body := '{"batchSize": 10}'::jsonb
-  ) AS request_id;
-  $$
-);
-```
-
-### 3. Verificar Jobs Ativos
-
-```sql
-SELECT * FROM cron.job;
-```
-
-### 4. Ver Histórico de Execuções
-
-```sql
-SELECT * FROM cron.job_run_details 
-ORDER BY start_time DESC 
-LIMIT 20;
-```
-
----
-
-## Fluxo Visual: Watermark por Orientação
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SELEÇÃO AUTOMÁTICA DE WATERMARK                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Foto HORIZONTAL (width >= height):                                         │
-│  ┌─────────────────────────────────┐                                        │
-│  │                                 │                                        │
-│  │      ┌─────────────────┐        │                                        │
-│  │      │  WATERMARK      │        │ ← /watermarks/horizontal.png           │
-│  │      └─────────────────┘        │                                        │
-│  │                                 │                                        │
-│  └─────────────────────────────────┘                                        │
-│                                                                             │
-│  Foto VERTICAL (height > width):                                            │
-│  ┌─────────────────┐                                                        │
-│  │                 │                                                        │
-│  │    ┌───────┐    │                                                        │
-│  │    │       │    │ ← /watermarks/vertical.png                             │
-│  │    │WMARK  │    │                                                        │
-│  │    └───────┘    │                                                        │
-│  │                 │                                                        │
-│  │                 │                                                        │
-│  └─────────────────┘                                                        │
-│                                                                             │
-│  Tamanho: 30% da menor dimensão da foto                                     │
-│  Posição: Sempre centralizada                                               │
-│  Opacidade: Configurável (10-100%, default 40%)                             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Limitação Atual (MVP)
-
-A composição real da watermark sobre a imagem requer bibliotecas WASM pesadas que não funcionam bem em Edge Functions Deno. 
-
-**Solução atual:**
-- O sistema cria 3 paths separados (thumb, preview, preview-wm)
-- O frontend exibe a versão correta baseado no contexto
-- Para watermark real, considerar no futuro:
-  - Cloudflare Worker dedicado com `@cf-wasm/photon`
-  - Cloudflare Image Resizing com overlay
-  - Serviço externo de processamento
-
----
-
-## Fallback para Fotos Legadas
-
-O sistema usa `getPhotoUrlWithFallback` que:
-1. Se `processing_status === 'ready'` → Usa URLs do R2
-2. Caso contrário → Usa URL direta do B2 (sem transformações)
-
-Isso garante que fotos existentes continuem funcionando durante a transição.
-
----
-
-## Preparação para Watermarks Customizadas (Futuro)
-
-Os types já incluem campos opcionais:
-```typescript
-export interface WatermarkSettings {
-  type: 'none' | 'standard' | 'custom';
-  opacity: number;
-  position: 'center';
-  customHorizontalUrl?: string;  // Futuro
-  customVerticalUrl?: string;    // Futuro
-}
-```
-
-Para implementar watermarks customizadas:
-1. Adicionar UI de upload em `WatermarkDefaults.tsx`
-2. Salvar URLs no storage (R2 ou Supabase Storage)
-3. A Edge Function já suporta buscar de URLs customizadas
+A solução remove as verificações 3 e 4, focando apenas em 1 e 2.
