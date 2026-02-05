@@ -35,6 +35,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemePreviewCard } from '@/components/ThemePreviewCard';
 import { FontSelect, getFontFamilyById } from '@/components/FontSelect';
+import { useWatermarkSettings } from '@/hooks/useWatermarkSettings';
 
 // Helper to extract the initial extra photo price from frozen rules
 // Handles progressive pricing by getting the first tier price
@@ -122,6 +123,7 @@ export default function GalleryCreate() {
     settings,
     updateSettings
   } = useSettings();
+  const { settings: watermarkSettings } = useWatermarkSettings();
   const [currentStep, setCurrentStep] = useState(1);
 
   // Preset dialog state
@@ -1456,6 +1458,12 @@ export default function GalleryCreate() {
                       </Label>
                     </div>
                     <div className="flex items-center">
+                      <RadioGroupItem value="custom" id="wm-custom" className="peer sr-only" />
+                      <Label htmlFor="wm-custom" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
+                        Minha Marca
+                      </Label>
+                    </div>
+                    <div className="flex items-center">
                       <RadioGroupItem value="none" id="wm-none" className="peer sr-only" />
                       <Label htmlFor="wm-none" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
                         Nenhuma
@@ -1464,17 +1472,19 @@ export default function GalleryCreate() {
                   </RadioGroup>
 
                   {/* Standard Watermark Preview */}
-                  {watermarkType === 'standard' && <div className="space-y-4 p-3 rounded-lg bg-muted/50">
+                  {(watermarkType === 'standard' || watermarkType === 'custom') && <div className="space-y-4 p-3 rounded-lg bg-muted/50">
                       <div className="flex items-center gap-4">
                         <div className="h-12 flex items-center justify-center bg-black/80 rounded px-2">
-                          <img src="/watermarks/horizontal.png" alt="Marca d'água padrão" className="h-8 object-contain" style={{
+                          <img src={watermarkType === 'custom' && watermarkSettings?.path ? watermarkSettings.path : "/watermarks/horizontal.png"} alt="Marca d'água" className="h-8 object-contain" style={{
                         opacity: watermarkOpacity / 100
                       }} />
                         </div>
                         <div>
-                          <p className="text-sm font-medium">Marca d'água padrão do sistema</p>
+                          <p className="text-sm font-medium">{watermarkType === 'custom' ? 'Sua marca d\'água personalizada' : 'Marca d\'água padrão do sistema'}</p>
                           <p className="text-xs text-muted-foreground">
-                            Aplicada automaticamente baseado na orientação
+                            {watermarkType === 'custom' 
+                              ? (watermarkSettings?.path ? 'Configurada em Configurações > Personalização' : 'Configure em Configurações > Personalização')
+                              : 'Aplicada automaticamente baseado na orientação'}
                           </p>
                         </div>
                       </div>
@@ -1490,7 +1500,7 @@ export default function GalleryCreate() {
                     </div>}
 
                   {/* Display setting for watermark */}
-                  {watermarkType === 'standard' && <div className="space-y-2">
+                  {(watermarkType === 'standard' || watermarkType === 'custom') && <div className="space-y-2">
                       <Label className="text-sm">Onde aplicar</Label>
                       <Select value={watermarkDisplay} onValueChange={v => setWatermarkDisplay(v as WatermarkDisplay)}>
                         <SelectTrigger>
