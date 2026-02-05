@@ -11,7 +11,7 @@ compatibility_flags = ["nodejs_compat"]
 # R2 Bucket binding (same bucket as gallery-upload)
 [[r2_buckets]]
 binding = "GALLERY_BUCKET"
-bucket_name = "lunari-gallery"
+bucket_name = "lunari-previews"
 
 # Environment variables (non-secret)
 [vars]
