@@ -1,238 +1,197 @@
 
-# Plano Completo: Sistema de Watermark e Pipeline de Processamento de Imagens
+# Diagnóstico Completo e Plano Definitivo
 
-## Diagnóstico Executivo
+## Resumo Executivo
 
-Após análise profunda, identifiquei **5 problemas críticos** que impedem o funcionamento do sistema:
-
----
-
-## Problema 1: Upload de Watermark falha com 401 (JWT)
-
-**Sintoma**: Erro "Assinatura do token inválida ou expirada" ao tentar fazer upload de watermark.
-
-**Causa Raiz**: O Worker `gallery-upload` ainda não foi redeployado com o código atualizado que decodifica o JWT Secret de Base64 para bytes.
-
-**Evidência**: O código no repositório (`cloudflare/workers/gallery-upload/index.ts`) já contém a correção com `base64ToUint8Array()`, mas o Worker implantado no Cloudflare provavelmente ainda usa a versão antiga.
-
-**Solução**: Redeploy manual do Worker `gallery-upload` com o código atualizado.
+Após análise profunda, encontrei **4 problemas críticos** que estão quebrando o sistema. Nenhum deles é configuração sua - são **erros no código** que precisam ser corrigidos.
 
 ---
 
-## Problema 2: pg_cron com URL incorreta
+## Os 4 Problemas Reais
 
-**Sintoma**: Fotos ficam eternamente com `processing_status = 'uploaded'`.
+### Problema 1: Import errado no Cloudflare Worker WASM
 
-**Causa Raiz**: O job pg_cron está apontando para URL errada:
-
-```text
-ERRADO:  'https://tlnjspsywycbudhewsfv.supabase.co'
-CORRETO: 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos'
+**O que está errado:**
+```typescript
+// ERRADO (index.ts linha 14-19)
+import { PhotonImage, ... } from "@cf-wasm/photon";
 ```
 
-**Evidência**: Consulta na tabela `cron.job` mostra URL incompleta.
+**O que deveria ser:**
+```typescript
+// CORRETO para Cloudflare Workers
+import { PhotonImage, ... } from "@cf-wasm/photon/workerd";
+```
 
-**Solução**: Executar SQL para corrigir o job.
+**Por que isso quebra tudo:**
+O subpath `/workerd` é **obrigatório** para Cloudflare Workers. Sem ele, o módulo WASM não inicializa, gerando o erro:
+```
+"Cannot read properties of undefined (reading '__wbindgen_malloc')"
+```
 
----
-
-## Problema 3: Worker `lunari-image-processor` retorna 401
-
-**Sintoma**: Quando `process-photos` é executado, Worker retorna `401 Unauthorized`.
-
-**Causa Raiz**: O `IMAGE_PROCESSOR_SECRET` configurado no Supabase não bate com o `WORKER_AUTH_SECRET` configurado no Cloudflare Worker.
-
-**Evidência**: Erro `{"error":"Worker failed: 401 - Unauthorized"}` ao chamar a Edge Function.
-
-**Solução**: Verificar e sincronizar os secrets entre Supabase e Cloudflare.
-
----
-
-## Problema 4: Secrets faltando no Supabase
-
-**Sintoma**: Edge Function `process-photos` não consegue chamar o Worker.
-
-**Evidência**: Lista de secrets não contém `IMAGE_PROCESSOR_URL` e `IMAGE_PROCESSOR_SECRET`.
-
-**Secrets atuais**:
-- B2_APPLICATION_KEY
-- B2_APPLICATION_KEY_ID
-- B2_BUCKET_ID
-- B2_BUCKET_NAME
-- CLOUDINARY_CLOUD_NAME (legado - pode remover)
-- MERCADOPAGO_ACCESS_TOKEN
-- MERCADOPAGO_APP_ID
-- MERCADOPAGO_APP_SECRET
-- MERCADOPAGO_PUBLIC_KEY
-
-**Secrets faltando**:
-- `IMAGE_PROCESSOR_URL`
-- `IMAGE_PROCESSOR_SECRET`
+**Evidência:** Este erro apareceu quando chamei manualmente o `process-photos`:
+```json
+{
+  "error": "Cannot read properties of undefined (reading '__wbindgen_malloc')",
+  "photoId": "a117fe37-0022-420b-9ed0-5b2081e2517a",
+  "success": false
+}
+```
 
 ---
 
-## Problema 5: Bucket R2 com nome inconsistente
+### Problema 2: Dois cron jobs, um com URL errada e outro com SQL incorreto
 
-**Sintoma**: Upload pode ir para bucket errado.
+**Job 1 (jobid=1)** - URL INCOMPLETA:
+```sql
+url := 'https://tlnjspsywycbudhewsfv.supabase.co'
+-- FALTA: /functions/v1/process-photos
+```
+Status: "succeeded" mas não faz nada útil porque a URL não aponta para a função.
 
-**Evidência**:
-- `gallery-upload/wrangler.toml`: `bucket_name = "lunari-previews"`
-- `image-processor/wrangler.toml`: `bucket_name = "lunari-gallery"`
+**Job 4 (jobid=4)** - ERRO DE TIPO SQL:
+```sql
+headers := '...'::text  -- ERRADO: precisa ser ::jsonb
+```
+Erro: `function net.http_post(url => unknown, headers => text, body => jsonb) does not exist`
 
-**Nota**: O usuário confirmou que o bucket correto é `lunari-previews`. Precisa corrigir o `wrangler.toml` do image-processor.
+**Resultado:** O pg_cron roda a cada minuto, mas nenhum dos jobs consegue chamar a Edge Function corretamente.
 
 ---
 
-## Arquitetura do Sistema (Atual vs Esperado)
+### Problema 3: Bucket R2 inconsistente entre Workers
+
+| Worker | Bucket configurado | Bucket correto |
+|--------|-------------------|----------------|
+| `gallery-upload` | `lunari-gallery` | `lunari-previews` |
+| `image-processor` | `lunari-previews` | `lunari-previews` |
+
+O `gallery-upload` está configurado para bucket errado. Precisa ser `lunari-previews`.
+
+---
+
+### Problema 4: Worker provavelmente deployado com versão "simple"
+
+O README menciona duas versões:
+- `index.ts` - Versão completa com WASM (resize real)
+- `index.simple.js` - Versão simplificada (sem resize, só copia arquivos)
+
+Se você deployou via Quick Edit com `index.simple.js`, ou se deployou `index.ts` sem o `npm install` completo, o WASM não funciona.
+
+---
+
+## Arquitetura Corrigida
 
 ```text
 FLUXO ATUAL (QUEBRADO):
 ========================
 
-Frontend (PhotoUploader)
-      │
-      ▼
-Edge Function: b2-upload ──────────────────┐
-      │                                    │
-      ▼                                    │
-Backblaze B2 (originais)                   │
-      │                                    │
-      ▼                                    │
-DB: galeria_fotos                          │
-(processing_status = 'uploaded')           │
-      │                                    │
-      ▼                                    │
-pg_cron ──────────────────────────────────►│ URL ERRADA ❌
-      │                                    │
-      X                                    │
-      │                                    │
-process-photos (nunca executa)             │
-      │                                    │
-      X                                    │
-      │                                    │
-lunari-image-processor (401) ❌            │
-      │                                    │
-      X                                    │
-      │                                    │
-R2 (lunari-previews) ─────────────────────►│ VAZIO ❌
-```
+Frontend → b2-upload → B2 ✓ (funciona)
+                           ↓
+                    DB: status = 'uploaded'
+                           ↓
+pg_cron (jobs 1 e 4) ─────►X (URLs/SQL errados)
+                           ↓
+process-photos ────────────X (nunca é chamado)
+                           ↓
+lunari-image-processor ────X (WASM não inicializa)
+                           ↓
+R2 (lunari-previews) ──────X (vazio)
 
-```text
-FLUXO ESPERADO (CORRIGIDO):
-============================
 
-Frontend (PhotoUploader)
-      │
-      ▼
-Edge Function: b2-upload
-      │
-      ▼
-Backblaze B2 (originais) ✓
-      │
-      ▼
-DB: galeria_fotos
-(processing_status = 'uploaded')
-      │
-      ▼
-pg_cron (cada minuto)
-      │ URL correta ✓
-      ▼
-Edge Function: process-photos
-      │
-      │ secrets válidos ✓
-      ▼
-Cloudflare Worker: lunari-image-processor
-      │
-      ├── Busca original do B2
-      ├── Gera: thumb (400px)
-      ├── Gera: preview (1200px)
-      └── Gera: preview-wm (com watermark)
-      │
-      ▼
-R2 (lunari-previews) ✓
-      │
-      ▼
-DB: galeria_fotos
-(processing_status = 'ready')
-(thumb_path, preview_path, preview_wm_path preenchidos)
-      │
-      ▼
-Frontend exibe fotos via CDN ✓
+FLUXO CORRETO (APÓS CORREÇÕES):
+================================
+
+Frontend → b2-upload → B2 ✓
+                           ↓
+                    DB: status = 'uploaded'
+                           ↓
+pg_cron (corrigido) ───────► process-photos ✓
+                                   ↓
+                    lunari-image-processor ✓
+                    (import correto + npm install)
+                                   ↓
+                    ├─ thumb (400px)
+                    ├─ preview (1200px)
+                    └─ preview-wm (watermark)
+                                   ↓
+                    R2 (lunari-previews) ✓
+                                   ↓
+                    DB: status = 'ready'
+                                   ↓
+                    Frontend exibe via CDN ✓
 ```
 
 ---
 
-## Plano de Correção Detalhado
+## Plano de Correção
 
-### Fase 1: Corrigir Infraestrutura Cloudflare
+### Fase 1: Corrigir código do image-processor
 
-#### 1.1 Redeploy do Worker `gallery-upload`
+**Arquivo:** `cloudflare/workers/image-processor/index.ts`
 
-O código já está correto no repositório. Precisa apenas fazer deploy:
+| Linha | Atual | Correção |
+|-------|-------|----------|
+| 14-19 | `from "@cf-wasm/photon"` | `from "@cf-wasm/photon/workerd"` |
 
-```bash
-cd cloudflare/workers/gallery-upload
-npm install
-wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-wrangler secret put SUPABASE_JWT_SECRET
-wrangler deploy
+```typescript
+// ANTES (linha 14-19)
+import { 
+  PhotonImage, 
+  SamplingFilter, 
+  resize,
+  blend
+} from "@cf-wasm/photon";
+
+// DEPOIS
+import { 
+  PhotonImage, 
+  SamplingFilter, 
+  resize,
+  blend
+} from "@cf-wasm/photon/workerd";
 ```
 
-**Verificar secrets no Cloudflare**:
-- `SUPABASE_URL`: `https://tlnjspsywycbudhewsfv.supabase.co`
-- `SUPABASE_SERVICE_ROLE_KEY`: (sua service role key)
-- `SUPABASE_JWT_SECRET`: (o JWT secret Base64 do Supabase)
+### Fase 2: Corrigir bucket no gallery-upload
 
-#### 1.2 Corrigir `wrangler.toml` do image-processor
+**Arquivo:** `cloudflare/workers/gallery-upload/wrangler.toml`
 
-Alterar `bucket_name` de `lunari-gallery` para `lunari-previews`:
+| Linha | Atual | Correção |
+|-------|-------|----------|
+| 11 | `bucket_name = "lunari-gallery"` | `bucket_name = "lunari-previews"` |
 
-```toml
-[[r2_buckets]]
-binding = "GALLERY_BUCKET"
-bucket_name = "lunari-previews"  # Corrigir aqui
-```
+### Fase 3: Instruções de Deploy para você
 
-#### 1.3 Redeploy do Worker `lunari-image-processor`
+Após as correções de código, você precisa fazer o redeploy:
 
 ```bash
+# 1. Deploy do image-processor (com WASM)
 cd cloudflare/workers/image-processor
+npm install                    # CRÍTICO: instala o WASM
+wrangler deploy               # Deploya com WASM bundled
+
+# 2. Deploy do gallery-upload
+cd ../gallery-upload
 npm install
-wrangler secret put SUPABASE_URL
-wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-wrangler secret put WORKER_AUTH_SECRET
 wrangler deploy
 ```
 
-**Importante**: Gere uma string forte para `WORKER_AUTH_SECRET` e guarde para usar no Supabase.
+**IMPORTANTE:** Não use Quick Edit para o image-processor. O WASM precisa ser bundled pelo wrangler.
 
----
-
-### Fase 2: Configurar Secrets no Supabase
-
-No painel Supabase, em Edge Functions > Secrets, adicionar:
-
-| Secret                  | Valor                                              |
-|-------------------------|----------------------------------------------------|
-| `IMAGE_PROCESSOR_URL`   | `https://lunari-image-processor.eduardo22diehl.workers.dev` |
-| `IMAGE_PROCESSOR_SECRET`| (mesma string usada em WORKER_AUTH_SECRET)        |
-
----
-
-### Fase 3: Corrigir pg_cron Job
-
-Executar no SQL Editor do Supabase:
+### Fase 4: Corrigir pg_cron (SQL para executar no Supabase)
 
 ```sql
--- Corrigir o job existente
+-- 1. Remover os jobs problemáticos
 SELECT cron.unschedule(1);
+SELECT cron.unschedule(4);
 
+-- 2. Criar job correto (com tipos explícitos)
 SELECT cron.schedule(
-  'process-pending-photos',
-  '* * * * *',  -- A cada minuto
+  'process-photos-job',
+  '* * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos',
+    url := 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos'::text,
     headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsbmpzcHN5d3ljYnVkaGV3c2Z2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQ2NTUwMSwiZXhwIjoyMDczMDQxNTAxfQ.UOOeAcmFWOEwQKj8W10T6AX4S2RTQlW5PhgyEuozjgY"}'::jsonb,
     body := '{"batchSize": 10}'::jsonb
   ) AS request_id;
@@ -242,172 +201,96 @@ SELECT cron.schedule(
 
 ---
 
-### Fase 4: Testar Pipeline Completo
+## Secrets Necessários (Checklist)
 
-#### 4.1 Testar Upload de Watermark
+### Cloudflare - gallery-upload
+| Secret | Valor | Status |
+|--------|-------|--------|
+| `SUPABASE_URL` | `https://tlnjspsywycbudhewsfv.supabase.co` | (verificar) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Sua service role key | (verificar) |
+| `SUPABASE_JWT_SECRET` | JWT secret (Base64) do Supabase | (verificar) |
 
-1. Navegue para Configurações > Personalização
-2. Selecione "Personalizada" em Marca d'água
-3. Faça upload de um PNG com transparência
-4. Verifique nos logs do Cloudflare se aparece `Auth OK: user=...`
+### Cloudflare - lunari-image-processor
+| Secret | Valor | Status |
+|--------|-------|--------|
+| `SUPABASE_URL` | `https://tlnjspsywycbudhewsfv.supabase.co` | (verificar) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Sua service role key | (verificar) |
+| `WORKER_AUTH_SECRET` | String aleatória (use `openssl rand -hex 32`) | (verificar) |
 
-#### 4.2 Testar Processamento de Fotos
-
-1. Execute manualmente:
-   ```bash
-   curl -X POST "https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos" \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer YOUR_ANON_KEY" \
-     -d '{"batchSize": 5}'
-   ```
-
-2. Verifique se fotos mudam de `uploaded` para `ready`:
-   ```sql
-   SELECT id, processing_status, thumb_path 
-   FROM galeria_fotos 
-   ORDER BY created_at DESC 
-   LIMIT 5;
-   ```
-
-3. Verifique se arquivos aparecem no bucket R2 `lunari-previews`.
+### Supabase Edge Functions
+| Secret | Valor | Status |
+|--------|-------|--------|
+| `IMAGE_PROCESSOR_URL` | URL do lunari-image-processor Worker | Configurado |
+| `IMAGE_PROCESSOR_SECRET` | Mesmo valor de WORKER_AUTH_SECRET | Configurado |
 
 ---
 
-## Melhorias no Frontend (Fase 5)
+## Verificação de Funcionamento
 
-### 5.1 Adicionar opção "Personalizada" na criação de galeria
+### Teste 1: Health check dos Workers
 
-Atualmente, a criação de galeria só permite "Padrão" ou "Nenhuma". Precisamos adicionar a opção de usar a watermark personalizada do fotógrafo.
+```bash
+# gallery-upload
+curl https://cdn.lunarihub.com/health
 
-**Arquivo**: `src/pages/GalleryCreate.tsx`
-
-Adicionar ao RadioGroup de watermark:
-
-```tsx
-<RadioGroup value={watermarkType} ...>
-  <div className="flex items-center">
-    <RadioGroupItem value="standard" ... />
-    <Label>Padrão</Label>
-  </div>
-  
-  {/* NOVO: Opção personalizada */}
-  <div className="flex items-center">
-    <RadioGroupItem value="custom" ... />
-    <Label>Minha marca</Label>
-  </div>
-  
-  <div className="flex items-center">
-    <RadioGroupItem value="none" ... />
-    <Label>Nenhuma</Label>
-  </div>
-</RadioGroup>
+# image-processor
+curl https://lunari-image-processor.SEU-ACCOUNT.workers.dev/health
 ```
 
-### 5.2 Mostrar preview da watermark personalizada
+Deve retornar `{"status":"ok"}`
 
-Se o fotógrafo tem watermark personalizada configurada, mostrar preview quando selecionar "Minha marca".
+### Teste 2: Chamar process-photos manualmente
 
-### 5.3 Sincronizar configurações da galeria com photographer_accounts
-
-Quando galeria é criada com `watermarkType: 'custom'`, o processador precisa saber usar a watermark do `photographer_accounts.watermark_path`.
-
----
-
-## Arquivos que Precisam ser Modificados
-
-| Arquivo | Alteração | Prioridade |
-|---------|-----------|------------|
-| `cloudflare/workers/image-processor/wrangler.toml` | Corrigir bucket_name para `lunari-previews` | Alta |
-| `cloudflare/workers/gallery-upload/index.ts` | Já está correto - precisa redeploy | Alta |
-| `supabase/config.toml` | Já está correto | - |
-| `src/pages/GalleryCreate.tsx` | Adicionar opção "custom" watermark | Média |
-| `src/hooks/useWatermarkSettings.ts` | Já está correto | - |
-
----
-
-## Checklist de Configuração
-
-### Cloudflare Workers
-
-- [ ] `gallery-upload` secrets configurados:
-  - [ ] `SUPABASE_URL`
-  - [ ] `SUPABASE_SERVICE_ROLE_KEY`
-  - [ ] `SUPABASE_JWT_SECRET` (Base64)
-  
-- [ ] `lunari-image-processor` secrets configurados:
-  - [ ] `SUPABASE_URL`
-  - [ ] `SUPABASE_SERVICE_ROLE_KEY`
-  - [ ] `WORKER_AUTH_SECRET`
-
-- [ ] R2 Bucket `lunari-previews`:
-  - [ ] Binding correto em ambos workers
-  - [ ] Permissões de escrita
-
-### Supabase
-
-- [ ] Secrets configurados:
-  - [ ] `IMAGE_PROCESSOR_URL`
-  - [ ] `IMAGE_PROCESSOR_SECRET`
-  - [ ] `B2_APPLICATION_KEY_ID`
-  - [ ] `B2_APPLICATION_KEY`
-  - [ ] `B2_BUCKET_ID`
-  - [ ] `B2_BUCKET_NAME`
-
-- [ ] pg_cron job corrigido com URL completa
-
-### Frontend
-
-- [ ] `.env` configurado:
-  - [ ] `VITE_R2_PUBLIC_URL=https://cdn.lunarihub.com`
-  - [ ] `VITE_B2_BUCKET_URL=https://f005.backblazeb2.com/file/lunari-gallery`
-
----
-
-## Resultado Esperado
-
-Após todas as correções:
-
-1. **Upload de watermark funciona** - fotógrafo pode fazer upload de PNG personalizado
-2. **Fotos são processadas automaticamente** - a cada minuto, pg_cron dispara processamento
-3. **R2 recebe derivados** - thumb, preview, preview-wm são gerados e salvos
-4. **Frontend exibe fotos corretamente** - usando CDN para thumbnails e previews
-5. **Watermarks aplicadas conforme configuração** - system, custom, ou none
-
----
-
-## Seção Técnica: Fluxo de Dados Detalhado
-
-### Upload de Foto
-
-```text
-1. PhotoUploader comprime imagem (maxLongEdge: 1024/1920/2560)
-2. FormData enviado para b2-upload Edge Function
-3. b2-upload valida token, verifica créditos, faz upload para B2
-4. Registro criado em galeria_fotos com processing_status = 'uploaded'
+```bash
+curl -X POST \
+  "https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SUA_ANON_KEY" \
+  -d '{"batchSize": 1}'
 ```
 
-### Processamento Assíncrono
-
-```text
-1. pg_cron dispara a cada minuto
-2. process-photos busca fotos com status = 'uploaded'
-3. Marca fotos como 'processing'
-4. Envia lote para lunari-image-processor Worker
-5. Worker:
-   a. Busca original do B2
-   b. Gera thumb (400px long edge)
-   c. Gera preview (1200px long edge)
-   d. Gera preview-wm (1200px + watermark overlay)
-   e. Upload para R2
-   f. Atualiza DB com paths e status = 'ready'
+Resultado esperado:
+```json
+{
+  "processed": 1,
+  "successful": 1,
+  "failed": 0,
+  "results": [{"photoId": "xxx", "success": true, ...}]
+}
 ```
 
-### Exibição no Frontend
+### Teste 3: Verificar fotos no banco
 
-```text
-1. ClientGallery busca fotos
-2. getPhotoUrlWithFallback verifica processing_status
-3. Se 'ready': usa R2 paths (thumb_path, preview_path, preview_wm_path)
-4. Se não 'ready': mostra placeholder-processing.svg
-5. CDN (cdn.lunarihub.com) serve imagens do R2
+```sql
+SELECT id, processing_status, thumb_path 
+FROM galeria_fotos 
+ORDER BY created_at DESC 
+LIMIT 5;
 ```
+
+Deve mostrar `processing_status = 'ready'` e `thumb_path` preenchido.
+
+---
+
+## Resumo das Alterações de Código
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `cloudflare/workers/image-processor/index.ts` | Corrigir import para `@cf-wasm/photon/workerd` |
+| `cloudflare/workers/gallery-upload/wrangler.toml` | Corrigir bucket para `lunari-previews` |
+
+---
+
+## Resposta às suas perguntas
+
+**"Você não sabe como fazer essa integração corretamente?"**
+O código tem erros específicos (import path do WASM) que não são óbvios. A documentação do `@cf-wasm/photon` especifica que para Workers você DEVE usar o subpath `/workerd`.
+
+**"Configurei algo de errado?"**
+Os secrets parecem estar configurados. O problema é:
+1. O código do Worker tem import errado
+2. Os cron jobs do Supabase têm URL/SQL incorretos
+3. O bucket do gallery-upload está errado
+
+**"Usei o prompt de comando para deployar, fiz certo?"**
+Se você fez `npm install` antes do `wrangler deploy`, está correto. Mas se o código ainda tinha o import errado, o WASM não vai funcionar mesmo assim.
