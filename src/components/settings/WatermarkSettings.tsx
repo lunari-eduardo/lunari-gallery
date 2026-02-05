@@ -66,12 +66,12 @@ export function WatermarkSettings() {
       {/* Header */}
       <div className="flex items-center gap-2">
         <Shield className="h-5 w-5 text-primary" />
-        <h4 className="font-medium">Marca d'Água</h4>
+        <h4 className="font-medium">Proteção de Imagem</h4>
       </div>
 
       {/* Mode Selection */}
       <div className="space-y-3">
-        <Label className="text-sm text-muted-foreground">Tipo de marca d'água</Label>
+        <Label className="text-sm text-muted-foreground">Tipo de proteção</Label>
         <RadioGroup
           value={settings.mode}
           onValueChange={(value) => handleModeChange(value as WatermarkMode)}
@@ -93,8 +93,8 @@ export function WatermarkSettings() {
               settings.mode === 'system' ? "text-primary" : "text-muted-foreground"
             )} />
             <div>
-              <p className="font-medium text-sm">Padrão</p>
-              <p className="text-xs text-muted-foreground">Lunari Gallery</p>
+              <p className="font-medium text-sm">Padrão do Sistema</p>
+              <p className="text-xs text-muted-foreground">Linhas diagonais</p>
             </div>
           </label>
 
@@ -113,8 +113,8 @@ export function WatermarkSettings() {
               settings.mode === 'custom' ? "text-primary" : "text-muted-foreground"
             )} />
             <div>
-              <p className="font-medium text-sm">Personalizada</p>
-              <p className="text-xs text-muted-foreground">Sua marca</p>
+              <p className="font-medium text-sm">Minha Marca</p>
+              <p className="text-xs text-muted-foreground">Logo em mosaico</p>
             </div>
           </label>
 
@@ -153,8 +153,8 @@ export function WatermarkSettings() {
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <p>
-              Use PNG com fundo transparente. A marca será redimensionada automaticamente
-              e aplicada no centro das fotos.
+              Use PNG com fundo transparente. Sua marca será repetida em mosaico
+              cobrindo toda a foto para proteção completa.
             </p>
           </div>
         </div>
@@ -189,7 +189,7 @@ export function WatermarkSettings() {
           {/* Scale */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Tamanho</Label>
+              <Label className="text-sm">{settings.mode === 'custom' ? 'Tamanho do Tile' : 'Tamanho'}</Label>
               <span className="text-sm font-medium tabular-nums">
                 {localScale}%
               </span>
@@ -205,7 +205,9 @@ export function WatermarkSettings() {
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              Porcentagem em relação à menor dimensão da foto
+              {settings.mode === 'custom' 
+                ? 'Tamanho de cada repetição do logo no mosaico'
+                : 'Porcentagem em relação à menor dimensão da foto'}
             </p>
           </div>
         </div>
