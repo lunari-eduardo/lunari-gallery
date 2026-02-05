@@ -29,7 +29,38 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
 
-// Validate Supabase JWT - versão tolerante para debug
+/**
+ * Decode a base64 string to Uint8Array
+ * Works with both standard base64 and base64url
+ */
+function base64ToUint8Array(base64: string): Uint8Array {
+  // Handle base64url format (replace - with + and _ with /)
+  const normalizedBase64 = base64
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  
+  // Decode base64 to binary string
+  const binaryString = atob(normalizedBase64);
+  
+  // Convert to Uint8Array
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  return bytes;
+}
+
+/**
+ * Check if a string appears to be base64 encoded
+ */
+function isBase64(str: string): boolean {
+  // Check for base64 patterns: ends with = or ==, or has valid base64 chars only
+  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+  return str.length > 20 && base64Regex.test(str);
+}
+
+// Validate Supabase JWT - com suporte a Base64 JWT Secret
 async function validateAuth(
   request: Request,
   env: Env
@@ -43,10 +74,24 @@ async function validateAuth(
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    const secret = new TextEncoder().encode(env.SUPABASE_JWT_SECRET);
+    // Determine if secret is base64 encoded
+    const rawSecret = env.SUPABASE_JWT_SECRET;
+    let secret: Uint8Array;
     
-    // Verificação SEM issuer/audience estritos (mais tolerante)
-    const { payload } = await jose.jwtVerify(token, secret);
+    if (isBase64(rawSecret)) {
+      // Decode base64 to bytes
+      console.log('Using Base64-decoded JWT secret');
+      secret = base64ToUint8Array(rawSecret);
+    } else {
+      // Use as plain text (fallback)
+      console.log('Using plain text JWT secret');
+      secret = new TextEncoder().encode(rawSecret);
+    }
+    
+    // Verify JWT with explicit HS256 algorithm
+    const { payload } = await jose.jwtVerify(token, secret, {
+      algorithms: ['HS256'],
+    });
 
     const userId = payload.sub;
     const email = payload.email as string;
@@ -56,16 +101,14 @@ async function validateAuth(
       return null;
     }
 
-    // Log de sucesso com detalhes
-    console.log(`Auth OK: user=${userId}, email=${email || 'N/A'}, iss=${payload.iss}, aud=${payload.aud}`);
-    
+    console.log(`Auth OK: user=${userId}, iss=${payload.iss}`);
     return { userId, email: email || '' };
   } catch (error) {
-    // Log detalhado do erro para debug
     console.error('JWT validation error:', {
       error: error instanceof Error ? error.message : String(error),
       errorName: error instanceof Error ? error.name : 'Unknown',
-      tokenPrefix: token.substring(0, 50) + '...',
+      tokenLength: token.length,
+      secretLength: env.SUPABASE_JWT_SECRET?.length || 0,
     });
     return null;
   }
