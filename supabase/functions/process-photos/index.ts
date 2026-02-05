@@ -32,6 +32,7 @@ interface WatermarkConfig {
   path?: string;
   opacity: number;
   scale: number;
+  tiling: boolean; // true = mosaico, false = overlay único
 }
 
 interface PhotoPayload {
@@ -126,11 +127,14 @@ Deno.serve(async (req) => {
     // Build watermark config map by user
     const watermarkByUser = new Map<string, WatermarkConfig>();
     for (const account of accounts || []) {
+      const mode = (account.watermark_mode as WatermarkConfig['mode']) || 'system';
       watermarkByUser.set(account.user_id, {
-        mode: (account.watermark_mode as WatermarkConfig['mode']) || 'system',
+        mode,
         path: account.watermark_path || undefined,
         opacity: account.watermark_opacity ?? 40,
         scale: account.watermark_scale ?? 30,
+        // Tiling enabled only for custom mode (mosaic pattern)
+        tiling: mode === 'custom',
       });
     }
     
@@ -139,6 +143,7 @@ Deno.serve(async (req) => {
       mode: 'system',
       opacity: 40,
       scale: 30,
+      tiling: false, // System mode uses overlay, not tiling
     };
     
     // 4. Build payload for Worker

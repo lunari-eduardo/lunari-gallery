@@ -1446,15 +1446,15 @@ export default function GalleryCreate() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Droplet className="h-4 w-4 text-primary" />
-                    <Label>Marca D'água</Label>
+                    <Label>Proteção da Imagem</Label>
                   </div>
                   
-                  {/* Watermark Type - Only standard and none */}
+                  {/* Watermark Type */}
                   <RadioGroup value={watermarkType} onValueChange={v => setWatermarkType(v as WatermarkType)} className="flex flex-wrap gap-2">
                     <div className="flex items-center">
                       <RadioGroupItem value="standard" id="wm-standard" className="peer sr-only" />
                       <Label htmlFor="wm-standard" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
-                        Padrão
+                        Padrão do Sistema
                       </Label>
                     </div>
                     <div className="flex items-center">
@@ -1471,20 +1471,22 @@ export default function GalleryCreate() {
                     </div>
                   </RadioGroup>
 
-                  {/* Standard Watermark Preview */}
+                  {/* Watermark Preview */}
                   {(watermarkType === 'standard' || watermarkType === 'custom') && <div className="space-y-4 p-3 rounded-lg bg-muted/50">
                       <div className="flex items-center gap-4">
                         <div className="h-12 flex items-center justify-center bg-black/80 rounded px-2">
-                          <img src={watermarkType === 'custom' && watermarkSettings?.path ? watermarkSettings.path : "/watermarks/horizontal.png"} alt="Marca d'água" className="h-8 object-contain" style={{
+                          <img src={watermarkType === 'custom' && watermarkSettings?.path ? watermarkSettings.path : "/watermarks/horizontal.png"} alt="Proteção" className="h-8 object-contain" style={{
                         opacity: watermarkOpacity / 100
                       }} />
                         </div>
                         <div>
-                          <p className="text-sm font-medium">{watermarkType === 'custom' ? 'Sua marca d\'água personalizada' : 'Marca d\'água padrão do sistema'}</p>
+                          <p className="text-sm font-medium">
+                            {watermarkType === 'custom' ? 'Sua marca em mosaico' : 'Linhas diagonais'}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {watermarkType === 'custom' 
-                              ? (watermarkSettings?.path ? 'Configurada em Configurações > Personalização' : 'Configure em Configurações > Personalização')
-                              : 'Aplicada automaticamente baseado na orientação'}
+                              ? (watermarkSettings?.path ? 'Logo repetido cobrindo toda a foto' : 'Configure em Configurações > Personalização')
+                              : 'Padrão de proteção cobrindo toda a foto'}
                           </p>
                         </div>
                       </div>
@@ -1685,8 +1687,8 @@ export default function GalleryCreate() {
                     <span className="font-medium">{imageResizeOption}px</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Marca d'água</span>
-                    <span className="font-medium capitalize">{watermarkType === 'none' ? 'Nenhuma' : watermarkType}</span>
+                    <span className="text-muted-foreground">Proteção</span>
+                    <span className="font-medium capitalize">{watermarkType === 'none' ? 'Nenhuma' : watermarkType === 'standard' ? 'Padrão do Sistema' : 'Minha Marca'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Comentários</span>

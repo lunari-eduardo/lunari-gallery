@@ -6,7 +6,9 @@
  * 
  * Funções:
  * - Resize para thumbnail (400px) e preview (1200px)
- * - Aplicação de watermark com opacidade e escala configuráveis
+ * - Aplicação de watermark:
+ *   - system: Overlay único cobrindo toda a imagem (linhas diagonais)
+ *   - custom: Mosaico (tiling) do logo do usuário
  * - Upload para R2
  * - Atualização do Supabase
  */
@@ -47,6 +49,7 @@ interface WatermarkConfig {
   path?: string;
   opacity: number;
   scale: number;
+  tiling: boolean; // true = mosaico, false = overlay único
 }
 
 interface ProcessResult {
@@ -110,25 +113,181 @@ function resizeImage(
   return { image: resized, bytes };
 }
 
-// Get watermark URL based on config and orientation
-function getWatermarkUrl(
-  config: WatermarkConfig, 
-  isLandscape: boolean,
-  cdnUrl: string
-): string | null {
-  if (config.mode === 'none') return null;
-  
-  if (config.mode === 'custom' && config.path) {
-    return `${cdnUrl}/image/${config.path}`;
+/**
+ * Apply system overlay (diagonal lines pattern)
+ * Stretches the pattern to cover the entire image
+ */
+async function applySystemOverlay(
+  baseImage: PhotonImage,
+  env: Env,
+  opacity: number
+): Promise<Uint8Array> {
+  try {
+    // Fetch system pattern from R2
+    const patternObj = await env.GALLERY_BUCKET.get('system-assets/default-pattern.png');
+    
+    if (!patternObj) {
+      console.warn('System pattern not found in R2, returning image without watermark');
+      const result = baseImage.get_bytes_jpeg(85);
+      baseImage.free();
+      return result;
+    }
+    
+    const patternBytes = new Uint8Array(await patternObj.arrayBuffer());
+    const patternImage = PhotonImage.new_from_byteslice(patternBytes);
+    
+    // Resize pattern to exactly match the base image dimensions
+    const baseWidth = baseImage.get_width();
+    const baseHeight = baseImage.get_height();
+    const scaledPattern = resize(patternImage, baseWidth, baseHeight, SamplingFilter.Lanczos3);
+    patternImage.free();
+    
+    // Apply overlay at position (0, 0) - covers entire image
+    blend(baseImage, scaledPattern, "over", 0, 0);
+    scaledPattern.free();
+    
+    const result = baseImage.get_bytes_jpeg(85);
+    baseImage.free();
+    
+    return result;
+  } catch (error) {
+    console.error('Error applying system overlay:', error);
+    const result = baseImage.get_bytes_jpeg(85);
+    baseImage.free();
+    return result;
   }
-  
-  // System watermark - use orientation-specific from production domain
-  const filename = isLandscape ? 'horizontal.png' : 'vertical.png';
-  return `https://gallery.lunarihub.com/watermarks/${filename}`;
 }
 
-// Apply watermark overlay with opacity and scale
-function applyWatermark(
+/**
+ * Apply tiled watermark (mosaic pattern)
+ * Repeats the user's logo across the entire image in a grid
+ */
+function applyTiledWatermark(
+  baseImage: PhotonImage,
+  watermarkBytes: Uint8Array,
+  opacity: number,
+  scale: number
+): Uint8Array {
+  try {
+    const wmImage = PhotonImage.new_from_byteslice(watermarkBytes);
+    
+    const baseWidth = baseImage.get_width();
+    const baseHeight = baseImage.get_height();
+    const minDim = Math.min(baseWidth, baseHeight);
+    
+    // Calculate tile size (scale% of smaller dimension)
+    const wmOrigWidth = wmImage.get_width();
+    const wmOrigHeight = wmImage.get_height();
+    const wmRatio = wmOrigWidth / wmOrigHeight;
+    
+    // Use scale percentage (10-50% typically) to determine tile width
+    const tileWidth = Math.round(minDim * (scale / 100));
+    const tileHeight = Math.round(tileWidth / wmRatio);
+    
+    // Resize watermark to tile size
+    const resizedWm = resize(wmImage, tileWidth, tileHeight, SamplingFilter.Lanczos3);
+    wmImage.free();
+    
+    // Calculate spacing between tiles (1.5x the tile size for breathing room)
+    const spacingX = Math.round(tileWidth * 1.5);
+    const spacingY = Math.round(tileHeight * 1.5);
+    
+    // Calculate offset to center the grid pattern
+    const offsetX = Math.round((spacingX - tileWidth) / 2);
+    const offsetY = Math.round((spacingY - tileHeight) / 2);
+    
+    // Apply watermark in a grid pattern across the entire image
+    for (let y = offsetY; y < baseHeight; y += spacingY) {
+      for (let x = offsetX; x < baseWidth; x += spacingX) {
+        // Only blend if tile position is within reasonable bounds
+        if (x + tileWidth > 0 && y + tileHeight > 0 && x < baseWidth && y < baseHeight) {
+          blend(baseImage, resizedWm, "over", x, y);
+        }
+      }
+    }
+    
+    resizedWm.free();
+    
+    const result = baseImage.get_bytes_jpeg(85);
+    baseImage.free();
+    
+    return result;
+  } catch (error) {
+    console.error('Error applying tiled watermark:', error);
+    const result = baseImage.get_bytes_jpeg(85);
+    baseImage.free();
+    return result;
+  }
+}
+
+/**
+ * Main watermark application function
+ * Routes to appropriate method based on watermark mode
+ */
+async function applyWatermarkProtection(
+  previewImage: PhotonImage,
+  config: WatermarkConfig,
+  env: Env
+): Promise<Uint8Array> {
+  // No watermark mode
+  if (config.mode === 'none') {
+    const result = previewImage.get_bytes_jpeg(85);
+    previewImage.free();
+    return result;
+  }
+  
+  // System mode: stretch diagonal lines pattern over entire image
+  if (config.mode === 'system') {
+    return await applySystemOverlay(previewImage, env, config.opacity);
+  }
+  
+  // Custom mode with tiling: repeat user's logo in a mosaic
+  if (config.mode === 'custom' && config.path && config.tiling) {
+    try {
+      // Fetch custom watermark from R2
+      const wmObj = await env.GALLERY_BUCKET.get(config.path);
+      
+      if (!wmObj) {
+        console.warn(`Custom watermark not found: ${config.path}, falling back to system overlay`);
+        return await applySystemOverlay(previewImage, env, config.opacity);
+      }
+      
+      const wmBytes = new Uint8Array(await wmObj.arrayBuffer());
+      return applyTiledWatermark(previewImage, wmBytes, config.opacity, config.scale);
+    } catch (error) {
+      console.error('Error loading custom watermark:', error);
+      return await applySystemOverlay(previewImage, env, config.opacity);
+    }
+  }
+  
+  // Custom mode without tiling (legacy single centered watermark)
+  if (config.mode === 'custom' && config.path && !config.tiling) {
+    try {
+      const wmObj = await env.GALLERY_BUCKET.get(config.path);
+      
+      if (!wmObj) {
+        console.warn(`Custom watermark not found: ${config.path}, falling back to system overlay`);
+        return await applySystemOverlay(previewImage, env, config.opacity);
+      }
+      
+      const wmBytes = new Uint8Array(await wmObj.arrayBuffer());
+      return applyCenteredWatermark(previewImage, wmBytes, config.opacity, config.scale);
+    } catch (error) {
+      console.error('Error loading custom watermark:', error);
+      return await applySystemOverlay(previewImage, env, config.opacity);
+    }
+  }
+  
+  // Fallback: return preview without watermark
+  const result = previewImage.get_bytes_jpeg(85);
+  previewImage.free();
+  return result;
+}
+
+/**
+ * Apply single centered watermark (legacy mode for backwards compatibility)
+ */
+function applyCenteredWatermark(
   baseImage: PhotonImage,
   watermarkBytes: Uint8Array,
   opacity: number,
@@ -157,9 +316,7 @@ function applyWatermark(
   const y = Math.round((baseHeight - targetWmHeight) / 2);
   
   // Blend watermark onto base image
-  // Note: blend applies the watermark with the specified opacity
   blend(baseImage, resizedWm, "over", x, y);
-  
   resizedWm.free();
   
   // Get result as JPEG
@@ -178,13 +335,12 @@ async function processPhoto(
   
   try {
     console.log(`Processing photo ${photo.id}: ${photo.filename}`);
+    console.log(`Watermark config: mode=${photo.watermark.mode}, tiling=${photo.watermark.tiling}, scale=${photo.watermark.scale}%`);
     
     // 1. Fetch original from B2
     const originalUrl = `${env.B2_PUBLIC_URL}/${photo.storageKey}`;
     const originalBytes = await fetchImage(originalUrl);
     console.log(`Fetched original: ${(originalBytes.length / 1024).toFixed(0)}KB`);
-    
-    const isLandscape = photo.width >= photo.height;
     
     // 2. Generate thumbnail (400px, no watermark)
     const { bytes: thumbBytes, image: thumbImage } = resizeImage(originalBytes, 400);
@@ -196,37 +352,11 @@ async function processPhoto(
     previewImage.free();
     console.log(`Generated preview: ${(previewBytes.length / 1024).toFixed(0)}KB`);
     
-    // 4. Generate preview with watermark (if enabled)
-    let previewWmBytes: Uint8Array;
-    
-    if (photo.watermark.mode !== 'none') {
-      const wmUrl = getWatermarkUrl(photo.watermark, isLandscape, env.CDN_URL);
-      
-      if (wmUrl) {
-        try {
-          const wmBytes = await fetchImage(wmUrl);
-          
-          // Create a fresh copy of the preview for watermarking
-          const { image: previewForWm } = resizeImage(originalBytes, 1200);
-          
-          previewWmBytes = applyWatermark(
-            previewForWm,
-            wmBytes,
-            photo.watermark.opacity,
-            photo.watermark.scale
-          );
-          console.log(`Generated preview-wm: ${(previewWmBytes.length / 1024).toFixed(0)}KB`);
-        } catch (wmError) {
-          console.warn(`Watermark application failed, using preview without watermark:`, wmError);
-          previewWmBytes = previewBytes;
-        }
-      } else {
-        previewWmBytes = previewBytes;
-      }
-    } else {
-      // No watermark mode
-      previewWmBytes = previewBytes;
-    }
+    // 4. Generate preview with watermark
+    // IMPORTANT: First resize, THEN apply watermark (correct order per plan)
+    const { image: previewForWm } = resizeImage(originalBytes, 1200);
+    const previewWmBytes = await applyWatermarkProtection(previewForWm, photo.watermark, env);
+    console.log(`Generated preview-wm: ${(previewWmBytes.length / 1024).toFixed(0)}KB`);
     
     // 5. Build R2 paths
     const basePath = `${photo.userId}/${photo.galleryId}`;
@@ -333,7 +463,8 @@ export default {
       return new Response(
         JSON.stringify({ 
           status: 'ok', 
-          version: '1.0.0',
+          version: '2.0.0', // Updated version for tiling support
+          features: ['thumb', 'preview', 'watermark-system', 'watermark-tiling'],
           timestamp: new Date().toISOString() 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
