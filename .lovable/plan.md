@@ -1,296 +1,374 @@
 
-# Diagnóstico Completo e Plano Definitivo
+# Implementação Final: Sistema de Watermark com Mosaico (Tiling) e Proteção Total
 
-## Resumo Executivo
+## Visão Geral
 
-Após análise profunda, encontrei **4 problemas críticos** que estão quebrando o sistema. Nenhum deles é configuração sua - são **erros no código** que precisam ser corrigidos.
+Este plano implementa um sistema de proteção de imagens robusto com duas abordagens distintas:
 
----
-
-## Os 4 Problemas Reais
-
-### Problema 1: Import errado no Cloudflare Worker WASM
-
-**O que está errado:**
-```typescript
-// ERRADO (index.ts linha 14-19)
-import { PhotonImage, ... } from "@cf-wasm/photon";
-```
-
-**O que deveria ser:**
-```typescript
-// CORRETO para Cloudflare Workers
-import { PhotonImage, ... } from "@cf-wasm/photon/workerd";
-```
-
-**Por que isso quebra tudo:**
-O subpath `/workerd` é **obrigatório** para Cloudflare Workers. Sem ele, o módulo WASM não inicializa, gerando o erro:
-```
-"Cannot read properties of undefined (reading '__wbindgen_malloc')"
-```
-
-**Evidência:** Este erro apareceu quando chamei manualmente o `process-photos`:
-```json
-{
-  "error": "Cannot read properties of undefined (reading '__wbindgen_malloc')",
-  "photoId": "a117fe37-0022-420b-9ed0-5b2081e2517a",
-  "success": false
-}
-```
+1. **Padrão do Sistema** - Overlay de linhas diagonais cobrindo toda a foto
+2. **Minha Marca** - Logo do usuário repetido em mosaico (tiling)
 
 ---
 
-### Problema 2: Dois cron jobs, um com URL errada e outro com SQL incorreto
-
-**Job 1 (jobid=1)** - URL INCOMPLETA:
-```sql
-url := 'https://tlnjspsywycbudhewsfv.supabase.co'
--- FALTA: /functions/v1/process-photos
-```
-Status: "succeeded" mas não faz nada útil porque a URL não aponta para a função.
-
-**Job 4 (jobid=4)** - ERRO DE TIPO SQL:
-```sql
-headers := '...'::text  -- ERRADO: precisa ser ::jsonb
-```
-Erro: `function net.http_post(url => unknown, headers => text, body => jsonb) does not exist`
-
-**Resultado:** O pg_cron roda a cada minuto, mas nenhum dos jobs consegue chamar a Edge Function corretamente.
-
----
-
-### Problema 3: Bucket R2 inconsistente entre Workers
-
-| Worker | Bucket configurado | Bucket correto |
-|--------|-------------------|----------------|
-| `gallery-upload` | `lunari-gallery` | `lunari-previews` |
-| `image-processor` | `lunari-previews` | `lunari-previews` |
-
-O `gallery-upload` está configurado para bucket errado. Precisa ser `lunari-previews`.
-
----
-
-### Problema 4: Worker provavelmente deployado com versão "simple"
-
-O README menciona duas versões:
-- `index.ts` - Versão completa com WASM (resize real)
-- `index.simple.js` - Versão simplificada (sem resize, só copia arquivos)
-
-Se você deployou via Quick Edit com `index.simple.js`, ou se deployou `index.ts` sem o `npm install` completo, o WASM não funciona.
-
----
-
-## Arquitetura Corrigida
+## Arquitetura do Fluxo
 
 ```text
-FLUXO ATUAL (QUEBRADO):
-========================
-
-Frontend → b2-upload → B2 ✓ (funciona)
-                           ↓
-                    DB: status = 'uploaded'
-                           ↓
-pg_cron (jobs 1 e 4) ─────►X (URLs/SQL errados)
-                           ↓
-process-photos ────────────X (nunca é chamado)
-                           ↓
-lunari-image-processor ────X (WASM não inicializa)
-                           ↓
-R2 (lunari-previews) ──────X (vazio)
-
-
-FLUXO CORRETO (APÓS CORREÇÕES):
-================================
-
-Frontend → b2-upload → B2 ✓
-                           ↓
-                    DB: status = 'uploaded'
-                           ↓
-pg_cron (corrigido) ───────► process-photos ✓
-                                   ↓
-                    lunari-image-processor ✓
-                    (import correto + npm install)
-                                   ↓
-                    ├─ thumb (400px)
-                    ├─ preview (1200px)
-                    └─ preview-wm (watermark)
-                                   ↓
-                    R2 (lunari-previews) ✓
-                                   ↓
-                    DB: status = 'ready'
-                                   ↓
-                    Frontend exibe via CDN ✓
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (Settings)                          │
+│  ┌─────────────────────────────────────────────────────────────────│
+│  │  WatermarkSettings.tsx                                           │
+│  │  ├── Upload PNG → gallery-upload/upload-watermark               │
+│  │  └── Salva path: user-assets/{userId}/watermark.png             │
+│  └─────────────────────────────────────────────────────────────────│
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    FRONTEND (GalleryCreate)                         │
+│  ┌─────────────────────────────────────────────────────────────────│
+│  │  Seletor "Proteção da Imagem":                                  │
+│  │  ├── Nenhuma (none)                                             │
+│  │  ├── Padrão do Sistema (system) ← Linhas diagonais             │
+│  │  └── Minha Marca (custom) ← Logo em mosaico                     │
+│  └─────────────────────────────────────────────────────────────────│
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                 BACKEND (process-photos Edge Function)              │
+│  ┌─────────────────────────────────────────────────────────────────│
+│  │  1. Busca watermark_mode de photographer_accounts               │
+│  │  2. Busca watermark_mode da galeria (configuracoes.watermark)   │
+│  │  3. Envia payload com configuração ao Worker                    │
+│  └─────────────────────────────────────────────────────────────────│
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              CLOUDFLARE WORKER (lunari-image-processor)             │
+│  ┌─────────────────────────────────────────────────────────────────│
+│  │  1. Busca original do B2                                        │
+│  │  2. PRIMEIRO: Redimensiona para preview (1200px)                │
+│  │  3. SEGUNDO: Aplica proteção:                                   │
+│  │     ├── system → Estica default-pattern.png (linhas diagonais) │
+│  │     └── custom → Repete logo em mosaico (tiling)               │
+│  │  4. Salva no R2: thumb, preview, preview-wm                     │
+│  └─────────────────────────────────────────────────────────────────│
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Plano de Correção
+## Fase 1: Preparar Assets do Sistema
 
-### Fase 1: Corrigir código do image-processor
+### 1.1 Arquivo de Pattern Padrão
 
-**Arquivo:** `cloudflare/workers/image-processor/index.ts`
+Você precisa fazer upload manual do arquivo `default-pattern.png` para o bucket R2 `lunari-previews`:
 
-| Linha | Atual | Correção |
-|-------|-------|----------|
-| 14-19 | `from "@cf-wasm/photon"` | `from "@cf-wasm/photon/workerd"` |
+**Caminho:** `system-assets/default-pattern.png`
+
+**Especificações do pattern:**
+- Dimensão recomendada: 2560x2560px (vai ser esticado para cobrir a foto)
+- Fundo transparente (PNG)
+- Linhas diagonais finas e discretas
+- Opacidade já aplicada na imagem (30-40%)
+
+---
+
+## Fase 2: Modificar Frontend
+
+### 2.1 Atualizar WatermarkSettings.tsx
+
+**Objetivo:** Melhorar o texto da interface para refletir a funcionalidade de mosaico.
+
+Mudanças:
+- Atualizar descrição para mencionar que o logo será aplicado em mosaico
+- Manter o slider de opacidade
+- O slider de "Tamanho" agora controla o tamanho de cada tile do mosaico
+
+### 2.2 Atualizar GalleryCreate.tsx
+
+**Objetivo:** Renomear labels e melhorar UX do seletor de watermark.
+
+Mudanças no Step 3 (Configurações):
+- Mudar label de "Marca D'água" para "Proteção da Imagem"
+- Atualizar textos das opções:
+  - "Padrão" → "Padrão do Sistema" (linhas diagonais)
+  - "Minha Marca" → "Minha Marca" (logo em mosaico)
+  - "Nenhuma" → mantém
+
+Preview visual:
+- Para "Padrão do Sistema": Mostrar ícone de linhas diagonais
+- Para "Minha Marca": Mostrar preview do logo do usuário (se existir)
+
+---
+
+## Fase 3: Modificar Edge Function (process-photos)
+
+### 3.1 Atualizar Interface WatermarkConfig
+
+Adicionar campo `tiling` para diferenciar os modos de aplicação:
 
 ```typescript
-// ANTES (linha 14-19)
-import { 
-  PhotonImage, 
-  SamplingFilter, 
-  resize,
-  blend
-} from "@cf-wasm/photon";
-
-// DEPOIS
-import { 
-  PhotonImage, 
-  SamplingFilter, 
-  resize,
-  blend
-} from "@cf-wasm/photon/workerd";
-```
-
-### Fase 2: Corrigir bucket no gallery-upload
-
-**Arquivo:** `cloudflare/workers/gallery-upload/wrangler.toml`
-
-| Linha | Atual | Correção |
-|-------|-------|----------|
-| 11 | `bucket_name = "lunari-gallery"` | `bucket_name = "lunari-previews"` |
-
-### Fase 3: Instruções de Deploy para você
-
-Após as correções de código, você precisa fazer o redeploy:
-
-```bash
-# 1. Deploy do image-processor (com WASM)
-cd cloudflare/workers/image-processor
-npm install                    # CRÍTICO: instala o WASM
-wrangler deploy               # Deploya com WASM bundled
-
-# 2. Deploy do gallery-upload
-cd ../gallery-upload
-npm install
-wrangler deploy
-```
-
-**IMPORTANTE:** Não use Quick Edit para o image-processor. O WASM precisa ser bundled pelo wrangler.
-
-### Fase 4: Corrigir pg_cron (SQL para executar no Supabase)
-
-```sql
--- 1. Remover os jobs problemáticos
-SELECT cron.unschedule(1);
-SELECT cron.unschedule(4);
-
--- 2. Criar job correto (com tipos explícitos)
-SELECT cron.schedule(
-  'process-photos-job',
-  '* * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos'::text,
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsbmpzcHN5d3ljYnVkaGV3c2Z2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQ2NTUwMSwiZXhwIjoyMDczMDQxNTAxfQ.UOOeAcmFWOEwQKj8W10T6AX4S2RTQlW5PhgyEuozjgY"}'::jsonb,
-    body := '{"batchSize": 10}'::jsonb
-  ) AS request_id;
-  $$
-);
-```
-
----
-
-## Secrets Necessários (Checklist)
-
-### Cloudflare - gallery-upload
-| Secret | Valor | Status |
-|--------|-------|--------|
-| `SUPABASE_URL` | `https://tlnjspsywycbudhewsfv.supabase.co` | (verificar) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Sua service role key | (verificar) |
-| `SUPABASE_JWT_SECRET` | JWT secret (Base64) do Supabase | (verificar) |
-
-### Cloudflare - lunari-image-processor
-| Secret | Valor | Status |
-|--------|-------|--------|
-| `SUPABASE_URL` | `https://tlnjspsywycbudhewsfv.supabase.co` | (verificar) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Sua service role key | (verificar) |
-| `WORKER_AUTH_SECRET` | String aleatória (use `openssl rand -hex 32`) | (verificar) |
-
-### Supabase Edge Functions
-| Secret | Valor | Status |
-|--------|-------|--------|
-| `IMAGE_PROCESSOR_URL` | URL do lunari-image-processor Worker | Configurado |
-| `IMAGE_PROCESSOR_SECRET` | Mesmo valor de WORKER_AUTH_SECRET | Configurado |
-
----
-
-## Verificação de Funcionamento
-
-### Teste 1: Health check dos Workers
-
-```bash
-# gallery-upload
-curl https://cdn.lunarihub.com/health
-
-# image-processor
-curl https://lunari-image-processor.SEU-ACCOUNT.workers.dev/health
-```
-
-Deve retornar `{"status":"ok"}`
-
-### Teste 2: Chamar process-photos manualmente
-
-```bash
-curl -X POST \
-  "https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/process-photos" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SUA_ANON_KEY" \
-  -d '{"batchSize": 1}'
-```
-
-Resultado esperado:
-```json
-{
-  "processed": 1,
-  "successful": 1,
-  "failed": 0,
-  "results": [{"photoId": "xxx", "success": true, ...}]
+interface WatermarkConfig {
+  mode: 'system' | 'custom' | 'none';
+  path?: string;           // Para custom: user-assets/{userId}/watermark.png
+  opacity: number;         // 10-100%
+  scale: number;           // 10-50% (tamanho do tile para mosaico)
+  tiling: boolean;         // true = mosaico, false = overlay único
 }
 ```
 
-### Teste 3: Verificar fotos no banco
+### 3.2 Lógica de Decisão
 
-```sql
-SELECT id, processing_status, thumb_path 
-FROM galeria_fotos 
-ORDER BY created_at DESC 
-LIMIT 5;
+```typescript
+// Determinar configuração de watermark
+const watermarkConfig: WatermarkConfig = {
+  mode: account.watermark_mode || 'system',
+  path: account.watermark_path,
+  opacity: account.watermark_opacity || 40,
+  scale: account.watermark_scale || 30,
+  tiling: account.watermark_mode === 'custom', // Mosaico só para custom
+};
 ```
 
-Deve mostrar `processing_status = 'ready'` e `thumb_path` preenchido.
+---
+
+## Fase 4: Modificar Cloudflare Worker (lunari-image-processor)
+
+Esta é a parte mais complexa - implementar dois algoritmos diferentes de aplicação de watermark.
+
+### 4.1 Nova Interface
+
+```typescript
+interface WatermarkConfig {
+  mode: 'system' | 'custom' | 'none';
+  path?: string;
+  opacity: number;
+  scale: number;
+  tiling: boolean;  // NOVO: true para mosaico
+}
+```
+
+### 4.2 Algoritmo A: Overlay Total (Sistema)
+
+```text
+Fluxo para mode = 'system':
+1. Buscar system-assets/default-pattern.png do R2
+2. Redimensionar pattern para EXATAMENTE o tamanho da foto de preview
+3. Aplicar blend na posição (0, 0) - cobre foto inteira
+4. Aplicar opacidade configurada
+```
+
+Implementação:
+```typescript
+async function applySystemOverlay(
+  baseImage: PhotonImage,
+  env: Env,
+  opacity: number
+): Promise<Uint8Array> {
+  // Buscar pattern do R2
+  const patternObj = await env.GALLERY_BUCKET.get('system-assets/default-pattern.png');
+  if (!patternObj) throw new Error('System pattern not found');
+  
+  const patternBytes = new Uint8Array(await patternObj.arrayBuffer());
+  const patternImage = PhotonImage.new_from_byteslice(patternBytes);
+  
+  // Redimensionar para tamanho exato da foto
+  const baseWidth = baseImage.get_width();
+  const baseHeight = baseImage.get_height();
+  const scaledPattern = resize(patternImage, baseWidth, baseHeight, SamplingFilter.Lanczos3);
+  patternImage.free();
+  
+  // Aplicar overlay na posição (0, 0) - cobre tudo
+  blend(baseImage, scaledPattern, "over", 0, 0);
+  scaledPattern.free();
+  
+  return baseImage.get_bytes_jpeg(85);
+}
+```
+
+### 4.3 Algoritmo B: Mosaico/Tiling (Custom)
+
+```text
+Fluxo para mode = 'custom':
+1. Buscar user-assets/{userId}/watermark.png do R2
+2. Calcular tamanho do tile (scale% da menor dimensão)
+3. Loop: percorrer toda a largura/altura da foto
+4. Para cada posição do grid, aplicar blend do logo
+5. Aplicar opacidade configurada
+```
+
+Implementação:
+```typescript
+async function applyTiledWatermark(
+  baseImage: PhotonImage,
+  watermarkBytes: Uint8Array,
+  opacity: number,
+  scale: number
+): Promise<Uint8Array> {
+  const wmImage = PhotonImage.new_from_byteslice(watermarkBytes);
+  
+  const baseWidth = baseImage.get_width();
+  const baseHeight = baseImage.get_height();
+  const minDim = Math.min(baseWidth, baseHeight);
+  
+  // Calcular tamanho do tile (ex: 15% da menor dimensão)
+  const wmOrigWidth = wmImage.get_width();
+  const wmOrigHeight = wmImage.get_height();
+  const wmRatio = wmOrigWidth / wmOrigHeight;
+  
+  const tileWidth = Math.round(minDim * (scale / 100));
+  const tileHeight = Math.round(tileWidth / wmRatio);
+  
+  // Redimensionar watermark para tamanho do tile
+  const resizedWm = resize(wmImage, tileWidth, tileHeight, SamplingFilter.Lanczos3);
+  wmImage.free();
+  
+  // Espaçamento entre tiles (pode ser 1.5x o tamanho do tile)
+  const spacingX = Math.round(tileWidth * 1.5);
+  const spacingY = Math.round(tileHeight * 1.5);
+  
+  // Loop: aplicar em grid
+  // Offset inicial para centralizar o pattern
+  const offsetX = Math.round((spacingX - tileWidth) / 2);
+  const offsetY = Math.round((spacingY - tileHeight) / 2);
+  
+  for (let y = offsetY; y < baseHeight; y += spacingY) {
+    for (let x = offsetX; x < baseWidth; x += spacingX) {
+      // Verificar se tile cabe na imagem (parcialmente ok)
+      if (x + tileWidth > 0 && y + tileHeight > 0) {
+        blend(baseImage, resizedWm, "over", x, y);
+      }
+    }
+  }
+  
+  resizedWm.free();
+  return baseImage.get_bytes_jpeg(85);
+}
+```
+
+### 4.4 Função Principal de Aplicação
+
+```typescript
+async function applyWatermarkProtection(
+  originalBytes: Uint8Array,
+  config: WatermarkConfig,
+  userId: string,
+  env: Env
+): Promise<Uint8Array> {
+  // 1. PRIMEIRO: Redimensionar para preview (1200px)
+  const { image: previewImage } = resizeImage(originalBytes, 1200);
+  
+  // 2. Se nenhuma proteção, retornar preview sem watermark
+  if (config.mode === 'none') {
+    const result = previewImage.get_bytes_jpeg(85);
+    previewImage.free();
+    return result;
+  }
+  
+  // 3. SEGUNDO: Aplicar proteção baseada no modo
+  if (config.mode === 'system') {
+    // Overlay total com linhas diagonais
+    return await applySystemOverlay(previewImage, env, config.opacity);
+  }
+  
+  if (config.mode === 'custom' && config.path) {
+    // Buscar watermark customizada do R2
+    const wmPath = config.path; // user-assets/{userId}/watermark.png
+    const wmObj = await env.GALLERY_BUCKET.get(wmPath);
+    
+    if (!wmObj) {
+      console.warn(`Custom watermark not found: ${wmPath}, falling back to system`);
+      return await applySystemOverlay(previewImage, env, config.opacity);
+    }
+    
+    const wmBytes = new Uint8Array(await wmObj.arrayBuffer());
+    
+    // Aplicar em mosaico
+    return await applyTiledWatermark(
+      previewImage,
+      wmBytes,
+      config.opacity,
+      config.scale
+    );
+  }
+  
+  // Fallback: retornar sem watermark
+  const result = previewImage.get_bytes_jpeg(85);
+  previewImage.free();
+  return result;
+}
+```
 
 ---
 
-## Resumo das Alterações de Código
+## Fase 5: Atualizar Banco de Dados (Opcional)
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `cloudflare/workers/image-processor/index.ts` | Corrigir import para `@cf-wasm/photon/workerd` |
-| `cloudflare/workers/gallery-upload/wrangler.toml` | Corrigir bucket para `lunari-previews` |
+Para suportar configuração por galeria (não apenas global), pode ser útil adicionar campos à tabela `galerias`:
+
+```sql
+-- Opcional: se quiser override por galeria
+ALTER TABLE galerias ADD COLUMN IF NOT EXISTS watermark_mode text;
+ALTER TABLE galerias ADD COLUMN IF NOT EXISTS watermark_opacity integer;
+```
+
+Por enquanto, usamos as configurações do `photographer_accounts` (global).
 
 ---
 
-## Resposta às suas perguntas
+## Resumo de Arquivos a Modificar
 
-**"Você não sabe como fazer essa integração corretamente?"**
-O código tem erros específicos (import path do WASM) que não são óbvios. A documentação do `@cf-wasm/photon` especifica que para Workers você DEVE usar o subpath `/workerd`.
+| Arquivo | Alterações |
+|---------|------------|
+| `src/components/settings/WatermarkSettings.tsx` | Atualizar textos para refletir funcionalidade de mosaico |
+| `src/pages/GalleryCreate.tsx` | Renomear labels, melhorar preview das opções |
+| `supabase/functions/process-photos/index.ts` | Adicionar campo `tiling` ao WatermarkConfig |
+| `cloudflare/workers/image-processor/index.ts` | **Principal:** Implementar `applySystemOverlay` e `applyTiledWatermark` |
 
-**"Configurei algo de errado?"**
-Os secrets parecem estar configurados. O problema é:
-1. O código do Worker tem import errado
-2. Os cron jobs do Supabase têm URL/SQL incorretos
-3. O bucket do gallery-upload está errado
+---
 
-**"Usei o prompt de comando para deployar, fiz certo?"**
-Se você fez `npm install` antes do `wrangler deploy`, está correto. Mas se o código ainda tinha o import errado, o WASM não vai funcionar mesmo assim.
+## Checklist de Implementação
+
+### Pré-requisitos (Manual)
+- [ ] Upload de `default-pattern.png` para R2 em `system-assets/default-pattern.png`
+
+### Código
+- [ ] Atualizar textos em WatermarkSettings.tsx
+- [ ] Atualizar labels em GalleryCreate.tsx
+- [ ] Adicionar `tiling: boolean` ao WatermarkConfig no process-photos
+- [ ] Implementar `applySystemOverlay()` no image-processor Worker
+- [ ] Implementar `applyTiledWatermark()` no image-processor Worker
+- [ ] Atualizar função principal `processPhoto()` para usar nova lógica
+- [ ] Testar com imagens pequenas primeiro
+
+### Deploy
+- [ ] Redeploy do Worker `lunari-image-processor` via CLI:
+  ```bash
+  cd cloudflare/workers/image-processor
+  npm install
+  wrangler deploy
+  ```
+
+### Testes
+- [ ] Testar mode = 'none' (sem watermark)
+- [ ] Testar mode = 'system' (overlay de linhas)
+- [ ] Testar mode = 'custom' (mosaico do logo)
+- [ ] Verificar que proteção cobre foto inteira
+- [ ] Verificar opacidade funciona corretamente
+
+---
+
+## Notas Técnicas Importantes
+
+1. **Ordem de operações:** SEMPRE redimensionar a foto PRIMEIRO, depois aplicar watermark. Isso garante que a watermark tenha tamanho proporcional ao resultado final.
+
+2. **Memory management:** O Photon WASM requer que você chame `.free()` em todas as imagens após uso para evitar memory leaks.
+
+3. **Fallback:** Se a watermark customizada não existir, o sistema deve fazer fallback para o pattern padrão.
+
+4. **R2 paths:**
+   - Pattern do sistema: `system-assets/default-pattern.png`
+   - Watermark customizada: `user-assets/{userId}/watermark.png`
+
+5. **Blend mode:** Usamos `"over"` que respeita a transparência do PNG.
