@@ -1,216 +1,170 @@
 
 
-# Plano: Corrigir Autenticação JWT do Worker gallery-upload
+# Plano de Correção: Sistema de Watermark e Autorização
 
-## Problema Identificado
+## Resumo dos Problemas Identificados
 
-O Worker `gallery-upload` usa validação HS256 com `SUPABASE_JWT_SECRET`:
-
-```typescript
-// ATUAL (linhas 91-94) - INCORRETO
-const { payload } = await jose.jwtVerify(token, secret, {
-  algorithms: ['HS256'],
-});
-```
-
-**Por que falha:**
-- Projetos Supabase modernos usam **RS256** (chave assimétrica)
-- O `SUPABASE_JWT_SECRET` pode não ser compatível com HS256
-- A rotação de chaves não é suportada
-
-## Solução: Usar JWKS (JSON Web Key Set)
-
-A abordagem correta é usar o endpoint JWKS do Supabase para validar tokens:
-
-```typescript
-// CORRETO
-const JWKS = jose.createRemoteJWKSet(
-  new URL('https://tlnjspsywycbudhewsfv.supabase.co/auth/v1/.well-known/jwks.json')
-);
-
-const { payload } = await jose.jwtVerify(token, JWKS, {
-  issuer: 'https://tlnjspsywycbudhewsfv.supabase.co/auth/v1',
-});
-```
-
-**Vantagens:**
-- Suporta RS256 automaticamente
-- Chaves públicas são baixadas e cacheadas
-- Rotação de chaves é transparente
-- Mais seguro (não requer distribuir secrets)
+| # | Problema | Causa Raiz |
+|---|----------|------------|
+| 1 | Worker image-processor retorna 503 | Limite de recursos do Cloudflare (plano grátis) |
+| 2 | Upload de watermark retorna 401 | Worker gallery-upload não foi redeployado após mudança JWKS |
+| 3 | Fotos presas em "processing" | Falharam no Worker e não voltaram para "uploaded" |
 
 ---
 
-## Alterações no Código
+## Fase 1: Correção Imediata - Deploy dos Workers
 
-### Arquivo: `cloudflare/workers/gallery-upload/index.ts`
+### 1.1 Deploy do Worker `gallery-upload` com JWKS
 
-#### 1. Remover função `base64ToUint8Array` (linhas 32-52)
-Não será mais necessária.
+Você **PRECISA** fazer o deploy manual do Worker atualizado. O código foi alterado, mas o Worker em produção ainda usa a versão antiga com HS256.
 
-#### 2. Remover função `isBase64` (linhas 57-61)
-Não será mais necessária.
+**Passos no terminal:**
 
-#### 3. Atualizar interface `Env` (linhas 16-23)
-```typescript
-// ANTES
-export interface Env {
-  GALLERY_BUCKET: R2Bucket;
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-  SUPABASE_JWT_SECRET: string;  // REMOVER
-}
-
-// DEPOIS
-export interface Env {
-  GALLERY_BUCKET: R2Bucket;
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-  // SUPABASE_JWT_SECRET removido - não é mais necessário
-}
-```
-
-#### 4. Reescrever função `validateAuth` (linhas 63-115)
-
-```typescript
-// URL do JWKS (chaves públicas do Supabase)
-const SUPABASE_JWKS_URL = 'https://tlnjspsywycbudhewsfv.supabase.co/auth/v1/.well-known/jwks.json';
-const SUPABASE_ISSUER = 'https://tlnjspsywycbudhewsfv.supabase.co/auth/v1';
-
-// Cache do JWKS (reutilizado entre requests)
-let jwks: ReturnType<typeof jose.createRemoteJWKSet> | null = null;
-
-function getJWKS(): ReturnType<typeof jose.createRemoteJWKSet> {
-  if (!jwks) {
-    jwks = jose.createRemoteJWKSet(new URL(SUPABASE_JWKS_URL));
-  }
-  return jwks;
-}
-
-// Validate Supabase JWT using JWKS
-async function validateAuth(
-  request: Request
-): Promise<{ userId: string; email: string } | null> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    console.log('Auth failed: No Authorization header');
-    return null;
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-
-  try {
-    // Verify JWT using JWKS (supports RS256 automatically)
-    const { payload } = await jose.jwtVerify(token, getJWKS(), {
-      issuer: SUPABASE_ISSUER,
-    });
-
-    const userId = payload.sub;
-    const email = payload.email as string;
-
-    if (!userId) {
-      console.log('Auth failed: No sub claim in JWT');
-      return null;
-    }
-
-    console.log(`Auth OK: user=${userId}, alg=RS256`);
-    return { userId, email: email || '' };
-  } catch (error) {
-    console.error('JWT validation error:', {
-      error: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : 'Unknown',
-    });
-    return null;
-  }
-}
-```
-
-#### 5. Atualizar chamadas de `validateAuth`
-
-Remover o parâmetro `env` das chamadas:
-
-```typescript
-// ANTES (linha 122)
-const user = await validateAuth(request, env);
-
-// DEPOIS
-const user = await validateAuth(request);
-```
-
-```typescript
-// ANTES (linha 307)
-const user = await validateAuth(request, env);
-
-// DEPOIS
-const user = await validateAuth(request);
-```
-
----
-
-## Atualização do wrangler.toml
-
-O secret `SUPABASE_JWT_SECRET` pode ser removido:
-
-```toml
-# Secrets (set via wrangler secret put):
-# wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-# SUPABASE_JWT_SECRET - NÃO É MAIS NECESSÁRIO
-```
-
----
-
-## Resumo das Alterações
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `cloudflare/workers/gallery-upload/index.ts` | Substituir validação HS256 por JWKS |
-
-### Código Removido
-- Função `base64ToUint8Array()`
-- Função `isBase64()`
-- Propriedade `SUPABASE_JWT_SECRET` do `Env`
-- Lógica de detecção Base64/texto do secret
-
-### Código Adicionado
-- Constantes `SUPABASE_JWKS_URL` e `SUPABASE_ISSUER`
-- Função `getJWKS()` para cache do JWKS
-- Nova implementação de `validateAuth()` usando JWKS
-
----
-
-## Checklist Pós-Implementação
-
-### Deploy
 ```bash
-cd cloudflare/workers/gallery-upload
+# 1. Entre na pasta do worker
+cd lunari-upload
+
+# 2. Instale dependências (se não instalou)
 npm install
-wrangler deploy
-```
 
-### Opcional: Remover Secret Antigo
-```bash
+# 3. Faça login no Cloudflare (se necessário)
+wrangler login
+
+# 4. Deploy do worker
+wrangler deploy
+
+# 5. (Opcional) Remova o secret antigo que não é mais necessário
 wrangler secret delete SUPABASE_JWT_SECRET
 ```
 
-### Teste
-1. Fazer login na aplicação
-2. Tentar fazer upload de uma foto
-3. Verificar logs do Worker para confirmar `Auth OK: user=xxx, alg=RS256`
+Após o deploy, verifique que funciona:
+```bash
+curl https://cdn.lunarihub.com/health
+# Deve retornar: {"status":"ok","timestamp":"..."}
+```
+
+### 1.2 Deploy do Worker `image-processor`
+
+O Worker de processamento também precisa ser redeployado com as novas funcionalidades de tiling:
+
+```bash
+# 1. Entre na pasta do worker
+cd lunari-image-processor
+
+# 2. Instale dependências
+npm install
+
+# 3. Deploy
+wrangler deploy
+```
+
+**IMPORTANTE:** O Worker vai continuar falhando com erro 503 (resource limits) até você fazer upgrade para o plano pago do Cloudflare Workers ($5/mês) ou usar imagens menores para teste.
 
 ---
 
-## Nota Técnica: Por que JWKS?
+## Fase 2: Correção de Dados - Fotos Presas
 
-| Método | HS256 (Simétrico) | RS256/JWKS (Assimétrico) |
-|--------|-------------------|--------------------------|
-| Chave | Compartilhada (secret) | Pública + Privada |
-| Distribuição | Precisa copiar o secret | Só precisa da URL pública |
-| Rotação | Manual | Automática |
-| Segurança | Se vazar, compromete tudo | Chave pública é... pública |
-| Supabase | Projetos antigos | **Projetos modernos (padrão)** |
+Após os deploys, precisamos corrigir as fotos que ficaram presas:
 
-O Supabase moderno usa RS256 por padrão, e o endpoint JWKS está sempre disponível em:
+### SQL para executar no Supabase:
+
+```sql
+-- Resetar fotos presas em "processing" para "uploaded"
+-- Assim serão reprocessadas na próxima execução do cron
+UPDATE galeria_fotos
+SET processing_status = 'uploaded',
+    updated_at = now()
+WHERE processing_status = 'processing';
 ```
-https://{project_id}.supabase.co/auth/v1/.well-known/jwks.json
+
+---
+
+## Fase 3: Upload do Pattern do Sistema
+
+O Worker espera encontrar o pattern de linhas diagonais em:
 ```
+system-assets/default-pattern.png
+```
+
+Você precisa fazer upload deste arquivo para o bucket R2 `lunari-previews`.
+
+**Opção A: Via Dashboard do Cloudflare**
+1. Acesse [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Vá em R2 → lunari-previews
+3. Crie a pasta `system-assets`
+4. Faça upload do arquivo `default-pattern.png`
+
+**Opção B: Via wrangler (CLI)**
+```bash
+# Na pasta do worker
+wrangler r2 object put lunari-previews/system-assets/default-pattern.png --file=/caminho/para/default-pattern.png
+```
+
+### Especificações do Pattern:
+- Dimensão: 2560x2560px (ou maior)
+- Formato: PNG com transparência
+- Conteúdo: Linhas diagonais finas
+- Opacidade já aplicada: 30-40%
+
+---
+
+## Fase 4: Verificação Completa
+
+### 4.1 Testar Upload de Watermark Personalizada
+
+1. Faça login na aplicação
+2. Vá em Configurações → Marca d'água
+3. Selecione "Minha Marca"
+4. Faça upload de um PNG
+5. Se funcionar, o arquivo será salvo em `user-assets/{user_id}/watermark.png`
+
+### 4.2 Testar Processamento de Fotos
+
+1. Crie uma nova galeria
+2. Faça upload de uma foto pequena (< 1MB)
+3. Aguarde 1-2 minutos (cron executa a cada minuto)
+4. Verifique se a foto foi processada (status = "ready")
+5. Verifique se `preview_wm_path` foi preenchido
+
+---
+
+## Resumo de Ações Manuais
+
+| Ordem | Ação | Comando/Local |
+|-------|------|---------------|
+| 1 | Deploy gallery-upload | `cd lunari-upload && wrangler deploy` |
+| 2 | Deploy image-processor | `cd lunari-image-processor && wrangler deploy` |
+| 3 | Resetar fotos presas | SQL no Supabase Dashboard |
+| 4 | Upload default-pattern.png | R2 → system-assets/ |
+| 5 | Testar upload de watermark | Configurações → Marca d'água |
+| 6 | (Opcional) Upgrade Cloudflare | Workers & Pages → Plans |
+
+---
+
+## Notas Técnicas
+
+### Por que o Worker precisa de deploy manual?
+
+O Lovable não tem acesso ao CLI do Cloudflare (`wrangler`). Os Workers do Cloudflare são gerenciados separadamente do deploy da aplicação web.
+
+Qualquer alteração em arquivos dentro de `cloudflare/workers/` requer:
+1. `npm install` para instalar dependências
+2. `wrangler deploy` para publicar no Cloudflare
+
+### Por que ainda ocorre erro 503?
+
+O plano gratuito do Cloudflare Workers tem limites rigorosos:
+- 10ms de CPU time por request
+- 128MB de memória
+
+O processamento de imagens com WASM (Photon) é muito intensivo e excede esses limites facilmente. A solução é:
+- **Plano Workers Paid**: $5/mês, 30 segundos de CPU, 128MB memória
+- **Workers Unbound**: Mais limites ainda
+
+### Arquivos que foram alterados (requerem deploy)
+
+| Worker | Arquivo | Alteração |
+|--------|---------|-----------|
+| gallery-upload | `index.ts` | Autenticação JWKS (linhas 31-79) |
+| image-processor | `index.ts` | Tiling watermark (funções novas) |
 
