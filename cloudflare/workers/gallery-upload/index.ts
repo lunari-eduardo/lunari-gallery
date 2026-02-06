@@ -8,7 +8,7 @@
  * - POST /upload - Upload image to R2
  * - GET /image/{path} - Serve image from R2
  * 
- * Authentication: JWT validated locally using SUPABASE_JWT_SECRET
+ * Authentication: JWT validated using JWKS (RS256)
  */
 
 import * as jose from 'jose';
@@ -19,7 +19,6 @@ export interface Env {
   // Supabase config
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
-  SUPABASE_JWT_SECRET: string;
 }
 
 // CORS headers for cross-origin requests
@@ -29,41 +28,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
 
-/**
- * Decode a base64 string to Uint8Array
- * Works with both standard base64 and base64url
- */
-function base64ToUint8Array(base64: string): Uint8Array {
-  // Handle base64url format (replace - with + and _ with /)
-  const normalizedBase64 = base64
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-  
-  // Decode base64 to binary string
-  const binaryString = atob(normalizedBase64);
-  
-  // Convert to Uint8Array
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+// JWKS configuration for Supabase JWT validation
+const SUPABASE_JWKS_URL = 'https://tlnjspsywycbudhewsfv.supabase.co/auth/v1/.well-known/jwks.json';
+const SUPABASE_ISSUER = 'https://tlnjspsywycbudhewsfv.supabase.co/auth/v1';
+
+// Cache do JWKS (reutilizado entre requests)
+let jwks: ReturnType<typeof jose.createRemoteJWKSet> | null = null;
+
+function getJWKS(): ReturnType<typeof jose.createRemoteJWKSet> {
+  if (!jwks) {
+    jwks = jose.createRemoteJWKSet(new URL(SUPABASE_JWKS_URL));
   }
-  
-  return bytes;
+  return jwks;
 }
 
-/**
- * Check if a string appears to be base64 encoded
- */
-function isBase64(str: string): boolean {
-  // Check for base64 patterns: ends with = or ==, or has valid base64 chars only
-  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
-  return str.length > 20 && base64Regex.test(str);
-}
-
-// Validate Supabase JWT - com suporte a Base64 JWT Secret
+// Validate Supabase JWT using JWKS (RS256)
 async function validateAuth(
-  request: Request,
-  env: Env
+  request: Request
 ): Promise<{ userId: string; email: string } | null> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -74,23 +55,9 @@ async function validateAuth(
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    // Determine if secret is base64 encoded
-    const rawSecret = env.SUPABASE_JWT_SECRET;
-    let secret: Uint8Array;
-    
-    if (isBase64(rawSecret)) {
-      // Decode base64 to bytes
-      console.log('Using Base64-decoded JWT secret');
-      secret = base64ToUint8Array(rawSecret);
-    } else {
-      // Use as plain text (fallback)
-      console.log('Using plain text JWT secret');
-      secret = new TextEncoder().encode(rawSecret);
-    }
-    
-    // Verify JWT with explicit HS256 algorithm
-    const { payload } = await jose.jwtVerify(token, secret, {
-      algorithms: ['HS256'],
+    // Verify JWT using JWKS (supports RS256 automatically)
+    const { payload } = await jose.jwtVerify(token, getJWKS(), {
+      issuer: SUPABASE_ISSUER,
     });
 
     const userId = payload.sub;
@@ -101,14 +68,12 @@ async function validateAuth(
       return null;
     }
 
-    console.log(`Auth OK: user=${userId}, iss=${payload.iss}`);
+    console.log(`Auth OK: user=${userId}, alg=RS256`);
     return { userId, email: email || '' };
   } catch (error) {
     console.error('JWT validation error:', {
       error: error instanceof Error ? error.message : String(error),
       errorName: error instanceof Error ? error.name : 'Unknown',
-      tokenLength: token.length,
-      secretLength: env.SUPABASE_JWT_SECRET?.length || 0,
     });
     return null;
   }
@@ -119,7 +84,7 @@ async function handleUpload(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const user = await validateAuth(request, env);
+  const user = await validateAuth(request);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Não autorizado' }), {
       status: 401,
@@ -304,7 +269,7 @@ async function handleWatermarkUpload(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const user = await validateAuth(request, env);
+  const user = await validateAuth(request);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Não autorizado' }), {
       status: 401,
