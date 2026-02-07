@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getPhotoUrlWithFallback, getOriginalPhotoUrl } from '@/lib/photoUrl';
+import { getPhotoUrl as getPhotoUrlFromLib, getOriginalPhotoUrl, WatermarkConfig } from '@/lib/photoUrl';
 import { WatermarkSettings, TitleCaseMode } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
 import { RegrasCongeladas } from '@/lib/pricingUtils';
@@ -585,29 +585,29 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Get photo URL helper - uses R2 for transformed images (with B2 fallback for legacy)
+  // Get photo URL helper - uses Cloudflare Image Resizing for transformations
   const getPhotoUrl = useCallback(
-    (photo: GaleriaPhoto & { processingStatus?: string; thumbPath?: string; previewPath?: string }, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', _b2BaseUrl?: string): string => {
+    (
+      photo: GaleriaPhoto & { processingStatus?: string; thumbPath?: string; previewPath?: string }, 
+      _gallery: Galeria | undefined, 
+      size: 'thumbnail' | 'preview' | 'full', 
+      watermarkConfig?: WatermarkConfig
+    ): string => {
       const photoPath = photo.storageKey;
       
       if (!photoPath) return '/placeholder.svg';
       
-      // Check if watermark should be applied
-      const watermarkSettings = gallery?.configuracoes?.watermark;
-      const shouldApplyWatermark = watermarkSettings && watermarkSettings.type !== 'none' && size === 'preview';
-      
-      // Use new R2-based URL function with fallback to B2 for legacy photos
-      return getPhotoUrlWithFallback(
+      // Use Cloudflare Image Resizing URL function
+      return getPhotoUrlFromLib(
         {
           storageKey: photoPath,
           thumbPath: photo.thumbPath,
           previewPath: photo.previewPath,
-          processingStatus: photo.processingStatus,
           width: photo.width,
           height: photo.height,
         },
         size === 'full' ? 'original' : size,
-        shouldApplyWatermark
+        watermarkConfig
       );
     },
     []

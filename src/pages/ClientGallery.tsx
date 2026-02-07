@@ -25,7 +25,7 @@ import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
 import { DownloadModal } from '@/components/DownloadModal';
-import { getPhotoUrlWithFallback, getOriginalPhotoUrl } from '@/lib/photoUrl';
+import { getPhotoUrl, getOriginalPhotoUrl, WatermarkConfig } from '@/lib/photoUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings, DiscountPackage, TitleCaseMode } from '@/types/gallery';
 import { GalleryPhoto, Gallery } from '@/types/gallery';
@@ -216,6 +216,29 @@ export default function ClientGallery() {
     enabled: !!sessionId && !supabaseGallery?.regrasCongeladas,
   });
 
+  // Fetch photographer's watermark settings from their account
+  const photographerUserId = supabaseGallery?.userId || supabaseGallery?.user_id;
+  const { data: photographerWatermark } = useQuery({
+    queryKey: ['photographer-watermark', photographerUserId],
+    queryFn: async () => {
+      if (!photographerUserId) return null;
+      
+      const { data, error } = await supabase
+        .from('photographer_accounts')
+        .select('watermark_mode, watermark_path, watermark_opacity, watermark_scale')
+        .eq('user_id', photographerUserId)
+        .single();
+      
+      if (error) {
+        console.warn('Photographer watermark fetch error:', error.message);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!photographerUserId,
+  });
+
   // 3. Fetch photos from Supabase (for legacy) or use from response (for token)
   const { data: supabasePhotos, isLoading: isLoadingPhotos } = useQuery({
     queryKey: ['client-gallery-photos', galleryId],
@@ -316,13 +339,17 @@ export default function ClientGallery() {
   // Check if deadline is actually set in database
   const hasDeadline = !!supabaseGallery?.prazo_selecao;
 
-  // 4. Transform photos with R2 Worker URLs
+  // 4. Transform photos with Cloudflare Image Resizing URLs
   const photos = useMemo((): GalleryPhoto[] => {
     if (!supabasePhotos || !transformedGallery) return [];
     
-    // Get watermark settings from gallery - this is used to determine if watermark should be applied
-    const watermarkSettings = transformedGallery.settings?.watermark;
-    const shouldApplyWatermark = watermarkSettings && watermarkSettings.type !== 'none';
+    // Build watermark config from photographer's settings
+    const watermarkConfig: WatermarkConfig = {
+      mode: (photographerWatermark?.watermark_mode as WatermarkConfig['mode']) || 'system',
+      path: photographerWatermark?.watermark_path || null,
+      opacity: photographerWatermark?.watermark_opacity || 40,
+      scale: photographerWatermark?.watermark_scale || 30,
+    };
     
     return supabasePhotos.map((photo) => {
       const photoWidth = photo.width || 800;
@@ -334,7 +361,6 @@ export default function ClientGallery() {
         storageKey: storagePath,
         thumbPath: photo.thumb_path,
         previewPath: photo.preview_path,
-        processingStatus: photo.processing_status || 'ready',
         width: photoWidth,
         height: photoHeight,
       };
@@ -343,8 +369,8 @@ export default function ClientGallery() {
         id: photo.id,
         filename: photo.original_filename || photo.filename,
         originalFilename: photo.original_filename || photo.filename,
-        thumbnailUrl: getPhotoUrlWithFallback(photoPaths, 'thumbnail', false),
-        previewUrl: getPhotoUrlWithFallback(photoPaths, 'preview', shouldApplyWatermark),
+        thumbnailUrl: getPhotoUrl(photoPaths, 'thumbnail'), // Never watermark thumbnails
+        previewUrl: getPhotoUrl(photoPaths, 'preview', watermarkConfig),
         originalUrl: getOriginalPhotoUrl(storagePath),
         storageKey: storagePath,
         width: photoWidth,
@@ -355,7 +381,7 @@ export default function ClientGallery() {
         order: photo.order_index || 0,
       };
     });
-  }, [supabasePhotos, transformedGallery]);
+  }, [supabasePhotos, transformedGallery, photographerWatermark]);
 
   // 5. Mutation for toggling selection via Edge Function
   const selectionMutation = useMutation({

@@ -1,20 +1,18 @@
 /**
- * Photo URL utilities with Cloudflare Image Resizing for watermark on-the-fly
+ * Photo URL utilities with Cloudflare Image Resizing
  * 
  * Architecture:
- * - Previews (clean, no watermark) are stored in R2
- * - Watermarks are applied via Cloudflare Image Resizing URL params
- * - Original images in B2 (for downloads after confirmation)
- * 
- * Cloudflare Image Resizing applies watermark via /cdn-cgi/image/ endpoint
- * using the `draw` parameter with `repeat: true` for tiling effect.
+ * - Clean previews stored in R2 (media.lunarihub.com)
+ * - Thumbnails/resizing via /cdn-cgi/image/width=X/
+ * - Watermarks applied on-the-fly via draw parameter
+ * - Originals in B2 (for downloads)
  */
 
-const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://cdn.lunarihub.com';
+const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://media.lunarihub.com';
 const B2_BUCKET_URL = import.meta.env.VITE_B2_BUCKET_URL || '';
 
-// Cloudflare Image Resizing base (must be the same domain as R2 CDN)
-const CF_IMAGE_RESIZING_DOMAIN = 'https://lunarihub.com';
+// Cloudflare Image Resizing endpoint (on the domain with Pro plan)
+const CF_RESIZING_DOMAIN = 'https://lunarihub.com';
 
 export type PhotoSize = 'thumbnail' | 'preview' | 'original';
 
@@ -28,148 +26,107 @@ export interface PhotoPaths {
 
 export interface WatermarkConfig {
   mode: 'system' | 'custom' | 'none';
-  path?: string | null;  // Path to custom watermark in R2 (user-assets/{userId}/watermark.png)
-  opacity?: number;      // 10-100 (not used in V1 - embedded in PNG)
-  scale?: number;        // 10-50 (not used in V1 - embedded in PNG)
+  path?: string | null;
+  opacity?: number;  // Not used in V1 - embedded in PNG
+  scale?: number;    // Not used in V1 - embedded in PNG
 }
 
+// Size configurations
+const SIZE_CONFIG: Record<PhotoSize, number | null> = {
+  thumbnail: 400,
+  preview: 1920,  // Default, can be overridden
+  original: null, // No resizing
+};
+
 /**
- * Get photo URL based on size and watermark configuration
+ * Get photo URL with optional resizing and watermark
  * 
- * For thumbnails: Always served clean from R2
- * For previews: 
- *   - If watermark mode is 'none': Clean URL from R2
- *   - If watermark mode is 'system' or 'custom': Cloudflare Image Resizing URL
- * For originals: Direct B2 URL (for downloads)
+ * @param photo - Photo paths object
+ * @param size - Target size (thumbnail, preview, original)
+ * @param watermarkConfig - Optional watermark configuration
+ * @param targetWidth - Optional custom width (overrides SIZE_CONFIG)
  */
 export function getPhotoUrl(
   photo: PhotoPaths,
   size: PhotoSize,
-  watermarkConfig?: WatermarkConfig
+  watermarkConfig?: WatermarkConfig,
+  targetWidth?: number
 ): string {
-  // Original - always from B2 (for downloads)
+  // Original - direct from B2 (for downloads)
   if (size === 'original') {
     return getOriginalPhotoUrl(photo.storageKey);
   }
 
-  // Thumbnail - always clean from R2 (no watermark)
-  if (size === 'thumbnail') {
-    if (photo.thumbPath) {
-      return `${R2_PUBLIC_URL}/${photo.thumbPath}`;
+  // Determine base path in R2
+  const basePath = size === 'thumbnail' 
+    ? (photo.thumbPath || photo.previewPath || photo.storageKey)
+    : (photo.previewPath || photo.storageKey);
+
+  if (!basePath) return '/placeholder.svg';
+
+  // Full R2 URL
+  const baseUrl = `${R2_PUBLIC_URL}/${basePath}`;
+
+  // Determine target width
+  const width = targetWidth || SIZE_CONFIG[size] || 1920;
+
+  // Build transformation options
+  const options: string[] = [];
+  options.push(`width=${width}`);
+  options.push('fit=scale-down');
+  options.push('quality=85');
+
+  // Add watermark if configured (only for preview, never for thumbnails)
+  if (size === 'preview' && watermarkConfig && watermarkConfig.mode !== 'none') {
+    const overlayUrl = getWatermarkOverlayUrl(watermarkConfig);
+    if (overlayUrl) {
+      const drawConfig = [{
+        url: overlayUrl,
+        repeat: true,
+        opacity: 1, // PNG transparency handles this
+      }];
+      options.push(`draw=${encodeURIComponent(JSON.stringify(drawConfig))}`);
     }
-    // Fallback to preview or storage key
-    if (photo.previewPath) {
-      return `${R2_PUBLIC_URL}/${photo.previewPath}`;
-    }
-    if (photo.storageKey) {
-      return `${R2_PUBLIC_URL}/${photo.storageKey}`;
-    }
-    return '/placeholder.svg';
   }
 
-  // Preview - apply watermark if configured
-  if (size === 'preview') {
-    const baseUrl = photo.previewPath 
-      ? `${R2_PUBLIC_URL}/${photo.previewPath}`
-      : photo.storageKey 
-        ? `${R2_PUBLIC_URL}/${photo.storageKey}`
-        : null;
-
-    if (!baseUrl) {
-      return '/placeholder.svg';
-    }
-
-    // No watermark - return clean URL
-    if (!watermarkConfig || watermarkConfig.mode === 'none') {
-      return baseUrl;
-    }
-
-    // Apply watermark via Cloudflare Image Resizing
-    return buildWatermarkedUrl(baseUrl, watermarkConfig);
-  }
-
-  return '/placeholder.svg';
+  // Build final URL with Cloudflare Image Resizing
+  return `${CF_RESIZING_DOMAIN}/cdn-cgi/image/${options.join(',')}/${baseUrl}`;
 }
 
 /**
- * Build a Cloudflare Image Resizing URL with watermark overlay
- * 
- * Uses the `/cdn-cgi/image/` endpoint with `draw` parameter.
- * The watermark PNG should have transparency and appropriate sizing/padding built-in.
+ * Get watermark overlay URL based on mode
  */
-function buildWatermarkedUrl(baseImageUrl: string, config: WatermarkConfig): string {
-  // Determine overlay URL based on mode
-  let overlayUrl: string;
+function getWatermarkOverlayUrl(config: WatermarkConfig): string | null {
+  if (config.mode === 'none') return null;
   
   if (config.mode === 'custom' && config.path) {
-    // Custom watermark from user's upload
-    overlayUrl = `${R2_PUBLIC_URL}/${config.path}`;
-  } else {
-    // System default pattern
-    overlayUrl = `${R2_PUBLIC_URL}/system-assets/default-pattern.png`;
+    return `${R2_PUBLIC_URL}/${config.path}`;
   }
-
-  // Build the draw parameter for Cloudflare Image Resizing
-  // repeat: true creates a tiling/mosaic effect
-  // opacity is applied from the PNG itself (V1 simplification)
-  const drawConfig = [{
-    url: overlayUrl,
-    repeat: true,
-    fit: 'contain',
-    opacity: 1, // PNG transparency handles this
-  }];
-
-  // Cloudflare Image Resizing URL format:
-  // https://domain.com/cdn-cgi/image/draw=[config]/original-image-url
-  const params = new URLSearchParams();
-  params.set('draw', JSON.stringify(drawConfig));
   
-  // Build final URL
-  // Format: /cdn-cgi/image/{options}/{source-image}
-  // The source image must be a full URL or path on the same domain
-  
-  // Since our images are on cdn.lunarihub.com (R2), we need to reference them
-  // from the main domain that has Image Resizing enabled
-  const imagePathFromR2 = baseImageUrl.replace(R2_PUBLIC_URL, '');
-  
-  return `${CF_IMAGE_RESIZING_DOMAIN}/cdn-cgi/image/draw=${encodeURIComponent(JSON.stringify(drawConfig))}/${baseImageUrl}`;
+  // System default pattern
+  return `${R2_PUBLIC_URL}/system-assets/default-pattern.png`;
 }
 
 /**
- * Get photo URL with fallback for legacy photos
+ * Get photo URL with fallback for legacy compatibility
+ * Converts boolean watermark flag to WatermarkConfig
  * 
- * This function handles the transition period where some photos may not have
- * R2 paths yet. For legacy photos, it falls back to B2 directly.
- * 
- * @deprecated Use getPhotoUrl with proper watermarkConfig instead
+ * @deprecated Use getPhotoUrl with proper WatermarkConfig instead
  */
 export function getPhotoUrlWithFallback(
   photo: PhotoPaths & { processingStatus?: string },
   size: PhotoSize,
   withWatermark: boolean = false
 ): string {
-  // For backward compatibility, convert boolean to config
   const watermarkConfig: WatermarkConfig | undefined = withWatermark 
     ? { mode: 'system' } 
     : undefined;
   
-  // Check if we have R2 paths
-  const hasR2Paths = photo.thumbPath || photo.previewPath;
-  
-  if (hasR2Paths) {
-    return getPhotoUrl(photo, size, watermarkConfig);
-  }
-  
-  // Fallback to B2 directly (legacy photos without R2 processing)
-  if (photo.storageKey) {
-    return getOriginalPhotoUrl(photo.storageKey);
-  }
-  
-  return '/placeholder.svg';
+  return getPhotoUrl(photo, size, watermarkConfig);
 }
 
 /**
- * Get the original photo URL directly from B2
+ * Get original photo URL from B2
  * Use this for downloads after payment/confirmation
  */
 export function getOriginalPhotoUrl(storageKey: string | null | undefined): string {
@@ -185,19 +142,23 @@ export function getOriginalPhotoUrl(storageKey: string | null | undefined): stri
 
 /**
  * Check if photo is ready for display
- * With the new architecture, photos are ready immediately after upload
+ * With new architecture, photos are ready immediately after upload
  */
 export function isPhotoReady(photo: { processingStatus?: string }): boolean {
-  // With new architecture, all photos are ready after upload
-  // Keep for backward compatibility
   return photo.processingStatus !== 'error';
 }
 
 /**
  * Check if photo is still processing
- * @deprecated Processing is no longer async
+ * @deprecated Processing is no longer async - always returns false
  */
-export function isPhotoProcessing(photo: { processingStatus?: string }): boolean {
-  // With new architecture, there's no async processing
+export function isPhotoProcessing(): boolean {
   return false;
+}
+
+/**
+ * Get R2 public URL (for external use)
+ */
+export function getR2PublicUrl(): string {
+  return R2_PUBLIC_URL;
 }
