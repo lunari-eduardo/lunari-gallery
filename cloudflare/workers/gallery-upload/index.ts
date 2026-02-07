@@ -115,15 +115,15 @@ async function handleUpload(
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const filename = `${photoId}.${extension}`;
 
-    // Build storage path: /{user_id}/{gallery_id}/original/{photo_id}.jpg
-    const basePath = `${user.userId}/${galleryId}`;
-    const originalPath = `${basePath}/original/${filename}`;
+    // Build storage path: galleries/{gallery_id}/{filename}
+    // This path is used for both storage and serving via Image Resizing
+    const storagePath = `galleries/${galleryId}/${filename}`;
 
     // Get file content as ArrayBuffer
     const fileBuffer = await file.arrayBuffer();
 
-    // Upload original to R2
-    await env.GALLERY_BUCKET.put(originalPath, fileBuffer, {
+    // Upload to R2 (single file - Cloudflare Image Resizing handles thumbnails)
+    await env.GALLERY_BUCKET.put(storagePath, fileBuffer, {
       httpMetadata: {
         contentType: file.type || 'image/jpeg',
       },
@@ -135,12 +135,11 @@ async function handleUpload(
       },
     });
 
-    console.log(`Uploaded: ${originalPath} (${fileBuffer.byteLength} bytes)`);
+    console.log(`Uploaded to R2: ${storagePath} (${fileBuffer.byteLength} bytes)`);
 
-    // For Phase 1.2, we return the same path for all versions
-    // In Phase 3.5, we'll generate actual thumbnails and previews
-    const previewPath = originalPath;
-    const thumbPath = originalPath;
+    // All paths point to the same file - Image Resizing applies width dynamically
+    const previewPath = storagePath;
+    const thumbPath = storagePath;
 
     // Save photo record to Supabase
     const photoRecord = {
@@ -148,8 +147,8 @@ async function handleUpload(
       user_id: user.userId,
       filename,
       original_filename: originalFilename,
-      storage_key: originalPath,
-      original_path: originalPath,
+      storage_key: storagePath,
+      original_path: storagePath,
       preview_path: previewPath,
       thumb_path: thumbPath,
       file_size: fileBuffer.byteLength,
@@ -157,6 +156,7 @@ async function handleUpload(
       width,
       height,
       has_watermark: false,
+      processing_status: 'ready',
     };
 
     const dbResponse = await fetch(
@@ -177,7 +177,7 @@ async function handleUpload(
       const dbError = await dbResponse.text();
       console.error('DB insert failed:', dbError);
       // Cleanup: delete the uploaded file
-      await env.GALLERY_BUCKET.delete(originalPath);
+      await env.GALLERY_BUCKET.delete(storagePath);
       return new Response(
         JSON.stringify({ error: 'Erro ao salvar no banco de dados' }),
         {
@@ -196,8 +196,8 @@ async function handleUpload(
           id: savedPhoto.id,
           filename,
           originalFilename,
-          storageKey: originalPath,
-          originalPath,
+          storageKey: storagePath,
+          originalPath: storagePath,
           previewPath,
           thumbPath,
           fileSize: fileBuffer.byteLength,
