@@ -20,11 +20,13 @@ export function WatermarkUploader({
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  // Generate preview URL from path
+  // Generate preview URL from path using Cloudflare Image Resizing
+  const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://media.lunarihub.com';
   const getPreviewUrl = useCallback((path: string | null) => {
     if (!path) return null;
-    return `https://cdn.lunarihub.com/image/${path}`;
-  }, []);
+    // Use Image Resizing for consistent preview sizing
+    return `https://lunarihub.com/cdn-cgi/image/width=200,fit=scale-down/${R2_PUBLIC_URL}/${path}`;
+  }, [R2_PUBLIC_URL]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

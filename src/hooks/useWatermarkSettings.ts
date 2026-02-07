@@ -133,7 +133,7 @@ export function useWatermarkSettings() {
       formData.append('file', file);
 
       // Get worker URL from environment or use default
-      const workerUrl = 'https://cdn.lunarihub.com';
+      const workerUrl = import.meta.env.VITE_R2_PUBLIC_URL || 'https://media.lunarihub.com';
       
       const response = await fetch(`${workerUrl}/upload-watermark`, {
         method: 'POST',
