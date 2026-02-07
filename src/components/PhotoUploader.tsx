@@ -122,13 +122,8 @@ export function PhotoUploader({
       const compressed = await compressImage(item.file, compressionOptions);
       updateItem(item.id, { progress: 30 });
 
-      // Step 2: Upload via B2 Edge Function with retry
+      // Step 2: Upload via R2 Edge Function
       updateItem(item.id, { status: 'uploading', progress: 40 });
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Não autenticado');
-      }
 
       // Create FormData with compressed file
       const formData = new FormData();
@@ -138,25 +133,16 @@ export function PhotoUploader({
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
 
-      // Upload to R2 via Cloudflare Worker with retry logic
-      const R2_UPLOAD_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
-      
-      const data = await retryWithBackoff(
+      // Upload via Supabase Edge Function (auto-deploys, no manual wrangler needed)
+      const result = await retryWithBackoff(
         async () => {
-          const response = await fetch(`${R2_UPLOAD_URL}/upload`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-            },
+          const { data, error } = await supabase.functions.invoke('r2-upload', {
             body: formData,
           });
 
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP ${response.status}`);
+          if (error) {
+            throw new Error(error.message || 'Falha ao enviar foto');
           }
-
-          const data = await response.json();
 
           if (!data?.success) {
             // Handle insufficient credits error specifically
@@ -187,14 +173,14 @@ export function PhotoUploader({
       refetchCredits();
 
       return {
-        id: data.photo.id,
-        filename: data.photo.filename,
-        originalFilename: data.photo.originalFilename,
-        storageKey: data.photo.storageKey,
-        fileSize: data.photo.fileSize,
-        mimeType: data.photo.mimeType,
-        width: data.photo.width,
-        height: data.photo.height,
+        id: result.photo.id,
+        filename: result.photo.filename,
+        originalFilename: result.photo.originalFilename,
+        storageKey: result.photo.storageKey,
+        fileSize: result.photo.fileSize,
+        mimeType: result.photo.mimeType,
+        width: result.photo.width,
+        height: result.photo.height,
       };
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error(String(error));
