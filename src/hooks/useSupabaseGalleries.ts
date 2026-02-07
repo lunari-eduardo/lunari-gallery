@@ -587,7 +587,7 @@ export function useSupabaseGalleries() {
 
   // Get photo URL helper - uses R2 for transformed images (with B2 fallback for legacy)
   const getPhotoUrl = useCallback(
-    (photo: GaleriaPhoto & { processingStatus?: string; thumbPath?: string; previewPath?: string; previewWmPath?: string }, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', _b2BaseUrl?: string): string => {
+    (photo: GaleriaPhoto & { processingStatus?: string; thumbPath?: string; previewPath?: string }, gallery: Galeria | undefined, size: 'thumbnail' | 'preview' | 'full', _b2BaseUrl?: string): string => {
       const photoPath = photo.storageKey;
       
       if (!photoPath) return '/placeholder.svg';
@@ -602,7 +602,6 @@ export function useSupabaseGalleries() {
           storageKey: photoPath,
           thumbPath: photo.thumbPath,
           previewPath: photo.previewPath,
-          previewWmPath: photo.previewWmPath,
           processingStatus: photo.processingStatus,
           width: photo.width,
           height: photo.height,

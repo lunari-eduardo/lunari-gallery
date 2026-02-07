@@ -320,7 +320,7 @@ export default function ClientGallery() {
   const photos = useMemo((): GalleryPhoto[] => {
     if (!supabasePhotos || !transformedGallery) return [];
     
-    // Get watermark settings from gallery
+    // Get watermark settings from gallery - this is used to determine if watermark should be applied
     const watermarkSettings = transformedGallery.settings?.watermark;
     const shouldApplyWatermark = watermarkSettings && watermarkSettings.type !== 'none';
     
@@ -334,8 +334,7 @@ export default function ClientGallery() {
         storageKey: storagePath,
         thumbPath: photo.thumb_path,
         previewPath: photo.preview_path,
-        previewWmPath: photo.preview_wm_path,
-        processingStatus: photo.processing_status || 'ready', // Default to ready for legacy photos
+        processingStatus: photo.processing_status || 'ready',
         width: photoWidth,
         height: photoHeight,
       };
@@ -347,7 +346,7 @@ export default function ClientGallery() {
         thumbnailUrl: getPhotoUrlWithFallback(photoPaths, 'thumbnail', false),
         previewUrl: getPhotoUrlWithFallback(photoPaths, 'preview', shouldApplyWatermark),
         originalUrl: getOriginalPhotoUrl(storagePath),
-        storageKey: storagePath, // For download without watermark
+        storageKey: storagePath,
         width: photoWidth,
         height: photoHeight,
         isSelected: photo.is_selected || false,

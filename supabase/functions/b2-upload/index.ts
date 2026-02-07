@@ -391,7 +391,7 @@ Deno.serve(async (req) => {
     const uploadDuration = Date.now() - startTime;
     console.log(`[${requestId}] B2 upload complete in ${uploadDuration}ms: ${uploadResult.fileId}`);
 
-    // Save metadata to Supabase with processing_status = 'uploaded'
+    // Save metadata to Supabase - photos are now ready immediately (no async processing)
     const { data: photo, error: insertError } = await supabase
       .from("galeria_fotos")
       .insert({
@@ -400,13 +400,17 @@ Deno.serve(async (req) => {
         filename: filename,
         original_filename: originalFilename || file.name,
         storage_key: storagePath,
+        // R2 paths will be same as storage_key initially
+        // Client can generate thumbnails client-side or use Cloudflare Image Resizing
+        thumb_path: storagePath,
+        preview_path: storagePath,
         file_size: fileData.byteLength,
         mime_type: file.type || "image/jpeg",
         width: width,
         height: height,
         is_selected: false,
         order_index: 0,
-        processing_status: 'uploaded', // NEW: mark for async processing
+        processing_status: 'ready', // CHANGED: Photos are ready immediately
       })
       .select()
       .single();
