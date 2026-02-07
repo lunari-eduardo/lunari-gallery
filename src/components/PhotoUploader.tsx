@@ -138,16 +138,25 @@ export function PhotoUploader({
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
 
-      // Upload to B2 via Supabase Edge Function with retry logic
+      // Upload to R2 via Cloudflare Worker with retry logic
+      const R2_UPLOAD_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
+      
       const data = await retryWithBackoff(
         async () => {
-          const { data, error: uploadError } = await supabase.functions.invoke('b2-upload', {
+          const response = await fetch(`${R2_UPLOAD_URL}/upload`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
             body: formData,
           });
 
-          if (uploadError) {
-            throw uploadError;
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
           }
+
+          const data = await response.json();
 
           if (!data?.success) {
             // Handle insufficient credits error specifically
