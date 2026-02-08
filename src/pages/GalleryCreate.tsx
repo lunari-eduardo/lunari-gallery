@@ -1347,7 +1347,17 @@ export default function GalleryCreate() {
             {isCreatingGallery ? <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                 <p className="text-muted-foreground">Preparando galeria para uploads...</p>
-              </div> : supabaseGalleryId ? <PhotoUploader galleryId={supabaseGalleryId} maxLongEdge={imageResizeOption} onUploadComplete={handlePhotoUploadComplete} /> : <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
+              </div> : supabaseGalleryId ? <PhotoUploader 
+                galleryId={supabaseGalleryId} 
+                maxLongEdge={imageResizeOption} 
+                watermarkConfig={{
+                  mode: watermarkSettings.mode,
+                  customPathHorizontal: watermarkSettings.path,
+                  customPathVertical: watermarkSettings.path,
+                  opacity: watermarkSettings.opacity,
+                }}
+                onUploadComplete={handlePhotoUploadComplete} 
+              /> : <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
                 <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">
                   Preparando área de upload...

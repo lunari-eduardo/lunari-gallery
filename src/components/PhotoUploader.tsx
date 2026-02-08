@@ -7,7 +7,8 @@ import {
   compressImage, 
   isValidImageType, 
   formatFileSize,
-  CompressionOptions 
+  CompressionOptions,
+  WatermarkConfig
 } from '@/lib/imageCompression';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -43,6 +44,8 @@ interface PhotoUploadItem {
 interface PhotoUploaderProps {
   galleryId: string;
   maxLongEdge?: 1024 | 1920 | 2560;
+  /** Watermark configuration for burn-in during compression */
+  watermarkConfig?: WatermarkConfig;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
@@ -52,6 +55,7 @@ interface PhotoUploaderProps {
 export function PhotoUploader({
   galleryId,
   maxLongEdge = 1920,
+  watermarkConfig,
   onUploadComplete,
   onUploadStart,
   onUploadingChange,
@@ -110,16 +114,27 @@ export function PhotoUploader({
 
   const uploadSingleFile = async (item: PhotoUploadItem): Promise<UploadedPhoto | null> => {
     try {
-      // Step 1: Compress
+      // Step 1: Compress (with watermark burn-in if configured)
       updateItem(item.id, { status: 'compressing', progress: 10 });
       
       const compressionOptions: Partial<CompressionOptions> = {
         maxLongEdge,
         quality: 0.8,
         removeExif: true,
+        watermark: watermarkConfig,
       };
       
-      const compressed = await compressImage(item.file, compressionOptions);
+      let compressed;
+      try {
+        compressed = await compressImage(item.file, compressionOptions);
+      } catch (compressionError) {
+        // Watermark load failure = upload failure (by design)
+        const errorMessage = compressionError instanceof Error 
+          ? compressionError.message 
+          : 'Erro ao processar imagem';
+        throw new Error(errorMessage);
+      }
+      
       updateItem(item.id, { progress: 30 });
 
       // Step 2: Upload via R2 Edge Function
