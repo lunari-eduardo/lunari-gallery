@@ -134,7 +134,6 @@ export default function GalleryPreview() {
               <MasonryItem key={photo.id}>
                 <PhotoCard
                   photo={photo}
-                  showWatermark={true}
                   isSelected={photo.isSelected}
                   allowComments={false}
                   disabled={true}

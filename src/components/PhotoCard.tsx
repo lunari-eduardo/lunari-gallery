@@ -1,22 +1,10 @@
 import { useState } from 'react';
 import { Check, MessageSquare, Heart, ImageOff } from 'lucide-react';
-import { GalleryPhoto, WatermarkDisplay } from '@/types/gallery';
+import { GalleryPhoto } from '@/types/gallery';
 import { cn } from '@/lib/utils';
-import { WatermarkOverlay, WatermarkMode, useWatermarkDisplay } from '@/components/WatermarkOverlay';
 
 interface PhotoCardProps {
   photo: GalleryPhoto;
-  /** Show watermark overlay on this image */
-  showWatermark?: boolean;
-  watermarkDisplay?: WatermarkDisplay;
-  /** Watermark mode: system, custom, or none */
-  watermarkMode?: WatermarkMode;
-  /** Custom watermark path in R2 for custom mode */
-  watermarkCustomPath?: string | null;
-  /** Opacity for watermark (0-100) */
-  watermarkOpacity?: number;
-  /** Scale for custom watermark tile (10-50%) */
-  watermarkScale?: number;
   isSelected: boolean;
   allowComments: boolean;
   disabled?: boolean;
@@ -28,12 +16,6 @@ interface PhotoCardProps {
 
 export function PhotoCard({ 
   photo, 
-  showWatermark = true,
-  watermarkDisplay = 'all',
-  watermarkMode = 'system',
-  watermarkCustomPath,
-  watermarkOpacity = 40,
-  watermarkScale = 30,
   isSelected, 
   allowComments,
   disabled,
@@ -44,12 +26,6 @@ export function PhotoCard({
 }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  
-  // Determine if watermark should show based on display mode
-  const shouldShowWatermark = useWatermarkDisplay(watermarkDisplay, 'grid') && showWatermark;
-  
-  // Determine photo orientation
-  const orientation = photo.width > photo.height ? 'horizontal' : 'vertical';
 
   const handleContainerClick = (e: React.MouseEvent) => {
     // Only open fullscreen if clicking on the image area, not on action buttons
@@ -67,7 +43,7 @@ export function PhotoCard({
       style={{ aspectRatio: `${photo.width}/${photo.height}` }}
       onClick={handleContainerClick}
     >
-      {/* Image with error handling */}
+      {/* Image with error handling - watermark is burned into pixels during upload */}
       {hasError ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted text-muted-foreground">
           <ImageOff className="h-8 w-8 mb-2" />
@@ -93,17 +69,6 @@ export function PhotoCard({
             setHasError(true);
           }}
           onContextMenu={(e) => e.preventDefault()}
-        />
-      )}
-
-      {/* Watermark overlay - visual protection */}
-      {shouldShowWatermark && isLoaded && !hasError && (
-        <WatermarkOverlay 
-          mode={watermarkMode}
-          orientation={orientation}
-          customPath={watermarkCustomPath}
-          opacity={watermarkOpacity}
-          scale={watermarkScale}
         />
       )}
 

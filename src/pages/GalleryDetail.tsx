@@ -598,7 +598,6 @@ export default function GalleryDetail() {
                 <MasonryItem key={photo.id}>
                   <PhotoCard
                     photo={photo}
-                    showWatermark={true}
                     isSelected={photo.isSelected}
                     allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
                     disabled
@@ -917,7 +916,6 @@ export default function GalleryDetail() {
         <Lightbox
           photos={transformedPhotos}
           currentIndex={lightboxIndex}
-          showWatermark={true}
           allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
           disabled
           onClose={() => setLightboxIndex(null)}

@@ -1021,8 +1021,6 @@ export default function ClientGallery() {
           <Lightbox
             photos={confirmedSelectedPhotos}
             currentIndex={lightboxIndex}
-            showWatermark={false}
-            watermarkDisplay={gallery.settings.watermarkDisplay}
             allowComments={false}
             allowDownload={gallery.settings.allowDownload}
             disabled={true}
@@ -1243,10 +1241,6 @@ export default function ClientGallery() {
             <MasonryItem key={photo.id}>
               <PhotoCard
                 photo={photo}
-                showWatermark={!isConfirmed}
-                watermarkDisplay={gallery.settings.watermarkDisplay}
-                watermarkMode="system"
-                watermarkOpacity={40}
                 isSelected={photo.isSelected}
                 allowComments={gallery.settings.allowComments}
                 disabled={isBlocked}
@@ -1282,10 +1276,6 @@ export default function ClientGallery() {
         <Lightbox
           photos={localPhotos}
           currentIndex={lightboxIndex}
-          showWatermark={!isConfirmed}
-          watermarkDisplay={gallery.settings.watermarkDisplay}
-          watermarkMode="system"
-          watermarkOpacity={40}
           allowComments={gallery.settings.allowComments}
           allowDownload={gallery.settings.allowDownload}
           disabled={isBlocked}

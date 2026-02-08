@@ -19,13 +19,11 @@ export function WatermarkSettings() {
   } = useWatermarkSettings();
 
   const [localOpacity, setLocalOpacity] = useState(settings.opacity);
-  const [localScale, setLocalScale] = useState(settings.scale);
 
   // Sync local state with fetched settings
   useEffect(() => {
     setLocalOpacity(settings.opacity);
-    setLocalScale(settings.scale);
-  }, [settings.opacity, settings.scale]);
+  }, [settings.opacity]);
 
   const handleModeChange = async (mode: WatermarkMode) => {
     await saveSettings({ mode });
@@ -39,14 +37,6 @@ export function WatermarkSettings() {
     await saveSettings({ opacity: value[0] });
   };
 
-  const handleScaleChange = (value: number[]) => {
-    setLocalScale(value[0]);
-  };
-
-  const handleScaleCommit = async (value: number[]) => {
-    await saveSettings({ scale: value[0] });
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -55,7 +45,6 @@ export function WatermarkSettings() {
           <Skeleton className="h-6 w-40" />
         </div>
         <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-12 w-full" />
         <Skeleton className="h-12 w-full" />
       </div>
     );
@@ -94,7 +83,7 @@ export function WatermarkSettings() {
             )} />
             <div>
               <p className="font-medium text-sm">Padrão do Sistema</p>
-              <p className="text-xs text-muted-foreground">Linhas diagonais</p>
+              <p className="text-xs text-muted-foreground">Proteção completa</p>
             </div>
           </label>
 
@@ -114,7 +103,7 @@ export function WatermarkSettings() {
             )} />
             <div>
               <p className="font-medium text-sm">Minha Marca</p>
-              <p className="text-xs text-muted-foreground">Logo em mosaico</p>
+              <p className="text-xs text-muted-foreground">Logo personalizado</p>
             </div>
           </label>
 
@@ -153,63 +142,35 @@ export function WatermarkSettings() {
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <p>
-              Use PNG com fundo transparente. Sua marca será repetida em mosaico
-              cobrindo toda a foto para proteção completa.
+              Use PNG com fundo transparente. Recomendado: 2560x1707px (horizontal) 
+              ou 1707x2560px (vertical). A marca será aplicada no centro da foto.
             </p>
           </div>
         </div>
       )}
 
-      {/* Opacity & Scale Sliders (only if not 'none') */}
+      {/* Opacity Slider (only if not 'none') */}
       {settings.mode !== 'none' && (
-        <div className="space-y-5">
-          {/* Opacity */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Opacidade</Label>
-              <span className="text-sm font-medium tabular-nums">
-                {localOpacity}%
-              </span>
-            </div>
-            <Slider
-              value={[localOpacity]}
-              onValueChange={handleOpacityChange}
-              onValueCommit={handleOpacityCommit}
-              min={10}
-              max={100}
-              step={5}
-              disabled={isSaving}
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              Valores baixos deixam a marca mais sutil
-            </p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">Opacidade</Label>
+            <span className="text-sm font-medium tabular-nums">
+              {localOpacity}%
+            </span>
           </div>
-
-          {/* Scale */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">{settings.mode === 'custom' ? 'Tamanho do Tile' : 'Tamanho'}</Label>
-              <span className="text-sm font-medium tabular-nums">
-                {localScale}%
-              </span>
-            </div>
-            <Slider
-              value={[localScale]}
-              onValueChange={handleScaleChange}
-              onValueCommit={handleScaleCommit}
-              min={10}
-              max={50}
-              step={5}
-              disabled={isSaving}
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              {settings.mode === 'custom' 
-                ? 'Tamanho de cada repetição do logo no mosaico'
-                : 'Porcentagem em relação à menor dimensão da foto'}
-            </p>
-          </div>
+          <Slider
+            value={[localOpacity]}
+            onValueChange={handleOpacityChange}
+            onValueCommit={handleOpacityCommit}
+            min={10}
+            max={100}
+            step={5}
+            disabled={isSaving}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">
+            Valores baixos deixam a marca mais sutil
+          </p>
         </div>
       )}
 
@@ -222,6 +183,15 @@ export function WatermarkSettings() {
           </p>
         </div>
       )}
+
+      {/* Info about burn-in */}
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border border-border/50 text-sm">
+        <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+        <p className="text-muted-foreground">
+          A marca d'água é aplicada diretamente nas fotos durante o upload, 
+          garantindo proteção consistente em qualquer dispositivo ou zoom.
+        </p>
+      </div>
     </div>
   );
 }

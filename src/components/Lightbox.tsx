@@ -11,7 +11,7 @@ import {
   Heart,
   Loader2
 } from 'lucide-react';
-import { GalleryPhoto, WatermarkDisplay } from '@/types/gallery';
+import { GalleryPhoto } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -19,22 +19,10 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { downloadPhoto } from '@/lib/downloadUtils';
 import { toast } from 'sonner';
-import { WatermarkOverlay, WatermarkMode, useWatermarkDisplay } from '@/components/WatermarkOverlay';
 
 interface LightboxProps {
   photos: GalleryPhoto[];
   currentIndex: number;
-  /** Show watermark overlay on images */
-  showWatermark?: boolean;
-  watermarkDisplay?: WatermarkDisplay;
-  /** Watermark mode: system, custom, or none */
-  watermarkMode?: WatermarkMode;
-  /** Custom watermark path in R2 for custom mode */
-  watermarkCustomPath?: string | null;
-  /** Opacity for watermark (0-100) */
-  watermarkOpacity?: number;
-  /** Scale for custom watermark tile (10-50%) */
-  watermarkScale?: number;
   allowComments: boolean;
   allowDownload?: boolean;
   disabled?: boolean;
@@ -49,12 +37,6 @@ interface LightboxProps {
 export function Lightbox({ 
   photos, 
   currentIndex, 
-  showWatermark = true,
-  watermarkDisplay = 'all',
-  watermarkMode = 'system',
-  watermarkCustomPath,
-  watermarkOpacity = 40,
-  watermarkScale = 30,
   allowComments,
   allowDownload = false,
   disabled,
@@ -90,11 +72,9 @@ export function Lightbox({
 
   const currentPhoto = photos[currentIndex];
   const [isDownloadingPhoto, setIsDownloadingPhoto] = useState(false);
-  
-  // Determine if watermark should show based on display mode and confirmed state
-  const shouldShowWatermark = useWatermarkDisplay(watermarkDisplay, 'lightbox') && showWatermark && !isConfirmedMode;
 
   // In confirmed mode, use original URL (no watermark) for display and download
+  // Otherwise use previewUrl which has watermark burned in
   const displayUrl = isConfirmedMode && currentPhoto?.storageKey
     ? getOriginalPhotoUrl(currentPhoto.storageKey)
     : currentPhoto?.previewUrl;
@@ -132,7 +112,7 @@ export function Lightbox({
       return;
     }
     
-    // Fallback: simple link download (may have watermark)
+    // Fallback: simple link download (with watermark)
     const link = document.createElement('a');
     link.href = currentPhoto.previewUrl;
     link.download = currentPhoto.originalFilename || currentPhoto.filename;
@@ -419,7 +399,7 @@ export function Lightbox({
           </button>
         )}
 
-        {/* Image wrapper - constrains watermark overlay to actual image dimensions */}
+        {/* Image wrapper - watermark is burned into pixels, no overlay needed */}
         <div 
           className="relative flex items-center justify-center overflow-hidden"
           style={{ 
@@ -433,7 +413,6 @@ export function Lightbox({
           onTouchEnd={handleTouchEnd}
           onWheel={handleWheel}
         >
-          {/* Inner wrapper that shrinks to image size for proper overlay containment */}
           <div className="relative inline-flex">
             <img
               src={displayUrl}
@@ -450,17 +429,6 @@ export function Lightbox({
               }}
               onContextMenu={(e) => e.preventDefault()}
             />
-            
-            {/* Watermark overlay - constrained to image dimensions */}
-            {shouldShowWatermark && (
-              <WatermarkOverlay 
-                mode={watermarkMode}
-                orientation={currentPhoto.width > currentPhoto.height ? 'horizontal' : 'vertical'}
-                customPath={watermarkCustomPath}
-                opacity={watermarkOpacity}
-                scale={watermarkScale}
-              />
-            )}
           </div>
         </div>
       </div>
