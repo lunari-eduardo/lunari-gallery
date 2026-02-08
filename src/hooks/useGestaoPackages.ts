@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useGalleryAccess } from '@/hooks/useGalleryAccess';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 export interface GestaoPackage {
   id: string;
@@ -22,8 +21,7 @@ interface UseGestaoPackagesResult {
  * Only available for PRO + Gallery users
  */
 export function useGestaoPackages(): UseGestaoPackagesResult {
-  const { user } = useAuth();
-  const { hasGestaoIntegration } = useGalleryAccess(user);
+  const { user, hasGestaoIntegration } = useAuthContext();
 
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['gestao-pacotes', user?.id],

@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: accessLoading,
     hasGestaoIntegration,
     isAdmin,
-  } = useGalleryAccess(user);
+  } = useGalleryAccess(user, session);
 
   // Debug logging
   useEffect(() => {

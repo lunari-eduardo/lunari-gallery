@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -23,13 +23,14 @@ interface GalleryAccessResult {
   isAdmin: boolean;             // Helper for admin bypass
 }
 
-export function useGalleryAccess(user: User | null): GalleryAccessResult {
+export function useGalleryAccess(user: User | null, session: Session | null): GalleryAccessResult {
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('free');
   const [planName, setPlanName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    // CRITICAL: Only proceed if we have BOTH user AND valid session with token
+    if (!user || !session?.access_token) {
       setAccessLevel('free');
       setPlanName(null);
       setIsLoading(false);
@@ -114,7 +115,7 @@ export function useGalleryAccess(user: User | null): GalleryAccessResult {
 
     const timer = setTimeout(checkAccessLevel, 0);
     return () => clearTimeout(timer);
-  }, [user]);
+  }, [user, session]);
 
   const isAdmin = accessLevel === 'admin';
   const hasGestaoIntegration = isAdmin || accessLevel === 'pro_gallery';
