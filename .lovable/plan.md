@@ -1,125 +1,300 @@
-# Plano: Arquitetura Simplificada "Watermark no Frontend"
 
-## ✅ Status: IMPLEMENTADO
 
-### Resumo das Mudanças
+# Plano: Sistema de Watermark com Modos System/Custom
 
-A arquitetura foi simplificada para:
-1. **Eliminar processamento de backend** - Nenhuma transformação dinâmica de imagem
-2. **URLs estáticas diretas** - Fotos servidas diretamente do R2 CDN
-3. **Watermark via CSS overlay** - Proteção visual aplicada no frontend
+## Resumo
+
+Implementar dois comportamentos distintos para o `WatermarkOverlay`:
+
+1. **System**: Imagem única que cobre a foto inteira (sem repetição)
+2. **Custom**: Logo do fotógrafo em tile/mosaico (com repetição)
 
 ---
 
-## Arquitetura Implementada
+## Arquitetura
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    FLUXO SIMPLIFICADO (ATIVO)                           │
+│                     MODOS DE WATERMARK                                  │
 └─────────────────────────────────────────────────────────────────────────┘
 
-  FASE 1: UPLOAD
+  SYSTEM (Padrão do Sistema)
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  Frontend comprime para 1920px (imageCompression.ts)                │
-  │         │                                                           │
-  │         ▼                                                           │
-  │  Edge Function: r2-upload                                           │
-  │         │                                                           │
-  │         ▼                                                           │
-  │  R2 Bucket: lunari-previews (PUBLICO)                              │
-  │  Path: galleries/{id}/foto.jpg                                      │
-  │         │                                                           │
-  │         ▼                                                           │
-  │  DB: galeria_fotos.storage_key = path                              │
-  │  Status: ready (imediato)                                           │
+  │  Arquivos no R2:                                                    │
+  │  - system-assets/default-watermark-h.png (2560x1440 - horizontal)   │
+  │  - system-assets/default-watermark-v.png (1440x2560 - vertical)     │
+  │                                                                     │
+  │  Comportamento CSS:                                                 │
+  │  - background-size: contain                                         │
+  │  - background-position: center                                      │
+  │  - background-repeat: no-repeat                                     │
+  │  - Imagem se encaixa na foto sem cortar ou distorcer               │
   └─────────────────────────────────────────────────────────────────────┘
 
-  FASE 2: VISUALIZACAO (SELECAO)
+  CUSTOM (Minha Marca)
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  Frontend busca fotos do banco                                      │
-  │         │                                                           │
-  │         ▼                                                           │
-  │  URL direta: https://media.lunarihub.com/galleries/{id}/foto.jpg   │
-  │         │                                                           │
-  │         ▼                                                           │
-  │  Watermark aplicada via CSS (WatermarkOverlay component)            │
-  │  - SVG diagonal pattern com opacity 15%                             │
-  │  - pointer-events:none, user-select:none                            │
-  │  - Context menu bloqueado                                           │
+  │  Arquivo no R2:                                                     │
+  │  - user-assets/{user_id}/watermark.png (tile pequeno ~200x200)     │
+  │                                                                     │
+  │  Comportamento CSS:                                                 │
+  │  - background-size: {scale}% (configurável 10-50%)                 │
+  │  - background-position: center                                      │
+  │  - background-repeat: repeat                                        │
+  │  - Logo repetido em mosaico cobrindo toda a foto                   │
   └─────────────────────────────────────────────────────────────────────┘
 
-  FASE 3: ENTREGA FINAL (APOS CONFIRMACAO)
+  NONE
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  Galeria confirmada + isConfirmed = true                            │
-  │         │                                                           │
-  │         ▼                                                           │
-  │  Watermark overlay é removido (showWatermark=false)                 │
-  │  Imagem limpa exibida para download                                 │
+  │  Sem overlay, foto exibida sem proteção                            │
   └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Arquivos Modificados
+## Mudanças no Código
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/lib/photoUrl.ts` | Simplificado - remove Cloudflare Image Resizing, retorna URLs diretas |
-| `src/components/WatermarkOverlay.tsx` | **NOVO** - Componente CSS overlay com SVG pattern |
-| `src/components/PhotoCard.tsx` | Usa `showWatermark` prop + `WatermarkOverlay` |
-| `src/components/Lightbox.tsx` | Usa `showWatermark` prop + `WatermarkOverlay` |
-| `src/pages/ClientGallery.tsx` | Remove query de watermark, usa prop `showWatermark` |
-| `src/pages/GalleryDetail.tsx` | Atualizado para nova API de PhotoCard/Lightbox |
-| `src/pages/GalleryPreview.tsx` | Atualizado para nova API de PhotoCard |
-| `src/hooks/useSupabaseGalleries.ts` | Remove `WatermarkConfig`, simplifica `getPhotoUrl` |
+### 1. Atualizar WatermarkOverlay.tsx
 
-## Arquivos Removidos
+Nova interface com props para modo e orientação:
 
-| Arquivo | Motivo |
-|---------|--------|
-| `public/watermarks/*` | Não mais necessário (pattern inline SVG) |
+```typescript
+interface WatermarkOverlayProps {
+  /** Watermark mode: system, custom, or none */
+  mode?: 'system' | 'custom' | 'none';
+  /** Photo orientation for system mode */
+  orientation?: 'horizontal' | 'vertical';
+  /** Custom watermark path (for custom mode) */
+  customPath?: string | null;
+  /** Opacity from 0 to 100 */
+  opacity?: number;
+  /** Scale for custom mode tile (10-50%) */
+  scale?: number;
+  /** Additional CSS classes */
+  className?: string;
+}
+```
+
+Lógica do componente:
+
+```typescript
+const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://media.lunarihub.com';
+
+export function WatermarkOverlay({ 
+  mode = 'system',
+  orientation = 'horizontal',
+  customPath,
+  opacity = 40,
+  scale = 30,
+  className 
+}: WatermarkOverlayProps) {
+  if (mode === 'none') return null;
+
+  const getBackgroundStyle = () => {
+    if (mode === 'system') {
+      // System: full-size watermark that fits the photo
+      const suffix = orientation === 'horizontal' ? 'h' : 'v';
+      const url = `${R2_PUBLIC_URL}/system-assets/default-watermark-${suffix}.png`;
+      
+      return {
+        backgroundImage: `url("${url}")`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      };
+    }
+    
+    if (mode === 'custom' && customPath) {
+      // Custom: tiled logo pattern
+      const url = `${R2_PUBLIC_URL}/${customPath}`;
+      
+      return {
+        backgroundImage: `url("${url}")`,
+        backgroundSize: `${scale}%`,
+        backgroundPosition: 'center',
+        backgroundRepeat: 'repeat',
+      };
+    }
+    
+    // Fallback: inline SVG diagonal pattern
+    return {
+      backgroundImage: fallbackPattern,
+      backgroundRepeat: 'repeat',
+    };
+  };
+
+  return (
+    <div
+      className={cn(
+        'absolute inset-0 z-10',
+        'pointer-events-none select-none',
+        className
+      )}
+      style={{
+        ...getBackgroundStyle(),
+        opacity: opacity / 100,
+      }}
+      aria-hidden="true"
+      draggable={false}
+    />
+  );
+}
+```
+
+### 2. Atualizar PhotoCard.tsx
+
+Passar orientação da foto e configurações de watermark:
+
+```typescript
+interface PhotoCardProps {
+  photo: GalleryPhoto;
+  watermarkMode?: 'system' | 'custom' | 'none';
+  watermarkCustomPath?: string | null;
+  watermarkOpacity?: number;
+  watermarkScale?: number;
+  watermarkDisplay?: WatermarkDisplay;
+  // ... resto das props
+}
+
+// No render:
+{shouldShowWatermark && isLoaded && !hasError && (
+  <WatermarkOverlay 
+    mode={watermarkMode}
+    orientation={photo.width > photo.height ? 'horizontal' : 'vertical'}
+    customPath={watermarkCustomPath}
+    opacity={watermarkOpacity}
+    scale={watermarkScale}
+  />
+)}
+```
+
+### 3. Atualizar Lightbox.tsx
+
+Mesmo padrão - passar configurações de watermark:
+
+```typescript
+interface LightboxProps {
+  // ... props existentes
+  watermarkMode?: 'system' | 'custom' | 'none';
+  watermarkCustomPath?: string | null;
+  watermarkOpacity?: number;
+  watermarkScale?: number;
+}
+
+// No render:
+{shouldShowWatermark && (
+  <WatermarkOverlay 
+    mode={watermarkMode}
+    orientation={currentPhoto.width > currentPhoto.height ? 'horizontal' : 'vertical'}
+    customPath={watermarkCustomPath}
+    opacity={watermarkOpacity}
+    scale={watermarkScale}
+  />
+)}
+```
+
+### 4. Atualizar ClientGallery.tsx
+
+Buscar configurações de watermark do fotógrafo e passar para os componentes:
+
+```typescript
+// Na query de gallery-access, já deve vir watermark_mode, watermark_path, watermark_opacity, watermark_scale
+
+const watermarkConfig = {
+  mode: galleryData.watermark_mode || 'system',
+  customPath: galleryData.watermark_path,
+  opacity: galleryData.watermark_opacity || 40,
+  scale: galleryData.watermark_scale || 30,
+};
+
+// Passar para PhotoCard e Lightbox
+<PhotoCard
+  photo={photo}
+  watermarkMode={watermarkConfig.mode}
+  watermarkCustomPath={watermarkConfig.customPath}
+  watermarkOpacity={watermarkConfig.opacity}
+  watermarkScale={watermarkConfig.scale}
+  // ...
+/>
+```
 
 ---
 
-## Proteções de Segurança (CSS)
+## Arquivos para Upload no R2
 
-| Proteção | Implementação |
-|----------|---------------|
-| Bloqueio de arraste | `draggable="false"` |
-| Bloqueio de seleção | `user-select: none` |
-| Click-through | `pointer-events: none` no overlay |
-| Context menu | `onContextMenu={e => e.preventDefault()}` |
+Você precisa subir estes arquivos para o bucket:
 
----
+| Caminho no R2 | Dimensões | Descrição |
+|---------------|-----------|-----------|
+| `system-assets/default-watermark-h.png` | 2560x1440 | Watermark para fotos horizontais |
+| `system-assets/default-watermark-v.png` | 1440x2560 | Watermark para fotos verticais |
 
-## Configuração Necessária (Cloudflare)
-
-Para o sistema funcionar, você precisa:
-
-1. **R2 > lunari-previews > Settings > Enable Public Access**
-2. **R2 > lunari-previews > Settings > Add Custom Domain: media.lunarihub.com**
-3. **DNS**: media.lunarihub.com apontando para R2
+Especificações:
+- Formato: PNG com transparência
+- Resolução: Alta (2560px no lado maior)
+- Conteúdo: Sua marca d'água padrão que será exibida sobre as fotos
 
 ---
 
-## Resultado
+## Arquivos a Modificar
 
-| Antes | Depois |
-|-------|--------|
-| Cloudflare Image Resizing | Nenhum |
-| URL com `/cdn-cgi/image/draw=...` | URL direta estática |
-| Query `photographer_accounts` para watermark | Não necessário |
-| Dependência de CF Pro | Apenas R2 público |
-| Watermark queimada no pixel | Overlay CSS visual |
+| Arquivo | Ação |
+|---------|------|
+| `src/components/WatermarkOverlay.tsx` | Refatorar para suportar modos system/custom |
+| `src/components/PhotoCard.tsx` | Passar configurações de watermark |
+| `src/components/Lightbox.tsx` | Passar configurações de watermark |
+| `src/pages/ClientGallery.tsx` | Buscar e distribuir configurações de watermark |
+| `supabase/functions/gallery-access/index.ts` | Retornar watermark settings na resposta |
 
-### Performance
+---
 
-- **Latência**: <50ms (CDN edge)
-- **Cache**: Infinito (arquivo estático)
-- **Transformação**: 0ms (não existe)
+## Fluxo de Dados
 
-### Custos
+```text
+photographer_accounts (DB)
+    │
+    │  watermark_mode
+    │  watermark_path
+    │  watermark_opacity
+    │  watermark_scale
+    │
+    ▼
+gallery-access (Edge Function)
+    │
+    │  Inclui watermark settings na resposta
+    │
+    ▼
+ClientGallery.tsx
+    │
+    │  Extrai watermarkConfig do galleryData
+    │
+    ├──────────────────────┐
+    │                      │
+    ▼                      ▼
+PhotoCard.tsx         Lightbox.tsx
+    │                      │
+    │                      │
+    ▼                      ▼
+WatermarkOverlay      WatermarkOverlay
+(system ou custom)    (system ou custom)
+```
 
-- **R2 Storage**: $0.015/GB/mês
-- **R2 Egress**: Grátis (via custom domain)
-- **Processamento**: $0 (não existe)
+---
+
+## Resultado Final
+
+| Cenário | Comportamento |
+|---------|---------------|
+| Fotógrafo escolhe "Padrão do Sistema" | Watermark única que se encaixa na foto (h ou v) |
+| Fotógrafo escolhe "Minha Marca" | Logo em mosaico/tile sobre a foto |
+| Fotógrafo escolhe "Nenhuma" | Sem overlay |
+| Foto horizontal | Usa `default-watermark-h.png` |
+| Foto vertical | Usa `default-watermark-v.png` |
+
+---
+
+## Próximos Passos
+
+1. Você sobe os arquivos `default-watermark-h.png` e `default-watermark-v.png` para o R2
+2. Eu implemento as mudanças no código
+3. Testamos com ambos os modos
+
