@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getPhotoUrl as getPhotoUrlFromLib, getOriginalPhotoUrl, WatermarkConfig } from '@/lib/photoUrl';
+import { getPhotoUrl as getPhotoUrlFromLib, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { WatermarkSettings, TitleCaseMode } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
 import { RegrasCongeladas } from '@/lib/pricingUtils';
@@ -585,19 +585,18 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Get photo URL helper - uses Cloudflare Image Resizing for transformations
+  // Get photo URL helper - returns direct static URLs from R2
   const getPhotoUrl = useCallback(
     (
       photo: GaleriaPhoto & { processingStatus?: string; thumbPath?: string; previewPath?: string }, 
       _gallery: Galeria | undefined, 
-      size: 'thumbnail' | 'preview' | 'full', 
-      watermarkConfig?: WatermarkConfig
+      size: 'thumbnail' | 'preview' | 'full'
     ): string => {
       const photoPath = photo.storageKey;
       
       if (!photoPath) return '/placeholder.svg';
       
-      // Use Cloudflare Image Resizing URL function
+      // Return direct static URL from R2
       return getPhotoUrlFromLib(
         {
           storageKey: photoPath,
@@ -606,8 +605,7 @@ export function useSupabaseGalleries() {
           width: photo.width,
           height: photo.height,
         },
-        size === 'full' ? 'original' : size,
-        watermarkConfig
+        size === 'full' ? 'original' : size
       );
     },
     []

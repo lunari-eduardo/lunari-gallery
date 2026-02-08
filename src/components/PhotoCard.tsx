@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Check, MessageSquare, Heart, ImageOff } from 'lucide-react';
-import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
+import { GalleryPhoto, WatermarkDisplay } from '@/types/gallery';
 import { cn } from '@/lib/utils';
+import { WatermarkOverlay, useWatermarkDisplay } from '@/components/WatermarkOverlay';
 
 interface PhotoCardProps {
   photo: GalleryPhoto;
-  watermark?: WatermarkSettings;
+  /** Show watermark overlay on this image */
+  showWatermark?: boolean;
   watermarkDisplay?: WatermarkDisplay;
   isSelected: boolean;
   allowComments: boolean;
@@ -18,7 +20,7 @@ interface PhotoCardProps {
 
 export function PhotoCard({ 
   photo, 
-  watermark,
+  showWatermark = true,
   watermarkDisplay = 'all',
   isSelected, 
   allowComments,
@@ -30,6 +32,9 @@ export function PhotoCard({
 }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  
+  // Determine if watermark should show based on display mode
+  const shouldShowWatermark = useWatermarkDisplay(watermarkDisplay, 'grid') && showWatermark;
 
   const handleContainerClick = (e: React.MouseEvent) => {
     // Only open fullscreen if clicking on the image area, not on action buttons
@@ -62,6 +67,7 @@ export function PhotoCard({
             !isLoaded && 'opacity-0',
             isLoaded && 'opacity-100'
           )}
+          draggable={false}
           onLoad={() => setIsLoaded(true)}
           onError={(e) => {
             console.error('Imagem falhou:', {
@@ -71,7 +77,13 @@ export function PhotoCard({
             });
             setHasError(true);
           }}
+          onContextMenu={(e) => e.preventDefault()}
         />
+      )}
+
+      {/* Watermark overlay - CSS-based visual protection */}
+      {shouldShowWatermark && isLoaded && !hasError && (
+        <WatermarkOverlay opacity={15} />
       )}
 
       {/* Loading skeleton */}

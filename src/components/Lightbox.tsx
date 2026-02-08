@@ -11,7 +11,7 @@ import {
   Heart,
   Loader2
 } from 'lucide-react';
-import { GalleryPhoto, WatermarkSettings, WatermarkDisplay } from '@/types/gallery';
+import { GalleryPhoto, WatermarkDisplay } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -19,11 +19,13 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { downloadPhoto } from '@/lib/downloadUtils';
 import { toast } from 'sonner';
+import { WatermarkOverlay, useWatermarkDisplay } from '@/components/WatermarkOverlay';
 
 interface LightboxProps {
   photos: GalleryPhoto[];
   currentIndex: number;
-  watermark?: WatermarkSettings;
+  /** Show watermark overlay on images */
+  showWatermark?: boolean;
   watermarkDisplay?: WatermarkDisplay;
   allowComments: boolean;
   allowDownload?: boolean;
@@ -39,7 +41,7 @@ interface LightboxProps {
 export function Lightbox({ 
   photos, 
   currentIndex, 
-  watermark,
+  showWatermark = true,
   watermarkDisplay = 'all',
   allowComments,
   allowDownload = false,
@@ -77,8 +79,8 @@ export function Lightbox({
   const currentPhoto = photos[currentIndex];
   const [isDownloadingPhoto, setIsDownloadingPhoto] = useState(false);
   
-  // Show watermark in fullscreen if watermarkDisplay is 'all' or 'fullscreen'
-  const showWatermark = watermark && watermark.type !== 'none' && watermarkDisplay !== 'none';
+  // Determine if watermark should show based on display mode and confirmed state
+  const shouldShowWatermark = useWatermarkDisplay(watermarkDisplay, 'lightbox') && showWatermark && !isConfirmedMode;
 
   // In confirmed mode, use original URL (no watermark) for display and download
   const displayUrl = isConfirmedMode && currentPhoto?.storageKey
@@ -432,7 +434,13 @@ export function Lightbox({
               transformOrigin: 'center center',
               transition: isGestureActive ? 'none' : 'transform 0.2s ease-out',
             }}
+            onContextMenu={(e) => e.preventDefault()}
           />
+          
+          {/* Watermark overlay - CSS-based visual protection */}
+          {shouldShowWatermark && (
+            <WatermarkOverlay opacity={15} className="rounded-none" />
+          )}
         </div>
       </div>
 
