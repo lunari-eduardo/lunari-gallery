@@ -24,7 +24,20 @@ import Auth from "./pages/Auth";
 import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        // Retry once for 401 errors (auth race condition safety net)
+        if ((error as any)?.code === '401' || (error as any)?.status === 401) {
+          return failureCount < 1;
+        }
+        return failureCount < 3;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

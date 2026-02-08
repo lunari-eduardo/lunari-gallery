@@ -205,19 +205,21 @@ export function useSupabaseGalleries() {
   useEffect(() => {
     let mounted = true;
     
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (mounted && session) {
-        setIsReady(true);
-      }
-    };
-    
-    checkAuth();
-    
-    // Also listen for auth state changes
+    // Use onAuthStateChange as single source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
-        setIsReady(!!session);
+        // Only set ready when we have a valid session WITH access_token
+        const hasValidSession = !!(session?.access_token);
+        console.log('🔐 Auth state for galleries:', event, hasValidSession);
+        setIsReady(hasValidSession);
+      }
+    });
+
+    // Also check current session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted && session?.access_token) {
+        console.log('📋 Initial session ready for galleries');
+        setIsReady(true);
       }
     });
     

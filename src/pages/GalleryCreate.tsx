@@ -22,8 +22,7 @@ import { PackageSelect } from '@/components/PackageSelect';
 import { PaymentMethodSelector } from '@/components/PaymentMethodSelector';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSettings } from '@/hooks/useSettings';
-import { useAuth } from '@/hooks/useAuth';
-import { useGalleryAccess } from '@/hooks/useGalleryAccess';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { useGestaoParams } from '@/hooks/useGestaoParams';
 import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
 import { usePaymentIntegration } from '@/hooks/usePaymentIntegration';
@@ -92,12 +91,10 @@ const steps = [{
 export default function GalleryCreate() {
   const navigate = useNavigate();
   const {
-    user
-  } = useAuth();
-  const {
+    user,
     hasGestaoIntegration,
     accessLevel
-  } = useGalleryAccess(user);
+  } = useAuthContext();
   const {
     gestaoParams,
     hasGestaoParams,
