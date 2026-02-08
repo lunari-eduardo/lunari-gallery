@@ -2,13 +2,21 @@ import { useState } from 'react';
 import { Check, MessageSquare, Heart, ImageOff } from 'lucide-react';
 import { GalleryPhoto, WatermarkDisplay } from '@/types/gallery';
 import { cn } from '@/lib/utils';
-import { WatermarkOverlay, useWatermarkDisplay } from '@/components/WatermarkOverlay';
+import { WatermarkOverlay, WatermarkMode, useWatermarkDisplay } from '@/components/WatermarkOverlay';
 
 interface PhotoCardProps {
   photo: GalleryPhoto;
   /** Show watermark overlay on this image */
   showWatermark?: boolean;
   watermarkDisplay?: WatermarkDisplay;
+  /** Watermark mode: system, custom, or none */
+  watermarkMode?: WatermarkMode;
+  /** Custom watermark path in R2 for custom mode */
+  watermarkCustomPath?: string | null;
+  /** Opacity for watermark (0-100) */
+  watermarkOpacity?: number;
+  /** Scale for custom watermark tile (10-50%) */
+  watermarkScale?: number;
   isSelected: boolean;
   allowComments: boolean;
   disabled?: boolean;
@@ -22,6 +30,10 @@ export function PhotoCard({
   photo, 
   showWatermark = true,
   watermarkDisplay = 'all',
+  watermarkMode = 'system',
+  watermarkCustomPath,
+  watermarkOpacity = 40,
+  watermarkScale = 30,
   isSelected, 
   allowComments,
   disabled,
@@ -35,6 +47,9 @@ export function PhotoCard({
   
   // Determine if watermark should show based on display mode
   const shouldShowWatermark = useWatermarkDisplay(watermarkDisplay, 'grid') && showWatermark;
+  
+  // Determine photo orientation
+  const orientation = photo.width > photo.height ? 'horizontal' : 'vertical';
 
   const handleContainerClick = (e: React.MouseEvent) => {
     // Only open fullscreen if clicking on the image area, not on action buttons
@@ -81,9 +96,15 @@ export function PhotoCard({
         />
       )}
 
-      {/* Watermark overlay - CSS-based visual protection */}
+      {/* Watermark overlay - visual protection */}
       {shouldShowWatermark && isLoaded && !hasError && (
-        <WatermarkOverlay opacity={15} />
+        <WatermarkOverlay 
+          mode={watermarkMode}
+          orientation={orientation}
+          customPath={watermarkCustomPath}
+          opacity={watermarkOpacity}
+          scale={watermarkScale}
+        />
       )}
 
       {/* Loading skeleton */}
