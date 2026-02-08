@@ -199,6 +199,33 @@ function transformPhoto(row: any): GaleriaPhoto {
 
 export function useSupabaseGalleries() {
   const queryClient = useQueryClient();
+  const [isReady, setIsReady] = useState(false);
+
+  // Wait for auth to be ready before querying
+  useEffect(() => {
+    let mounted = true;
+    
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (mounted && session) {
+        setIsReady(true);
+      }
+    };
+    
+    checkAuth();
+    
+    // Also listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted) {
+        setIsReady(!!session);
+      }
+    });
+    
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Fetch all galleries for current user
   const {
@@ -217,6 +244,7 @@ export function useSupabaseGalleries() {
       if (error) throw error;
       return data.map(transformGaleria);
     },
+    enabled: isReady, // Only run query when auth is ready
   });
 
   // Get a single gallery by ID
