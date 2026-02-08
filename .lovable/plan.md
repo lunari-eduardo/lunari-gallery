@@ -1,246 +1,242 @@
 
-# Plano: Investigacao Completa e Correcao do Sistema de Watermark
 
-## Diagnostico - Situacao Atual
+# Plano: Arquitetura Simplificada "Watermark no Frontend"
 
-### Problema Identificado
+## Concordo Completamente
 
-O sistema de watermark **nunca foi funcional** porque existe uma falha fundamental na arquitetura de entrega de imagens.
+A sua proposta e a abordagem correta para este produto:
 
-### Cadeia de Erros Encontrada
-
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      FLUXO ATUAL (QUEBRADO)                             │
-└─────────────────────────────────────────────────────────────────────────┘
-
-   1. UPLOAD (Funciona)
-   ┌─────────────────────────────────────────────────────────────────────┐
-   │  PhotoUploader.tsx                                                  │
-   │         │                                                           │
-   │         ▼                                                           │
-   │  supabase.functions.invoke('r2-upload')                            │
-   │         │                                                           │
-   │         ▼                                                           │
-   │  Edge Function r2-upload                                            │
-   │         │                                                           │
-   │         ▼                                                           │
-   │  R2 Bucket: lunari-previews ✓                                      │
-   │  Path: galleries/{id}/1770489680545-e2e444b3.jpg                   │
-   │         │                                                           │
-   │         ▼                                                           │
-   │  Supabase DB: galeria_fotos ✓                                      │
-   │  storage_key = thumb_path = preview_path                           │
-   └─────────────────────────────────────────────────────────────────────┘
-
-   2. VISUALIZACAO (Quebrado)
-   ┌─────────────────────────────────────────────────────────────────────┐
-   │  getPhotoUrl() tenta construir URL:                                 │
-   │                                                                     │
-   │  https://lunarihub.com/cdn-cgi/image/                              │
-   │    width=1920,                                                      │
-   │    fit=scale-down,                                                  │
-   │    quality=85,                                                      │
-   │    draw=[{"url":"https://media.lunarihub.com/system-assets/..."}]  │
-   │    /https://media.lunarihub.com/galleries/{id}/foto.jpg            │
-   │         │                                                           │
-   │         ▼                                                           │
-   │  Cloudflare Image Resizing tenta buscar imagem                     │
-   │         │                                                           │
-   │         ▼                                                           │
-   │  https://media.lunarihub.com/galleries/...  ❌ 404!                │
-   │                                                                     │
-   │  Por que? R2 bucket esta PRIVADO e nao ha Worker servindo!         │
-   └─────────────────────────────────────────────────────────────────────┘
-```
-
-### Evidencias Coletadas
-
-| Teste | Resultado | Conclusao |
-|-------|-----------|-----------|
-| Edge Function r2-upload logs | "R2 upload complete" | Upload funciona |
-| `media.lunarihub.com/{path}` | Pagina em branco (404) | R2 nao e publico |
-| `lunarihub.com/cdn-cgi/image/...` | Pagina em branco | Image Resizing nao encontra origem |
-| `system-assets/default-pattern.png` | Nao existe | Asset de watermark nunca foi criado |
-| Worker `gallery-upload` | Nunca deployado | Codigo existe, mas nao roda |
-
-### Pontos de Falha
-
-1. **R2 Bucket Privado**: O bucket `lunari-previews` nao tem acesso publico configurado
-2. **Worker Nao Deployado**: O Worker `gallery-upload` nunca foi publicado via `wrangler deploy`
-3. **Asset Inexistente**: O arquivo `system-assets/default-pattern.png` nao existe no R2
-4. **Dominio Desconectado**: `media.lunarihub.com` nao esta conectado ao R2 ou Worker
+1. **Elimina complexidade de backend** - Nenhum processamento de imagem
+2. **Custo previsivel** - Apenas CDN estatica (R2) + storage frio (B2)
+3. **Menos pontos de falha** - Sem Workers, pipelines ou servicos externos
+4. **Performance maxima** - Arquivos estaticos servidos diretamente
 
 ---
 
-## Arquitetura Correta (Como Deveria Funcionar)
+## Nova Arquitetura
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      FLUXO CORRETO                                      │
+│                    FLUXO SIMPLIFICADO                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 
-  OPCAO A: R2 com Acesso Publico
+  FASE 1: UPLOAD
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  1. Configurar R2 bucket como PUBLICO                               │
-  │  2. Conectar custom domain media.lunarihub.com ao R2 publico        │
-  │  3. Imagens ficam acessiveis em media.lunarihub.com/{path}          │
-  │  4. Cloudflare Image Resizing busca de media.lunarihub.com          │
-  │  5. Watermark aplicado via parametro 'draw'                         │
+  │  Frontend comprime para 1920px (imageCompression.ts)                │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  Edge Function: r2-upload                                           │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  R2 Bucket: lunari-previews (PUBLICO)                              │
+  │  Path: galleries/{id}/foto.jpg                                      │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  DB: galeria_fotos.storage_key = path                              │
+  │  Status: ready (imediato)                                           │
   └─────────────────────────────────────────────────────────────────────┘
 
-  OPCAO B: R2 Privado + Worker (Atual no codigo, nao deployado)
+  FASE 2: VISUALIZACAO (SELECAO)
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  1. R2 permanece privado                                            │
-  │  2. Worker 'gallery-upload' serve imagens do R2                     │
-  │  3. Custom domain cdn.lunarihub.com conectado ao Worker             │
-  │  4. Cloudflare Image Resizing busca via Worker                      │
-  │  5. Problema: Worker precisa deploy manual (wrangler)               │
+  │  Frontend busca fotos do banco                                      │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  URL direta: https://media.lunarihub.com/galleries/{id}/foto.jpg   │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  Watermark aplicada via CSS (overlay visual)                        │
+  │  - <img> + <div> com background-image do pattern                    │
+  │  - Protecao: pointer-events:none, user-select:none                  │
+  │  - Opcional: context menu bloqueado                                 │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  FASE 3: ENTREGA FINAL (APOS CONFIRMACAO)
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  Galeria confirmada + allowDownload = true                          │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  Opcao A: Mesmo arquivo do R2 (1920px web)                         │
+  │  https://media.lunarihub.com/galleries/{id}/foto.jpg               │
+  │         │                                                           │
+  │         ▼                                                           │
+  │  Opcao B: Original do B2 (se fotografo subiu)                      │
+  │  https://b2.lunarihub.com/originals/galleries/{id}/original.jpg    │
+  │  (URL temporaria com signed URL)                                    │
   └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Solucao Recomendada
+## O Que Muda no Codigo
 
-### Opcao Escolhida: Tornar R2 Publico
+### 1. Simplificar photoUrl.ts
 
-Esta e a solucao mais simples porque:
-- Nao requer deploy manual de Workers
-- Usa infraestrutura nativa do Cloudflare
-- Menos pontos de falha
-- Lovable pode fazer apenas as mudancas no codigo
+Remover toda logica de Cloudflare Image Resizing e watermark dinamico:
 
-### Acoes Necessarias no Cloudflare Dashboard
-
-Voce precisara fazer estas configuracoes manualmente no painel do Cloudflare:
-
-1. **Tornar bucket R2 publico**
-   - Cloudflare Dashboard → R2 → lunari-previews → Settings
-   - Enable "Public access" (R2.dev subdomain ou custom domain)
-   
-2. **Conectar custom domain**
-   - R2 → lunari-previews → Settings → Custom Domain
-   - Adicionar: `media.lunarihub.com`
-   - Isso automaticamente cria os DNS records
-
-3. **Upload do asset de watermark**
-   - Criar arquivo `system-assets/default-pattern.png`
-   - Upload para o bucket R2
-
----
-
-## Mudancas no Codigo
-
-Uma vez que o R2 esteja publico com custom domain, as URLs vao funcionar automaticamente porque o codigo ja esta correto.
-
-### Validacao do Codigo Existente
-
-**photoUrl.ts** - Ja esta correto:
 ```typescript
+// ANTES: 150+ linhas com /cdn-cgi/image/draw=...
+// DEPOIS: ~30 linhas
+
 const R2_PUBLIC_URL = 'https://media.lunarihub.com';
-const CF_RESIZING_DOMAIN = 'https://lunarihub.com';
 
-// Gera URL correta:
-// https://lunarihub.com/cdn-cgi/image/width=1920,draw=[...]/https://media.lunarihub.com/galleries/...
-```
-
-**ClientGallery.tsx** - Ja busca watermark settings:
-```typescript
-const { data: photographerWatermark } = useQuery({
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('photographer_accounts')
-      .select('watermark_mode, watermark_path, watermark_opacity, watermark_scale')
-      .eq('user_id', photographerUserId)
-      .single();
-    return data;
-  },
-});
-
-// Passa para getPhotoUrl:
-const watermarkConfig: WatermarkConfig = {
-  mode: photographerWatermark?.watermark_mode || 'system',
-  path: photographerWatermark?.watermark_path || null,
-};
-```
-
-### Unica Mudanca Necessaria no Codigo
-
-Criar fallback caso o asset de watermark nao exista:
-
-**src/lib/photoUrl.ts** - Adicionar fallback seguro:
-```typescript
-function getWatermarkOverlayUrl(config: WatermarkConfig): string | null {
-  if (config.mode === 'none') return null;
-  
-  if (config.mode === 'custom' && config.path) {
-    return `${R2_PUBLIC_URL}/${config.path}`;
+export function getPhotoUrl(
+  photo: { storageKey: string; thumbPath?: string; previewPath?: string },
+  size: 'thumbnail' | 'preview' | 'original'
+): string {
+  if (size === 'original') {
+    return getOriginalPhotoUrl(photo.storageKey);
   }
   
-  // System default - usar padrao hospedado ou gerar via CSS
-  // Por enquanto, retornar null se nao existir para evitar erros
-  return `${R2_PUBLIC_URL}/system-assets/default-pattern.png`;
+  const path = size === 'thumbnail' 
+    ? (photo.thumbPath || photo.previewPath || photo.storageKey)
+    : (photo.previewPath || photo.storageKey);
+    
+  if (!path) return '/placeholder.svg';
+  
+  return `${R2_PUBLIC_URL}/${path}`;
 }
 ```
 
+### 2. Criar Componente WatermarkOverlay
+
+Componente CSS puro para overlay visual:
+
+```typescript
+// src/components/WatermarkOverlay.tsx
+
+interface WatermarkOverlayProps {
+  opacity?: number;
+  pattern?: 'diagonal' | 'grid' | 'custom';
+  customUrl?: string;
+}
+
+export function WatermarkOverlay({ opacity = 40, pattern = 'diagonal' }: WatermarkOverlayProps) {
+  // Pattern SVG inline ou PNG do sistema
+  // Aplicado via CSS absoluto sobre a imagem
+  // pointer-events: none para nao interferir com cliques
+}
+```
+
+### 3. Atualizar PhotoCard.tsx
+
+Adicionar overlay de watermark:
+
+```typescript
+<div className="relative">
+  <img src={photo.previewUrl} ... />
+  {showWatermark && <WatermarkOverlay opacity={40} />}
+</div>
+```
+
+### 4. Atualizar Lightbox.tsx
+
+Mesmo padrao - overlay CSS no fullscreen:
+
+```typescript
+<div className="relative">
+  <img src={displayUrl} ... />
+  {showWatermark && !isConfirmedMode && <WatermarkOverlay opacity={40} />}
+</div>
+```
+
+### 5. Atualizar ClientGallery.tsx
+
+Remover:
+- Query de photographerWatermark (nao necessario)
+- Logica de WatermarkConfig
+- Passagem de watermarkConfig para getPhotoUrl
+
+Adicionar:
+- Flag simples showWatermark baseada em configuracao da galeria
+
 ---
 
-## Asset de Watermark Padrao
+## Seguranca da Watermark Visual
 
-O sistema precisa de um arquivo PNG para aplicar como marca d'agua em mosaico.
+Protecoes CSS (nivel adequado para selecao de fotos):
 
-### Especificacoes do Asset
+| Protecao | Como |
+|----------|------|
+| Bloqueio de arraste | `draggable="false"` |
+| Bloqueio de selecao | `user-select: none` |
+| Click-through | `pointer-events: none` no overlay |
+| Context menu | `onContextMenu={e => e.preventDefault()}` |
+| Print media | `@media print { .watermark { opacity: 1 } }` |
 
-| Propriedade | Valor |
-|-------------|-------|
-| Formato | PNG com transparencia |
-| Dimensoes | ~200x200px (tile pequeno) |
-| Conteudo | Linhas diagonais semi-transparentes |
-| Opacidade | Embutida no PNG (~30-40%) |
-| Path no R2 | `system-assets/default-pattern.png` |
-
-### Como Criar e Subir
-
-1. Criar imagem PNG com pattern diagonal
-2. Subir para R2 via Cloudflare Dashboard:
-   - R2 → lunari-previews → Upload
-   - Path: `system-assets/default-pattern.png`
+Nota: Nenhuma watermark frontend e "inquebravel", mas para o fluxo de selecao e suficiente. O cliente ja pagou pelo servico - o objetivo e apenas evitar uso indevido casual.
 
 ---
 
-## Checklist de Correcao
+## Configuracao Necessaria (Voce)
 
-### Acoes no Cloudflare (Voce)
+### Cloudflare Dashboard
 
-- [ ] R2 → lunari-previews → Settings → Enable Public Access
-- [ ] R2 → lunari-previews → Settings → Add Custom Domain: media.lunarihub.com
-- [ ] Verificar DNS: media.lunarihub.com → R2 bucket
-- [ ] Upload: system-assets/default-pattern.png para R2
+1. **R2 > lunari-previews > Settings > Enable Public Access**
+2. **R2 > lunari-previews > Settings > Add Custom Domain: media.lunarihub.com**
+3. **Verificar DNS**: media.lunarihub.com apontando para R2
 
-### Validacao (Eu farei apos configuracao)
+### Environment Variables
 
-- [ ] Testar URL direta: `https://media.lunarihub.com/galleries/{id}/foto.jpg`
-- [ ] Testar Image Resizing: `https://lunarihub.com/cdn-cgi/image/width=400/https://media.lunarihub.com/...`
-- [ ] Testar Watermark: `https://lunarihub.com/cdn-cgi/image/width=1920,draw=[...]/https://media.lunarihub.com/...`
+Confirmar que existe:
+- `VITE_R2_PUBLIC_URL=https://media.lunarihub.com`
 
 ---
 
-## Resumo
+## Implementacao
 
-| Problema | Causa | Solucao |
-|----------|-------|---------|
-| Imagens nao carregam | R2 bucket privado | Tornar publico + custom domain |
-| Watermark nao aparece | Asset nao existe | Upload do PNG pattern |
-| Worker nao funciona | Nunca deployado | Nao necessario com R2 publico |
+### Arquivos a Modificar
 
-### Por Que Isso Aconteceu
+| Arquivo | Acao |
+|---------|------|
+| src/lib/photoUrl.ts | Simplificar (remover /cdn-cgi/image/) |
+| src/components/WatermarkOverlay.tsx | Criar novo |
+| src/components/PhotoCard.tsx | Adicionar overlay |
+| src/components/Lightbox.tsx | Adicionar overlay |
+| src/pages/ClientGallery.tsx | Remover logica de watermark backend |
 
-O projeto foi arquitetado para usar Cloudflare Image Resizing com R2, mas a configuracao do bucket e dominio nunca foi concluida. O codigo esta correto, mas a infraestrutura nao foi provisionada.
+### Arquivos a Remover
 
-### Proximos Passos
+| Arquivo | Motivo |
+|---------|--------|
+| public/watermarks/* | Nao mais necessario (pattern inline SVG) |
+| Configuracoes de watermark_mode | Simplificar para on/off |
 
-1. Voce configura R2 publico no Cloudflare Dashboard
-2. Voce faz upload do asset de watermark
-3. Eu valido que as URLs funcionam
-4. Sistema de watermark funciona automaticamente
+---
+
+## Resultado Final
+
+| Antes | Depois |
+|-------|--------|
+| Cloudflare Image Resizing | Nenhum |
+| Worker de processamento | Nenhum |
+| Servico externo (Cloudinary) | Nenhum |
+| URLs de 300+ caracteres | URL direta simples |
+| Watermark queimada no pixel | Overlay CSS visual |
+| Depende de CF Pro | Apenas R2 publico |
+
+### Custos Estimados
+
+| Servico | Custo |
+|---------|-------|
+| R2 Storage | $0.015/GB/mes |
+| R2 Egress | Gratis (via custom domain) |
+| B2 Cold Storage | $0.006/GB/mes |
+| Processamento | $0 (nao existe) |
+
+### Performance
+
+| Metrica | Valor |
+|---------|-------|
+| Latencia | <50ms (CDN edge) |
+| Cache | Infinito (arquivo estatico) |
+| Transformacao | 0ms (nao existe) |
+
+---
+
+## Proximos Passos
+
+1. Voce configura R2 publico + custom domain
+2. Eu implemento as mudancas no codigo
+3. Testamos upload e visualizacao
+4. Sistema funciona de forma estavel
+
