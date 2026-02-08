@@ -1,300 +1,212 @@
 
 
-# Plano: Sistema de Watermark com Modos System/Custom
+# Plano: Corrigir Race Condition de Autenticacao
 
-## Resumo
+## Problema Identificado
 
-Implementar dois comportamentos distintos para o `WatermarkOverlay`:
-
-1. **System**: Imagem única que cobre a foto inteira (sem repetição)
-2. **Custom**: Logo do fotógrafo em tile/mosaico (com repetição)
-
----
-
-## Arquitetura
+Ao acessar o sistema, multiplos erros 401 (Unauthorized) ocorrem em requisicoes para `user_roles`, `subscriptions` e `galerias`. O usuario precisa fazer logout e login novamente para que as galerias sejam carregadas.
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     MODOS DE WATERMARK                                  │
-└─────────────────────────────────────────────────────────────────────────┘
+SEQUENCIA ATUAL (COM BUG)
+────────────────────────────────────────────────────────────────────────
 
-  SYSTEM (Padrão do Sistema)
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  Arquivos no R2:                                                    │
-  │  - system-assets/default-watermark-h.png (2560x1440 - horizontal)   │
-  │  - system-assets/default-watermark-v.png (1440x2560 - vertical)     │
-  │                                                                     │
-  │  Comportamento CSS:                                                 │
-  │  - background-size: contain                                         │
-  │  - background-position: center                                      │
-  │  - background-repeat: no-repeat                                     │
-  │  - Imagem se encaixa na foto sem cortar ou distorcer               │
-  └─────────────────────────────────────────────────────────────────────┘
-
-  CUSTOM (Minha Marca)
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  Arquivo no R2:                                                     │
-  │  - user-assets/{user_id}/watermark.png (tile pequeno ~200x200)     │
-  │                                                                     │
-  │  Comportamento CSS:                                                 │
-  │  - background-size: {scale}% (configurável 10-50%)                 │
-  │  - background-position: center                                      │
-  │  - background-repeat: repeat                                        │
-  │  - Logo repetido em mosaico cobrindo toda a foto                   │
-  └─────────────────────────────────────────────────────────────────────┘
-
-  NONE
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  Sem overlay, foto exibida sem proteção                            │
-  └─────────────────────────────────────────────────────────────────────┘
+  T0: Pagina carrega
+      │
+      ▼
+  T1: useAuth configura onAuthStateChange
+      │
+      ▼
+  T2: INITIAL_SESSION dispara
+      user = {email: "...", id: "..."}
+      session = {..., access_token: "..."}
+      loading = false
+      │
+      ▼
+  T3: useGalleryAccess(user) recebe user != null
+      │
+      ├── Dispara: supabase.from('user_roles').select()  ──────▶ 401
+      ├── Dispara: supabase.from('subscriptions').select() ────▶ 401
+      │
+      ▼
+  T4: useSupabaseGalleries.checkAuth()
+      getSession() retorna session
+      isReady = true
+      │
+      ├── Dispara: supabase.from('galerias').select() ─────────▶ 401
+      │
+      ▼
+  T5: Supabase client FINALMENTE configura token internamente
+      (Tarde demais - queries ja falharam)
 ```
 
----
+O problema e que o evento `INITIAL_SESSION` e emitido **antes** do cliente Supabase estar completamente pronto para anexar o token nas requisicoes HTTP.
 
-## Mudanças no Código
+## Solucao
 
-### 1. Atualizar WatermarkOverlay.tsx
+Usar **session** como gate em vez de apenas **user**, e adicionar um pequeno delay ou verificar o token explicitamente.
 
-Nova interface com props para modo e orientação:
+```text
+SEQUENCIA CORRIGIDA
+────────────────────────────────────────────────────────────────────────
 
-```typescript
-interface WatermarkOverlayProps {
-  /** Watermark mode: system, custom, or none */
-  mode?: 'system' | 'custom' | 'none';
-  /** Photo orientation for system mode */
-  orientation?: 'horizontal' | 'vertical';
-  /** Custom watermark path (for custom mode) */
-  customPath?: string | null;
-  /** Opacity from 0 to 100 */
-  opacity?: number;
-  /** Scale for custom mode tile (10-50%) */
-  scale?: number;
-  /** Additional CSS classes */
-  className?: string;
-}
+  T0: Pagina carrega
+      │
+      ▼
+  T1: useAuth configura onAuthStateChange
+      │
+      ▼
+  T2: INITIAL_SESSION dispara
+      user = {email: "...", id: "..."}
+      session = {..., access_token: "..."}
+      loading = false
+      │
+      ▼
+  T3: AuthContext passa session para useGalleryAccess
+      │
+      ▼
+  T4: useGalleryAccess verifica session.access_token
+      Se nao tiver token valido, aguarda
+      │
+      ▼
+  T5: useSupabaseGalleries verifica session do AuthContext
+      │
+      ▼
+  T6: Queries disparam APENAS quando session.access_token existe
 ```
 
-Lógica do componente:
+## Mudancas no Codigo
+
+### 1. Modificar useGalleryAccess para usar Session
+
+**Arquivo:** `src/hooks/useGalleryAccess.ts`
+
+Alterar para receber `session` em vez de apenas `user`:
 
 ```typescript
-const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://media.lunarihub.com';
+export function useGalleryAccess(user: User | null, session: Session | null): GalleryAccessResult {
+  const [accessLevel, setAccessLevel] = useState<AccessLevel>('free');
+  const [planName, setPlanName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-export function WatermarkOverlay({ 
-  mode = 'system',
-  orientation = 'horizontal',
-  customPath,
-  opacity = 40,
-  scale = 30,
-  className 
-}: WatermarkOverlayProps) {
-  if (mode === 'none') return null;
+  useEffect(() => {
+    // CRITICAL: Only proceed if we have BOTH user AND valid session with token
+    if (!user || !session?.access_token) {
+      setAccessLevel('free');
+      setPlanName(null);
+      setIsLoading(false);
+      return;
+    }
 
-  const getBackgroundStyle = () => {
-    if (mode === 'system') {
-      // System: full-size watermark that fits the photo
-      const suffix = orientation === 'horizontal' ? 'h' : 'v';
-      const url = `${R2_PUBLIC_URL}/system-assets/default-watermark-${suffix}.png`;
-      
-      return {
-        backgroundImage: `url("${url}")`,
-        backgroundSize: 'contain',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      };
-    }
-    
-    if (mode === 'custom' && customPath) {
-      // Custom: tiled logo pattern
-      const url = `${R2_PUBLIC_URL}/${customPath}`;
-      
-      return {
-        backgroundImage: `url("${url}")`,
-        backgroundSize: `${scale}%`,
-        backgroundPosition: 'center',
-        backgroundRepeat: 'repeat',
-      };
-    }
-    
-    // Fallback: inline SVG diagonal pattern
-    return {
-      backgroundImage: fallbackPattern,
-      backgroundRepeat: 'repeat',
+    const checkAccessLevel = async () => {
+      // ... resto do codigo
     };
-  };
+    // ...
+  }, [user, session]);
+```
 
-  return (
-    <div
-      className={cn(
-        'absolute inset-0 z-10',
-        'pointer-events-none select-none',
-        className
-      )}
-      style={{
-        ...getBackgroundStyle(),
-        opacity: opacity / 100,
-      }}
-      aria-hidden="true"
-      draggable={false}
-    />
-  );
+### 2. Atualizar AuthContext para passar session
+
+**Arquivo:** `src/contexts/AuthContext.tsx`
+
+```typescript
+const { 
+  hasAccess, 
+  accessLevel, 
+  planName, 
+  isLoading: accessLoading,
+  hasGestaoIntegration,
+  isAdmin,
+} = useGalleryAccess(user, session); // Passar session tambem
+```
+
+### 3. Simplificar useSupabaseGalleries
+
+**Arquivo:** `src/hooks/useSupabaseGalleries.ts`
+
+Remover o listener duplicado e usar o session do contexto via prop ou verificar de forma mais robusta:
+
+```typescript
+export function useSupabaseGalleries() {
+  const queryClient = useQueryClient();
+  const [isReady, setIsReady] = useState(false);
+
+  // Wait for auth to be ready before querying
+  useEffect(() => {
+    let mounted = true;
+    
+    // Use onAuthStateChange as single source of truth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted) {
+        // Only set ready when we have a valid session WITH access_token
+        const hasValidSession = !!(session?.access_token);
+        console.log('🔐 Auth state for galleries:', event, hasValidSession);
+        setIsReady(hasValidSession);
+      }
+    });
+
+    // Also check current session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted && session?.access_token) {
+        console.log('📋 Initial session ready for galleries');
+        setIsReady(true);
+      }
+    });
+    
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ... resto do codigo
 }
 ```
 
-### 2. Atualizar PhotoCard.tsx
+### 4. Adicionar verificacao de retry para queries
 
-Passar orientação da foto e configurações de watermark:
+Como medida de seguranca adicional, configurar o React Query para retry em caso de 401:
 
-```typescript
-interface PhotoCardProps {
-  photo: GalleryPhoto;
-  watermarkMode?: 'system' | 'custom' | 'none';
-  watermarkCustomPath?: string | null;
-  watermarkOpacity?: number;
-  watermarkScale?: number;
-  watermarkDisplay?: WatermarkDisplay;
-  // ... resto das props
-}
-
-// No render:
-{shouldShowWatermark && isLoaded && !hasError && (
-  <WatermarkOverlay 
-    mode={watermarkMode}
-    orientation={photo.width > photo.height ? 'horizontal' : 'vertical'}
-    customPath={watermarkCustomPath}
-    opacity={watermarkOpacity}
-    scale={watermarkScale}
-  />
-)}
-```
-
-### 3. Atualizar Lightbox.tsx
-
-Mesmo padrão - passar configurações de watermark:
+**Arquivo:** `src/App.tsx`
 
 ```typescript
-interface LightboxProps {
-  // ... props existentes
-  watermarkMode?: 'system' | 'custom' | 'none';
-  watermarkCustomPath?: string | null;
-  watermarkOpacity?: number;
-  watermarkScale?: number;
-}
-
-// No render:
-{shouldShowWatermark && (
-  <WatermarkOverlay 
-    mode={watermarkMode}
-    orientation={currentPhoto.width > currentPhoto.height ? 'horizontal' : 'vertical'}
-    customPath={watermarkCustomPath}
-    opacity={watermarkOpacity}
-    scale={watermarkScale}
-  />
-)}
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        // Retry once for 401 errors (auth race condition)
+        if ((error as any)?.code === '401' || (error as any)?.status === 401) {
+          return failureCount < 1;
+        }
+        return failureCount < 3;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    },
+  },
+});
 ```
-
-### 4. Atualizar ClientGallery.tsx
-
-Buscar configurações de watermark do fotógrafo e passar para os componentes:
-
-```typescript
-// Na query de gallery-access, já deve vir watermark_mode, watermark_path, watermark_opacity, watermark_scale
-
-const watermarkConfig = {
-  mode: galleryData.watermark_mode || 'system',
-  customPath: galleryData.watermark_path,
-  opacity: galleryData.watermark_opacity || 40,
-  scale: galleryData.watermark_scale || 30,
-};
-
-// Passar para PhotoCard e Lightbox
-<PhotoCard
-  photo={photo}
-  watermarkMode={watermarkConfig.mode}
-  watermarkCustomPath={watermarkConfig.customPath}
-  watermarkOpacity={watermarkConfig.opacity}
-  watermarkScale={watermarkConfig.scale}
-  // ...
-/>
-```
-
----
-
-## Arquivos para Upload no R2
-
-Você precisa subir estes arquivos para o bucket:
-
-| Caminho no R2 | Dimensões | Descrição |
-|---------------|-----------|-----------|
-| `system-assets/default-watermark-h.png` | 2560x1440 | Watermark para fotos horizontais |
-| `system-assets/default-watermark-v.png` | 1440x2560 | Watermark para fotos verticais |
-
-Especificações:
-- Formato: PNG com transparência
-- Resolução: Alta (2560px no lado maior)
-- Conteúdo: Sua marca d'água padrão que será exibida sobre as fotos
-
----
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| `src/components/WatermarkOverlay.tsx` | Refatorar para suportar modos system/custom |
-| `src/components/PhotoCard.tsx` | Passar configurações de watermark |
-| `src/components/Lightbox.tsx` | Passar configurações de watermark |
-| `src/pages/ClientGallery.tsx` | Buscar e distribuir configurações de watermark |
-| `supabase/functions/gallery-access/index.ts` | Retornar watermark settings na resposta |
+| `src/hooks/useGalleryAccess.ts` | Receber session, verificar access_token |
+| `src/contexts/AuthContext.tsx` | Passar session para useGalleryAccess |
+| `src/hooks/useSupabaseGalleries.ts` | Verificar session.access_token antes de setIsReady |
+| `src/App.tsx` | Adicionar retry config no QueryClient |
 
----
+## Resultado Esperado
 
-## Fluxo de Dados
+| Antes | Depois |
+|-------|--------|
+| Multiplos 401 no carregamento inicial | Queries aguardam token valido |
+| Precisa logout/login para ver galerias | Galerias carregam na primeira vez |
+| Race condition entre auth e queries | Sequenciamento correto |
 
-```text
-photographer_accounts (DB)
-    │
-    │  watermark_mode
-    │  watermark_path
-    │  watermark_opacity
-    │  watermark_scale
-    │
-    ▼
-gallery-access (Edge Function)
-    │
-    │  Inclui watermark settings na resposta
-    │
-    ▼
-ClientGallery.tsx
-    │
-    │  Extrai watermarkConfig do galleryData
-    │
-    ├──────────────────────┐
-    │                      │
-    ▼                      ▼
-PhotoCard.tsx         Lightbox.tsx
-    │                      │
-    │                      │
-    ▼                      ▼
-WatermarkOverlay      WatermarkOverlay
-(system ou custom)    (system ou custom)
-```
+## Testes
 
----
-
-## Resultado Final
-
-| Cenário | Comportamento |
-|---------|---------------|
-| Fotógrafo escolhe "Padrão do Sistema" | Watermark única que se encaixa na foto (h ou v) |
-| Fotógrafo escolhe "Minha Marca" | Logo em mosaico/tile sobre a foto |
-| Fotógrafo escolhe "Nenhuma" | Sem overlay |
-| Foto horizontal | Usa `default-watermark-h.png` |
-| Foto vertical | Usa `default-watermark-v.png` |
-
----
-
-## Próximos Passos
-
-1. Você sobe os arquivos `default-watermark-h.png` e `default-watermark-v.png` para o R2
-2. Eu implemento as mudanças no código
-3. Testamos com ambos os modos
+Apos a implementacao:
+1. Limpar cookies/localStorage
+2. Fazer login
+3. Verificar que nenhum erro 401 aparece no console
+4. Galerias devem carregar imediatamente sem refresh
 
