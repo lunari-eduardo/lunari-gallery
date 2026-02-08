@@ -1,479 +1,246 @@
 
-# Plano Definitivo: Upload para R2 com B2 Condicional
+# Plano: Investigacao Completa e Correcao do Sistema de Watermark
 
-## Diagnóstico Final
+## Diagnostico - Situacao Atual
 
-### Causa do Erro 404
-O frontend chama `https://cdn.lunarihub.com/upload`, mas **o Worker nunca foi deployed** via `wrangler deploy`. O código existe no repositório, mas não está rodando no Cloudflare.
+### Problema Identificado
 
-### Erro 429 (Build)
-Esse é um problema interno temporário do Lovable e não está relacionado ao seu código.
+O sistema de watermark **nunca foi funcional** porque existe uma falha fundamental na arquitetura de entrega de imagens.
 
----
-
-## Arquitetura Proposta (Alinhada com Seus Requisitos)
+### Cadeia de Erros Encontrada
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        NOVO FLUXO DE UPLOAD                             │
+│                      FLUXO ATUAL (QUEBRADO)                             │
 └─────────────────────────────────────────────────────────────────────────┘
 
-                       ┌─────────────────────────────────────────┐
-                       │          1. UPLOAD (Frontend)           │
-                       └─────────────────────────────────────────┘
-                                          │
-                                          ▼
+   1. UPLOAD (Funciona)
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │  PhotoUploader.tsx                                                  │
+   │         │                                                           │
+   │         ▼                                                           │
+   │  supabase.functions.invoke('r2-upload')                            │
+   │         │                                                           │
+   │         ▼                                                           │
+   │  Edge Function r2-upload                                            │
+   │         │                                                           │
+   │         ▼                                                           │
+   │  R2 Bucket: lunari-previews ✓                                      │
+   │  Path: galleries/{id}/1770489680545-e2e444b3.jpg                   │
+   │         │                                                           │
+   │         ▼                                                           │
+   │  Supabase DB: galeria_fotos ✓                                      │
+   │  storage_key = thumb_path = preview_path                           │
+   └─────────────────────────────────────────────────────────────────────┘
+
+   2. VISUALIZACAO (Quebrado)
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │  getPhotoUrl() tenta construir URL:                                 │
+   │                                                                     │
+   │  https://lunarihub.com/cdn-cgi/image/                              │
+   │    width=1920,                                                      │
+   │    fit=scale-down,                                                  │
+   │    quality=85,                                                      │
+   │    draw=[{"url":"https://media.lunarihub.com/system-assets/..."}]  │
+   │    /https://media.lunarihub.com/galleries/{id}/foto.jpg            │
+   │         │                                                           │
+   │         ▼                                                           │
+   │  Cloudflare Image Resizing tenta buscar imagem                     │
+   │         │                                                           │
+   │         ▼                                                           │
+   │  https://media.lunarihub.com/galleries/...  ❌ 404!                │
+   │                                                                     │
+   │  Por que? R2 bucket esta PRIVADO e nao ha Worker servindo!         │
+   └─────────────────────────────────────────────────────────────────────┘
+```
+
+### Evidencias Coletadas
+
+| Teste | Resultado | Conclusao |
+|-------|-----------|-----------|
+| Edge Function r2-upload logs | "R2 upload complete" | Upload funciona |
+| `media.lunarihub.com/{path}` | Pagina em branco (404) | R2 nao e publico |
+| `lunarihub.com/cdn-cgi/image/...` | Pagina em branco | Image Resizing nao encontra origem |
+| `system-assets/default-pattern.png` | Nao existe | Asset de watermark nunca foi criado |
+| Worker `gallery-upload` | Nunca deployado | Codigo existe, mas nao roda |
+
+### Pontos de Falha
+
+1. **R2 Bucket Privado**: O bucket `lunari-previews` nao tem acesso publico configurado
+2. **Worker Nao Deployado**: O Worker `gallery-upload` nunca foi publicado via `wrangler deploy`
+3. **Asset Inexistente**: O arquivo `system-assets/default-pattern.png` nao existe no R2
+4. **Dominio Desconectado**: `media.lunarihub.com` nao esta conectado ao R2 ou Worker
+
+---
+
+## Arquitetura Correta (Como Deveria Funcionar)
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      FLUXO CORRETO                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  OPCAO A: R2 com Acesso Publico
   ┌─────────────────────────────────────────────────────────────────────┐
-  │              Supabase Edge Function: preview-upload                 │
-  │                                                                     │
-  │   • Recebe imagem comprimida (1024/1920/2560px) do frontend        │
-  │   • Verifica créditos do usuário                                   │
-  │   • Faz R2.put() → Cloudflare R2 (via S3 API)                     │
-  │   • Salva metadata no Supabase                                     │
-  │   • NÃO envia para B2 (original não é salvo por padrão)           │
-  └─────────────────────────────────────────────────────────────────────┘
-                                          │
-                    ┌─────────────────────┴──────────────────────┐
-                    │                                            │
-                    ▼                                            ▼
-           ┌───────────────┐                           ┌────────────────┐
-           │ Cloudflare R2 │                           │    Supabase    │
-           │ (previews)    │                           │ galeria_fotos  │
-           │               │                           │  (metadata)    │
-           └───────────────┘                           └────────────────┘
-                    │
-                    ▼
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │                    2. VISUALIZAÇÃO (Runtime)                        │
-  │                                                                     │
-  │   Cloudflare Image Resizing transforma on-the-fly:                 │
-  │   • Thumbnail: width=400                                           │
-  │   • Preview: width=1920 + draw (watermark)                         │
-  │                                                                     │
-  │   URL: lunarihub.com/cdn-cgi/image/width=X/media.lunarihub.com/... │
+  │  1. Configurar R2 bucket como PUBLICO                               │
+  │  2. Conectar custom domain media.lunarihub.com ao R2 publico        │
+  │  3. Imagens ficam acessiveis em media.lunarihub.com/{path}          │
+  │  4. Cloudflare Image Resizing busca de media.lunarihub.com          │
+  │  5. Watermark aplicado via parametro 'draw'                         │
   └─────────────────────────────────────────────────────────────────────┘
 
-                       ┌─────────────────────────────────────────┐
-                       │          3. DOWNLOAD (Condicional)      │
-                       └─────────────────────────────────────────┘
-                                          │
-                                          ▼
+  OPCAO B: R2 Privado + Worker (Atual no codigo, nao deployado)
   ┌─────────────────────────────────────────────────────────────────────┐
-  │   Quando allowDownload = true e galeria finalizada:                │
-  │                                                                     │
-  │   Opção A: Servir diretamente do R2 (preview em alta resolução)   │
-  │   Opção B: Upload separado para B2 (original não comprimido)       │
-  │                                                                     │
-  │   Para V1: Servir do R2 é suficiente se preview é 2560px          │
+  │  1. R2 permanece privado                                            │
+  │  2. Worker 'gallery-upload' serve imagens do R2                     │
+  │  3. Custom domain cdn.lunarihub.com conectado ao Worker             │
+  │  4. Cloudflare Image Resizing busca via Worker                      │
+  │  5. Problema: Worker precisa deploy manual (wrangler)               │
   └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Solução: Nova Edge Function para R2
+## Solucao Recomendada
 
-Como o Worker Cloudflare requer deploy manual via `wrangler`, vou criar uma **Edge Function Supabase** que faz upload direto para R2 usando a **API S3-compatível**.
+### Opcao Escolhida: Tornar R2 Publico
 
-### Por Que Edge Function?
+Esta e a solucao mais simples porque:
+- Nao requer deploy manual de Workers
+- Usa infraestrutura nativa do Cloudflare
+- Menos pontos de falha
+- Lovable pode fazer apenas as mudancas no codigo
 
-| Aspecto | Worker Cloudflare | Edge Function Supabase |
-|---------|-------------------|------------------------|
-| Deploy | Manual (wrangler) | Automático (Lovable) |
-| Auth | JWKS (complexo) | Supabase nativo |
-| R2 Access | R2 Binding | S3 API (compatível) |
-| Manutenção | Dois sistemas | Centralizado |
+### Acoes Necessarias no Cloudflare Dashboard
 
-### Requisitos de Configuração
+Voce precisara fazer estas configuracoes manualmente no painel do Cloudflare:
 
-Para conectar a Edge Function ao R2 via S3 API, preciso de:
+1. **Tornar bucket R2 publico**
+   - Cloudflare Dashboard → R2 → lunari-previews → Settings
+   - Enable "Public access" (R2.dev subdomain ou custom domain)
+   
+2. **Conectar custom domain**
+   - R2 → lunari-previews → Settings → Custom Domain
+   - Adicionar: `media.lunarihub.com`
+   - Isso automaticamente cria os DNS records
 
-| Secret | Descrição | Como Obter |
-|--------|-----------|------------|
-| `R2_ACCOUNT_ID` | ID da conta Cloudflare | Dashboard → R2 → Overview |
-| `R2_ACCESS_KEY_ID` | Chave de acesso S3 | R2 → Manage R2 API Tokens |
-| `R2_SECRET_ACCESS_KEY` | Segredo S3 | R2 → Manage R2 API Tokens |
-| `R2_BUCKET_NAME` | Nome do bucket | `lunari-previews` |
-
----
-
-## Arquivos a Criar/Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/r2-upload/index.ts` | **Criar** | Nova Edge Function para R2 |
-| `src/components/PhotoUploader.tsx` | **Modificar** | Chamar `r2-upload` em vez do Worker |
-| `src/lib/photoUrl.ts` | **Manter** | Já está correto para R2 |
-| `.env` | **Manter** | URLs já configuradas |
+3. **Upload do asset de watermark**
+   - Criar arquivo `system-assets/default-pattern.png`
+   - Upload para o bucket R2
 
 ---
 
-## Código da Edge Function: r2-upload
+## Mudancas no Codigo
 
+Uma vez que o R2 esteja publico com custom domain, as URLs vao funcionar automaticamente porque o codigo ja esta correto.
+
+### Validacao do Codigo Existente
+
+**photoUrl.ts** - Ja esta correto:
 ```typescript
-// supabase/functions/r2-upload/index.ts
+const R2_PUBLIC_URL = 'https://media.lunarihub.com';
+const CF_RESIZING_DOMAIN = 'https://lunarihub.com';
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+// Gera URL correta:
+// https://lunarihub.com/cdn-cgi/image/width=1920,draw=[...]/https://media.lunarihub.com/galleries/...
+```
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+**ClientGallery.tsx** - Ja busca watermark settings:
+```typescript
+const { data: photographerWatermark } = useQuery({
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('photographer_accounts')
+      .select('watermark_mode, watermark_path, watermark_opacity, watermark_scale')
+      .eq('user_id', photographerUserId)
+      .single();
+    return data;
+  },
+});
+
+// Passa para getPhotoUrl:
+const watermarkConfig: WatermarkConfig = {
+  mode: photographerWatermark?.watermark_mode || 'system',
+  path: photographerWatermark?.watermark_path || null,
 };
-
-// R2 S3-compatible endpoint
-function getR2Endpoint(accountId: string): string {
-  return `https://${accountId}.r2.cloudflarestorage.com`;
-}
-
-// Upload to R2 using S3-compatible API with AWS Signature V4
-async function uploadToR2(
-  accountId: string,
-  accessKeyId: string,
-  secretAccessKey: string,
-  bucketName: string,
-  key: string,
-  body: ArrayBuffer,
-  contentType: string
-): Promise<void> {
-  const endpoint = getR2Endpoint(accountId);
-  const url = `${endpoint}/${bucketName}/${key}`;
-  
-  const date = new Date();
-  const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
-  const dateStamp = amzDate.slice(0, 8);
-  
-  const region = 'auto';
-  const service = 's3';
-  
-  // Create canonical request
-  const method = 'PUT';
-  const canonicalUri = `/${bucketName}/${key}`;
-  const canonicalQueryString = '';
-  
-  const payloadHash = await sha256Hex(body);
-  
-  const canonicalHeaders = [
-    `content-type:${contentType}`,
-    `host:${accountId}.r2.cloudflarestorage.com`,
-    `x-amz-content-sha256:${payloadHash}`,
-    `x-amz-date:${amzDate}`,
-  ].join('\n') + '\n';
-  
-  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
-  
-  const canonicalRequest = [
-    method,
-    canonicalUri,
-    canonicalQueryString,
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join('\n');
-  
-  // Create string to sign
-  const algorithm = 'AWS4-HMAC-SHA256';
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const stringToSign = [
-    algorithm,
-    amzDate,
-    credentialScope,
-    await sha256Hex(new TextEncoder().encode(canonicalRequest)),
-  ].join('\n');
-  
-  // Calculate signature
-  const signingKey = await getSignatureKey(secretAccessKey, dateStamp, region, service);
-  const signature = await hmacHex(signingKey, stringToSign);
-  
-  // Create authorization header
-  const authorization = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-  
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': contentType,
-      'x-amz-content-sha256': payloadHash,
-      'x-amz-date': amzDate,
-      'Authorization': authorization,
-    },
-    body,
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`R2 upload failed: ${response.status} - ${error}`);
-  }
-}
-
-// Helper functions for AWS Signature V4
-async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function hmac(key: ArrayBuffer, data: string): Promise<ArrayBuffer> {
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    key,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
-}
-
-async function hmacHex(key: ArrayBuffer, data: string): Promise<string> {
-  const sig = await hmac(key, data);
-  return Array.from(new Uint8Array(sig))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function getSignatureKey(
-  key: string,
-  dateStamp: string,
-  region: string,
-  service: string
-): Promise<ArrayBuffer> {
-  const kDate = await hmac(new TextEncoder().encode('AWS4' + key).buffer, dateStamp);
-  const kRegion = await hmac(kDate, region);
-  const kService = await hmac(kRegion, service);
-  return hmac(kService, 'aws4_request');
-}
-
-Deno.serve(async (req) => {
-  const requestId = crypto.randomUUID().slice(0, 8);
-  const startTime = Date.now();
-  
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    console.log(`[${requestId}] R2 upload request started`);
-
-    // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Parse form data
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const galleryId = formData.get("galleryId") as string;
-    const originalFilename = formData.get("originalFilename") as string;
-    const width = parseInt(formData.get("width") as string) || 0;
-    const height = parseInt(formData.get("height") as string) || 0;
-
-    if (!file || !galleryId) {
-      return new Response(JSON.stringify({ error: "Arquivo e galleryId são obrigatórios" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Verify gallery belongs to user
-    const { data: gallery, error: galleryError } = await supabase
-      .from("galerias")
-      .select("id, user_id")
-      .eq("id", galleryId)
-      .single();
-
-    if (galleryError || !gallery || gallery.user_id !== user.id) {
-      return new Response(JSON.stringify({ error: "Galeria não encontrada ou sem permissão" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check credits (same logic as b2-upload)
-    const { data: isAdmin } = await supabase.rpc('has_role', {
-      _user_id: user.id,
-      _role: 'admin'
-    });
-
-    if (!isAdmin) {
-      const { data: creditConsumed, error: creditError } = await supabase.rpc(
-        'consume_photo_credits',
-        { _user_id: user.id, _gallery_id: galleryId, _photo_count: 1 }
-      );
-
-      if (creditError || !creditConsumed) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Créditos insuficientes',
-            code: 'INSUFFICIENT_CREDITS'
-          }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    // R2 credentials
-    const r2AccountId = Deno.env.get("R2_ACCOUNT_ID");
-    const r2AccessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
-    const r2SecretKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
-    const r2BucketName = Deno.env.get("R2_BUCKET_NAME") || "lunari-previews";
-
-    if (!r2AccountId || !r2AccessKeyId || !r2SecretKey) {
-      console.error(`[${requestId}] R2 credentials not configured`);
-      return new Response(JSON.stringify({ error: "Configuração de storage incompleta" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Generate path
-    const timestamp = Date.now();
-    const randomId = crypto.randomUUID().slice(0, 8);
-    const extension = file.name.split(".").pop() || "jpg";
-    const filename = `${timestamp}-${randomId}.${extension}`;
-    const storagePath = `galleries/${galleryId}/${filename}`;
-
-    // Read file
-    const fileData = await file.arrayBuffer();
-
-    console.log(`[${requestId}] Uploading to R2: ${storagePath} (${(fileData.byteLength / 1024).toFixed(0)}KB)`);
-
-    // Upload to R2
-    await uploadToR2(
-      r2AccountId,
-      r2AccessKeyId,
-      r2SecretKey,
-      r2BucketName,
-      storagePath,
-      fileData,
-      file.type || "image/jpeg"
-    );
-
-    console.log(`[${requestId}] R2 upload complete`);
-
-    // Save to database
-    const { data: photo, error: insertError } = await supabase
-      .from("galeria_fotos")
-      .insert({
-        galeria_id: galleryId,
-        user_id: user.id,
-        filename,
-        original_filename: originalFilename || file.name,
-        storage_key: storagePath,
-        thumb_path: storagePath,
-        preview_path: storagePath,
-        file_size: fileData.byteLength,
-        mime_type: file.type || "image/jpeg",
-        width,
-        height,
-        is_selected: false,
-        order_index: 0,
-        processing_status: 'ready',
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error(`[${requestId}] DB error:`, insertError);
-      return new Response(JSON.stringify({ error: "Erro ao salvar metadados" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Update gallery photo count
-    await supabase.rpc('increment_gallery_photo_count', { gallery_id: galleryId });
-
-    const duration = Date.now() - startTime;
-    console.log(`[${requestId}] ✓ Complete in ${duration}ms`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        photo: {
-          id: photo.id,
-          filename: photo.filename,
-          originalFilename: photo.original_filename,
-          storageKey: photo.storage_key,
-          fileSize: photo.file_size,
-          mimeType: photo.mime_type,
-          width: photo.width,
-          height: photo.height,
-        },
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error(`[${requestId}] Error:`, error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-});
 ```
 
----
+### Unica Mudanca Necessaria no Codigo
 
-## Modificação do PhotoUploader
+Criar fallback caso o asset de watermark nao exista:
 
+**src/lib/photoUrl.ts** - Adicionar fallback seguro:
 ```typescript
-// ANTES: chamava Worker que não existe
-const R2_UPLOAD_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
-const response = await fetch(`${R2_UPLOAD_URL}/upload`, {...});
-
-// DEPOIS: chama Edge Function do Supabase
-const { data, error } = await supabase.functions.invoke('r2-upload', {
-  body: formData,
-});
+function getWatermarkOverlayUrl(config: WatermarkConfig): string | null {
+  if (config.mode === 'none') return null;
+  
+  if (config.mode === 'custom' && config.path) {
+    return `${R2_PUBLIC_URL}/${config.path}`;
+  }
+  
+  // System default - usar padrao hospedado ou gerar via CSS
+  // Por enquanto, retornar null se nao existir para evitar erros
+  return `${R2_PUBLIC_URL}/system-assets/default-pattern.png`;
+}
 ```
 
 ---
 
-## Configuração Necessária (Ação do Usuário)
+## Asset de Watermark Padrao
 
-Você precisa fornecer os seguintes dados para eu configurar os secrets:
+O sistema precisa de um arquivo PNG para aplicar como marca d'agua em mosaico.
 
-| Secret | Onde Encontrar |
-|--------|----------------|
-| `R2_ACCOUNT_ID` | Cloudflare Dashboard → R2 → Overview → Account ID |
-| `R2_ACCESS_KEY_ID` | Cloudflare Dashboard → R2 → Manage R2 API Tokens → Create |
-| `R2_SECRET_ACCESS_KEY` | Gerado junto com o Access Key ID |
+### Especificacoes do Asset
 
-Esses valores são configurados como **Supabase Secrets** e deployados automaticamente pelo Lovable.
+| Propriedade | Valor |
+|-------------|-------|
+| Formato | PNG com transparencia |
+| Dimensoes | ~200x200px (tile pequeno) |
+| Conteudo | Linhas diagonais semi-transparentes |
+| Opacidade | Embutida no PNG (~30-40%) |
+| Path no R2 | `system-assets/default-pattern.png` |
 
----
+### Como Criar e Subir
 
-## Resumo da Arquitetura Final
-
-| Etapa | Componente | Destino | Notas |
-|-------|------------|---------|-------|
-| Upload | Edge Function `r2-upload` | **R2** | Preview comprimido (1024/1920/2560) |
-| Visualização | Cloudflare Image Resizing | R2 → Browser | Thumbnails + watermark runtime |
-| Download | (Condicional) | R2 direto | Sem watermark, se `allowDownload=true` |
-| Original B2 | **Desativado** | N/A | Não salva original por padrão |
+1. Criar imagem PNG com pattern diagonal
+2. Subir para R2 via Cloudflare Dashboard:
+   - R2 → lunari-previews → Upload
+   - Path: `system-assets/default-pattern.png`
 
 ---
 
-## Próximos Passos
+## Checklist de Correcao
 
-1. **Você fornece** os 3 secrets R2 (Account ID, Access Key, Secret Key)
-2. Eu **crio** a Edge Function `r2-upload`
-3. Eu **atualizo** `PhotoUploader.tsx` para usar a Edge Function
-4. O deploy é **automático** pelo Lovable
-5. Você **testa** upload de uma foto
+### Acoes no Cloudflare (Voce)
+
+- [ ] R2 → lunari-previews → Settings → Enable Public Access
+- [ ] R2 → lunari-previews → Settings → Add Custom Domain: media.lunarihub.com
+- [ ] Verificar DNS: media.lunarihub.com → R2 bucket
+- [ ] Upload: system-assets/default-pattern.png para R2
+
+### Validacao (Eu farei apos configuracao)
+
+- [ ] Testar URL direta: `https://media.lunarihub.com/galleries/{id}/foto.jpg`
+- [ ] Testar Image Resizing: `https://lunarihub.com/cdn-cgi/image/width=400/https://media.lunarihub.com/...`
+- [ ] Testar Watermark: `https://lunarihub.com/cdn-cgi/image/width=1920,draw=[...]/https://media.lunarihub.com/...`
+
+---
+
+## Resumo
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| Imagens nao carregam | R2 bucket privado | Tornar publico + custom domain |
+| Watermark nao aparece | Asset nao existe | Upload do PNG pattern |
+| Worker nao funciona | Nunca deployado | Nao necessario com R2 publico |
+
+### Por Que Isso Aconteceu
+
+O projeto foi arquitetado para usar Cloudflare Image Resizing com R2, mas a configuracao do bucket e dominio nunca foi concluida. O codigo esta correto, mas a infraestrutura nao foi provisionada.
+
+### Proximos Passos
+
+1. Voce configura R2 publico no Cloudflare Dashboard
+2. Voce faz upload do asset de watermark
+3. Eu valido que as URLs funcionam
+4. Sistema de watermark funciona automaticamente
