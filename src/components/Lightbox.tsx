@@ -19,7 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { downloadPhoto } from '@/lib/downloadUtils';
 import { toast } from 'sonner';
-import { WatermarkOverlay, useWatermarkDisplay } from '@/components/WatermarkOverlay';
+import { WatermarkOverlay, WatermarkMode, useWatermarkDisplay } from '@/components/WatermarkOverlay';
 
 interface LightboxProps {
   photos: GalleryPhoto[];
@@ -27,6 +27,14 @@ interface LightboxProps {
   /** Show watermark overlay on images */
   showWatermark?: boolean;
   watermarkDisplay?: WatermarkDisplay;
+  /** Watermark mode: system, custom, or none */
+  watermarkMode?: WatermarkMode;
+  /** Custom watermark path in R2 for custom mode */
+  watermarkCustomPath?: string | null;
+  /** Opacity for watermark (0-100) */
+  watermarkOpacity?: number;
+  /** Scale for custom watermark tile (10-50%) */
+  watermarkScale?: number;
   allowComments: boolean;
   allowDownload?: boolean;
   disabled?: boolean;
@@ -43,6 +51,10 @@ export function Lightbox({
   currentIndex, 
   showWatermark = true,
   watermarkDisplay = 'all',
+  watermarkMode = 'system',
+  watermarkCustomPath,
+  watermarkOpacity = 40,
+  watermarkScale = 30,
   allowComments,
   allowDownload = false,
   disabled,
@@ -407,7 +419,7 @@ export function Lightbox({
           </button>
         )}
 
-        {/* Image Container */}
+        {/* Image wrapper - constrains watermark overlay to actual image dimensions */}
         <div 
           className="relative flex items-center justify-center overflow-hidden"
           style={{ 
@@ -421,26 +433,35 @@ export function Lightbox({
           onTouchEnd={handleTouchEnd}
           onWheel={handleWheel}
         >
-          <img
-            src={displayUrl}
-            alt={currentPhoto.filename}
-            className="select-none"
-            draggable={false}
-            style={{ 
-              maxWidth: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain',
-              transform: getImageTransform(),
-              transformOrigin: 'center center',
-              transition: isGestureActive ? 'none' : 'transform 0.2s ease-out',
-            }}
-            onContextMenu={(e) => e.preventDefault()}
-          />
-          
-          {/* Watermark overlay - CSS-based visual protection */}
-          {shouldShowWatermark && (
-            <WatermarkOverlay opacity={15} className="rounded-none" />
-          )}
+          {/* Inner wrapper that shrinks to image size for proper overlay containment */}
+          <div className="relative inline-flex">
+            <img
+              src={displayUrl}
+              alt={currentPhoto.filename}
+              className="select-none"
+              draggable={false}
+              style={{ 
+                maxWidth: isMobile ? 'calc(100vw - 32px)' : 'calc(100vw - 120px)',
+                maxHeight: isMobile ? 'calc(100vh - 140px)' : 'calc(100vh - 180px)',
+                objectFit: 'contain',
+                transform: getImageTransform(),
+                transformOrigin: 'center center',
+                transition: isGestureActive ? 'none' : 'transform 0.2s ease-out',
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+            />
+            
+            {/* Watermark overlay - constrained to image dimensions */}
+            {shouldShowWatermark && (
+              <WatermarkOverlay 
+                mode={watermarkMode}
+                orientation={currentPhoto.width > currentPhoto.height ? 'horizontal' : 'vertical'}
+                customPath={watermarkCustomPath}
+                opacity={watermarkOpacity}
+                scale={watermarkScale}
+              />
+            )}
+          </div>
         </div>
       </div>
 

@@ -1245,6 +1245,8 @@ export default function ClientGallery() {
                 photo={photo}
                 showWatermark={!isConfirmed}
                 watermarkDisplay={gallery.settings.watermarkDisplay}
+                watermarkMode="system"
+                watermarkOpacity={40}
                 isSelected={photo.isSelected}
                 allowComments={gallery.settings.allowComments}
                 disabled={isBlocked}
@@ -1282,6 +1284,8 @@ export default function ClientGallery() {
           currentIndex={lightboxIndex}
           showWatermark={!isConfirmed}
           watermarkDisplay={gallery.settings.watermarkDisplay}
+          watermarkMode="system"
+          watermarkOpacity={40}
           allowComments={gallery.settings.allowComments}
           allowDownload={gallery.settings.allowDownload}
           disabled={isBlocked}
