@@ -1,118 +1,149 @@
-# Plano: Sistema de Download de Fotos Originais
 
-## ✅ Status: TOTALMENTE IMPLEMENTADO
+
+# Plano: Correção Completa do Fluxo de Download
+
+## Problemas Identificados
+
+### 1. Bug Crítico no `b2-upload/index.ts`
+A Edge Function `b2-upload` possui **dois bugs de referência não definida** que causam falha silenciosa:
+
+```typescript
+// Linha 304 - isAdmin NUNCA é definida no código
+if (!isAdmin && !isOriginalOnly) {
+  // ... código de verificação de créditos
+}
+
+// Linhas 393 e 461 - uploadDuration NUNCA é definida
+console.log(`[${requestId}] ✓ Complete in ${totalDuration}ms (upload: ${uploadDuration}ms)`);
+```
+
+**Resultado**: A função falha com `ReferenceError` antes de fazer qualquer upload, mas o erro é capturado silenciosamente.
+
+### 2. Evidência no Banco de Dados
+Todas as fotos de galerias com `allowDownload = true` têm:
+- `storage_key`: Preenchido (R2 preview funciona)
+- `original_path`: **NULL** (B2 original nunca foi salvo)
+
+### 3. Consequências na Tela Final
+1. **Miniaturas com watermark**: Correto - estão vindo do R2 (preview com watermark burn-in)
+2. **Fullscreen não abre**: Bug separado a investigar
+3. **Download retorna 404**: Correto - `b2-download-url` valida que `original_path` deve existir, mas está NULL
 
 ---
 
-## Fase 1: Signed URLs para Download (COMPLETO)
+## Correções Necessárias
 
-### Problema
-O frontend tentava `fetch()` direto do B2, que bloqueava por CORS.
+### Correção 1: Edge Function `b2-upload/index.ts`
 
-### Solução
-Edge function `b2-download-url` gera URLs assinadas com token no query parameter.
+Adicionar as variáveis que faltam:
+
+```typescript
+// ADICIONAR após linha 301 (depois de verificar gallery):
+
+// Check if user is admin (para bypass de créditos)
+const { data: isAdmin } = await supabase.rpc('has_role', {
+  _user_id: user.id,
+  _role: 'admin'
+});
+```
+
+```typescript
+// ADICIONAR antes do upload (linha ~375):
+const uploadStart = Date.now();
+
+// E depois do upload:
+const uploadDuration = Date.now() - uploadStart;
+```
+
+### Correção 2: Exibição na Tela Finalizada
+
+A tela finalizada (`FinalizedPreviewScreen.tsx`) deve:
+
+| Elemento | Fonte | URL |
+|----------|-------|-----|
+| Miniaturas | R2 | `https://media.lunarihub.com/{storage_key}` |
+| Fullscreen | R2 | `https://media.lunarihub.com/{storage_key}` |
+| Download | B2 via Signed URL | `b2-download-url` edge function |
+
+Atualmente está correto, mas **o download falha porque `original_path` é NULL**.
+
+### Correção 3: Decisão sobre Exibição sem Watermark
+
+Conforme solicitado:
+> "O fluxo quando download estiver ativado, deve mostrar fotos diretamente do B2, sem watermark (isto é possível?)"
+
+**Análise**: Tecnicamente possível, MAS:
+1. B2 requer signed URLs (não URLs públicas)
+2. Gerar signed URLs para cada visualização adiciona latência
+3. Signed URLs expiram (1 hora)
+
+**Recomendação**: Manter arquitetura atual onde:
+- **Visualização**: Sempre do R2 (com watermark) - rápido, público, CDN
+- **Download**: Do B2 (sem watermark) - via signed URL
+
+Se o requisito for mostrar SEM watermark na tela final, precisamos:
+1. Gerar signed URLs para todas as fotos na visualização
+2. Ou criar um segundo preview (sem watermark) no R2 apenas para galerias finalizadas
 
 ---
 
-## Fase 2: Upload Dual (B2 + R2) quando allowDownload=true (COMPLETO)
+## Arquivos a Modificar
 
-### Problema
-Quando `allowDownload = true`, o sistema só fazia upload do preview para R2, descartando o original. Isso causava 404 no download porque o arquivo original nunca era salvo no B2.
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `supabase/functions/b2-upload/index.ts` | CORRIGIR | Adicionar `isAdmin` e `uploadDuration` |
+| `src/components/FinalizedPreviewScreen.tsx` | VERIFICAR | Garantir que exibição usa R2, não B2 |
+| `src/components/Lightbox.tsx` | VERIFICAR | Debug do fullscreen que não abre |
 
-### Solução: Upload Dual
+---
+
+## Fluxo Corrigido
 
 ```text
-FLUXO DE UPLOAD COM allowDownload = true
+UPLOAD (quando allowDownload = true)
 ─────────────────────────────────────────────────────────────────────────
 
-  Usuário seleciona foto
+  1. PhotoUploader detecta allowDownload = true
       │
       ▼
-  PhotoUploader.tsx verifica: allowDownload === true?
+  2. Chama b2-upload com isOriginalOnly = true
       │
-  ┌───┴───────────────────────────────────────────────────────────────┐
-  │ SEQUÊNCIA CRÍTICA:                                                 │
-  │                                                                    │
-  │ 1. PRIMEIRO: Upload do ORIGINAL para B2 (sem compressão)          │
-  │    → b2-upload com flag isOriginalOnly=true                        │
-  │    → Retorna b2_path                                               │
-  │                                                                    │
-  │ 2. DEPOIS: Compressão com watermark                               │
-  │    → compressImage() aplica marca d'água                          │
-  │                                                                    │
-  │ 3. POR FIM: Upload do preview para R2                             │
-  │    → r2-upload com originalPath=b2_path                           │
-  │    → Salva ambos os paths no banco                                │
-  │                                                                    │
-  └────────────────────────────────────────────────────────────────────┘
+      ├── Edge function valida usuário
+      ├── Verifica isAdmin (via RPC) ← NOVA verificação
+      ├── Upload para B2
+      ├── Retorna { storageKey: "galleries/{id}/original-{filename}" }
       │
       ▼
-  Banco de dados (galeria_fotos):
-      ├── storage_key = path do preview no R2 (para visualização)
-      └── original_path = path do original no B2 (para download)
-```
-
-### Arquivos Modificados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/PhotoUploader.tsx` | Nova prop `allowDownload`, upload para B2 antes da compressão |
-| `supabase/functions/r2-upload/index.ts` | Aceita `originalPath` e salva no campo `original_path` |
-| `supabase/functions/b2-upload/index.ts` | Flag `isOriginalOnly` para skip de créditos/DB record |
-| `supabase/functions/b2-download-url/index.ts` | Usa `original_path` em vez de `storage_key` |
-| `src/pages/GalleryCreate.tsx` | Passa `allowDownload` para PhotoUploader |
-| `src/components/FinalizedPreviewScreen.tsx` | Usa `originalPath` para download, verifica existência |
-| `src/components/Lightbox.tsx` | Download individual usa `originalPath` |
-
----
-
-## Arquitetura de Storage Final
-
-| Arquivo | Storage | Campo no DB | Uso | Condição |
-|---------|---------|-------------|-----|----------|
-| Preview (com watermark) | Cloudflare R2 | `storage_key` | Visualização, seleção | **Sempre** |
-| Original (sem watermark) | Backblaze B2 | `original_path` | Download após confirmação | **Apenas se allowDownload = true** |
-
----
-
-## Regras de Negócio
-
-1. **Exibição (thumbnails, lightbox, fullscreen)**: Sempre usa `storage_key` (R2 preview com watermark)
-2. **Download**: Sempre usa `original_path` (B2 original) via signed URL
-3. **Sem original no B2 = Sem botão de download**: UI verifica se `original_path` existe
-4. **allowDownload = true durante upload**: Upload duplo obrigatório (B2 + R2)
-5. **allowDownload = false durante upload**: Apenas R2, original descartado
-
----
-
-## Fluxo de Download (Signed URLs)
-
-```text
-  Cliente clica em "Baixar Todas (ZIP)"
+  3. Comprime imagem localmente (com watermark)
       │
       ▼
-  Frontend chama: POST /b2-download-url
-      body: { galleryId, storageKeys: [original_path values] }
+  4. Chama r2-upload com originalPath = B2 path
+      │
+      ├── Upload para R2
+      ├── Salva no banco: storage_key (R2) + original_path (B2)
       │
       ▼
-  Edge Function:
-      1. Valida: galeria finalizada + allowDownload = true
-      2. Valida: fotos têm original_path (não null)
-      3. Gera token via b2_get_download_authorization
-      4. Retorna signed URLs (válidas por 1 hora)
-      │
-      ▼
-  Frontend:
-      - Individual: redirect nativo (window.location.href)
-      - ZIP: fetch → blob → JSZip → saveAs
+  5. Banco atualizado corretamente:
+      ├── storage_key = "galleries/{id}/1234-abc.jpg" (R2 preview)
+      └── original_path = "galleries/{id}/original-1234-abc.jpg" (B2 original)
+
+
+VISUALIZAÇÃO FINALIZADA
+─────────────────────────────────────────────────────────────────────────
+
+  Thumbnails → R2 (storage_key) → Com watermark
+  Fullscreen → R2 (storage_key) → Com watermark
+  Download   → B2 (original_path) via signed URL → SEM watermark
 ```
 
 ---
 
-## Validações de Segurança
+## Resultado Esperado
 
-- Galeria deve estar finalizada (`finalized_at IS NOT NULL`)
-- Download deve estar permitido (`configuracoes->'allowDownload' = true`)
-- Fotos devem ter `original_path` não nulo
-- URLs expiram em 1 hora
-- Máximo 500 arquivos por requisição
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Upload com allowDownload=true | Falha silenciosa no B2 | Upload duplo funciona |
+| `original_path` no banco | NULL | Path real do B2 |
+| Miniaturas na tela final | Mostra preview com watermark | Mantém (correto) |
+| Download | Erro 404 | Funciona via signed URL |
+
