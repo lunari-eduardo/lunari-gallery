@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { Lightbox } from '@/components/Lightbox';
-import { downloadAllPhotos } from '@/lib/downloadUtils';
+import { downloadAllPhotos, DownloadablePhoto } from '@/lib/downloadUtils';
 import { cn } from '@/lib/utils';
 import { TitleCaseMode, GalleryPhoto } from '@/types/gallery';
 import { applyTitleCase } from '@/lib/textTransform';
@@ -226,13 +226,14 @@ export function FinalizedPreviewScreen({
 
       {/* Lightbox */}
       {lightboxIndex !== null && (
-        <Lightbox
+      <Lightbox
           photos={transformedPhotos}
           currentIndex={lightboxIndex}
           allowComments={false}
           allowDownload={allowDownload}
           disabled={true}
           isConfirmedMode={true}
+          galleryId={galleryId}
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}
           onSelect={() => {}} // No-op - selection disabled
