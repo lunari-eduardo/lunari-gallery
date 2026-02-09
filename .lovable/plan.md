@@ -1,212 +1,210 @@
 
 
-# Plano: Corrigir Race Condition de Autenticacao
+# Plano: Corrigir Download via B2 com Signed URLs
 
 ## Problema Identificado
 
-Ao acessar o sistema, multiplos erros 401 (Unauthorized) ocorrem em requisicoes para `user_roles`, `subscriptions` e `galerias`. O usuario precisa fazer logout e login novamente para que as galerias sejam carregadas.
+O fluxo de download de fotos originais falha porque o frontend tenta fazer `fetch()` diretamente do Backblaze B2:
 
 ```text
-SEQUENCIA ATUAL (COM BUG)
-────────────────────────────────────────────────────────────────────────
+FLUXO ATUAL (COM BUG)
+─────────────────────────────────────────────────────────────────────────
 
-  T0: Pagina carrega
+  Cliente clica em "Baixar Todas (ZIP)"
       │
       ▼
-  T1: useAuth configura onAuthStateChange
+  downloadUtils.ts executa:
+      fetch("https://f005.backblazeb2.com/file/lunari-gallery/...")
       │
       ▼
-  T2: INITIAL_SESSION dispara
-      user = {email: "...", id: "..."}
-      session = {..., access_token: "..."}
-      loading = false
+  ERRO: CORS Policy
+  "No 'Access-Control-Allow-Origin' header"
       │
       ▼
-  T3: useGalleryAccess(user) recebe user != null
-      │
-      ├── Dispara: supabase.from('user_roles').select()  ──────▶ 401
-      ├── Dispara: supabase.from('subscriptions').select() ────▶ 401
+  Alguns arquivos retornam 404 (path incorreto ou arquivo não existe)
       │
       ▼
-  T4: useSupabaseGalleries.checkAuth()
-      getSession() retorna session
-      isReady = true
-      │
-      ├── Dispara: supabase.from('galerias').select() ─────────▶ 401
-      │
-      ▼
-  T5: Supabase client FINALMENTE configura token internamente
-      (Tarde demais - queries ja falharam)
+  Download falha completamente
 ```
 
-O problema e que o evento `INITIAL_SESSION` e emitido **antes** do cliente Supabase estar completamente pronto para anexar o token nas requisicoes HTTP.
+O B2 bloqueia requisições cross-origin do browser. Isso é esperado e correto para buckets privados.
 
-## Solucao
+## Solução: Signed URLs via Edge Function
 
-Usar **session** como gate em vez de apenas **user**, e adicionar um pequeno delay ou verificar o token explicitamente.
+A abordagem correta é gerar URLs temporárias assinadas no backend, e o browser acessa essas URLs diretamente (sem fetch):
 
 ```text
-SEQUENCIA CORRIGIDA
-────────────────────────────────────────────────────────────────────────
+FLUXO CORRETO (SIGNED URLS)
+─────────────────────────────────────────────────────────────────────────
 
-  T0: Pagina carrega
+  Cliente clica em "Baixar Todas (ZIP)"
       │
       ▼
-  T1: useAuth configura onAuthStateChange
+  Frontend chama Edge Function:
+      POST /b2-download-url
+      body: { storageKeys: ["galleries/xxx/foto1.jpg", ...] }
       │
       ▼
-  T2: INITIAL_SESSION dispara
-      user = {email: "...", id: "..."}
-      session = {..., access_token: "..."}
-      loading = false
+  Edge Function:
+      1. Valida permissão (galeria finalizada + allowDownload = true)
+      2. Gera b2_get_download_authorization token
+      3. Retorna signed URLs para cada arquivo
       │
       ▼
-  T3: AuthContext passa session para useGalleryAccess
-      │
-      ▼
-  T4: useGalleryAccess verifica session.access_token
-      Se nao tiver token valido, aguarda
-      │
-      ▼
-  T5: useSupabaseGalleries verifica session do AuthContext
-      │
-      ▼
-  T6: Queries disparam APENAS quando session.access_token existe
+  Frontend:
+      OPÇÃO A (individual): window.location.href = signedUrl
+      OPÇÃO B (ZIP): fetch(signedUrl) sem CORS issues (mesma origem do redirect)
 ```
 
-## Mudancas no Codigo
+## Por que Signed URLs Funcionam
 
-### 1. Modificar useGalleryAccess para usar Session
-
-**Arquivo:** `src/hooks/useGalleryAccess.ts`
-
-Alterar para receber `session` em vez de apenas `user`:
-
-```typescript
-export function useGalleryAccess(user: User | null, session: Session | null): GalleryAccessResult {
-  const [accessLevel, setAccessLevel] = useState<AccessLevel>('free');
-  const [planName, setPlanName] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // CRITICAL: Only proceed if we have BOTH user AND valid session with token
-    if (!user || !session?.access_token) {
-      setAccessLevel('free');
-      setPlanName(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const checkAccessLevel = async () => {
-      // ... resto do codigo
-    };
-    // ...
-  }, [user, session]);
+A URL assinada inclui o token de autorização como query parameter:
+```
+https://f005.backblazeb2.com/file/lunari-gallery/galleries/xxx/foto.jpg?Authorization=eyJhbG...
 ```
 
-### 2. Atualizar AuthContext para passar session
+Isso permite que o browser faça download nativo SEM precisar de headers CORS.
 
-**Arquivo:** `src/contexts/AuthContext.tsx`
+## Implementação Técnica
+
+### 1. Nova Edge Function: `b2-download-url`
 
 ```typescript
-const { 
-  hasAccess, 
-  accessLevel, 
-  planName, 
-  isLoading: accessLoading,
-  hasGestaoIntegration,
-  isAdmin,
-} = useGalleryAccess(user, session); // Passar session tambem
+// supabase/functions/b2-download-url/index.ts
+
+// Endpoint: POST /b2-download-url
+// Body: { galleryId: string, storageKeys: string[] }
+// Response: { urls: { storageKey: string, url: string, expiresAt: string }[] }
+
+// Flow:
+// 1. Validate gallery is finalized and allowDownload = true
+// 2. Validate photos belong to this gallery
+// 3. Call b2_authorize_account to get authToken
+// 4. Call b2_get_download_authorization for file prefix
+// 5. Build signed URLs with ?Authorization=token
+// 6. Return URLs (valid for N seconds)
 ```
 
-### 3. Simplificar useSupabaseGalleries
-
-**Arquivo:** `src/hooks/useSupabaseGalleries.ts`
-
-Remover o listener duplicado e usar o session do contexto via prop ou verificar de forma mais robusta:
+### 2. Atualizar `downloadUtils.ts`
 
 ```typescript
-export function useSupabaseGalleries() {
-  const queryClient = useQueryClient();
-  const [isReady, setIsReady] = useState(false);
+// ANTES (bloqueado por CORS)
+const url = getOriginalPhotoUrl(storageKey);
+const response = await fetch(url, { mode: 'cors' });
 
-  // Wait for auth to be ready before querying
-  useEffect(() => {
-    let mounted = true;
-    
-    // Use onAuthStateChange as single source of truth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted) {
-        // Only set ready when we have a valid session WITH access_token
-        const hasValidSession = !!(session?.access_token);
-        console.log('🔐 Auth state for galleries:', event, hasValidSession);
-        setIsReady(hasValidSession);
-      }
-    });
+// DEPOIS (signed URL)
+// 1. Chamar edge function para obter URLs assinadas
+const signedUrls = await getSignedDownloadUrls(galleryId, storageKeys);
 
-    // Also check current session immediately
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session?.access_token) {
-        console.log('📋 Initial session ready for galleries');
-        setIsReady(true);
-      }
-    });
-    
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+// 2. Para download ZIP: fetch das signed URLs
+// 3. Para download individual: window.location.href = signedUrl
+```
 
-  // ... resto do codigo
+### 3. Download Individual vs ZIP
+
+| Tipo | Comportamento |
+|------|---------------|
+| Individual | `window.location.href = signedUrl` (redirect nativo) |
+| ZIP | `fetch(signedUrl)` funciona porque não precisa de CORS em redirect |
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/b2-download-url/index.ts` | **CRIAR** - Nova edge function |
+| `src/lib/downloadUtils.ts` | **MODIFICAR** - Usar signed URLs |
+| `src/lib/photoUrl.ts` | **MODIFICAR** - Adicionar helper para signed URLs |
+| `src/components/DownloadModal.tsx` | **MODIFICAR** - Passar galleryId |
+| `src/components/FinalizedPreviewScreen.tsx` | **MODIFICAR** - Passar galleryId |
+| `src/components/Lightbox.tsx` | **MODIFICAR** - Download individual com signed URL |
+
+## Detalhes da Edge Function
+
+### Request
+```json
+{
+  "galleryId": "uuid-da-galeria",
+  "storageKeys": [
+    "galleries/xxx/1770595297840-79d35baa.jpg",
+    "galleries/xxx/1770595297828-fa7ca897.jpg"
+  ]
 }
 ```
 
-### 4. Adicionar verificacao de retry para queries
-
-Como medida de seguranca adicional, configurar o React Query para retry em caso de 401:
-
-**Arquivo:** `src/App.tsx`
-
-```typescript
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error) => {
-        // Retry once for 401 errors (auth race condition)
-        if ((error as any)?.code === '401' || (error as any)?.status === 401) {
-          return failureCount < 1;
-        }
-        return failureCount < 3;
-      },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    },
-  },
-});
+### Response
+```json
+{
+  "success": true,
+  "urls": [
+    {
+      "storageKey": "galleries/xxx/1770595297840-79d35baa.jpg",
+      "url": "https://f005.backblazeb2.com/file/lunari-gallery/galleries/xxx/1770595297840-79d35baa.jpg?Authorization=eyJhbG...",
+      "expiresAt": "2026-02-09T01:00:00Z"
+    }
+  ],
+  "expiresIn": 3600
+}
 ```
 
-## Arquivos a Modificar
+### Validações de Segurança
 
-| Arquivo | Acao |
-|---------|------|
-| `src/hooks/useGalleryAccess.ts` | Receber session, verificar access_token |
-| `src/contexts/AuthContext.tsx` | Passar session para useGalleryAccess |
-| `src/hooks/useSupabaseGalleries.ts` | Verificar session.access_token antes de setIsReady |
-| `src/App.tsx` | Adicionar retry config no QueryClient |
+1. **Galeria finalizada**: `finalized_at IS NOT NULL`
+2. **Download permitido**: `configuracoes->'allowDownload' = true`
+3. **Fotos pertencem à galeria**: Verificar `galeria_id` de cada foto
+4. **Rate limiting**: Máximo X requisições por minuto
+
+## Fluxo de Download em Lote (ZIP)
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│  DOWNLOAD ZIP COM SIGNED URLS                                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  1. Usuario clica "Baixar Todas (ZIP)"
+      │
+  2. Frontend coleta storageKeys das fotos selecionadas
+      │
+  3. Frontend chama: POST /b2-download-url
+      │
+      ├── Edge Function valida permissoes
+      ├── Edge Function gera token B2
+      ├── Edge Function retorna URLs assinadas
+      │
+  4. Frontend recebe array de signed URLs
+      │
+  5. Para cada URL:
+      │
+      ├── fetch(signedUrl) <-- Funciona! Sem CORS porque é redirect
+      ├── Adiciona ao JSZip
+      │
+  6. Gera blob do ZIP
+      │
+  7. saveAs(zipBlob, "fotos.zip")
+```
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Multiplos 401 no carregamento inicial | Queries aguardam token valido |
-| Precisa logout/login para ver galerias | Galerias carregam na primeira vez |
-| Race condition entre auth e queries | Sequenciamento correto |
+| Cenario | Antes | Depois |
+|---------|-------|--------|
+| Download individual | Erro CORS | Redirect nativo funciona |
+| Download ZIP | Erro CORS + 404 | Fetch funciona via signed URL |
+| Fotos no view | Imagens quebradas | Carregam corretamente |
+| Segurança | - | URLs expiram em 1 hora |
 
-## Testes
+## Configuração Necessária (Secrets)
 
-Apos a implementacao:
-1. Limpar cookies/localStorage
-2. Fazer login
-3. Verificar que nenhum erro 401 aparece no console
-4. Galerias devem carregar imediatamente sem refresh
+Os seguintes secrets já existem e serão utilizados:
+- `B2_APPLICATION_KEY_ID`
+- `B2_APPLICATION_KEY`
+- `B2_BUCKET_ID`
+- `B2_BUCKET_NAME`
+
+## Observação sobre 404
+
+Os erros 404 indicam que alguns `storageKey` não correspondem a arquivos existentes no B2. Isso pode ocorrer se:
+1. O arquivo nunca foi salvo no B2 (apenas no R2)
+2. O path está incorreto no banco
+3. O arquivo foi deletado
+
+A edge function deve tratar isso graciosamente e retornar apenas URLs para arquivos que existem.
 
