@@ -300,6 +300,12 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Check if user is admin (for credit bypass)
+    const { data: isAdmin } = await supabase.rpc('has_role', {
+      _user_id: user.id,
+      _role: 'admin'
+    });
+
     // Skip credit check for isOriginalOnly mode (credits are consumed by r2-upload)
     if (!isAdmin && !isOriginalOnly) {
       // Try to consume 1 credit atomically
@@ -375,6 +381,9 @@ Deno.serve(async (req) => {
 
     console.log(`[${requestId}] Uploading to B2: ${storagePath}`);
 
+    // Track upload timing
+    const uploadStart = Date.now();
+
     // Upload to B2 with retry logic
     const uploadResult = await b2UploadFile(
       supabase,
@@ -385,6 +394,9 @@ Deno.serve(async (req) => {
       file.type || "image/jpeg",
       requestId
     );
+
+    // Calculate upload duration
+    const uploadDuration = Date.now() - uploadStart;
 
     // For isOriginalOnly mode, skip DB record creation (r2-upload will handle it)
     if (isOriginalOnly) {
