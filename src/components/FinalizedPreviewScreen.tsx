@@ -22,6 +22,7 @@ interface FinalizedPhoto {
 
 interface FinalizedPreviewScreenProps {
   photos: FinalizedPhoto[];
+  galleryId: string; // Required for signed URL generation
   sessionName?: string;
   sessionFont?: string;
   titleCaseMode?: TitleCaseMode;
@@ -34,6 +35,7 @@ interface FinalizedPreviewScreenProps {
 
 export function FinalizedPreviewScreen({
   photos,
+  galleryId,
   sessionName,
   sessionFont,
   titleCaseMode = 'normal',
@@ -79,6 +81,7 @@ export function FinalizedPreviewScreen({
     
     try {
       await downloadAllPhotos(
+        galleryId,
         transformedPhotos.map(p => ({
           storageKey: p.storageKey || '',
           filename: p.originalFilename || p.filename,
