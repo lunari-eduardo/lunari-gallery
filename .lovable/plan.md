@@ -1,96 +1,180 @@
 
 
-# Plano: Correção Definitiva do Download
+# Plano: Migrar Originais de B2 para R2 (Eliminar Backblaze)
 
-## Problemas Identificados (2 bugs concretos)
+## Resumo Executivo
 
-### Bug 1: "Baixar Todas" retorna 400 (Bad Request)
+Sim, migrar os arquivos originais para o Cloudflare R2 resolve **definitivamente** todos os problemas de download. O R2 ja e usado para previews e funciona perfeitamente. O B2 e a unica fonte de falhas.
 
-**Causa raiz**: Quando a galeria esta finalizada, a Edge Function `gallery-access` retorna `{ finalized: true, photos: [...] }` -- sem o campo `gallery.id`. O codigo do frontend calcula `galleryId` assim:
+**Resultado**: infraestrutura simplificada com UM unico provedor de storage (Cloudflare R2), eliminando toda a complexidade de autenticacao B2, signed URLs, e problemas de CORS.
+
+## Por que R2 resolve o download
 
 ```text
-supabaseGallery = galleryResponse.gallery  --> undefined (nao existe no response finalized)
-galleryId = supabaseGallery?.id || ...     --> null
-FinalizedPreviewScreen recebe galleryId=""  --> Edge Function rejeita com 400
+HOJE (B2 - quebrado):
+Browser --> Edge Function (gera signed URL B2) --> Browser --> B2 privado
+                                                       ^
+                                                  FALHA: auth, CORS, Content-Disposition
+
+COM R2 (simples):
+Browser --> Worker (GET /download/{path}) --> R2 bucket (mesmo Worker ja tem binding)
+                |
+                v
+            Response com Content-Disposition: attachment
+            Content-Type: image/jpeg
+            [streaming do arquivo]
 ```
 
-**Correcao**: Incluir o `galleryId` na resposta da Edge Function `gallery-access` para galerias finalizadas.
+O Cloudflare Worker ja tem binding direto ao bucket R2 (`GALLERY_BUCKET`). Nao precisa de autenticacao, API calls, signed URLs, ou CORS. E uma leitura direta do bucket.
 
-Arquivo: `supabase/functions/gallery-access/index.ts` (linha 104)
+## Mapeamento Completo da Mudanca
 
-Adicionar `galleryId: gallery.id` no JSON de retorno do bloco finalized.
-
-E no frontend, extrair esse ID:
-
-Arquivo: `src/pages/ClientGallery.tsx` (linha ~188)
-
-Atualizar a logica de `galleryId` para tambem considerar `galleryResponse.galleryId` (retorno do finalized).
-
----
-
-### Bug 2: Download individual abre imagem em vez de baixar
-
-**Causa raiz**: O atributo `<a download="filename.jpg">` so funciona para URLs do **mesmo dominio** (same-origin). Para URLs cross-origin como B2 (`f005.backblazeb2.com`), o browser ignora o `download` e abre a imagem normalmente.
-
-Isso afeta tanto o download individual (Lightbox) quanto o "Baixar Todas" (downloads sequenciais).
-
-**Solucao**: Usar `b2ResponseContentDisposition` -- parametro do B2 que forca o header `Content-Disposition: attachment` na resposta. Quando adicionado a signed URL, o B2 retorna o arquivo como download em vez de renderizar no browser.
-
-Arquivo: `supabase/functions/b2-download-url/index.ts`
-
-Na construcao da signed URL, adicionar o parametro:
-
-```
-signedUrl + "&b2ContentDisposition=attachment;filename=" + encodedFilename
-```
-
-Isso garante que o B2 retorne `Content-Disposition: attachment; filename="nome.jpg"` e o browser force o download automatico.
-
----
-
-## Regra de Arquitetura (reforco)
-
-O botao de download ja aparece SOMENTE nos locais corretos:
-- `FinalizedPreviewScreen` -- somente se `allowDownload && hasDownloadablePhotos`
-- Confirmed selection view -- somente se `gallery.settings.allowDownload`
-- Lightbox -- somente em `isConfirmedMode` com `allowDownload`
-
-Nenhum botao de download aparece durante a selecao ativa. Isso ja esta correto.
-
----
-
-## Arquivos a Modificar
+### Arquivos que MUDAM
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/gallery-access/index.ts` | Adicionar `galleryId` na resposta finalized |
-| `src/pages/ClientGallery.tsx` | Extrair `galleryId` do response finalized |
-| `supabase/functions/b2-download-url/index.ts` | Adicionar `b2ContentDisposition` na signed URL |
+| `cloudflare/workers/gallery-upload/index.ts` | Adicionar rota `/download/{path}` para servir originais com Content-Disposition |
+| `src/components/PhotoUploader.tsx` | Upload original vai para R2 (Worker) em vez de B2 (Edge Function) |
+| `src/lib/downloadUtils.ts` | Reescrever: URL direta para Worker em vez de Edge Function b2-download-url |
+| `src/components/Lightbox.tsx` | Simplificar handleDownload para usar Worker URL |
+| `src/components/FinalizedPreviewScreen.tsx` | Atualizar handleDownloadAll para Worker URL |
+| `src/components/DownloadModal.tsx` | Sem mudanca (ja usa originalPath corretamente) |
 
----
+### Arquivos que sao REMOVIDOS
 
-## Fluxo Corrigido
+| Arquivo | Razao |
+|---------|-------|
+| `supabase/functions/b2-upload/index.ts` | Substituido por upload via Worker R2 |
+| `supabase/functions/b2-download-url/index.ts` | Substituido por rota /download no Worker |
+
+### Arquivos que NAO mudam
+
+| Arquivo | Razao |
+|---------|-------|
+| `supabase/functions/r2-upload/index.ts` | Continua como esta (upload de previews) |
+| `supabase/functions/delete-photos/index.ts` | Precisa adaptar para deletar do R2 em vez de B2 |
+| `supabase/functions/gallery-access/index.ts` | Sem mudanca (ja retorna galleryId) |
+| `src/lib/photoUrl.ts` | Sem mudanca (ja aponta para R2) |
+| `src/types/gallery.ts` | Sem mudanca (originalPath continua existindo) |
+
+## Secao Tecnica: Novo Fluxo
+
+### Upload de Originais (quando allowDownload=true)
 
 ```text
-1. Cliente acessa galeria finalizada
-2. gallery-access retorna { finalized: true, galleryId: "6c231190-..." }
-3. FinalizedPreviewScreen recebe galleryId correto
-4. "Baixar Todas" envia galleryId + originalPaths para b2-download-url
-5. Edge Function retorna signed URLs com b2ContentDisposition=attachment
-6. triggerBrowserDownload(<a>) redireciona para B2
-7. B2 retorna Content-Disposition: attachment --> browser forca download
+ANTES:
+PhotoUploader --> supabase.functions.invoke('b2-upload') --> Backblaze B2 API
+                  (Edge Function com auth B2, retry, cache)
+
+DEPOIS:
+PhotoUploader --> fetch('https://cdn.lunarihub.com/upload-original', formData)
+                  --> Worker R2 --> GALLERY_BUCKET.put('originals/{galleryId}/{file}')
 ```
 
----
+Mudancas no Worker:
+- Nova rota `POST /upload-original` para arquivos originais (sem compressao)
+- Path separado: `originals/{galleryId}/{filename}` (para diferenciar de previews em `galleries/`)
+- Mesma autenticacao JWT ja existente
+- Retorna o path salvo para gravar em `original_path` no banco
 
-## Secao Tecnica: b2ContentDisposition
+### Download de Originais
 
-O Backblaze B2 suporta o parametro `b2ContentDisposition` em URLs de download autorizadas. Quando presente:
+```text
+ANTES:
+Frontend --> Edge Function b2-download-url (gera signed URLs) --> Frontend --> B2 direto (FALHA)
 
-- O B2 inclui o header `Content-Disposition` na resposta HTTP
-- O browser interpreta como download forcado
-- Funciona em todos os browsers (Chrome, Safari, Firefox, mobile)
-- Nao requer CORS, proxy ou Edge Function adicional
-- Documentacao: https://www.backblaze.com/docs/cloud-storage-download-files
+DEPOIS:
+Frontend --> window.location.href = 'https://cdn.lunarihub.com/download/originals/{galleryId}/{file}?filename=nome.jpg'
+         --> Worker le do R2, retorna com Content-Disposition: attachment
+```
 
-Formato: `?Authorization=TOKEN&b2ContentDisposition=attachment%3B%20filename%3D%22nome.jpg%22`
+Mudancas no Worker:
+- Nova rota `GET /download/{path}` 
+- Le arquivo do R2 via `GALLERY_BUCKET.get(path)`
+- Retorna com headers:
+  - `Content-Disposition: attachment; filename="nome_original.jpg"`
+  - `Content-Type: image/jpeg`
+  - `Cache-Control: private, no-cache`
+- Streaming nativo (nao carrega tudo na memoria)
+- **Sem autenticacao complexa** - a seguranca e por obscuridade do path (UUID no galleryId + UUID no filename)
+
+### Delecao de Fotos
+
+O `delete-photos` Edge Function precisa ser adaptado:
+- Em vez de chamar B2 API para deletar, chama o Worker R2
+- Ou melhor: usa a API S3 do R2 diretamente (ja temos R2_ACCESS_KEY_ID e R2_SECRET_ACCESS_KEY como secrets)
+- Deleta tanto o preview (`galleries/{id}/{file}`) quanto o original (`originals/{id}/{file}`)
+
+## Custos e Limites
+
+| Recurso | Cloudflare R2 (Free Tier) |
+|---------|--------------------------|
+| Armazenamento | 10 GB gratis, depois $0.015/GB/mes |
+| Operacoes PUT | 1M gratis/mes |
+| Operacoes GET | 10M gratis/mes |
+| Egress (saida) | **GRATIS** (sempre, sem limite) |
+| Workers | 100k requests/dia (free), 10M/mes ($5/mes) |
+
+Comparacao com B2:
+- B2 egress: gratis via Cloudflare (Bandwidth Alliance)
+- R2 egress: **sempre gratis** independente de rota
+- Complexidade B2: auth, signed URLs, tokens, cache --> **eliminada**
+
+## Plano de Execucao (ordem)
+
+### Passo 1: Adicionar rotas ao Worker
+
+Adicionar ao `cloudflare/workers/gallery-upload/index.ts`:
+
+1. `POST /upload-original` - Recebe arquivo original, salva em `originals/{galleryId}/{filename}`
+2. `GET /download/{path}` - Serve arquivo com `Content-Disposition: attachment`
+
+### Passo 2: Atualizar PhotoUploader
+
+Modificar `src/components/PhotoUploader.tsx`:
+- Trocar chamada `supabase.functions.invoke('b2-upload')` por `fetch('https://cdn.lunarihub.com/upload-original', formData)`
+- Manter mesma logica de "upload original ANTES da compressao"
+- O path retornado sera algo como `originals/{galleryId}/{timestamp}-{uuid}.jpg`
+- Esse path e gravado em `original_path` via R2 upload (que ja faz o insert no banco)
+
+### Passo 3: Reescrever downloadUtils
+
+Simplificar `src/lib/downloadUtils.ts`:
+- Remover toda logica de Edge Function `b2-download-url`
+- `downloadPhoto()`: `window.location.href = workerDownloadUrl`
+- `downloadAllPhotos()`: downloads sequenciais com mesma URL pattern
+
+### Passo 4: Atualizar Lightbox e FinalizedPreviewScreen
+
+- Lightbox `handleDownload`: usar nova URL direta do Worker
+- FinalizedPreviewScreen `handleDownloadAll`: usar nova funcao simplificada
+
+### Passo 5: Adaptar delete-photos
+
+- Usar R2 S3 API (com credenciais ja existentes) para deletar arquivos
+- Deletar tanto `galleries/{id}/{file}` (preview) quanto `originals/{id}/{file}` (original)
+
+### Passo 6: Remover B2
+
+- Deletar `supabase/functions/b2-upload/index.ts`
+- Deletar `supabase/functions/b2-download-url/index.ts`
+- Secrets B2 podem ser removidos depois (B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET_ID, B2_BUCKET_NAME)
+
+## Nota sobre Deploy
+
+O Cloudflare Worker precisa ser deployado **manualmente** pelo usuario:
+
+1. Apos as mudancas no codigo, rodar `wrangler deploy` no diretorio `cloudflare/workers/gallery-upload/`
+2. Nao precisa de novos secrets (Worker ja tem binding R2 configurado)
+3. As Edge Functions deletadas serao removidas automaticamente pelo Lovable
+
+## Dependencias Externas Apos Migracao
+
+| Servico | Uso | Risco |
+|---------|-----|-------|
+| Cloudflare R2 | Storage unico (previews + originais) | Baixo - infraestrutura madura |
+| Cloudflare Workers | Upload, serve, download | Baixo - mesmo provedor |
+| Supabase | Auth, banco de dados, Edge Functions | Medio - ja em uso |
+
+**Zero dependencia de B2/Backblaze.** Tudo em um unico provedor de storage (Cloudflare).
+
