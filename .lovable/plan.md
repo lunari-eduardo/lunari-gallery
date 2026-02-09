@@ -1,86 +1,96 @@
 
-# Fix: Download sends wrong path (R2 instead of B2)
 
-## Root Cause (definitively identified)
+# Plano: Correção Definitiva do Download
 
-The download flow has a data pipeline break:
+## Problemas Identificados (2 bugs concretos)
+
+### Bug 1: "Baixar Todas" retorna 400 (Bad Request)
+
+**Causa raiz**: Quando a galeria esta finalizada, a Edge Function `gallery-access` retorna `{ finalized: true, photos: [...] }` -- sem o campo `gallery.id`. O codigo do frontend calcula `galleryId` assim:
 
 ```text
-Database row:
-  storage_key   = "galleries/.../1770651939351-16b939c4.jpg"  (R2 preview)
-  original_path = "galleries/.../1770651936153-70ee9c55.jpg"  (B2 original)
-
-ClientGallery.tsx transforms photos at line 326-355:
-  storageKey = photo.storage_key       -- mapped
-  original_path = ???                  -- NEVER MAPPED (lost here)
-
-DownloadModal.tsx receives GalleryPhoto:
-  sends storageKey (R2 path) to Edge Function
-
-Edge Function b2-download-url:
-  queries galeria_fotos WHERE original_path IN (storageKeys)
-  R2 paths don't match any original_path
-  Result: "No valid photos found" --> 404
+supabaseGallery = galleryResponse.gallery  --> undefined (nao existe no response finalized)
+galleryId = supabaseGallery?.id || ...     --> null
+FinalizedPreviewScreen recebe galleryId=""  --> Edge Function rejeita com 400
 ```
 
-The `GalleryPhoto` type doesn't have an `originalPath` field, so even though the database has the correct B2 path, it gets lost during transformation.
+**Correcao**: Incluir o `galleryId` na resposta da Edge Function `gallery-access` para galerias finalizadas.
 
-## Fix (3 files, surgical changes)
+Arquivo: `supabase/functions/gallery-access/index.ts` (linha 104)
 
-### 1. Add `originalPath` to `GalleryPhoto` type
+Adicionar `galleryId: gallery.id` no JSON de retorno do bloco finalized.
 
-**File: `src/types/gallery.ts`**
+E no frontend, extrair esse ID:
 
-Add optional `originalPath` field to the `GalleryPhoto` interface:
-```typescript
-originalPath?: string | null; // B2 path for download (only when allowDownload=true)
+Arquivo: `src/pages/ClientGallery.tsx` (linha ~188)
+
+Atualizar a logica de `galleryId` para tambem considerar `galleryResponse.galleryId` (retorno do finalized).
+
+---
+
+### Bug 2: Download individual abre imagem em vez de baixar
+
+**Causa raiz**: O atributo `<a download="filename.jpg">` so funciona para URLs do **mesmo dominio** (same-origin). Para URLs cross-origin como B2 (`f005.backblazeb2.com`), o browser ignora o `download` e abre a imagem normalmente.
+
+Isso afeta tanto o download individual (Lightbox) quanto o "Baixar Todas" (downloads sequenciais).
+
+**Solucao**: Usar `b2ResponseContentDisposition` -- parametro do B2 que forca o header `Content-Disposition: attachment` na resposta. Quando adicionado a signed URL, o B2 retorna o arquivo como download em vez de renderizar no browser.
+
+Arquivo: `supabase/functions/b2-download-url/index.ts`
+
+Na construcao da signed URL, adicionar o parametro:
+
+```
+signedUrl + "&b2ContentDisposition=attachment;filename=" + encodedFilename
 ```
 
-### 2. Map `original_path` during photo transformation
+Isso garante que o B2 retorne `Content-Disposition: attachment; filename="nome.jpg"` e o browser force o download automatico.
 
-**File: `src/pages/ClientGallery.tsx` (lines 326-355)**
+---
 
-In the `useMemo` that transforms `supabasePhotos` to `GalleryPhoto[]`, add:
-```typescript
-originalPath: photo.original_path || null,
+## Regra de Arquitetura (reforco)
+
+O botao de download ja aparece SOMENTE nos locais corretos:
+- `FinalizedPreviewScreen` -- somente se `allowDownload && hasDownloadablePhotos`
+- Confirmed selection view -- somente se `gallery.settings.allowDownload`
+- Lightbox -- somente em `isConfirmedMode` com `allowDownload`
+
+Nenhum botao de download aparece durante a selecao ativa. Isso ja esta correto.
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/gallery-access/index.ts` | Adicionar `galleryId` na resposta finalized |
+| `src/pages/ClientGallery.tsx` | Extrair `galleryId` do response finalized |
+| `supabase/functions/b2-download-url/index.ts` | Adicionar `b2ContentDisposition` na signed URL |
+
+---
+
+## Fluxo Corrigido
+
+```text
+1. Cliente acessa galeria finalizada
+2. gallery-access retorna { finalized: true, galleryId: "6c231190-..." }
+3. FinalizedPreviewScreen recebe galleryId correto
+4. "Baixar Todas" envia galleryId + originalPaths para b2-download-url
+5. Edge Function retorna signed URLs com b2ContentDisposition=attachment
+6. triggerBrowserDownload(<a>) redireciona para B2
+7. B2 retorna Content-Disposition: attachment --> browser forca download
 ```
 
-### 3. Fix DownloadModal to use `originalPath` instead of `storageKey`
+---
 
-**File: `src/components/DownloadModal.tsx` (lines 43-48)**
+## Secao Tecnica: b2ContentDisposition
 
-Change from:
-```typescript
-const downloadablePhotos: DownloadablePhoto[] = photos
-  .filter(p => p.storageKey)
-  .map(p => ({
-    storageKey: p.storageKey!,           // WRONG: sends R2 path
-    filename: p.originalFilename || p.filename,
-  }));
-```
+O Backblaze B2 suporta o parametro `b2ContentDisposition` em URLs de download autorizadas. Quando presente:
 
-To:
-```typescript
-const downloadablePhotos: DownloadablePhoto[] = photos
-  .filter(p => p.originalPath)           // Only photos with B2 original
-  .map(p => ({
-    storageKey: p.originalPath!,          // CORRECT: sends B2 path
-    filename: p.originalFilename || p.filename,
-  }));
-```
+- O B2 inclui o header `Content-Disposition` na resposta HTTP
+- O browser interpreta como download forcado
+- Funciona em todos os browsers (Chrome, Safari, Firefox, mobile)
+- Nao requer CORS, proxy ou Edge Function adicional
+- Documentacao: https://www.backblaze.com/docs/cloud-storage-download-files
 
-## Why this is the definitive fix
-
-The data is already correct in the database (verified):
-- Gallery `8e72918e` has 2 photos, both with `original_path` set
-- The B2 files exist (signed URLs return 200)
-- The Edge Function works correctly when given the right paths
-
-The ONLY problem is that `original_path` gets dropped during the frontend transformation and the wrong field (`storage_key`) is sent instead.
-
-## No other files need changes
-
-- `b2-download-url` Edge Function: works correctly (verified with curl)
-- `downloadUtils.ts`: works correctly (passes data through)
-- `FinalizedPreviewScreen.tsx`: already handles `originalPath` correctly (line 97-101)
-- `PhotoUploader.tsx`: upload logic is correct
+Formato: `?Authorization=TOKEN&b2ContentDisposition=attachment%3B%20filename%3D%22nome.jpg%22`
