@@ -93,7 +93,7 @@ serve(async (req) => {
       // ALWAYS fetch selected photos for preview (regardless of download permission)
       const { data: selectedPhotos } = await supabase
         .from("galeria_fotos")
-        .select("id, storage_key, original_filename, filename")
+        .select("id, storage_key, original_path, original_filename, filename")
         .eq("galeria_id", gallery.id)
         .eq("is_selected", true)
         .order("original_filename", { ascending: true });
