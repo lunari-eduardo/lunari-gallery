@@ -131,23 +131,20 @@ export function PhotoUploader({
         originalFormData.append('originalFilename', item.file.name);
         originalFormData.append('isOriginalOnly', 'true'); // Flag to indicate this is just for storing original
 
-        try {
-          const { data: b2Data, error: b2Error } = await supabase.functions.invoke('b2-upload', {
-            body: originalFormData,
-          });
+        // CRITICAL: B2 upload is MANDATORY when allowDownload=true
+        // If B2 fails, the entire upload must fail to prevent inconsistent state
+        const { data: b2Data, error: b2Error } = await supabase.functions.invoke('b2-upload', {
+          body: originalFormData,
+        });
 
-          if (b2Error) {
-            console.error('[PhotoUploader] B2 original upload error:', b2Error);
-            // Don't fail the whole upload, just skip original storage
-          } else if (b2Data?.success && b2Data?.photo?.storageKey) {
-            originalPath = b2Data.photo.storageKey;
-            console.log(`[PhotoUploader] Original saved to B2: ${originalPath}`);
-          }
-        } catch (b2Err) {
-          console.error('[PhotoUploader] B2 upload exception:', b2Err);
-          // Continue with preview upload even if B2 fails
+        if (b2Error || !b2Data?.success || !b2Data?.photo?.storageKey) {
+          const errorMsg = b2Error?.message || b2Data?.error || 'Falha ao salvar arquivo original no B2';
+          console.error('[PhotoUploader] B2 original upload FAILED (mandatory):', errorMsg);
+          throw new Error(`Falha no upload do original: ${errorMsg}`);
         }
         
+        originalPath = b2Data.photo.storageKey;
+        console.log(`[PhotoUploader] Original saved to B2 (mandatory): ${originalPath}`);
         updateItem(item.id, { progress: 20 });
       }
 
