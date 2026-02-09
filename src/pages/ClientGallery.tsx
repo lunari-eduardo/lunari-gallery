@@ -738,6 +738,7 @@ export default function ClientGallery() {
     return (
       <FinalizedPreviewScreen
         photos={galleryResponse.photos || []}
+        galleryId={galleryId || ''}
         sessionName={galleryResponse.sessionName}
         sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
         titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
@@ -1025,6 +1026,7 @@ export default function ClientGallery() {
             allowDownload={gallery.settings.allowDownload}
             disabled={true}
             isConfirmedMode={true}
+            galleryId={gallery.id}
             onClose={() => setLightboxIndex(null)}
             onNavigate={setLightboxIndex}
             onSelect={() => {}}
@@ -1037,6 +1039,7 @@ export default function ClientGallery() {
           onClose={() => setShowDownloadModal(false)}
           photos={confirmedSelectedPhotos}
           sessionName={gallery.sessionName}
+          galleryId={gallery.id}
           onViewIndividual={() => {
             setShowDownloadModal(false);
             if (confirmedSelectedPhotos.length > 0) {

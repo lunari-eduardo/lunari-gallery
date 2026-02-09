@@ -18,6 +18,7 @@ interface DownloadModalProps {
   onClose: () => void;
   photos: GalleryPhoto[];
   sessionName: string;
+  galleryId: string; // Required for signed URL generation
   onViewIndividual?: () => void; // Optional - not available on finalized galleries
 }
 
@@ -26,6 +27,7 @@ export function DownloadModal({
   onClose,
   photos,
   sessionName,
+  galleryId,
   onViewIndividual,
 }: DownloadModalProps) {
   const [isDownloading, setIsDownloading] = useState(false);
@@ -56,6 +58,7 @@ export function DownloadModal({
         .slice(0, 50);
 
       await downloadAllPhotos(
+        galleryId,
         downloadablePhotos,
         `${sanitizedSessionName}_fotos`,
         (current, total) => setDownloadProgress({ current, total })

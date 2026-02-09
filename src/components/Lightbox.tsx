@@ -27,6 +27,7 @@ interface LightboxProps {
   allowDownload?: boolean;
   disabled?: boolean;
   isConfirmedMode?: boolean; // When true, shows original photos (no watermark) and enables download
+  galleryId?: string; // Required for downloads when isConfirmedMode is true
   onClose: () => void;
   onNavigate: (index: number) => void;
   onSelect: (photoId: string) => void;
@@ -41,6 +42,7 @@ export function Lightbox({
   allowDownload = false,
   disabled,
   isConfirmedMode = false,
+  galleryId,
   onClose, 
   onNavigate,
   onSelect,
@@ -94,11 +96,12 @@ export function Lightbox({
   const handleDownload = async () => {
     if (!currentPhoto || !allowDownload) return;
     
-    // In confirmed mode with storageKey, download original (no watermark)
-    if (isConfirmedMode && currentPhoto.storageKey) {
+    // In confirmed mode with storageKey and galleryId, download original via signed URL
+    if (isConfirmedMode && currentPhoto.storageKey && galleryId) {
       setIsDownloadingPhoto(true);
       try {
         await downloadPhoto(
+          galleryId,
           currentPhoto.storageKey,
           currentPhoto.originalFilename || currentPhoto.filename
         );
@@ -112,7 +115,7 @@ export function Lightbox({
       return;
     }
     
-    // Fallback: simple link download (with watermark)
+    // Fallback: simple link download (preview URL)
     const link = document.createElement('a');
     link.href = currentPhoto.previewUrl;
     link.download = currentPhoto.originalFilename || currentPhoto.filename;

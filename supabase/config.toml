@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.mercadopago-refresh-token]
 verify_jwt = false
+
+[functions.b2-download-url]
+verify_jwt = false
