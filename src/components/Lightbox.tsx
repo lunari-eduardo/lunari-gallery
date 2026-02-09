@@ -96,13 +96,16 @@ export function Lightbox({
   const handleDownload = async () => {
     if (!currentPhoto || !allowDownload) return;
     
-    // In confirmed mode with storageKey and galleryId, download original via signed URL
-    if (isConfirmedMode && currentPhoto.storageKey && galleryId) {
+    // In confirmed mode with originalPath (B2 path) and galleryId, download original via signed URL
+    // Note: originalPath is the B2 path set when allowDownload was true during upload
+    const originalPath = (currentPhoto as GalleryPhoto & { originalPath?: string | null }).originalPath;
+    
+    if (isConfirmedMode && originalPath && galleryId) {
       setIsDownloadingPhoto(true);
       try {
         await downloadPhoto(
           galleryId,
-          currentPhoto.storageKey,
+          originalPath, // Use B2 path, not R2 storageKey
           currentPhoto.originalFilename || currentPhoto.filename
         );
         toast.success('Download iniciado!');
@@ -115,7 +118,13 @@ export function Lightbox({
       return;
     }
     
-    // Fallback: simple link download (preview URL)
+    // If no originalPath but download is allowed, show error
+    if (isConfirmedMode && !originalPath) {
+      toast.error('Arquivo original não disponível para download.');
+      return;
+    }
+    
+    // Fallback: simple link download (preview URL) - for non-confirmed mode
     const link = document.createElement('a');
     link.href = currentPhoto.previewUrl;
     link.download = currentPhoto.originalFilename || currentPhoto.filename;

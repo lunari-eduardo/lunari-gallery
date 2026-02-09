@@ -46,6 +46,8 @@ interface PhotoUploaderProps {
   maxLongEdge?: 1024 | 1920 | 2560;
   /** Watermark configuration for burn-in during compression */
   watermarkConfig?: WatermarkConfig;
+  /** When true, also uploads original file to B2 for download (before compression) */
+  allowDownload?: boolean;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
@@ -56,6 +58,7 @@ export function PhotoUploader({
   galleryId,
   maxLongEdge = 1920,
   watermarkConfig,
+  allowDownload = false,
   onUploadComplete,
   onUploadStart,
   onUploadingChange,
@@ -114,8 +117,42 @@ export function PhotoUploader({
 
   const uploadSingleFile = async (item: PhotoUploadItem): Promise<UploadedPhoto | null> => {
     try {
-      // Step 1: Compress (with watermark burn-in if configured)
-      updateItem(item.id, { status: 'compressing', progress: 10 });
+      let originalPath: string | null = null;
+
+      // Step 1: If allowDownload is enabled, upload ORIGINAL to B2 FIRST (before compression discards it)
+      if (allowDownload) {
+        updateItem(item.id, { status: 'uploading', progress: 5 });
+        console.log(`[PhotoUploader] allowDownload=true, uploading original to B2 first: ${item.file.name}`);
+        
+        // Upload original file to B2
+        const originalFormData = new FormData();
+        originalFormData.append('file', item.file, item.file.name);
+        originalFormData.append('galleryId', galleryId);
+        originalFormData.append('originalFilename', item.file.name);
+        originalFormData.append('isOriginalOnly', 'true'); // Flag to indicate this is just for storing original
+
+        try {
+          const { data: b2Data, error: b2Error } = await supabase.functions.invoke('b2-upload', {
+            body: originalFormData,
+          });
+
+          if (b2Error) {
+            console.error('[PhotoUploader] B2 original upload error:', b2Error);
+            // Don't fail the whole upload, just skip original storage
+          } else if (b2Data?.success && b2Data?.photo?.storageKey) {
+            originalPath = b2Data.photo.storageKey;
+            console.log(`[PhotoUploader] Original saved to B2: ${originalPath}`);
+          }
+        } catch (b2Err) {
+          console.error('[PhotoUploader] B2 upload exception:', b2Err);
+          // Continue with preview upload even if B2 fails
+        }
+        
+        updateItem(item.id, { progress: 20 });
+      }
+
+      // Step 2: Compress (with watermark burn-in if configured)
+      updateItem(item.id, { status: 'compressing', progress: allowDownload ? 25 : 10 });
       
       const compressionOptions: Partial<CompressionOptions> = {
         maxLongEdge,
@@ -135,10 +172,10 @@ export function PhotoUploader({
         throw new Error(errorMessage);
       }
       
-      updateItem(item.id, { progress: 30 });
+      updateItem(item.id, { progress: allowDownload ? 40 : 30 });
 
-      // Step 2: Upload via R2 Edge Function
-      updateItem(item.id, { status: 'uploading', progress: 40 });
+      // Step 3: Upload preview to R2
+      updateItem(item.id, { status: 'uploading', progress: allowDownload ? 50 : 40 });
 
       // Create FormData with compressed file
       const formData = new FormData();
@@ -147,6 +184,11 @@ export function PhotoUploader({
       formData.append('originalFilename', item.file.name);
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
+      
+      // Pass the B2 original path if we have one
+      if (originalPath) {
+        formData.append('originalPath', originalPath);
+      }
 
       // Upload via Supabase Edge Function (auto-deploys, no manual wrangler needed)
       const result = await retryWithBackoff(
@@ -174,7 +216,7 @@ export function PhotoUploader({
           baseDelay: 2000,
           onRetry: (attempt, error, delay) => {
             updateItem(item.id, { 
-              progress: 40,
+              progress: allowDownload ? 50 : 40,
               error: `Tentativa ${attempt + 1}...` 
             });
             console.log(`[PhotoUploader] Retry ${attempt} for ${item.file.name}: ${error.message}`);

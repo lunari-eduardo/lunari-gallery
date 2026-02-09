@@ -1356,6 +1356,7 @@ export default function GalleryCreate() {
                   customPathVertical: watermarkSettings.path,
                   opacity: watermarkSettings.opacity,
                 }}
+                allowDownload={allowDownload}
                 onUploadComplete={handlePhotoUploadComplete} 
               /> : <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
                 <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

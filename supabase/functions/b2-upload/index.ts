@@ -266,13 +266,14 @@ Deno.serve(async (req) => {
 
     console.log(`[${requestId}] User: ${user.id.slice(0, 8)}`);
 
-    // Parse form data
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const galleryId = formData.get("galleryId") as string;
     const originalFilename = formData.get("originalFilename") as string;
     const width = parseInt(formData.get("width") as string) || 0;
     const height = parseInt(formData.get("height") as string) || 0;
+    // Flag to indicate this is just for storing the original file (no DB record, no credit consumption)
+    const isOriginalOnly = formData.get("isOriginalOnly") === "true";
 
     if (!file || !galleryId) {
       console.log(`[${requestId}] Missing required fields`);
@@ -299,13 +300,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if user is admin (bypass credit check)
-    const { data: isAdmin } = await supabase.rpc('has_role', {
-      _user_id: user.id,
-      _role: 'admin'
-    });
-
-    if (!isAdmin) {
+    // Skip credit check for isOriginalOnly mode (credits are consumed by r2-upload)
+    if (!isAdmin && !isOriginalOnly) {
       // Try to consume 1 credit atomically
       const { data: creditConsumed, error: creditError } = await supabase.rpc(
         'consume_photo_credits',
@@ -339,6 +335,8 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[${requestId}] Credit consumed for user ${user.id}`);
+    } else if (isOriginalOnly) {
+      console.log(`[${requestId}] isOriginalOnly mode - skipping credit check`);
     } else {
       console.log(`[${requestId}] Admin bypass - no credit consumed`);
     }
@@ -388,8 +386,29 @@ Deno.serve(async (req) => {
       requestId
     );
 
-    const uploadDuration = Date.now() - startTime;
-    console.log(`[${requestId}] B2 upload complete in ${uploadDuration}ms: ${uploadResult.fileId}`);
+    // For isOriginalOnly mode, skip DB record creation (r2-upload will handle it)
+    if (isOriginalOnly) {
+      console.log(`[${requestId}] isOriginalOnly mode - returning storage path without DB record`);
+      const totalDuration = Date.now() - startTime;
+      console.log(`[${requestId}] ✓ Complete in ${totalDuration}ms (upload: ${uploadDuration}ms)`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          photo: {
+            storageKey: storagePath,
+            filename: filename,
+            originalFilename: originalFilename || file.name,
+            fileSize: fileData.byteLength,
+            mimeType: file.type || "image/jpeg",
+          },
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // Save metadata to Supabase - photos are now ready immediately (no async processing)
     const { data: photo, error: insertError } = await supabase
