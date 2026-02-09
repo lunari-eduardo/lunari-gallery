@@ -198,7 +198,8 @@ Deno.serve(async (req) => {
     // Build signed URLs for each file
     const urls: SignedUrlResponse[] = validStorageKeys.map((storageKey) => {
       const filename = photoMap.get(storageKey) || storageKey.split('/').pop() || 'photo.jpg';
-      const signedUrl = `${downloadUrl}/file/${bucketName}/${storageKey}?Authorization=${downloadAuthToken}`;
+      const encodedDisposition = encodeURIComponent(`attachment; filename="${filename}"`);
+      const signedUrl = `${downloadUrl}/file/${bucketName}/${storageKey}?Authorization=${downloadAuthToken}&b2ContentDisposition=${encodedDisposition}`;
       
       return {
         storageKey,

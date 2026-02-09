@@ -103,6 +103,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           finalized: true,
+          galleryId: gallery.id,
           allowDownload: allowDownload,
           sessionName: gallery.nome_sessao,
           photos: selectedPhotos || [],

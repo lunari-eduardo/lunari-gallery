@@ -184,8 +184,8 @@ export default function ClientGallery() {
     return null;
   }, [galleryResponse]);
 
-  // Get gallery ID for queries
-  const galleryId = supabaseGallery?.id || (isLegacyAccess ? identifier : null);
+  // Get gallery ID for queries (also check galleryResponse.galleryId for finalized galleries)
+  const galleryId = supabaseGallery?.id || galleryResponse?.galleryId || (isLegacyAccess ? identifier : null);
 
   // Get session_id from gallery (for fetching frozen rules from Gestão session)
   // Support both camelCase (from Edge Function) and snake_case (from legacy)
