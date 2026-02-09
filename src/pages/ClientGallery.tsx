@@ -345,6 +345,7 @@ export default function ClientGallery() {
         previewUrl: getPhotoUrl(photoPaths, 'preview'),
         originalUrl: getOriginalPhotoUrl(storagePath),
         storageKey: storagePath,
+        originalPath: photo.original_path || null,
         width: photoWidth,
         height: photoHeight,
         isSelected: photo.is_selected || false,
