@@ -147,12 +147,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate that photos belong to this gallery
+    // Validate that photos belong to this gallery AND have original_path set
+    // original_path is the B2 path for original files (only set when allowDownload=true during upload)
     const { data: photos, error: photosError } = await supabase
       .from('galeria_fotos')
-      .select('storage_key, original_filename, filename')
+      .select('original_path, original_filename, filename')
       .eq('galeria_id', galleryId)
-      .in('storage_key', storageKeys);
+      .not('original_path', 'is', null);
 
     if (photosError) {
       console.error('Error fetching photos:', photosError);
@@ -162,17 +163,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create a map for quick lookup
+    // Create a map for quick lookup using original_path as key
     const photoMap = new Map(
-      photos?.map((p) => [p.storage_key, p.original_filename || p.filename]) || []
+      photos?.map((p) => [p.original_path, p.original_filename || p.filename]) || []
     );
 
-    // Filter to only valid storage keys that exist in gallery
+    // Filter to only valid storage keys that exist in gallery (use original_path)
     const validStorageKeys = storageKeys.filter((key) => photoMap.has(key));
 
     if (validStorageKeys.length === 0) {
       return new Response(
-        JSON.stringify({ error: 'No valid photos found for this gallery' }),
+        JSON.stringify({ error: 'No valid photos found for this gallery. Photos may not have originals stored (allowDownload was disabled during upload).' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

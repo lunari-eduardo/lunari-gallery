@@ -15,6 +15,8 @@ interface FinalizedPhoto {
   id: string;
   storage_key?: string;
   storageKey?: string;
+  original_path?: string | null; // B2 path for original file (for download)
+  originalPath?: string | null;
   original_filename?: string;
   originalFilename?: string;
   filename: string;
@@ -50,9 +52,10 @@ export function FinalizedPreviewScreen({
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
 
   // Transform photos for display - normalize field names
-  const transformedPhotos: GalleryPhoto[] = photos.map((p) => {
+  const transformedPhotos: (GalleryPhoto & { originalPath?: string | null })[] = photos.map((p) => {
     const storageKey = p.storageKey || p.storage_key || '';
     const originalFilename = p.originalFilename || p.original_filename || p.filename;
+    const originalPath = p.originalPath || p.original_path || null;
     const photoUrl = getOriginalPhotoUrl(storageKey);
     
     return {
@@ -60,7 +63,8 @@ export function FinalizedPreviewScreen({
       filename: p.filename,
       originalFilename,
       storageKey,
-      // Use original URL (no watermark) for all views
+      originalPath, // B2 path for download
+      // Use R2 preview URL for display (not B2 original)
       thumbnailUrl: photoUrl,
       previewUrl: photoUrl,
       originalUrl: photoUrl,
@@ -73,17 +77,22 @@ export function FinalizedPreviewScreen({
     };
   });
 
+  // Filter photos that have original_path (can be downloaded from B2)
+  const downloadablePhotos = transformedPhotos.filter(p => p.originalPath);
+  const hasDownloadablePhotos = downloadablePhotos.length > 0;
+
   const handleDownloadAll = async () => {
-    if (isDownloading || transformedPhotos.length === 0) return;
+    if (isDownloading || downloadablePhotos.length === 0) return;
     
     setIsDownloading(true);
-    setDownloadProgress({ current: 0, total: transformedPhotos.length });
+    setDownloadProgress({ current: 0, total: downloadablePhotos.length });
     
     try {
       await downloadAllPhotos(
         galleryId,
-        transformedPhotos.map(p => ({
-          storageKey: p.storageKey || '',
+        downloadablePhotos.map(p => ({
+          // Use originalPath (B2 path) for download, NOT storageKey (R2 path)
+          storageKey: p.originalPath || '',
           filename: p.originalFilename || p.filename,
         })),
         sessionName || 'fotos-selecionadas',
@@ -148,8 +157,8 @@ export function FinalizedPreviewScreen({
           </p>
         )}
         
-        {/* Botão de download - apenas se permitido */}
-        {allowDownload && photos.length > 0 && (
+        {/* Botão de download - apenas se permitido E há fotos com originalPath */}
+        {allowDownload && hasDownloadablePhotos && (
           <Button 
             onClick={handleDownloadAll} 
             disabled={isDownloading}
@@ -164,10 +173,17 @@ export function FinalizedPreviewScreen({
             ) : (
               <>
                 <Download className="h-4 w-4" />
-                Baixar Todas (ZIP)
+                Baixar Todas ({downloadablePhotos.length})
               </>
             )}
           </Button>
+        )}
+        
+        {/* Warning if download is allowed but no originals exist */}
+        {allowDownload && !hasDownloadablePhotos && photos.length > 0 && (
+          <p className="text-sm text-muted-foreground italic">
+            Download não disponível para estas fotos
+          </p>
         )}
       </div>
 

@@ -189,6 +189,8 @@ Deno.serve(async (req) => {
     const originalFilename = formData.get("originalFilename") as string;
     const width = parseInt(formData.get("width") as string) || 0;
     const height = parseInt(formData.get("height") as string) || 0;
+    // Optional: B2 original path (when allowDownload is enabled)
+    const originalPath = formData.get("originalPath") as string | null;
 
     if (!file || !galleryId) {
       return new Response(JSON.stringify({ error: "Arquivo e galleryId são obrigatórios" }), {
@@ -292,6 +294,8 @@ Deno.serve(async (req) => {
         storage_key: storagePath,
         thumb_path: storagePath,
         preview_path: storagePath,
+        // Save B2 original path if provided (for allowDownload=true galleries)
+        original_path: originalPath || null,
         file_size: fileData.byteLength,
         mime_type: file.type || "image/jpeg",
         width,
