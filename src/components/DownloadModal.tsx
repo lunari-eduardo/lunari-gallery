@@ -143,13 +143,13 @@ export function DownloadModal({
             ) : (
               <>
                 <Download className="h-5 w-5" />
-                Baixar Todas (ZIP)
+                Baixar Todas ({photos.length} fotos)
               </>
             )}
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            Recomendado - Todas as fotos em um único arquivo
+            As fotos serão baixadas uma a uma automaticamente
           </p>
 
           {/* Divider - only show if individual view is available */}
