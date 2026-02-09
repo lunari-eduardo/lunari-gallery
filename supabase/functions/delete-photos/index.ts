@@ -11,93 +11,101 @@ interface DeleteRequest {
   photoIds: string[];
 }
 
-interface B2AuthResponse {
-  authorizationToken: string;
-  apiUrl: string;
+// Helper functions for AWS Signature V4 (R2 S3-compatible)
+async function sha256Hex(data: ArrayBuffer | Uint8Array | string): Promise<string> {
+  const buffer = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-// B2 Authorization
-async function authorizeB2(): Promise<B2AuthResponse> {
-  const keyId = Deno.env.get("B2_APPLICATION_KEY_ID");
-  const appKey = Deno.env.get("B2_APPLICATION_KEY");
-  
-  if (!keyId || !appKey) {
-    throw new Error("B2 credentials not configured");
-  }
-
-  const credentials = btoa(`${keyId}:${appKey}`);
-  
-  const response = await fetch("https://api.backblazeb2.com/b2api/v2/b2_authorize_account", {
-    method: "GET",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`B2 authorization failed: ${error}`);
-  }
-
-  return await response.json();
+async function hmac(key: ArrayBuffer, data: string): Promise<ArrayBuffer> {
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
 }
 
-// Delete file from B2
-async function deleteB2File(auth: B2AuthResponse, fileName: string, fileId: string): Promise<boolean> {
+async function hmacHex(key: ArrayBuffer, data: string): Promise<string> {
+  const sig = await hmac(key, data);
+  return Array.from(new Uint8Array(sig))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function getSignatureKey(
+  key: string, dateStamp: string, region: string, service: string
+): Promise<ArrayBuffer> {
+  const kDate = await hmac(new TextEncoder().encode('AWS4' + key), dateStamp);
+  const kRegion = await hmac(kDate, region);
+  const kService = await hmac(kRegion, service);
+  return hmac(kService, 'aws4_request');
+}
+
+// Delete a file from R2 using S3-compatible DELETE
+async function deleteFromR2(
+  accountId: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  bucketName: string,
+  key: string
+): Promise<boolean> {
   try {
-    const response = await fetch(`${auth.apiUrl}/b2api/v2/b2_delete_file_version`, {
-      method: "POST",
+    const host = `${accountId}.r2.cloudflarestorage.com`;
+    const date = new Date();
+    const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = amzDate.slice(0, 8);
+    const region = 'auto';
+    const service = 's3';
+
+    const canonicalUri = `/${bucketName}/${key}`;
+    const payloadHash = await sha256Hex('');
+
+    const canonicalHeaders = [
+      `host:${host}`,
+      `x-amz-content-sha256:${payloadHash}`,
+      `x-amz-date:${amzDate}`,
+    ].join('\n') + '\n';
+
+    const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+
+    const canonicalRequest = [
+      'DELETE', canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash,
+    ].join('\n');
+
+    const algorithm = 'AWS4-HMAC-SHA256';
+    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+    const canonicalRequestHash = await sha256Hex(canonicalRequest);
+    const stringToSign = [algorithm, amzDate, credentialScope, canonicalRequestHash].join('\n');
+
+    const signingKey = await getSignatureKey(secretAccessKey, dateStamp, region, service);
+    const signature = await hmacHex(signingKey, stringToSign);
+
+    const authorization = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+    const response = await fetch(`https://${host}${canonicalUri}`, {
+      method: 'DELETE',
       headers: {
-        Authorization: auth.authorizationToken,
-        "Content-Type": "application/json",
+        'x-amz-content-sha256': payloadHash,
+        'x-amz-date': amzDate,
+        'Authorization': authorization,
       },
-      body: JSON.stringify({ fileName, fileId }),
     });
 
-    return response.ok;
+    return response.ok || response.status === 204;
   } catch (error) {
-    console.error(`Failed to delete B2 file ${fileName}:`, error);
+    console.error(`Failed to delete R2 file ${key}:`, error);
     return false;
   }
 }
 
-// Get file info from B2 by name
-async function getB2FileInfo(auth: B2AuthResponse, bucketId: string, fileName: string): Promise<{ fileId: string } | null> {
-  try {
-    const response = await fetch(`${auth.apiUrl}/b2api/v2/b2_list_file_names`, {
-      method: "POST",
-      headers: {
-        Authorization: auth.authorizationToken,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        bucketId,
-        prefix: fileName,
-        maxFileCount: 1,
-      }),
-    });
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    if (data.files && data.files.length > 0) {
-      return { fileId: data.files[0].fileId };
-    }
-    return null;
-  } catch (error) {
-    console.error(`Failed to get B2 file info for ${fileName}:`, error);
-    return null;
-  }
-}
-
 serve(async (req) => {
-  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -109,16 +117,12 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    
-    // Use anon key for user auth check
+
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    
-    // Use service role for database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) {
       return new Response(
@@ -127,7 +131,6 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
     const body: DeleteRequest = await req.json();
     const { galleryId, photoIds } = body;
 
@@ -138,7 +141,7 @@ serve(async (req) => {
       );
     }
 
-    // Verify gallery exists and belongs to user
+    // Verify gallery belongs to user
     const { data: gallery, error: galleryError } = await supabaseAuth
       .from("galerias")
       .select("id, user_id")
@@ -153,10 +156,10 @@ serve(async (req) => {
       );
     }
 
-    // Get photos to delete
+    // Get photos to delete (including both storage_key and original_path)
     const { data: photos, error: photosError } = await supabaseAdmin
       .from("galeria_fotos")
-      .select("id, storage_key")
+      .select("id, storage_key, original_path")
       .eq("galeria_id", galleryId)
       .eq("user_id", user.id)
       .in("id", photoIds);
@@ -168,30 +171,27 @@ serve(async (req) => {
       );
     }
 
-    // Authorize with B2
-    const bucketId = Deno.env.get("B2_BUCKET_ID");
-    let b2Auth: B2AuthResponse | null = null;
-    
-    if (bucketId) {
-      try {
-        b2Auth = await authorizeB2();
-      } catch (error) {
-        console.error("B2 auth failed, will skip B2 deletion:", error);
-      }
-    }
+    // Delete from R2 (both preview and original)
+    const r2AccountId = Deno.env.get("R2_ACCOUNT_ID");
+    const r2AccessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
+    const r2SecretKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
+    const r2BucketName = "lunari-previews";
 
-    // Delete from B2 (if authorized)
-    const deletedFromB2: string[] = [];
-    if (b2Auth && bucketId) {
+    let deletedFromStorage = 0;
+    if (r2AccountId && r2AccessKeyId && r2SecretKey) {
       for (const photo of photos) {
-        const fileInfo = await getB2FileInfo(b2Auth, bucketId, photo.storage_key);
-        if (fileInfo) {
-          const deleted = await deleteB2File(b2Auth, photo.storage_key, fileInfo.fileId);
-          if (deleted) {
-            deletedFromB2.push(photo.id);
-          }
+        // Delete preview (galleries/{galleryId}/...)
+        if (photo.storage_key) {
+          const ok = await deleteFromR2(r2AccountId, r2AccessKeyId, r2SecretKey, r2BucketName, photo.storage_key);
+          if (ok) deletedFromStorage++;
+        }
+        // Delete original (originals/{galleryId}/...) if different from storage_key
+        if (photo.original_path && photo.original_path !== photo.storage_key) {
+          await deleteFromR2(r2AccountId, r2AccessKeyId, r2SecretKey, r2BucketName, photo.original_path);
         }
       }
+    } else {
+      console.warn("R2 credentials not configured, skipping storage deletion");
     }
 
     // Delete from database
@@ -213,11 +213,10 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         deletedCount: photos.length,
-        deletedFromB2: deletedFromB2.length,
+        deletedFromStorage,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   } catch (error: unknown) {
     console.error("Error in delete-photos:", error);
     const message = error instanceof Error ? error.message : "Internal server error";

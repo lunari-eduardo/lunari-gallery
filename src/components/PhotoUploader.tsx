@@ -46,7 +46,7 @@ interface PhotoUploaderProps {
   maxLongEdge?: 1024 | 1920 | 2560;
   /** Watermark configuration for burn-in during compression */
   watermarkConfig?: WatermarkConfig;
-  /** When true, also uploads original file to B2 for download (before compression) */
+  /** When true, also uploads original file to R2 for download (before compression) */
   allowDownload?: boolean;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
@@ -119,32 +119,47 @@ export function PhotoUploader({
     try {
       let originalPath: string | null = null;
 
-      // Step 1: If allowDownload is enabled, upload ORIGINAL to B2 FIRST (before compression discards it)
+      // Step 1: If allowDownload is enabled, upload ORIGINAL to R2 FIRST (before compression discards it)
       if (allowDownload) {
         updateItem(item.id, { status: 'uploading', progress: 5 });
-        console.log(`[PhotoUploader] allowDownload=true, uploading original to B2 first: ${item.file.name}`);
+        console.log(`[PhotoUploader] allowDownload=true, uploading original to R2 first: ${item.file.name}`);
         
-        // Upload original file to B2
+        const R2_WORKER_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
+        
+        // Upload original file to R2 via Worker
         const originalFormData = new FormData();
         originalFormData.append('file', item.file, item.file.name);
         originalFormData.append('galleryId', galleryId);
         originalFormData.append('originalFilename', item.file.name);
-        originalFormData.append('isOriginalOnly', 'true'); // Flag to indicate this is just for storing original
 
-        // CRITICAL: B2 upload is MANDATORY when allowDownload=true
-        // If B2 fails, the entire upload must fail to prevent inconsistent state
-        const { data: b2Data, error: b2Error } = await supabase.functions.invoke('b2-upload', {
+        // Get auth token for Worker authentication
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('Sessão expirada. Faça login novamente.');
+        }
+
+        // CRITICAL: R2 original upload is MANDATORY when allowDownload=true
+        const r2Response = await fetch(`${R2_WORKER_URL}/upload-original`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
           body: originalFormData,
         });
 
-        if (b2Error || !b2Data?.success || !b2Data?.photo?.storageKey) {
-          const errorMsg = b2Error?.message || b2Data?.error || 'Falha ao salvar arquivo original no B2';
-          console.error('[PhotoUploader] B2 original upload FAILED (mandatory):', errorMsg);
-          throw new Error(`Falha no upload do original: ${errorMsg}`);
+        if (!r2Response.ok) {
+          const errorData = await r2Response.json().catch(() => ({ error: 'Upload failed' }));
+          console.error('[PhotoUploader] R2 original upload FAILED:', errorData);
+          throw new Error(`Falha no upload do original: ${errorData.error || 'Erro desconhecido'}`);
+        }
+
+        const r2Data = await r2Response.json();
+        if (!r2Data?.success || !r2Data?.photo?.storageKey) {
+          throw new Error('Falha no upload do original: resposta inválida');
         }
         
-        originalPath = b2Data.photo.storageKey;
-        console.log(`[PhotoUploader] Original saved to B2 (mandatory): ${originalPath}`);
+        originalPath = r2Data.photo.storageKey;
+        console.log(`[PhotoUploader] Original saved to R2: ${originalPath}`);
         updateItem(item.id, { progress: 20 });
       }
 
