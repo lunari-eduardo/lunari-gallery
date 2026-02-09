@@ -75,11 +75,11 @@ export function Lightbox({
   const currentPhoto = photos[currentIndex];
   const [isDownloadingPhoto, setIsDownloadingPhoto] = useState(false);
 
-  // In confirmed mode, use original URL (no watermark) for display and download
-  // Otherwise use previewUrl which has watermark burned in
-  const displayUrl = isConfirmedMode && currentPhoto?.storageKey
-    ? getOriginalPhotoUrl(currentPhoto.storageKey)
-    : currentPhoto?.previewUrl;
+  // ALWAYS use R2 (previewUrl) for display - both normal and confirmed mode
+  // The watermark is burned-in during upload, so previews are already protected
+  // Downloads use B2 (originalPath) via signed URLs - that's handled separately in handleDownload
+  // NEVER try to access B2 directly from browser (CORS blocked)
+  const displayUrl = currentPhoto?.previewUrl || currentPhoto?.originalUrl;
 
   // Utility function for clamping values
   const clamp = (value: number, min: number, max: number) => 

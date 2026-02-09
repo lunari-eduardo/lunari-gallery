@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { Lightbox } from '@/components/Lightbox';
-import { getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { downloadAllPhotos } from '@/lib/downloadUtils';
 import { cn } from '@/lib/utils';
 import { TitleCaseMode, GalleryPhoto } from '@/types/gallery';
@@ -52,27 +51,32 @@ export function FinalizedPreviewScreen({
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
 
   // Transform photos for display - normalize field names
+  // ARCHITECTURE: R2 (storage_key) = display, B2 (original_path) = download
+  const R2_PUBLIC_URL = 'https://media.lunarihub.com';
+  
   const transformedPhotos: (GalleryPhoto & { originalPath?: string | null })[] = photos.map((p) => {
     const storageKey = p.storageKey || p.storage_key || '';
     const originalFilename = p.originalFilename || p.original_filename || p.filename;
     const originalPath = p.originalPath || p.original_path || null;
-    const photoUrl = getOriginalPhotoUrl(storageKey);
+    
+    // ALWAYS use R2 for display (never B2 - CORS blocked)
+    const displayUrl = storageKey ? `${R2_PUBLIC_URL}/${storageKey}` : '/placeholder.svg';
     
     return {
       id: p.id,
       filename: p.filename,
       originalFilename,
       storageKey,
-      originalPath, // B2 path for download
-      // Use R2 preview URL for display (not B2 original)
-      thumbnailUrl: photoUrl,
-      previewUrl: photoUrl,
-      originalUrl: photoUrl,
+      originalPath, // B2 path for download only
+      // All display URLs point to R2 (watermarked previews)
+      thumbnailUrl: displayUrl,
+      previewUrl: displayUrl,
+      originalUrl: displayUrl,
       isSelected: true,
       isFavorite: false,
       comment: '',
       order: 0,
-      width: 800,  // Default dimensions (not needed for display)
+      width: 800,
       height: 600,
     };
   });
