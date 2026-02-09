@@ -1,12 +1,16 @@
 /**
- * Cloudflare Worker: Gallery Upload & Serve
+ * Cloudflare Worker: Gallery Upload, Serve & Download
  * 
- * Handles image uploads to R2 and serves images from R2
- * R2 bucket is PRIVATE - all access goes through this worker
+ * Handles image uploads to R2, serves images, and downloads originals.
+ * R2 bucket is PRIVATE - all access goes through this worker.
  * 
  * Routes:
- * - POST /upload - Upload image to R2
- * - GET /image/{path} - Serve image from R2
+ * - POST /upload          - Upload compressed preview to R2
+ * - POST /upload-original - Upload original file to R2 (for download)
+ * - POST /upload-watermark - Upload watermark PNG
+ * - GET  /image/{path}    - Serve image from R2
+ * - GET  /download/{path} - Download file with Content-Disposition: attachment
+ * - GET  /health          - Health check
  * 
  * Authentication: JWT validated using JWKS (RS256)
  */
@@ -55,7 +59,6 @@ async function validateAuth(
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    // Verify JWT using JWKS (supports RS256 automatically)
     const { payload } = await jose.jwtVerify(token, getJWKS(), {
       issuer: SUPABASE_ISSUER,
     });
@@ -79,7 +82,7 @@ async function validateAuth(
   }
 }
 
-// Handle image upload
+// Handle compressed preview upload (existing route)
 async function handleUpload(
   request: Request,
   env: Env
@@ -103,30 +106,19 @@ async function handleUpload(
     if (!file || !galleryId) {
       return new Response(
         JSON.stringify({ error: 'File e galleryId são obrigatórios' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Generate unique photo ID
     const photoId = crypto.randomUUID();
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const filename = `${photoId}.${extension}`;
-
-    // Build storage path: galleries/{gallery_id}/{filename}
-    // This path is used for both storage and serving via Image Resizing
     const storagePath = `galleries/${galleryId}/${filename}`;
 
-    // Get file content as ArrayBuffer
     const fileBuffer = await file.arrayBuffer();
 
-    // Upload to R2 (single file - Cloudflare Image Resizing handles thumbnails)
     await env.GALLERY_BUCKET.put(storagePath, fileBuffer, {
-      httpMetadata: {
-        contentType: file.type || 'image/jpeg',
-      },
+      httpMetadata: { contentType: file.type || 'image/jpeg' },
       customMetadata: {
         originalFilename,
         uploadedAt: new Date().toISOString(),
@@ -137,11 +129,9 @@ async function handleUpload(
 
     console.log(`Uploaded to R2: ${storagePath} (${fileBuffer.byteLength} bytes)`);
 
-    // All paths point to the same file - Image Resizing applies width dynamically
     const previewPath = storagePath;
     const thumbPath = storagePath;
 
-    // Save photo record to Supabase
     const photoRecord = {
       galeria_id: galleryId,
       user_id: user.userId,
@@ -176,14 +166,10 @@ async function handleUpload(
     if (!dbResponse.ok) {
       const dbError = await dbResponse.text();
       console.error('DB insert failed:', dbError);
-      // Cleanup: delete the uploaded file
       await env.GALLERY_BUCKET.delete(storagePath);
       return new Response(
         JSON.stringify({ error: 'Erro ao salvar no banco de dados' }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -206,21 +192,104 @@ async function handleUpload(
           height,
         },
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Upload error:', error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : 'Erro no upload',
-      }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro no upload' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+/**
+ * Handle original file upload to R2 (for download).
+ * Stores in originals/{galleryId}/{filename} to separate from previews.
+ * No DB record created - just returns the R2 path.
+ */
+async function handleUploadOriginal(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const user = await validateAuth(request);
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const galleryId = formData.get('galleryId') as string;
+    const originalFilename = formData.get('originalFilename') as string;
+
+    if (!file || !galleryId) {
+      return new Response(
+        JSON.stringify({ error: 'File e galleryId são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify gallery belongs to user via Supabase
+    const galleryCheckRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&user_id=eq.${user.userId}&select=id`,
       {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
       }
+    );
+    const galleryCheck = await galleryCheckRes.json();
+    if (!galleryCheck || galleryCheck.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Galeria não encontrada ou sem permissão' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Store original in separate path: originals/{galleryId}/{timestamp}-{uuid}.{ext}
+    const timestamp = Date.now();
+    const randomId = crypto.randomUUID().slice(0, 8);
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const filename = `${timestamp}-${randomId}.${extension}`;
+    const storagePath = `originals/${galleryId}/${filename}`;
+
+    const fileBuffer = await file.arrayBuffer();
+
+    await env.GALLERY_BUCKET.put(storagePath, fileBuffer, {
+      httpMetadata: { contentType: file.type || 'image/jpeg' },
+      customMetadata: {
+        originalFilename: originalFilename || file.name,
+        uploadedAt: new Date().toISOString(),
+        userId: user.userId,
+        galleryId,
+      },
+    });
+
+    console.log(`Original uploaded to R2: ${storagePath} (${fileBuffer.byteLength} bytes)`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        photo: {
+          storageKey: storagePath,
+          filename,
+          originalFilename: originalFilename || file.name,
+          fileSize: fileBuffer.byteLength,
+          mimeType: file.type || 'image/jpeg',
+        },
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Upload original error:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro no upload do original' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 }
@@ -232,23 +301,17 @@ async function handleServe(
   path: string
 ): Promise<Response> {
   try {
-    // Get object from R2
     const object = await env.GALLERY_BUCKET.get(path);
 
     if (!object) {
-      return new Response('Not found', {
-        status: 404,
-        headers: corsHeaders,
-      });
+      return new Response('Not found', { status: 404, headers: corsHeaders });
     }
 
-    // Return the image with caching headers
     const headers = new Headers(corsHeaders);
     headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     headers.set('ETag', object.etag);
 
-    // Handle conditional requests
     const ifNoneMatch = request.headers.get('If-None-Match');
     if (ifNoneMatch === object.etag) {
       return new Response(null, { status: 304, headers });
@@ -257,10 +320,122 @@ async function handleServe(
     return new Response(object.body, { headers });
   } catch (error) {
     console.error('Serve error:', error);
-    return new Response('Internal server error', {
-      status: 500,
-      headers: corsHeaders,
-    });
+    return new Response('Internal server error', { status: 500, headers: corsHeaders });
+  }
+}
+
+/**
+ * Handle file download from R2 with Content-Disposition: attachment.
+ * Forces the browser to download the file instead of displaying it.
+ * 
+ * URL format: GET /download/{storagePath}?filename=original_name.jpg
+ * 
+ * Security: path must match a valid original_path in galeria_fotos
+ * for a finalized gallery with allowDownload enabled.
+ */
+async function handleDownload(
+  request: Request,
+  env: Env,
+  path: string
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const requestedFilename = url.searchParams.get('filename') || path.split('/').pop() || 'photo.jpg';
+
+    // Validate the path belongs to a finalized gallery with allowDownload
+    // Extract galleryId from path (originals/{galleryId}/... or galleries/{galleryId}/...)
+    const pathParts = path.split('/');
+    if (pathParts.length < 3) {
+      return new Response(JSON.stringify({ error: 'Invalid path' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const galleryId = pathParts[1]; // second segment is always galleryId
+
+    // Verify gallery is finalized and has allowDownload enabled
+    const galleryRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,finalized_at,configuracoes`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const galleries = await galleryRes.json();
+    
+    if (!galleries || galleries.length === 0) {
+      return new Response(JSON.stringify({ error: 'Gallery not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const gallery = galleries[0];
+    if (!gallery.finalized_at) {
+      return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const config = gallery.configuracoes as Record<string, unknown> | null;
+    if (config?.allowDownload !== true) {
+      return new Response(JSON.stringify({ error: 'Download not allowed' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify this path exists as original_path in the gallery's photos
+    const photoRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&original_path=eq.${encodeURIComponent(path)}&select=id`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const photos = await photoRes.json();
+
+    if (!photos || photos.length === 0) {
+      return new Response(JSON.stringify({ error: 'Photo not found in gallery' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Get the file from R2
+    const object = await env.GALLERY_BUCKET.get(path);
+
+    if (!object) {
+      return new Response(JSON.stringify({ error: 'File not found in storage' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Stream the file with Content-Disposition: attachment
+    const headers = new Headers(corsHeaders);
+    headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Content-Disposition', `attachment; filename="${requestedFilename}"`);
+    headers.set('Cache-Control', 'private, no-cache');
+    if (object.size) {
+      headers.set('Content-Length', object.size.toString());
+    }
+
+    console.log(`Download: ${path} -> ${requestedFilename} (${object.size} bytes)`);
+
+    return new Response(object.body, { headers });
+  } catch (error) {
+    console.error('Download error:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Download failed' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 }
 
@@ -288,7 +463,6 @@ async function handleWatermarkUpload(
       );
     }
 
-    // Validate PNG
     if (!file.type.includes('png')) {
       return new Response(
         JSON.stringify({ error: 'Apenas arquivos PNG são permitidos' }),
@@ -296,7 +470,6 @@ async function handleWatermarkUpload(
       );
     }
 
-    // Max 2MB
     if (file.size > 2 * 1024 * 1024) {
       return new Response(
         JSON.stringify({ error: 'Arquivo muito grande (máximo 2MB)' }),
@@ -304,15 +477,11 @@ async function handleWatermarkUpload(
       );
     }
 
-    // Build path: user-assets/{user_id}/watermark.png
     const watermarkPath = `user-assets/${user.userId}/watermark.png`;
     const fileBuffer = await file.arrayBuffer();
 
-    // Upload to R2 (overwrites if exists)
     await env.GALLERY_BUCKET.put(watermarkPath, fileBuffer, {
-      httpMetadata: {
-        contentType: 'image/png',
-      },
+      httpMetadata: { contentType: 'image/png' },
       customMetadata: {
         uploadedAt: new Date().toISOString(),
         userId: user.userId,
@@ -322,19 +491,13 @@ async function handleWatermarkUpload(
     console.log(`Watermark uploaded: ${watermarkPath} (${fileBuffer.byteLength} bytes)`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        path: watermarkPath,
-        size: fileBuffer.byteLength,
-      }),
+      JSON.stringify({ success: true, path: watermarkPath, size: fileBuffer.byteLength }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Watermark upload error:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Erro no upload da watermark' 
-      }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro no upload da watermark' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -350,14 +513,25 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Route: POST /upload
+    // Route: POST /upload (compressed preview)
     if (request.method === 'POST' && url.pathname === '/upload') {
       return handleUpload(request, env);
+    }
+
+    // Route: POST /upload-original (original file for download)
+    if (request.method === 'POST' && url.pathname === '/upload-original') {
+      return handleUploadOriginal(request, env);
     }
 
     // Route: POST /upload-watermark
     if (request.method === 'POST' && url.pathname === '/upload-watermark') {
       return handleWatermarkUpload(request, env);
+    }
+
+    // Route: GET /download/{path} - forced download with Content-Disposition
+    if (request.method === 'GET' && url.pathname.startsWith('/download/')) {
+      const downloadPath = url.pathname.replace('/download/', '');
+      return handleDownload(request, env, decodeURIComponent(downloadPath));
     }
 
     // Route: GET /image/{path}

@@ -12,9 +12,6 @@ verify_jwt = false
 [functions.confirm-selection]
 verify_jwt = false
 
-[functions.b2-upload]
-verify_jwt = false
-
 [functions.r2-upload]
 verify_jwt = false
 
@@ -49,7 +46,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.mercadopago-refresh-token]
-verify_jwt = false
-
-[functions.b2-download-url]
 verify_jwt = false
