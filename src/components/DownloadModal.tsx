@@ -41,9 +41,9 @@ export function DownloadModal({
 
     try {
       const downloadablePhotos: DownloadablePhoto[] = photos
-        .filter(p => p.storageKey)
+        .filter(p => p.originalPath)
         .map(p => ({
-          storageKey: p.storageKey!,
+          storageKey: p.originalPath!,
           filename: p.originalFilename || p.filename,
         }));
 
