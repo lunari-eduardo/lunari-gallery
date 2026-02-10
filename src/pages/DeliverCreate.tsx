@@ -136,7 +136,7 @@ export default function DeliverCreate() {
       // Send/publish gallery
       await sendGallery(supabaseGalleryId);
       toast.success('Galeria de entrega publicada!');
-      navigate(`/gallery/${supabaseGalleryId}`);
+      navigate(`/deliver/${supabaseGalleryId}`);
     } catch (error) {
       console.error('Error publishing deliver gallery:', error);
       toast.error('Erro ao publicar galeria');
