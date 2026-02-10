@@ -19,9 +19,9 @@ export interface DownloadablePhoto {
  * Build a download URL through the Cloudflare Worker.
  */
 function buildDownloadUrl(storagePath: string, filename: string): string {
-  const encodedPath = encodeURIComponent(storagePath);
+  const safePath = storagePath.split('/').map(encodeURIComponent).join('/');
   const encodedFilename = encodeURIComponent(filename);
-  return `${R2_WORKER_URL}/download/${encodedPath}?filename=${encodedFilename}`;
+  return `${R2_WORKER_URL}/download/${safePath}?filename=${encodedFilename}`;
 }
 
 /**
