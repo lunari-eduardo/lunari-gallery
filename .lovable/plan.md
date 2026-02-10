@@ -1,146 +1,118 @@
 
-# Plano: Galeria de Entrega -- Experiencia do Cliente
+# Sub-abas Select / Deliver na pagina Galerias
 
-## Principio
+## Visao Geral
 
-A Galeria de Entrega e um produto diferente com layout, fluxo e componentes proprios. Nenhum componente da galeria de selecao sera reutilizado para a visualizacao do cliente.
+Transformar a pagina Dashboard (Galerias) em uma interface multi-modo com duas sub-abas no topo: **Select** (padrao) e **Deliver**. Cada aba possui stats, filtros, cards e empty state proprios.
 
-## Experiencia do Cliente
+## Mudancas
+
+### 1. `src/pages/Dashboard.tsx` -- Adicionar sub-abas
+
+Usar o componente `Tabs` do Radix UI (ja disponivel em `@/components/ui/tabs`) para criar duas abas fixas logo abaixo do titulo:
 
 ```text
-Cliente clica no link --> /g/:token
+Suas Galerias
+Gerencie suas galerias
 
-gallery-access Edge Function identifica tipo='entrega'
-  --> retorna { deliver: true, ... }
-
-Frontend detecta flag 'deliver'
-  --> renderiza <ClientDeliverGallery /> em vez de <ClientGallery />
+[ Select ]  [ Deliver ]         [+ Nova Galeria]
 ```
 
-### Tela: Capa (Hero)
+**Comportamento:**
+- "Select" ativo por padrao
+- Troca de aba altera: dados filtrados, cards de resumo, filtros de status, visual dos cards, CTA
 
-- Primeira foto da galeria como imagem de fundo em tela cheia
-- Nome do fotografo/estudio no topo (discreto, sobre a imagem)
-- Nome da sessao centralizado com fonte escolhida pelo fotografo
-- Botao "Ver Galeria" com scroll suave para a area de fotos
-- Barra inferior fixa: nome da sessao + nome do estudio + botao "Entrar"
+**Aba Select (existente):**
+- Filtra galerias com `tipo !== 'entrega'`
+- Stats: Total, Em selecao, Concluidas, Expiradas
+- Filtros: Todas, Criadas, Enviadas, Em selecao, Concluidas, Expiradas
+- Cards: `GalleryCard` existente com contagem X/Y, badge de status de selecao
 
-### Tela: Galeria de Fotos
+**Aba Deliver (nova):**
+- Filtra galerias com `tipo === 'entrega'` (usando campo da `Galeria` do hook)
+- Stats: Total, Publicadas, Expiradas
+- Filtros: Todas, Publicadas, Expiradas
+- Cards: novo componente `DeliverGalleryCard`
+- Empty state proprio
 
-- Header limpo: logo do estudio + nome da sessao + contagem de fotos + data de expiracao (discreto)
-- Botao "Baixar Todas" no topo
-- Grid masonry de fotos grandes, sem overlays, sem icones de selecao
-- Hover em cada foto: icone de download discreto no canto inferior
-- Lightbox simplificado: apenas navegacao + botao de download (sem selecao, favoritos, comentarios)
+### 2. `src/hooks/useSupabaseGalleries.ts` -- Expor campo `tipo`
 
-### Modal de Boas-Vindas
+O campo `tipo` ja existe no banco e no `CreateGaleriaData`, mas nao e mapeado no `transformGaleria`. Adicionar `tipo: row.tipo || 'selecao'` ao transform e a interface `Galeria`.
 
-- Exibido automaticamente na primeira visita
-- Mostra a mensagem configurada pelo fotografo na Etapa 3 da criacao
-- Botao "Continuar" para fechar
+### 3. `src/components/DeliverGalleryCard.tsx` -- Novo componente
 
-## Arquitetura de Arquivos
+Card visual proprio para galerias Deliver:
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/pages/ClientDeliverGallery.tsx` | Pagina principal (roteamento, fetch, estado) |
-| `src/components/deliver/DeliverHero.tsx` | Capa hero com foto de fundo |
-| `src/components/deliver/DeliverHeader.tsx` | Header limpo da galeria |
-| `src/components/deliver/DeliverPhotoGrid.tsx` | Grid masonry com hover de download |
-| `src/components/deliver/DeliverLightbox.tsx` | Lightbox simplificado (sem selecao) |
-| `src/components/deliver/DeliverWelcomeModal.tsx` | Modal de boas-vindas |
+- Badge azul "Deliver" no topo
+- Sem contagem X/Y (selecao)
+- Sem icones de selecao
+- Exibe: quantidade total de fotos (ex: "32 fotos")
+- Status: Publicada ou Expirada
+- Icone de download discreto
+- CTA: "Ver entrega"
+- Thumbnail da primeira foto como preview (usando dados ja disponiveis)
+
+### 4. `src/pages/Dashboard.tsx` -- Empty state Deliver
+
+Quando nao houver galerias Deliver:
+
+- Texto: "Voce ainda nao criou nenhuma galeria de entrega. Use esse modo para entregar as fotos finais aos seus clientes."
+- Botao: "Criar galeria de entrega" (navega para `/deliver/new`)
+
+### 5. Subtitulo dinamico
+
+O subtitulo muda conforme a aba:
+- Select: "Gerencie as galerias de selecao dos seus clientes"
+- Deliver: "Gerencie as entregas finais de fotos"
 
 ## Detalhes Tecnicos
 
-### 1. Edge Function `gallery-access/index.ts` -- Suporte ao tipo `entrega`
-
-Quando `gallery.tipo === 'entrega'`, retornar um payload diferente:
+### Estrutura do Dashboard refatorado
 
 ```text
-{
-  deliver: true,
-  gallery: {
-    id, sessionName, clientName,
-    welcomeMessage, expirationDate,
-    coverPhoto (primeira foto),
-    settings: { sessionFont, titleCaseMode }
-  },
-  photos: [ { id, storage_key, original_path, original_filename, width, height } ],
-  studioSettings: { studio_name, studio_logo_url },
-  theme: { backgroundMode, ... }
-}
+Dashboard
+  |-- Header (titulo + subtitulo dinamico + botao Nova Galeria)
+  |-- Tabs (Select | Deliver)
+  |    |-- TabsContent "select"
+  |    |    |-- Stats (Total, Em selecao, Concluidas, Expiradas)
+  |    |    |-- Search + Filtros de selecao + View toggle
+  |    |    |-- Grid de GalleryCard
+  |    |    |-- Empty state (selecao)
+  |    |-- TabsContent "deliver"
+  |         |-- Stats (Total, Publicadas, Expiradas)
+  |         |-- Search + Filtros de entrega
+  |         |-- Grid de DeliverGalleryCard
+  |         |-- Empty state (entrega)
 ```
 
-A logica de galeria de entrega NAO passa por verificacao de `status_selecao`, pois nao ha fluxo de selecao. Apenas verifica:
-- Galeria existe (pelo token)
-- Senha (se privada)
-- Prazo nao expirado
+### Filtragem por tipo
 
-### 2. Roteamento em `ClientGallery.tsx`
+No Dashboard, separar as galerias por tipo antes de aplicar filtros de status:
 
-O componente `ClientGallery.tsx` existente continuara como ponto de entrada para `/g/:token`. Apos o fetch da Edge Function, se `response.deliver === true`, renderiza `<ClientDeliverGallery />` passando os dados. Nenhuma logica de selecao e carregada.
+```typescript
+const selectGalleries = allGalleries.filter(g => g.tipo !== 'entrega');
+const deliverGalleries = allGalleries.filter(g => g.tipo === 'entrega');
+```
 
-### 3. `ClientDeliverGallery.tsx` -- Pagina Principal
+### Mapeamento de status Deliver
 
-- Recebe dados ja carregados (nao faz fetch proprio)
-- Gerencia estado: `showWelcome`, `lightboxIndex`, download progress
-- Renderiza: Hero --> Header --> Grid --> Lightbox --> WelcomeModal
-- Tematizacao: aplica CSS variables do tema do fotografo (mesmo sistema existente `hexToHsl`)
+Para galerias de entrega, os status relevantes sao:
+- `publicada` / `enviado` --> "Publicada"
+- `expirada` / `expirado` --> "Expirada"
+- `rascunho` / `criado` --> "Rascunho" (nao publicada ainda)
 
-### 4. `DeliverHero.tsx` -- Capa
+### DeliverGalleryCard -- Props
 
-- Foto de capa: primeira foto da galeria (`photos[0]`) como `background-image` cobrindo viewport
-- Overlay escuro gradiente para legibilidade do texto
-- Nome do estudio no topo
-- Titulo da sessao centralizado com fonte personalizada
-- Botao "Ver Galeria" com animacao de scroll
-- Chevron animado apontando para baixo
+Reutiliza a interface `Gallery` existente (mesma transformacao), mas renderiza informacoes diferentes:
+- Ignora `selectedCount`, `includedPhotos`, `extraCount`, `extraTotal`
+- Mostra `photos.length` como "N fotos"
+- Badge "Deliver" azul
+- Status simplificado (Publicada/Expirada)
 
-### 5. `DeliverPhotoGrid.tsx` -- Grid
+## Arquivos
 
-- Masonry layout via CSS Columns (reutiliza classes `.masonry-grid` ja existentes)
-- Cada foto: `img` com `loading="lazy"`, sem bordas de selecao
-- Hover: overlay sutil + icone de download no canto inferior
-- Click: abre lightbox
-- Botao de download individual por foto (click no icone)
-
-### 6. `DeliverLightbox.tsx` -- Lightbox Simplificado
-
-- Navegacao por setas e swipe
-- Zoom (pinch-to-zoom mobile, scroll desktop)
-- Botao de download (unica acao disponivel)
-- Sem: botao de selecao, favoritar, comentar
-- Usa `downloadPhoto()` do `downloadUtils.ts` existente
-
-### 7. `DeliverWelcomeModal.tsx` -- Modal de Boas-Vindas
-
-- Dialog modal com mensagem do fotografo
-- Exibido uma vez por sessao (controle via `sessionStorage`)
-- Botao "Continuar" fecha o modal
-
-### 8. `DeliverHeader.tsx` -- Header
-
-- Logo do estudio centralizado
-- Nome da sessao com fonte customizada
-- Contagem de fotos
-- Data de expiracao (se definida)
-- Botao "Baixar Todas" (usa `downloadAllPhotos()` existente)
-
-### 9. Tela de Senha (reutilizacao parcial)
-
-Para galerias privadas, o `PasswordScreen.tsx` existente pode ser reutilizado pois e generico o suficiente (logo + campo de senha). Apenas o texto "Galeria Protegida" permanece.
-
-## Ordem de Implementacao
-
-1. Atualizar Edge Function `gallery-access` para detectar `tipo='entrega'`
-2. Criar componentes em `src/components/deliver/`
-3. Criar `ClientDeliverGallery.tsx`
-4. Integrar no `ClientGallery.tsx` existente (branch por tipo)
-5. Testes visuais
-
-## O Que NAO Muda
-
-- Nenhum componente de selecao e modificado
-- `PhotoCard.tsx`, `SelectionSummary.tsx`, `SelectionConfirmation.tsx` nao sao tocados
-- A rota `/g/:token` permanece a mesma -- o tipo e resolvido no backend
-- O sistema de download (`downloadUtils.ts`) e reutilizado como esta
+| Arquivo | Acao |
+|---------|------|
+| `src/pages/Dashboard.tsx` | Refatorar com Tabs, stats/filtros por aba |
+| `src/components/DeliverGalleryCard.tsx` | Criar card proprio para Deliver |
+| `src/hooks/useSupabaseGalleries.ts` | Adicionar `tipo` ao transform e interface |
