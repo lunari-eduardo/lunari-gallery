@@ -208,37 +208,37 @@
   }
 
   .masonry-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
+    column-count: 2;
+    column-gap: 0.5rem;
   }
 
   @media (min-width: 640px) {
     .masonry-grid {
-      grid-template-columns: repeat(3, 1fr);
+      column-count: 3;
     }
   }
 
   @media (min-width: 1024px) {
     .masonry-grid {
-      grid-template-columns: repeat(4, 1fr);
+      column-count: 4;
     }
   }
 
   @media (min-width: 1280px) {
     .masonry-grid {
-      grid-template-columns: repeat(5, 1fr);
+      column-count: 5;
     }
   }
 
   @media (min-width: 1536px) {
     .masonry-grid {
-      grid-template-columns: repeat(6, 1fr);
+      column-count: 6;
     }
   }
 
   .masonry-item {
-    /* Grid items don't need break-inside */
+    break-inside: avoid;
+    margin-bottom: 0.5rem;
   }
 
   .status-badge {
