@@ -92,6 +92,8 @@ export interface Galeria {
   galleryPassword: string | null;
   // Frozen pricing rules from Gestão
   regrasCongeladas: RegrasCongeladas | null;
+  // Gallery type
+  tipo: 'selecao' | 'entrega';
   // Relations
   photos?: GaleriaPhoto[];
 }
@@ -163,6 +165,7 @@ function transformGaleria(row: any): Galeria {
     publicToken: row.public_token || null,
     galleryPassword: row.gallery_password || null,
     regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
+    tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
   };
 }
 
