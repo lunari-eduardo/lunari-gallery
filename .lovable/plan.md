@@ -1,54 +1,114 @@
 
-# Fix: Watermark Defaults + Favicon Card Verification
+# Plano: Produto Deliver (Entrega Final)
 
-## Problem 1: Watermark defaults not loading
+## Visao Geral
 
-There are two separate watermark storage systems that are out of sync:
+Adicionar um novo produto "Deliver" ao sistema Gallery. Galerias de entrega permitem que fotografos enviem fotos em alta resolucao para download direto pelo cliente, sem fluxo de selecao, sem creditos, e com prazo de expiracao.
 
-- **Personalization page** saves to `photographer_accounts` table (via `useWatermarkSettings`) -- columns: `watermark_mode`, `watermark_opacity`, `watermark_path`
-- **GalleryCreate** reads defaults from `gallery_settings.default_watermark` JSON (via `useGallerySettings`) -- which has hardcoded defaults of `type: 'standard'`, `opacity: 40`
+## Arquitetura
 
-When the photographer sets "Minha Marca" with 75% opacity in Personalization, it saves to `photographer_accounts`. But when creating a new gallery, the code reads from the wrong table (`gallery_settings`), getting stale defaults instead.
+### Diferenca entre Selecao vs Entrega
 
-## Solution
+| Aspecto | Selecao (existente) | Entrega (novo) |
+|---------|---------------------|----------------|
+| Tipo | `selecao` | `entrega` |
+| Creditos | Consome creditos | Nao consome |
+| Watermark | Configuravel | Sem watermark |
+| Download | Opcional | Sempre ativo |
+| Previews | 1024/1920/2560px | 2560px fixo |
+| Selecao | Cliente seleciona fotos | Nao ha selecao |
+| Venda | Configuravel | Nao ha venda |
+| Cliente | Obrigatorio | Opcional |
+| Pacote | Configuravel | Nao se aplica |
 
-In `GalleryCreate.tsx`, replace the watermark initialization from `settings.defaultWatermark` with values from `useWatermarkSettings`:
+### Fluxo do Usuario
 
-### File: `src/pages/GalleryCreate.tsx`
+```text
+"Nova Galeria" (nav)
+      |
+      v
+  Popover flutuante
+  +-----------------+
+  | Selecao         |
+  | Entrega         |
+  +-----------------+
+      |
+  Selecao --> /gallery/new (existente)
+  Entrega --> /deliver/new (nova pagina)
+```
 
-The hook `useWatermarkSettings` is already imported (line 37). The fix:
+## Mudancas por Arquivo
 
-1. Call the hook to get watermark settings: `const { settings: watermarkGlobalSettings } = useWatermarkSettings();`
-2. In the `useEffect` that initializes from settings (lines 198-220), replace:
-   ```
-   if (settings.defaultWatermark) {
-     setWatermarkType(settings.defaultWatermark.type);
-     setWatermarkOpacity(settings.defaultWatermark.opacity || 40);
-   }
-   ```
-   with reading from `watermarkGlobalSettings`:
-   ```
-   // Map mode names: useWatermarkSettings uses 'system', GalleryCreate uses 'standard'
-   const modeToType = { system: 'standard', custom: 'custom', none: 'none' };
-   setWatermarkType(modeToType[watermarkGlobalSettings.mode] as WatermarkType);
-   setWatermarkOpacity(watermarkGlobalSettings.opacity);
-   ```
-3. Add `watermarkGlobalSettings` to the useEffect dependency array so it updates when the data loads from the database.
+### 1. Migracao SQL - Nova coluna `tipo` na tabela `galerias`
 
-### Mapping between the two naming conventions
+Adicionar coluna `tipo TEXT NOT NULL DEFAULT 'selecao'` na tabela `galerias`. Valores possiveis: `'selecao'` e `'entrega'`. Todas as galerias existentes serao automaticamente `'selecao'`.
 
-| Personalization (useWatermarkSettings) | GalleryCreate (WatermarkType) |
-|---------------------------------------|-------------------------------|
-| `mode: 'system'`                       | `type: 'standard'`           |
-| `mode: 'custom'`                       | `type: 'custom'`             |
-| `mode: 'none'`                         | `type: 'none'`               |
+### 2. `src/components/Layout.tsx` - Menu "Nova Galeria" com Popover
 
-## Problem 2: Favicon/Logo cards
+Substituir o link direto "Nova Galeria" por um botao com Popover que mostra duas opcoes:
+- **Selecao** - navega para `/gallery/new`
+- **Entrega** - navega para `/deliver/new`
 
-The code already has both components inside one card (confirmed in `PersonalizationSettings.tsx` lines 26-36). The screenshot may be from a cached version. No code changes needed -- will verify visually after deploying.
+Usar o componente Popover existente do Radix UI.
 
-## Files Changed
+### 3. `src/pages/Dashboard.tsx` - Botao "Nova Galeria" com Popover
 
-| File | Change |
-|------|--------|
-| `src/pages/GalleryCreate.tsx` | Read watermark defaults from `useWatermarkSettings` instead of `settings.defaultWatermark` |
+Mesmo tratamento do Layout: substituir o botao que navega direto para `/gallery/new` por um Popover com as duas opcoes.
+
+### 4. `src/pages/DeliverCreate.tsx` - Nova pagina de criacao
+
+Pagina com 3 etapas (steps):
+
+**Etapa 1 - Dados:**
+- Cliente (opcional, usando ClientSelect existente + ClientModal)
+- Nome da sessao (titulo da galeria, obrigatorio)
+- Permissao: Publica ou Privada (com senha)
+- Prazo de expiracao em dias
+
+**Etapa 2 - Fotos:**
+- Reutiliza o componente `PhotoUploader` existente
+- Configuracoes fixas: `maxLongEdge=2560`, sem watermark, `allowDownload=true`
+- Nao consome creditos (passara flag para o uploader)
+
+**Etapa 3 - Mensagem:**
+- Campo de texto para mensagem de boas-vindas
+- Sera exibida em modal quando o cliente acessar a galeria
+- Botao de revisao rapida e publicacao
+
+### 5. `src/hooks/useSupabaseGalleries.ts` - Suporte ao tipo `entrega`
+
+- Adicionar campo `tipo` ao `CreateGaleriaData`
+- Passar `tipo` no insert do `createGaleria`
+- Adicionar `tipo` ao transform e interface `Galeria`
+
+### 6. `src/App.tsx` - Nova rota
+
+Adicionar rota `/deliver/new` apontando para `DeliverCreate`.
+
+### 7. `src/components/PhotoUploader.tsx` - Flag `skipCredits`
+
+Adicionar prop opcional `skipCredits?: boolean`. Quando `true`, pula toda a logica de verificacao e consumo de creditos na Edge Function. Enviar flag no payload para o `r2-upload`.
+
+### 8. `supabase/functions/r2-upload/index.ts` - Suporte a `skipCredits`
+
+Quando `skipCredits: true` no body, pular as chamadas a `check_photo_credits` e `consume_photo_credits`. A validacao de permissao (usuario autenticado + dono da galeria) continua igual.
+
+### 9. `src/integrations/supabase/types.ts` - Atualizar tipos
+
+Refletir a nova coluna `tipo` nos tipos gerados.
+
+## Etapas de Implementacao (ordem)
+
+1. Migracao SQL (coluna `tipo`)
+2. Tipos TypeScript atualizados
+3. Hook `useSupabaseGalleries` com suporte a `tipo`
+4. Pagina `DeliverCreate.tsx` (3 etapas)
+5. Layout + Dashboard (popover "Nova Galeria")
+6. Rota no App.tsx
+7. PhotoUploader + Edge Function (flag `skipCredits`)
+
+## Observacoes
+
+- A visualizacao client-side da galeria de entrega (como o cliente ve) sera implementada em uma fase seguinte, reutilizando o `ClientGallery` com adaptacoes para o tipo `entrega`.
+- Planos de armazenamento serao configurados posteriormente conforme mencionado.
+- A listagem no Dashboard mostrara ambos os tipos, com badge visual diferenciando "Selecao" de "Entrega".
