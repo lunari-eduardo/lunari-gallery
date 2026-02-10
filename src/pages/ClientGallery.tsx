@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
 import { applyTitleCase } from '@/lib/textTransform';
+import ClientDeliverGallery from '@/pages/ClientDeliverGallery';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
@@ -732,6 +733,11 @@ export default function ClientGallery() {
         backgroundMode={effectiveBackgroundMode}
       />
     );
+  }
+
+  // Deliver gallery - completely different product
+  if (galleryResponse?.deliver) {
+    return <ClientDeliverGallery data={galleryResponse} />;
   }
 
   // Finalized gallery screen - show preview of selected photos

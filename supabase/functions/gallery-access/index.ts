@@ -41,7 +41,119 @@ serve(async (req) => {
       );
     }
 
-    // 2. Check if gallery is finalized (show preview of selected photos)
+    // 2. Check if gallery is a DELIVER type (completely different product)
+    if (gallery.tipo === 'entrega') {
+      // Password check for private deliver galleries
+      if (gallery.permissao === 'private') {
+        if (!password) {
+          const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+          const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+          return new Response(
+            JSON.stringify({ 
+              requiresPassword: true,
+              galleryId: gallery.id,
+              sessionName: gallery.nome_sessao,
+              clientMode,
+              settings: {
+                sessionFont: galleryConfig?.sessionFont || undefined,
+                titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+              },
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (password !== gallery.gallery_password) {
+          return new Response(
+            JSON.stringify({ error: "Senha incorreta", code: "WRONG_PASSWORD" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
+      // Check expiration
+      if (gallery.prazo_selecao && new Date(gallery.prazo_selecao) < new Date()) {
+        return new Response(
+          JSON.stringify({ error: "Galeria expirada", code: "EXPIRED" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Fetch photos
+      const { data: photos } = await supabase
+        .from("galeria_fotos")
+        .select("id, storage_key, original_path, original_filename, filename, width, height, preview_path, thumb_path")
+        .eq("galeria_id", gallery.id)
+        .order("original_filename", { ascending: true });
+
+      // Fetch studio settings
+      const { data: settings } = await supabase
+        .from("gallery_settings")
+        .select("studio_name, studio_logo_url, favicon_url")
+        .eq("user_id", gallery.user_id)
+        .single();
+
+      // Build theme
+      const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+      const themeId = galleryConfig?.themeId as string | undefined;
+      const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+      
+      let themeData = null;
+      if (themeId) {
+        const { data: theme } = await supabase
+          .from("gallery_themes")
+          .select("*")
+          .eq("id", themeId)
+          .maybeSingle();
+        if (theme) {
+          themeData = {
+            id: theme.id, name: theme.name,
+            backgroundMode: theme.background_mode || 'light',
+            primaryColor: theme.primary_color, accentColor: theme.accent_color,
+            emphasisColor: theme.emphasis_color,
+          };
+        }
+      }
+      if (!themeData) {
+        themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+      }
+
+      // Log first access
+      const { data: existingAccess } = await supabase
+        .from('galeria_acoes').select('id')
+        .eq('galeria_id', gallery.id).eq('tipo', 'cliente_acessou').maybeSingle();
+      if (!existingAccess) {
+        await supabase.from('galeria_acoes').insert({
+          galeria_id: gallery.id, tipo: 'cliente_acessou',
+          descricao: 'Cliente acessou a galeria de entrega', user_id: null,
+        });
+      }
+
+      console.log("📦 Deliver gallery accessed:", gallery.id);
+
+      return new Response(
+        JSON.stringify({
+          deliver: true,
+          gallery: {
+            id: gallery.id,
+            sessionName: gallery.nome_sessao,
+            clientName: gallery.cliente_nome,
+            welcomeMessage: gallery.mensagem_boas_vindas,
+            expirationDate: gallery.prazo_selecao,
+            settings: {
+              sessionFont: galleryConfig?.sessionFont || undefined,
+              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+            },
+          },
+          photos: photos || [],
+          studioSettings: settings || null,
+          theme: themeData,
+          clientMode,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3. Check if gallery is finalized (show preview of selected photos)
     const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
     
     if (isFinalized) {
