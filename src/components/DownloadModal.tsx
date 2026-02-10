@@ -149,7 +149,7 @@ export function DownloadModal({
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            As fotos serão baixadas uma a uma automaticamente
+            As fotos serão baixadas em um arquivo ZIP
           </p>
 
           {/* Divider - only show if individual view is available */}
