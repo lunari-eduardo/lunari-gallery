@@ -1,118 +1,133 @@
 
-# Sub-abas Select / Deliver na pagina Galerias
 
-## Visao Geral
+# Rotas Proprias e Tela de Edicao para Deliver
 
-Transformar a pagina Dashboard (Galerias) em uma interface multi-modo com duas sub-abas no topo: **Select** (padrao) e **Deliver**. Cada aba possui stats, filtros, cards e empty state proprios.
+## 1. Reestruturacao de Rotas
 
-## Mudancas
+Atualmente, `/` (Index) renderiza o Dashboard com as tabs Select/Deliver. Vamos criar rotas dedicadas para que cada modo tenha URL propria.
 
-### 1. `src/pages/Dashboard.tsx` -- Adicionar sub-abas
+### Novas rotas
 
-Usar o componente `Tabs` do Radix UI (ja disponivel em `@/components/ui/tabs`) para criar duas abas fixas logo abaixo do titulo:
+| Rota | Componente | Descricao |
+|------|------------|-----------|
+| `/galleries` | Dashboard (redirect default para select) | Rota base de galerias |
+| `/galleries/select` | Dashboard com tab Select ativa | Sub-aba Select |
+| `/galleries/deliver` | Dashboard com tab Deliver ativa | Sub-aba Deliver |
+| `/deliver/:id` | DeliverDetail (nova) | Tela administrativa de galeria Deliver |
+| `/deliver/:id/edit` | DeliverEdit (nova) | Tela de edicao Deliver (fase futura, opcional) |
 
-```text
-Suas Galerias
-Gerencie suas galerias
+A rota `/` continuara renderizando `<Index />` que por enquanto redireciona para `/galleries/select`. Futuramente sera a pagina "Inicio".
 
-[ Select ]  [ Deliver ]         [+ Nova Galeria]
-```
+### Mudancas em `App.tsx`
 
-**Comportamento:**
-- "Select" ativo por padrao
-- Troca de aba altera: dados filtrados, cards de resumo, filtros de status, visual dos cards, CTA
+- Adicionar rotas `/galleries`, `/galleries/select`, `/galleries/deliver`
+- Adicionar rota `/deliver/:id` para `DeliverDetail`
+- Manter rotas existentes de selecao intactas
 
-**Aba Select (existente):**
-- Filtra galerias com `tipo !== 'entrega'`
-- Stats: Total, Em selecao, Concluidas, Expiradas
-- Filtros: Todas, Criadas, Enviadas, Em selecao, Concluidas, Expiradas
-- Cards: `GalleryCard` existente com contagem X/Y, badge de status de selecao
+### Mudancas em `Layout.tsx`
 
-**Aba Deliver (nova):**
-- Filtra galerias com `tipo === 'entrega'` (usando campo da `Galeria` do hook)
-- Stats: Total, Publicadas, Expiradas
-- Filtros: Todas, Publicadas, Expiradas
-- Cards: novo componente `DeliverGalleryCard`
-- Empty state proprio
+- Atualizar o link "Galerias" de `/` para `/galleries/select`
+- O link ativo deve reconhecer qualquer rota `/galleries/*`
 
-### 2. `src/hooks/useSupabaseGalleries.ts` -- Expor campo `tipo`
+### Mudancas em `Dashboard.tsx`
 
-O campo `tipo` ja existe no banco e no `CreateGaleriaData`, mas nao e mapeado no `transformGaleria`. Adicionar `tipo: row.tipo || 'selecao'` ao transform e a interface `Galeria`.
+- Ler a tab ativa da URL (`/galleries/select` ou `/galleries/deliver`)
+- Ao trocar de tab, navegar para a rota correspondente via `useNavigate`
+- Aceitar prop ou usar `useParams`/`useLocation` para determinar tab ativa
 
-### 3. `src/components/DeliverGalleryCard.tsx` -- Novo componente
+### Mudancas em `Index.tsx`
 
-Card visual proprio para galerias Deliver:
+- Redirecionar para `/galleries/select` em vez de renderizar Dashboard diretamente
 
-- Badge azul "Deliver" no topo
-- Sem contagem X/Y (selecao)
-- Sem icones de selecao
-- Exibe: quantidade total de fotos (ex: "32 fotos")
-- Status: Publicada ou Expirada
-- Icone de download discreto
-- CTA: "Ver entrega"
-- Thumbnail da primeira foto como preview (usando dados ja disponiveis)
+### Mudancas em `DeliverGalleryCard.tsx`
 
-### 4. `src/pages/Dashboard.tsx` -- Empty state Deliver
+- O `onClick` deve navegar para `/deliver/:id` em vez de `/gallery/:id`
 
-Quando nao houver galerias Deliver:
+## 2. Nova Pagina: DeliverDetail (`src/pages/DeliverDetail.tsx`)
 
-- Texto: "Voce ainda nao criou nenhuma galeria de entrega. Use esse modo para entregar as fotos finais aos seus clientes."
-- Botao: "Criar galeria de entrega" (navega para `/deliver/new`)
+Tela administrativa propria para galerias de entrega, com abas internas.
 
-### 5. Subtitulo dinamico
-
-O subtitulo muda conforme a aba:
-- Select: "Gerencie as galerias de selecao dos seus clientes"
-- Deliver: "Gerencie as entregas finais de fotos"
-
-## Detalhes Tecnicos
-
-### Estrutura do Dashboard refatorado
+### Estrutura
 
 ```text
-Dashboard
-  |-- Header (titulo + subtitulo dinamico + botao Nova Galeria)
-  |-- Tabs (Select | Deliver)
-  |    |-- TabsContent "select"
-  |    |    |-- Stats (Total, Em selecao, Concluidas, Expiradas)
-  |    |    |-- Search + Filtros de selecao + View toggle
-  |    |    |-- Grid de GalleryCard
-  |    |    |-- Empty state (selecao)
-  |    |-- TabsContent "deliver"
-  |         |-- Stats (Total, Publicadas, Expiradas)
-  |         |-- Search + Filtros de entrega
-  |         |-- Grid de DeliverGalleryCard
-  |         |-- Empty state (entrega)
+<-- Voltar    Nome da Sessao  [Badge Status]     [Publicar] [Excluir]
+              Cliente • Data • N fotos
+
+[ Detalhes ] [ Fotos ] [ Acesso & Download ] [ Compartilhamento ]
 ```
 
-### Filtragem por tipo
+### Aba "Detalhes"
 
-No Dashboard, separar as galerias por tipo antes de aplicar filtros de status:
+- Cliente (nome, email, telefone) -- somente leitura, com botao editar inline
+- Nome da sessao -- editavel inline
+- Observacoes internas -- campo de texto livre (novo campo, salva em `configuracoes.notasInternas`)
+- Mensagem de boas-vindas -- campo de texto editavel
 
-```typescript
-const selectGalleries = allGalleries.filter(g => g.tipo !== 'entrega');
-const deliverGalleries = allGalleries.filter(g => g.tipo === 'entrega');
-```
+### Aba "Fotos Entregues"
 
-### Mapeamento de status Deliver
+- Grid de fotos finais (masonry ou grid simples)
+- Botao "Adicionar fotos" (abre PhotoUploader com `skipCredits=true`)
+- Hover em cada foto: botao remover (usa `deletePhoto` existente)
+- Contador total de fotos
 
-Para galerias de entrega, os status relevantes sao:
-- `publicada` / `enviado` --> "Publicada"
-- `expirada` / `expirado` --> "Expirada"
-- `rascunho` / `criado` --> "Rascunho" (nao publicada ainda)
+### Aba "Acesso & Download"
 
-### DeliverGalleryCard -- Props
+- Link publico da galeria (com botao copiar)
+- Toggle: Publica / Privada com senha
+- Campo de senha (quando privada)
+- Status de download (sempre ativo para Deliver)
+- Data de expiracao (editavel com calendar picker)
 
-Reutiliza a interface `Gallery` existente (mesma transformacao), mas renderiza informacoes diferentes:
-- Ignora `selectedCount`, `includedPhotos`, `extraCount`, `extraTotal`
-- Mostra `photos.length` como "N fotos"
-- Badge "Deliver" azul
-- Status simplificado (Publicada/Expirada)
+### Aba "Compartilhamento"
 
-## Arquivos
+- Botao "Copiar link da galeria"
+- Botao "Enviar por WhatsApp" (abre link whatsapp com mensagem padrao)
+- Botao "Enviar por e-mail" (futuro, placeholder)
+- Botao "Visualizar como cliente" (abre `/g/:token` em nova aba)
+- Mensagem padrao sugerida: "Suas fotos finais estao prontas para download."
+- Botao "Publicar entrega" (se status = rascunho)
 
-| Arquivo | Acao |
-|---------|------|
-| `src/pages/Dashboard.tsx` | Refatorar com Tabs, stats/filtros por aba |
-| `src/components/DeliverGalleryCard.tsx` | Criar card proprio para Deliver |
-| `src/hooks/useSupabaseGalleries.ts` | Adicionar `tipo` ao transform e interface |
+### Estados do header
+
+- **Rascunho**: Botao "Publicar entrega" visivel, botao "Compartilhar" desabilitado
+- **Publicada**: Botao "Compartilhar" ativo, badge "Publicada"
+- **Expirada**: Badge "Expirada" vermelho, opcao de reativar (estender prazo)
+
+## 3. Detalhes Tecnicos
+
+### Arquivos novos
+
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/DeliverDetail.tsx` | Pagina administrativa da galeria Deliver |
+
+### Arquivos modificados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/App.tsx` | Novas rotas `/galleries/*`, `/deliver/:id` |
+| `src/pages/Index.tsx` | Redirect para `/galleries/select` |
+| `src/pages/Dashboard.tsx` | Ler tab ativa da URL, navegar ao trocar |
+| `src/components/Layout.tsx` | Atualizar href "Galerias" para `/galleries/select` |
+| `src/components/DeliverGalleryCard.tsx` | onClick navega para `/deliver/:id` |
+
+### Reutilizacao de componentes
+
+- `PhotoUploader` (com `skipCredits=true`) para adicionar fotos
+- `DeleteGalleryDialog` para excluir galeria
+- `ClientSelect` / `ClientModal` para associar cliente
+- `downloadUtils.ts` para funcoes de download
+- `getGalleryUrl` para gerar link do cliente
+- Hooks: `useSupabaseGalleries` (getGallery, fetchGalleryPhotos, sendGallery, deleteGallery, deletePhoto, updateGallery)
+
+### Publicacao de galeria Deliver
+
+Reutiliza `sendGallery` do hook existente que:
+- Gera `public_token`
+- Seta `status = 'enviado'`
+- Seta `enviado_em` e `prazo_selecao`
+
+### Observacoes internas
+
+Campo novo salvo em `configuracoes.notasInternas` (dentro do JSON existente). Nao requer migracao SQL.
+
