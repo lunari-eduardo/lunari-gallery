@@ -85,6 +85,10 @@ const steps = [{
   icon: Image
 }, {
   id: 5,
+  name: 'Mensagem',
+  icon: MessageSquare
+}, {
+  id: 6,
   name: 'Revisão',
   icon: Check
 }];
@@ -208,6 +212,10 @@ export default function GalleryCreate() {
         setClientMode('dark');
       } else {
         setClientMode('light');
+      }
+      // Initialize font from last used
+      if (settings.lastSessionFont) {
+        setSessionFont(settings.lastSessionFont);
       }
     }
   }, [settings]);
@@ -515,7 +523,7 @@ export default function GalleryCreate() {
     }
   };
   const handleNext = async () => {
-    if (currentStep < 5) {
+    if (currentStep < 6) {
       // When going to step 4 (Fotos), create Supabase gallery first with configurations
       if (currentStep === 3 && !supabaseGalleryId) {
         // Validate client requirement for private galleries (ALL plans)
@@ -590,6 +598,9 @@ export default function GalleryCreate() {
             }
           });
 
+          // Persist last used font
+          updateSettings({ lastSessionFont: sessionFont });
+
           // Auto-publish gallery so it's ready to be shared
           await sendSupabaseGallery(supabaseGalleryId);
           toast.success('Galeria criada e publicada!', {
@@ -618,6 +629,8 @@ export default function GalleryCreate() {
   // Save draft function - can be called at any step
   const handleSaveDraft = async () => {
     try {
+      // Persist last used font
+      updateSettings({ lastSessionFont: sessionFont });
       // Determine password for private gallery
       let passwordToUse: string | undefined = undefined;
       if (galleryPermission === 'private' && !passwordDisabled && selectedClient) {
@@ -1023,6 +1036,21 @@ export default function GalleryCreate() {
               <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
               <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={e => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
             </div>
+
+            {/* Deadline - moved here from Configurações */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <Label>Prazo de Seleção *</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Input type="number" min={1} max={90} value={customDays} onChange={e => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
+                <span className="text-muted-foreground">dias</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Configuração padrão: {settings.defaultExpirationDays || 10} dias
+              </p>
+            </div>
             
             <div className="space-y-2">
               <Label>Fonte do Título</Label>
@@ -1397,37 +1425,7 @@ export default function GalleryCreate() {
 
             {/* Two column layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Block - Welcome Message & Deadline */}
-              <div className="space-y-6">
-                {/* Welcome Message */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-primary" />
-                    <Label>Mensagem de Saudação</Label>
-                  </div>
-                  <Textarea value={welcomeMessage} onChange={e => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={6} className="resize-none" />
-                  <p className="text-xs text-muted-foreground">
-                    Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
-                  </p>
-                </div>
-
-                {/* Deadline */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-primary" />
-                    <Label>Prazo de Seleção *</Label>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Input type="number" min={1} max={90} value={customDays} onChange={e => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
-                    <span className="text-muted-foreground">dias</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Configuração padrão: {settings.defaultExpirationDays || 10} dias
-                  </p>
-                </div>
-              </div>
-
-              {/* Right Block - Image Settings & Watermark & Interactions */}
+              {/* Left Block - Image Settings & Watermark */}
               <div className="space-y-6">
                 {/* Image Resize */}
                 <div className="space-y-3">
@@ -1508,25 +1506,13 @@ export default function GalleryCreate() {
                         <Slider value={[watermarkOpacity]} onValueChange={value => setWatermarkOpacity(value[0])} min={10} max={100} step={5} className="w-full" />
                       </div>
                     </div>}
-
-                  {/* Display setting for watermark */}
-                  {(watermarkType === 'standard' || watermarkType === 'custom') && <div className="space-y-2">
-                      <Label className="text-sm">Onde aplicar</Label>
-                      <Select value={watermarkDisplay} onValueChange={v => setWatermarkDisplay(v as WatermarkDisplay)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Fotos ampliadas e miniaturas</SelectItem>
-                          <SelectItem value="fullscreen">Somente fotos ampliadas</SelectItem>
-                          <SelectItem value="none">Não aplicar</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>}
                 </div>
+              </div>
 
+              {/* Right Block - Appearance & Interactions */}
+              <div className="space-y-6">
                 {/* Theme Selection for Client Gallery - Simplified */}
-                {settings.themeType === 'custom' && settings.customTheme && <div className="space-y-4 pt-2">
+                {settings.themeType === 'custom' && settings.customTheme && <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <Palette className="h-4 w-4 text-primary" />
                       <h3 className="font-medium text-sm">Aparência da Galeria</h3>
@@ -1570,7 +1556,7 @@ export default function GalleryCreate() {
                   </div>}
 
                 {/* Client Interactions */}
-                <div className="space-y-3 pt-2">
+                <div className="space-y-3">
                   <h3 className="font-medium text-sm">Interações do Cliente</h3>
                   
                   <div className="flex items-center justify-between py-2">
@@ -1607,6 +1593,25 @@ export default function GalleryCreate() {
             </div>
           </div>;
       case 5:
+        return <div className="space-y-6 animate-fade-in">
+            <div>
+              <p className="text-muted-foreground text-lg font-serif">
+                Personalize a mensagem que o cliente verá ao acessar a galeria
+              </p>
+            </div>
+
+            <div className="max-w-2xl space-y-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" />
+                <Label>Mensagem de Saudação</Label>
+              </div>
+              <Textarea value={welcomeMessage} onChange={e => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={8} className="resize-none" />
+              <p className="text-xs text-muted-foreground">
+                Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
+              </p>
+            </div>
+          </div>;
+      case 6:
         return <div className="space-y-6 animate-fade-in">
             <div>
               
@@ -1779,8 +1784,8 @@ export default function GalleryCreate() {
             </Button>
             
             <Button variant="terracotta" onClick={handleNext}>
-              {currentStep === 5 ? 'Criar Galeria' : 'Próximo'}
-              {currentStep < 5 && <ArrowRight className="h-4 w-4 ml-2" />}
+              {currentStep === 6 ? 'Criar Galeria' : 'Próximo'}
+              {currentStep < 6 && <ArrowRight className="h-4 w-4 ml-2" />}
             </Button>
           </div>
         </div>
