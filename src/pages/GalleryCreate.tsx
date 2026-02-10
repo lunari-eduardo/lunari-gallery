@@ -194,15 +194,14 @@ export default function GalleryCreate() {
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
 
+   // Read global watermark settings from photographer_accounts
+  const { settings: watermarkGlobalSettings } = useWatermarkSettings();
+
   // Initialize from settings
   useEffect(() => {
     if (settings) {
       setCustomDays(settings.defaultExpirationDays || 10);
       setGalleryPermission(settings.defaultGalleryPermission || 'private');
-      if (settings.defaultWatermark) {
-        setWatermarkType(settings.defaultWatermark.type);
-        setWatermarkOpacity(settings.defaultWatermark.opacity || 40);
-      }
       // Initialize theme selection from settings
       if (settings.activeThemeId) {
         setSelectedThemeId(settings.activeThemeId);
@@ -219,6 +218,13 @@ export default function GalleryCreate() {
       }
     }
   }, [settings]);
+
+  // Initialize watermark from global personalization settings (photographer_accounts)
+  useEffect(() => {
+    const modeToType: Record<string, WatermarkType> = { system: 'standard', custom: 'custom', none: 'none' };
+    setWatermarkType(modeToType[watermarkGlobalSettings.mode] || 'standard');
+    setWatermarkOpacity(watermarkGlobalSettings.opacity);
+  }, [watermarkGlobalSettings]);
 
   // Fetch frozen pricing rules from Gestão session
   // Now fetches ALWAYS when session_id is present, regardless of hasGestaoIntegration
