@@ -4,7 +4,7 @@ import { DeliverHeader } from '@/components/deliver/DeliverHeader';
 import { DeliverPhotoGrid, DeliverPhoto } from '@/components/deliver/DeliverPhotoGrid';
 import { DeliverLightbox } from '@/components/deliver/DeliverLightbox';
 import { DeliverWelcomeModal } from '@/components/deliver/DeliverWelcomeModal';
-import { downloadPhoto, downloadAllPhotos } from '@/lib/downloadUtils';
+import { downloadDeliverPhoto, downloadAllDeliverPhotos } from '@/lib/deliverDownloadUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
 import { TitleCaseMode } from '@/types/gallery';
 import { PhotoPaths } from '@/lib/photoUrl';
@@ -104,7 +104,7 @@ export default function ClientDeliverGallery({ data }: Props) {
 
   const handleDownloadSingle = async (photo: DeliverPhoto) => {
     try {
-      await downloadPhoto(gallery.id, photo.originalPath || photo.storageKey, photo.originalFilename);
+      await downloadDeliverPhoto(gallery.id, photo.originalPath || photo.storageKey, photo.originalFilename);
     } catch {
       toast.error('Erro ao baixar foto');
     }
@@ -118,7 +118,7 @@ export default function ClientDeliverGallery({ data }: Props) {
         storageKey: p.originalPath || p.storageKey,
         filename: p.originalFilename,
       }));
-      await downloadAllPhotos(gallery.id, downloadable, `${gallery.sessionName}.zip`, (current, total) => {
+      await downloadAllDeliverPhotos(gallery.id, downloadable, `${gallery.sessionName}.zip`, (current, total) => {
         if (current === total) toast.success(`${total} fotos baixadas!`);
       });
     } catch {

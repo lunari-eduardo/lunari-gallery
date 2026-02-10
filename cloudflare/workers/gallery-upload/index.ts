@@ -9,7 +9,8 @@
  * - POST /upload-original - Upload original file to R2 (for download)
  * - POST /upload-watermark - Upload watermark PNG
  * - GET  /image/{path}    - Serve image from R2
- * - GET  /download/{path} - Download file with Content-Disposition: attachment
+ * - GET  /download/{path} - Download for SELECT galleries (requires finalized + allowDownload)
+ * - GET  /deliver-download/{path} - Download for DELIVER galleries (no finalized check)
  * - GET  /health          - Health check
  * 
  * Authentication: JWT validated using JWKS (RS256)
@@ -325,13 +326,10 @@ async function handleServe(
 }
 
 /**
- * Handle file download from R2 with Content-Disposition: attachment.
- * Forces the browser to download the file instead of displaying it.
+ * Handle file download from R2 for SELECT galleries.
+ * Requires finalized_at + allowDownload.
  * 
  * URL format: GET /download/{storagePath}?filename=original_name.jpg
- * 
- * Security: path must match a valid original_path in galeria_fotos
- * for a finalized gallery with allowDownload enabled.
  */
 async function handleDownload(
   request: Request,
@@ -342,8 +340,6 @@ async function handleDownload(
     const url = new URL(request.url);
     const requestedFilename = url.searchParams.get('filename') || path.split('/').pop() || 'photo.jpg';
 
-    // Validate the path belongs to a finalized gallery with allowDownload
-    // Extract galleryId from path (originals/{galleryId}/... or galleries/{galleryId}/...)
     const pathParts = path.split('/');
     if (pathParts.length < 3) {
       return new Response(JSON.stringify({ error: 'Invalid path' }), {
@@ -352,11 +348,11 @@ async function handleDownload(
       });
     }
 
-    const galleryId = pathParts[1]; // second segment is always galleryId
+    const galleryId = pathParts[1];
 
-    // Verify gallery is finalized and has allowDownload enabled
+    // Select galleries: verify finalized + allowDownload
     const galleryRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,finalized_at,configuracoes,tipo`,
+      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,finalized_at,configuracoes`,
       {
         headers: {
           apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -374,26 +370,23 @@ async function handleDownload(
     }
 
     const gallery = galleries[0];
-    const isDeliver = gallery.tipo === 'entrega';
 
-    if (!isDeliver) {
-      if (!gallery.finalized_at) {
-        return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const config = gallery.configuracoes as Record<string, unknown> | null;
-      if (config?.allowDownload !== true) {
-        return new Response(JSON.stringify({ error: 'Download not allowed' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    if (!gallery.finalized_at) {
+      return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    // Verify this path exists as original_path in the gallery's photos
+    const config = gallery.configuracoes as Record<string, unknown> | null;
+    if (config?.allowDownload !== true) {
+      return new Response(JSON.stringify({ error: 'Download not allowed' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify photo belongs to gallery
     const photoRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&original_path=eq.${encodeURIComponent(path)}&select=id`,
       {
@@ -412,28 +405,7 @@ async function handleDownload(
       });
     }
 
-    // Get the file from R2
-    const object = await env.GALLERY_BUCKET.get(path);
-
-    if (!object) {
-      return new Response(JSON.stringify({ error: 'File not found in storage' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Stream the file with Content-Disposition: attachment
-    const headers = new Headers(corsHeaders);
-    headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
-    headers.set('Content-Disposition', `attachment; filename="${requestedFilename}"`);
-    headers.set('Cache-Control', 'private, no-cache');
-    if (object.size) {
-      headers.set('Content-Length', object.size.toString());
-    }
-
-    console.log(`Download: ${path} -> ${requestedFilename} (${object.size} bytes)`);
-
-    return new Response(object.body, { headers });
+    return await serveFileAsDownload(env, path, requestedFilename);
   } catch (error) {
     console.error('Download error:', error);
     return new Response(
@@ -441,6 +413,124 @@ async function handleDownload(
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
+}
+
+/**
+ * Handle file download from R2 for DELIVER galleries.
+ * NO finalized_at check. NO allowDownload check.
+ * Only verifies: gallery exists, tipo=entrega, photo belongs to gallery.
+ * 
+ * URL format: GET /deliver-download/{storagePath}?filename=original_name.jpg
+ */
+async function handleDeliverDownload(
+  request: Request,
+  env: Env,
+  path: string
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const requestedFilename = url.searchParams.get('filename') || path.split('/').pop() || 'photo.jpg';
+
+    const pathParts = path.split('/');
+    if (pathParts.length < 3) {
+      return new Response(JSON.stringify({ error: 'Invalid path' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const galleryId = pathParts[1];
+
+    // Verify gallery exists and is tipo=entrega
+    const galleryRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&tipo=eq.entrega&select=id`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const galleries = await galleryRes.json();
+    
+    if (!galleries || galleries.length === 0) {
+      return new Response(JSON.stringify({ error: 'Deliver gallery not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify photo belongs to this gallery
+    const photoRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&original_path=eq.${encodeURIComponent(path)}&select=id`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const photos = await photoRes.json();
+
+    if (!photos || photos.length === 0) {
+      // Also try matching by storage_key for deliver galleries
+      const photoRes2 = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&storage_key=eq.${encodeURIComponent(path)}&select=id`,
+        {
+          headers: {
+            apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        }
+      );
+      const photos2 = await photoRes2.json();
+
+      if (!photos2 || photos2.length === 0) {
+        return new Response(JSON.stringify({ error: 'Photo not found in deliver gallery' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    return await serveFileAsDownload(env, path, requestedFilename);
+  } catch (error) {
+    console.error('Deliver download error:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Download failed' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+/**
+ * Shared helper: fetch file from R2 and serve with Content-Disposition: attachment.
+ */
+async function serveFileAsDownload(
+  env: Env,
+  path: string,
+  filename: string
+): Promise<Response> {
+  const object = await env.GALLERY_BUCKET.get(path);
+
+  if (!object) {
+    return new Response(JSON.stringify({ error: 'File not found in storage' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const headers = new Headers(corsHeaders);
+  headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
+  headers.set('Content-Disposition', `attachment; filename="${filename}"`);
+  headers.set('Cache-Control', 'private, no-cache');
+  if (object.size) {
+    headers.set('Content-Length', object.size.toString());
+  }
+
+  console.log(`Download: ${path} -> ${filename} (${object.size} bytes)`);
+
+  return new Response(object.body, { headers });
 }
 
 // Handle watermark upload
@@ -532,7 +622,13 @@ export default {
       return handleWatermarkUpload(request, env);
     }
 
-    // Route: GET /download/{path} - forced download with Content-Disposition
+    // Route: GET /deliver-download/{path} - Deliver gallery download (no finalized check)
+    if (request.method === 'GET' && url.pathname.startsWith('/deliver-download/')) {
+      const downloadPath = url.pathname.replace('/deliver-download/', '');
+      return handleDeliverDownload(request, env, decodeURIComponent(downloadPath));
+    }
+
+    // Route: GET /download/{path} - Select gallery download (requires finalized + allowDownload)
     if (request.method === 'GET' && url.pathname.startsWith('/download/')) {
       const downloadPath = url.pathname.replace('/download/', '');
       return handleDownload(request, env, decodeURIComponent(downloadPath));
