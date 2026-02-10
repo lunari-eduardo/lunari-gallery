@@ -1,7 +1,7 @@
-import Dashboard from './Dashboard';
+import { Navigate } from 'react-router-dom';
 
 const Index = () => {
-  return <Dashboard />;
+  return <Navigate to="/galleries/select" replace />;
 };
 
 export default Index;

@@ -38,7 +38,7 @@ interface LayoutProps {
 }
 
 const navigation = [
-  { name: 'Galerias', href: '/', icon: Images },
+  { name: 'Galerias', href: '/galleries/select', icon: Images, matchPrefix: '/galleries' },
   { name: 'Clientes', href: '/clients', icon: Users },
   { name: 'Nova Galeria', href: '__popover__', icon: ImagePlus },
   { name: 'Configurações', href: '/settings', icon: Settings },
@@ -122,7 +122,9 @@ export function Layout({ children }: LayoutProps) {
                 );
               }
 
-              const isActive = location.pathname === item.href;
+              const isActive = (item as any).matchPrefix
+                ? location.pathname.startsWith((item as any).matchPrefix)
+                : location.pathname === item.href;
               return (
                 <Link
                   key={item.name}
@@ -220,7 +222,9 @@ export function Layout({ children }: LayoutProps) {
                   );
                 }
 
-                const isActive = location.pathname === item.href;
+                const isActive = (item as any).matchPrefix
+                  ? location.pathname.startsWith((item as any).matchPrefix)
+                  : location.pathname === item.href;
                 return (
                   <Link
                     key={item.name}
