@@ -39,19 +39,28 @@ interface PhotoUploadItem {
   error?: string;
   result?: UploadedPhoto;
   retryCount?: number;
+  uploadKey?: string;
 }
 
 interface PhotoUploaderProps {
   galleryId: string;
   maxLongEdge?: 1024 | 1920 | 2560;
-  /** Watermark configuration for burn-in during compression */
   watermarkConfig?: WatermarkConfig;
-  /** When true, also uploads original file to R2 for download (before compression) */
   allowDownload?: boolean;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
   className?: string;
+}
+
+/** Generate a deterministic upload key for idempotency */
+async function generateUploadKey(galleryId: string, fileName: string, fileSize: number): Promise<string> {
+  const raw = `${galleryId}:${fileName}:${fileSize}`;
+  const buffer = new TextEncoder().encode(raw);
+  const hash = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hash).slice(0, 12))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export function PhotoUploader({
@@ -70,7 +79,6 @@ export function PhotoUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTriggeredRef = useRef(false);
   
-  // Photo credits hook
   const { photoCredits, isAdmin, canUpload, refetch: refetchCredits } = usePhotoCredits();
 
   const addFiles = useCallback((files: FileList | File[]) => {
@@ -81,7 +89,6 @@ export function PhotoUploader({
       toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
     }
 
-    // Check credits BEFORE adding files (except for admins)
     if (!isAdmin && !canUpload(validFiles.length)) {
       toast.error(`Créditos insuficientes. Você tem ${photoCredits} créditos e está tentando enviar ${validFiles.length} fotos.`);
       return;
@@ -119,31 +126,30 @@ export function PhotoUploader({
     try {
       let originalPath: string | null = null;
 
-      // Step 1: If allowDownload is enabled, upload ORIGINAL to R2 FIRST (before compression discards it)
+      // Generate upload key for idempotency
+      const uploadKey = item.uploadKey || await generateUploadKey(galleryId, item.file.name, item.file.size);
+      updateItem(item.id, { uploadKey });
+
+      // Step 1: If allowDownload, upload original to R2 first
       if (allowDownload) {
         updateItem(item.id, { status: 'uploading', progress: 5 });
         console.log(`[PhotoUploader] allowDownload=true, uploading original to R2 first: ${item.file.name}`);
         
         const R2_WORKER_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
         
-        // Upload original file to R2 via Worker
         const originalFormData = new FormData();
         originalFormData.append('file', item.file, item.file.name);
         originalFormData.append('galleryId', galleryId);
         originalFormData.append('originalFilename', item.file.name);
 
-        // Get auth token for Worker authentication
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) {
           throw new Error('Sessão expirada. Faça login novamente.');
         }
 
-        // CRITICAL: R2 original upload is MANDATORY when allowDownload=true
         const r2Response = await fetch(`${R2_WORKER_URL}/upload-original`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-          },
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
           body: originalFormData,
         });
 
@@ -163,7 +169,7 @@ export function PhotoUploader({
         updateItem(item.id, { progress: 20 });
       }
 
-      // Step 2: Compress (with watermark burn-in if configured)
+      // Step 2: Compress
       updateItem(item.id, { status: 'compressing', progress: allowDownload ? 25 : 10 });
       
       const compressionOptions: Partial<CompressionOptions> = {
@@ -177,7 +183,6 @@ export function PhotoUploader({
       try {
         compressed = await compressImage(item.file, compressionOptions);
       } catch (compressionError) {
-        // Watermark load failure = upload failure (by design)
         const errorMessage = compressionError instanceof Error 
           ? compressionError.message 
           : 'Erro ao processar imagem';
@@ -186,23 +191,21 @@ export function PhotoUploader({
       
       updateItem(item.id, { progress: allowDownload ? 40 : 30 });
 
-      // Step 3: Upload preview to R2
+      // Step 3: Upload preview to R2 via Edge Function
       updateItem(item.id, { status: 'uploading', progress: allowDownload ? 50 : 40 });
 
-      // Create FormData with compressed file
       const formData = new FormData();
       formData.append('file', compressed.blob, compressed.filename);
       formData.append('galleryId', galleryId);
       formData.append('originalFilename', item.file.name);
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
+      formData.append('uploadKey', uploadKey);
       
-      // Pass the B2 original path if we have one
       if (originalPath) {
         formData.append('originalPath', originalPath);
       }
 
-      // Upload via Supabase Edge Function (auto-deploys, no manual wrangler needed)
       const result = await retryWithBackoff(
         async () => {
           const { data, error } = await supabase.functions.invoke('r2-upload', {
@@ -214,7 +217,6 @@ export function PhotoUploader({
           }
 
           if (!data?.success) {
-            // Handle insufficient credits error specifically
             if (data?.code === 'INSUFFICIENT_CREDITS') {
               throw new Error('Créditos insuficientes');
             }
@@ -238,7 +240,6 @@ export function PhotoUploader({
 
       updateItem(item.id, { status: 'done', progress: 100, error: undefined });
       
-      // Refetch credits after successful upload
       refetchCredits();
 
       return {
@@ -277,7 +278,6 @@ export function PhotoUploader({
       retryCount: currentRetryCount + 1,
     });
 
-    // Trigger upload for this single item
     const result = await uploadSingleFile(item);
     if (result) {
       toast.success(`Foto "${item.file.name}" enviada com sucesso!`);
@@ -289,13 +289,16 @@ export function PhotoUploader({
     const pendingItems = items.filter((item) => item.status === 'pending');
     if (pendingItems.length === 0) return;
 
+    // Force token refresh before starting batch
+    console.log('[PhotoUploader] Refreshing session token before batch...');
+    await supabase.auth.refreshSession();
+
     setIsUploading(true);
     onUploadStart?.();
     onUploadingChange?.(true);
 
     const results: UploadedPhoto[] = [];
 
-    // Dynamic batch size based on connection quality
     const batchSize = getOptimalBatchSize();
     console.log(`[PhotoUploader] Using batch size: ${batchSize} for ${pendingItems.length} files`);
 
@@ -307,11 +310,56 @@ export function PhotoUploader({
       results.push(...batchResults.filter((r): r is UploadedPhoto => r !== null));
     }
 
+    // ── Auto-retry failed photos (up to 2 rounds) ───────────────────────────
+    for (let retryRound = 0; retryRound < 2; retryRound++) {
+      // Re-read items from state to get current statuses
+      const currentItems = await new Promise<PhotoUploadItem[]>(resolve => {
+        setItems(prev => {
+          resolve(prev);
+          return prev;
+        });
+      });
+      
+      const failedItems = currentItems.filter(i => i.status === 'error' && (i.retryCount || 0) <= retryRound + 1);
+      if (failedItems.length === 0) break;
+
+      const delay = retryRound === 0 ? 5000 : 10000;
+      console.log(`[PhotoUploader] Auto-retry round ${retryRound + 1}: ${failedItems.length} failed items, waiting ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+
+      // Refresh token again before retry round
+      await supabase.auth.refreshSession();
+
+      for (const failedItem of failedItems) {
+        updateItem(failedItem.id, { 
+          status: 'pending', 
+          progress: 0, 
+          error: undefined,
+          retryCount: (failedItem.retryCount || 0) + 1,
+        });
+      }
+
+      for (let i = 0; i < failedItems.length; i += batchSize) {
+        const batch = failedItems.slice(i, i + batchSize);
+        const retryResults = await Promise.all(
+          batch.map((item) => uploadSingleFile(item))
+        );
+        results.push(...retryResults.filter((r): r is UploadedPhoto => r !== null));
+      }
+    }
+
     setIsUploading(false);
     onUploadingChange?.(false);
     uploadTriggeredRef.current = false;
 
-    const errorCount = items.filter(i => i.status === 'error').length;
+    // Re-read final state for error count
+    const finalItems = await new Promise<PhotoUploadItem[]>(resolve => {
+      setItems(prev => {
+        resolve(prev);
+        return prev;
+      });
+    });
+    const errorCount = finalItems.filter(i => i.status === 'error').length;
 
     if (results.length > 0) {
       if (errorCount > 0) {
@@ -365,7 +413,6 @@ export function PhotoUploader({
     i.status === 'compressing' || i.status === 'uploading' || i.status === 'saving'
   ).length;
 
-  // Calculate compression savings
   const totalOriginalSize = items.reduce((sum, i) => sum + i.file.size, 0);
   const totalCompressedSize = items
     .filter((i) => i.result)
