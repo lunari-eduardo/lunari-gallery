@@ -20,7 +20,7 @@ export interface DeliverDownloadablePhoto {
 function buildDeliverDownloadUrl(storagePath: string, filename: string): string {
   const safePath = storagePath.split('/').map(encodeURIComponent).join('/');
   const encodedFilename = encodeURIComponent(filename);
-  return `${R2_WORKER_URL}/deliver-download/${safePath}?filename=${encodedFilename}`;
+  return `${R2_WORKER_URL}/download/${safePath}?filename=${encodedFilename}`;
 }
 
 /**
