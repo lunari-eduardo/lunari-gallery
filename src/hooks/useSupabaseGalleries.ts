@@ -107,8 +107,8 @@ export interface GaleriaAcao {
 
 export interface CreateGaleriaData {
   clienteId?: string | null;  // Optional for public galleries
-  clienteNome?: string;
-  clienteEmail?: string;
+  clienteNome?: string | null;
+  clienteEmail?: string | null;
   clienteTelefone?: string;
   nomeSessao?: string;
   nomePacote?: string;
@@ -123,6 +123,7 @@ export interface CreateGaleriaData {
   sessionId?: string | null; // Session ID from Gestão system
   origin?: 'manual' | 'gestao'; // Track how gallery was created
   regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Gestão
+  tipo?: 'selecao' | 'entrega'; // Gallery type
 }
 
 // Transform database row to Galeria
@@ -289,6 +290,7 @@ export function useSupabaseGalleries() {
           configuracoes: (data.configuracoes || {}) as Json,
           prazo_selecao_dias: data.prazoSelecaoDias || 7,
           permissao: data.permissao || 'private',
+          tipo: data.tipo || 'selecao',
           gallery_password: data.galleryPassword || null,
           session_id: data.sessionId || null, // Session ID from Gestão
           origin: data.origin || 'manual', // Track creation origin

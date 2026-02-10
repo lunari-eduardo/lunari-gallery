@@ -1,0 +1,1 @@
+ALTER TABLE public.galerias ADD COLUMN tipo TEXT NOT NULL DEFAULT 'selecao';

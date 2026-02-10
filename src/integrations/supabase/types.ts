@@ -1333,6 +1333,7 @@ export type Database = {
           status: string
           status_pagamento: string | null
           status_selecao: string | null
+          tipo: string
           total_fotos: number | null
           total_fotos_extras_vendidas: number | null
           updated_at: string
@@ -1370,6 +1371,7 @@ export type Database = {
           status?: string
           status_pagamento?: string | null
           status_selecao?: string | null
+          tipo?: string
           total_fotos?: number | null
           total_fotos_extras_vendidas?: number | null
           updated_at?: string
@@ -1407,6 +1409,7 @@ export type Database = {
           status?: string
           status_pagamento?: string | null
           status_selecao?: string | null
+          tipo?: string
           total_fotos?: number | null
           total_fotos_extras_vendidas?: number | null
           updated_at?: string
