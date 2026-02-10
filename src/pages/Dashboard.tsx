@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Search, Grid, List, Loader2, AlertCircle, MousePointerClick, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,7 +111,12 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao'
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<string>('select');
+  const location = useLocation();
+  const activeTab = location.pathname.includes('/galleries/deliver') ? 'deliver' : 'select';
+
+  const handleTabChange = (value: string) => {
+    navigate(value === 'deliver' ? '/galleries/deliver' : '/galleries/select', { replace: true });
+  };
   const [search, setSearch] = useState('');
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
@@ -213,7 +218,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="select">Select</TabsTrigger>
           <TabsTrigger value="deliver">Deliver</TabsTrigger>
@@ -369,11 +374,11 @@ export default function Dashboard() {
                   key={gallery.id}
                   gallery={gallery}
                   totalPhotos={gallery.totalFotos}
-                  onClick={() => navigate(`/gallery/${gallery.id}`)}
-                />
-              ))}
-            </div>
-          ) : (
+                  onClick={() => navigate(`/deliver/${gallery.id}`)}
+                 />
+               ))}
+             </div>
+           ) : (
             <div className="text-center py-16">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Send className="h-8 w-8 text-muted-foreground" />
