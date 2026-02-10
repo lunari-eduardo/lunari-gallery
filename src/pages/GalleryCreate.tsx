@@ -1351,10 +1351,10 @@ export default function GalleryCreate() {
                 galleryId={supabaseGalleryId} 
                 maxLongEdge={imageResizeOption} 
                 watermarkConfig={{
-                  mode: watermarkSettings.mode,
+                  mode: watermarkType === 'standard' ? 'system' : watermarkType === 'custom' ? 'custom' : 'none',
                   customPathHorizontal: watermarkSettings.path,
                   customPathVertical: watermarkSettings.path,
-                  opacity: watermarkSettings.opacity,
+                  opacity: watermarkOpacity,
                 }}
                 allowDownload={allowDownload}
                 onUploadComplete={handlePhotoUploadComplete} 

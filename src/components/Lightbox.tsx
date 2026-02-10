@@ -499,7 +499,7 @@ export function Lightbox({
             </Button>
           )}
 
-          {allowDownload && (
+          {allowDownload && isConfirmedMode && (
             <Button
               onClick={handleDownload}
               disabled={isDownloadingPhoto}
