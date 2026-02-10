@@ -352,7 +352,7 @@ async function handleDownload(
 
     // Select galleries: verify finalized + allowDownload
     const galleryRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,finalized_at,configuracoes`,
+      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,tipo,finalized_at,configuracoes`,
       {
         headers: {
           apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -370,25 +370,29 @@ async function handleDownload(
     }
 
     const gallery = galleries[0];
+    const isDeliver = gallery.tipo === 'entrega';
 
-    if (!gallery.finalized_at) {
-      return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Deliver galleries: skip finalized_at and allowDownload checks
+    if (!isDeliver) {
+      if (!gallery.finalized_at) {
+        return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const config = gallery.configuracoes as Record<string, unknown> | null;
+      if (config?.allowDownload !== true) {
+        return new Response(JSON.stringify({ error: 'Download not allowed' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
-    const config = gallery.configuracoes as Record<string, unknown> | null;
-    if (config?.allowDownload !== true) {
-      return new Response(JSON.stringify({ error: 'Download not allowed' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verify photo belongs to gallery
+    // Verify photo belongs to gallery (check both original_path and storage_key for Deliver compatibility)
     const photoRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&original_path=eq.${encodeURIComponent(path)}&select=id`,
+      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&or=(original_path.eq.${encodeURIComponent(path)},storage_key.eq.${encodeURIComponent(path)})&select=id`,
       {
         headers: {
           apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -415,93 +419,7 @@ async function handleDownload(
   }
 }
 
-/**
- * Handle file download from R2 for DELIVER galleries.
- * NO finalized_at check. NO allowDownload check.
- * Only verifies: gallery exists, tipo=entrega, photo belongs to gallery.
- * 
- * URL format: GET /deliver-download/{storagePath}?filename=original_name.jpg
- */
-async function handleDeliverDownload(
-  request: Request,
-  env: Env,
-  path: string
-): Promise<Response> {
-  try {
-    const url = new URL(request.url);
-    const requestedFilename = url.searchParams.get('filename') || path.split('/').pop() || 'photo.jpg';
-
-    const pathParts = path.split('/');
-    if (pathParts.length < 3) {
-      return new Response(JSON.stringify({ error: 'Invalid path' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const galleryId = pathParts[1];
-
-    // Verify gallery exists and is tipo=entrega
-    const galleryRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&tipo=eq.entrega&select=id`,
-      {
-        headers: {
-          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-      }
-    );
-    const galleries = await galleryRes.json();
-    
-    if (!galleries || galleries.length === 0) {
-      return new Response(JSON.stringify({ error: 'Deliver gallery not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verify photo belongs to this gallery
-    const photoRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&original_path=eq.${encodeURIComponent(path)}&select=id`,
-      {
-        headers: {
-          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-      }
-    );
-    const photos = await photoRes.json();
-
-    if (!photos || photos.length === 0) {
-      // Also try matching by storage_key for deliver galleries
-      const photoRes2 = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&storage_key=eq.${encodeURIComponent(path)}&select=id`,
-        {
-          headers: {
-            apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-            Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-          },
-        }
-      );
-      const photos2 = await photoRes2.json();
-
-      if (!photos2 || photos2.length === 0) {
-        return new Response(JSON.stringify({ error: 'Photo not found in deliver gallery' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    }
-
-    return await serveFileAsDownload(env, path, requestedFilename);
-  } catch (error) {
-    console.error('Deliver download error:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Download failed' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-}
+// handleDeliverDownload removed - Deliver downloads now handled by handleDownload with tipo check
 
 /**
  * Shared helper: fetch file from R2 and serve with Content-Disposition: attachment.
@@ -622,13 +540,7 @@ export default {
       return handleWatermarkUpload(request, env);
     }
 
-    // Route: GET /deliver-download/{path} - Deliver gallery download (no finalized check)
-    if (request.method === 'GET' && url.pathname.startsWith('/deliver-download/')) {
-      const downloadPath = url.pathname.replace('/deliver-download/', '');
-      return handleDeliverDownload(request, env, decodeURIComponent(downloadPath));
-    }
-
-    // Route: GET /download/{path} - Select gallery download (requires finalized + allowDownload)
+    // Route: GET /download/{path} - Download for both Select and Deliver galleries
     if (request.method === 'GET' && url.pathname.startsWith('/download/')) {
       const downloadPath = url.pathname.replace('/download/', '');
       return handleDownload(request, env, decodeURIComponent(downloadPath));
