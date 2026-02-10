@@ -356,7 +356,7 @@ async function handleDownload(
 
     // Verify gallery is finalized and has allowDownload enabled
     const galleryRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,finalized_at,configuracoes`,
+      `${env.SUPABASE_URL}/rest/v1/galerias?id=eq.${galleryId}&select=id,finalized_at,configuracoes,tipo`,
       {
         headers: {
           apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -374,19 +374,23 @@ async function handleDownload(
     }
 
     const gallery = galleries[0];
-    if (!gallery.finalized_at) {
-      return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const isDeliver = gallery.tipo === 'entrega';
 
-    const config = gallery.configuracoes as Record<string, unknown> | null;
-    if (config?.allowDownload !== true) {
-      return new Response(JSON.stringify({ error: 'Download not allowed' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (!isDeliver) {
+      if (!gallery.finalized_at) {
+        return new Response(JSON.stringify({ error: 'Gallery not finalized' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const config = gallery.configuracoes as Record<string, unknown> | null;
+      if (config?.allowDownload !== true) {
+        return new Response(JSON.stringify({ error: 'Download not allowed' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Verify this path exists as original_path in the gallery's photos
