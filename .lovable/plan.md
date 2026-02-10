@@ -1,55 +1,40 @@
 
 
-# Correcao: Download em Galerias de Entrega
+# Correcao: Redirecionamento pos-criacao de galeria Deliver
 
 ## Problema
 
-O Cloudflare Worker (`cloudflare/workers/gallery-upload/index.ts`) bloqueia downloads de galerias Deliver porque:
+Em `src/pages/DeliverCreate.tsx`, linha 139, o `handlePublish` navega para `/gallery/${supabaseGalleryId}` (pagina de detalhes de **Selecao**) em vez de `/deliver/${supabaseGalleryId}` (pagina administrativa de **Deliver**).
 
-1. **Linha 377**: Exige `finalized_at` preenchido -- galerias Deliver nunca sao "finalizadas" (nao ha fluxo de selecao)
-2. **Linha 385**: Exige `configuracoes.allowDownload === true` -- galerias Deliver podem nao ter esse flag
-
-Resultado: o Worker retorna `{"error":"Gallery not finalized"}` com status 403. Como o `triggerBrowserDownload` abre essa URL em `target="_blank"`, o navegador navega para a tela de erro em vez de baixar. No caso do "Baixar Todas", a primeira foto causa essa navegacao e as demais nunca executam.
+Isso faz com que, apos publicar uma entrega, o fotografo veja a interface de selecao (com abas "Selecao", "Fotos", "Detalhes", "Historico") em vez da interface propria de entrega.
 
 ## Solucao
 
-### 1. `cloudflare/workers/gallery-upload/index.ts` -- Ajustar `handleDownload`
+### 1. `src/pages/DeliverCreate.tsx` -- Corrigir rota de redirecionamento
 
-Adicionar `tipo` ao SELECT da galeria e, quando `tipo === 'entrega'`, pular as verificacoes de `finalized_at` e `allowDownload`:
+Alterar a linha 139:
 
-```text
-// Busca atual (linha 359):
-select=id,finalized_at,configuracoes
+```
+// De:
+navigate(`/gallery/${supabaseGalleryId}`);
 
-// Nova busca:
-select=id,finalized_at,configuracoes,tipo
+// Para:
+navigate(`/deliver/${supabaseGalleryId}`);
 ```
 
-Logica ajustada:
+### 2. Sobre o atraso no upload
 
-```text
-const isDeliver = gallery.tipo === 'entrega';
+O atraso observado antes do upload comecar e **comportamento esperado**. Para galerias Deliver (com `allowDownload=true`), o fluxo executa:
 
-if (!isDeliver) {
-  // Selecao: manter verificacoes existentes
-  if (!gallery.finalized_at) --> 403 "Gallery not finalized"
-  if (config?.allowDownload !== true) --> 403 "Download not allowed"
-}
-// Deliver: pula ambas as verificacoes, download sempre permitido
-```
+1. Upload do **original em alta resolucao** para o Cloudflare R2 (pode levar alguns segundos dependendo do tamanho do arquivo)
+2. **Compressao client-side** do preview (2560px)
+3. Upload do **preview** via Edge Function
 
-A verificacao de que o `path` pertence a uma foto da galeria (linhas 393-409) continua ativa para ambos os tipos -- isso garante seguranca sem bloquear Deliver.
-
-### 2. Nenhuma mudanca no frontend
-
-O codigo de `downloadUtils.ts` e `ClientDeliverGallery.tsx` ja esta correto. O problema e exclusivamente no Worker que rejeita a requisicao.
+O passo 1 e obrigatorio para garantir que o arquivo original esteja salvo antes de processar o preview. Nao ha problema no fluxo.
 
 ## Arquivo
 
 | Arquivo | Acao |
 |---------|------|
-| `cloudflare/workers/gallery-upload/index.ts` | Ajustar `handleDownload` para permitir download em galerias `entrega` |
+| `src/pages/DeliverCreate.tsx` | Corrigir navigate de `/gallery/` para `/deliver/` |
 
-## Observacao
-
-Este arquivo e um Cloudflare Worker (nao e Edge Function do Supabase). Apos a mudanca no codigo, sera necessario fazer deploy manualmente via `wrangler deploy` no ambiente Cloudflare.
