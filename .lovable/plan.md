@@ -1,114 +1,146 @@
 
-# Plano: Produto Deliver (Entrega Final)
+# Plano: Galeria de Entrega -- Experiencia do Cliente
 
-## Visao Geral
+## Principio
 
-Adicionar um novo produto "Deliver" ao sistema Gallery. Galerias de entrega permitem que fotografos enviem fotos em alta resolucao para download direto pelo cliente, sem fluxo de selecao, sem creditos, e com prazo de expiracao.
+A Galeria de Entrega e um produto diferente com layout, fluxo e componentes proprios. Nenhum componente da galeria de selecao sera reutilizado para a visualizacao do cliente.
 
-## Arquitetura
-
-### Diferenca entre Selecao vs Entrega
-
-| Aspecto | Selecao (existente) | Entrega (novo) |
-|---------|---------------------|----------------|
-| Tipo | `selecao` | `entrega` |
-| Creditos | Consome creditos | Nao consome |
-| Watermark | Configuravel | Sem watermark |
-| Download | Opcional | Sempre ativo |
-| Previews | 1024/1920/2560px | 2560px fixo |
-| Selecao | Cliente seleciona fotos | Nao ha selecao |
-| Venda | Configuravel | Nao ha venda |
-| Cliente | Obrigatorio | Opcional |
-| Pacote | Configuravel | Nao se aplica |
-
-### Fluxo do Usuario
+## Experiencia do Cliente
 
 ```text
-"Nova Galeria" (nav)
-      |
-      v
-  Popover flutuante
-  +-----------------+
-  | Selecao         |
-  | Entrega         |
-  +-----------------+
-      |
-  Selecao --> /gallery/new (existente)
-  Entrega --> /deliver/new (nova pagina)
+Cliente clica no link --> /g/:token
+
+gallery-access Edge Function identifica tipo='entrega'
+  --> retorna { deliver: true, ... }
+
+Frontend detecta flag 'deliver'
+  --> renderiza <ClientDeliverGallery /> em vez de <ClientGallery />
 ```
 
-## Mudancas por Arquivo
+### Tela: Capa (Hero)
 
-### 1. Migracao SQL - Nova coluna `tipo` na tabela `galerias`
+- Primeira foto da galeria como imagem de fundo em tela cheia
+- Nome do fotografo/estudio no topo (discreto, sobre a imagem)
+- Nome da sessao centralizado com fonte escolhida pelo fotografo
+- Botao "Ver Galeria" com scroll suave para a area de fotos
+- Barra inferior fixa: nome da sessao + nome do estudio + botao "Entrar"
 
-Adicionar coluna `tipo TEXT NOT NULL DEFAULT 'selecao'` na tabela `galerias`. Valores possiveis: `'selecao'` e `'entrega'`. Todas as galerias existentes serao automaticamente `'selecao'`.
+### Tela: Galeria de Fotos
 
-### 2. `src/components/Layout.tsx` - Menu "Nova Galeria" com Popover
+- Header limpo: logo do estudio + nome da sessao + contagem de fotos + data de expiracao (discreto)
+- Botao "Baixar Todas" no topo
+- Grid masonry de fotos grandes, sem overlays, sem icones de selecao
+- Hover em cada foto: icone de download discreto no canto inferior
+- Lightbox simplificado: apenas navegacao + botao de download (sem selecao, favoritos, comentarios)
 
-Substituir o link direto "Nova Galeria" por um botao com Popover que mostra duas opcoes:
-- **Selecao** - navega para `/gallery/new`
-- **Entrega** - navega para `/deliver/new`
+### Modal de Boas-Vindas
 
-Usar o componente Popover existente do Radix UI.
+- Exibido automaticamente na primeira visita
+- Mostra a mensagem configurada pelo fotografo na Etapa 3 da criacao
+- Botao "Continuar" para fechar
 
-### 3. `src/pages/Dashboard.tsx` - Botao "Nova Galeria" com Popover
+## Arquitetura de Arquivos
 
-Mesmo tratamento do Layout: substituir o botao que navega direto para `/gallery/new` por um Popover com as duas opcoes.
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/ClientDeliverGallery.tsx` | Pagina principal (roteamento, fetch, estado) |
+| `src/components/deliver/DeliverHero.tsx` | Capa hero com foto de fundo |
+| `src/components/deliver/DeliverHeader.tsx` | Header limpo da galeria |
+| `src/components/deliver/DeliverPhotoGrid.tsx` | Grid masonry com hover de download |
+| `src/components/deliver/DeliverLightbox.tsx` | Lightbox simplificado (sem selecao) |
+| `src/components/deliver/DeliverWelcomeModal.tsx` | Modal de boas-vindas |
 
-### 4. `src/pages/DeliverCreate.tsx` - Nova pagina de criacao
+## Detalhes Tecnicos
 
-Pagina com 3 etapas (steps):
+### 1. Edge Function `gallery-access/index.ts` -- Suporte ao tipo `entrega`
 
-**Etapa 1 - Dados:**
-- Cliente (opcional, usando ClientSelect existente + ClientModal)
-- Nome da sessao (titulo da galeria, obrigatorio)
-- Permissao: Publica ou Privada (com senha)
-- Prazo de expiracao em dias
+Quando `gallery.tipo === 'entrega'`, retornar um payload diferente:
 
-**Etapa 2 - Fotos:**
-- Reutiliza o componente `PhotoUploader` existente
-- Configuracoes fixas: `maxLongEdge=2560`, sem watermark, `allowDownload=true`
-- Nao consome creditos (passara flag para o uploader)
+```text
+{
+  deliver: true,
+  gallery: {
+    id, sessionName, clientName,
+    welcomeMessage, expirationDate,
+    coverPhoto (primeira foto),
+    settings: { sessionFont, titleCaseMode }
+  },
+  photos: [ { id, storage_key, original_path, original_filename, width, height } ],
+  studioSettings: { studio_name, studio_logo_url },
+  theme: { backgroundMode, ... }
+}
+```
 
-**Etapa 3 - Mensagem:**
-- Campo de texto para mensagem de boas-vindas
-- Sera exibida em modal quando o cliente acessar a galeria
-- Botao de revisao rapida e publicacao
+A logica de galeria de entrega NAO passa por verificacao de `status_selecao`, pois nao ha fluxo de selecao. Apenas verifica:
+- Galeria existe (pelo token)
+- Senha (se privada)
+- Prazo nao expirado
 
-### 5. `src/hooks/useSupabaseGalleries.ts` - Suporte ao tipo `entrega`
+### 2. Roteamento em `ClientGallery.tsx`
 
-- Adicionar campo `tipo` ao `CreateGaleriaData`
-- Passar `tipo` no insert do `createGaleria`
-- Adicionar `tipo` ao transform e interface `Galeria`
+O componente `ClientGallery.tsx` existente continuara como ponto de entrada para `/g/:token`. Apos o fetch da Edge Function, se `response.deliver === true`, renderiza `<ClientDeliverGallery />` passando os dados. Nenhuma logica de selecao e carregada.
 
-### 6. `src/App.tsx` - Nova rota
+### 3. `ClientDeliverGallery.tsx` -- Pagina Principal
 
-Adicionar rota `/deliver/new` apontando para `DeliverCreate`.
+- Recebe dados ja carregados (nao faz fetch proprio)
+- Gerencia estado: `showWelcome`, `lightboxIndex`, download progress
+- Renderiza: Hero --> Header --> Grid --> Lightbox --> WelcomeModal
+- Tematizacao: aplica CSS variables do tema do fotografo (mesmo sistema existente `hexToHsl`)
 
-### 7. `src/components/PhotoUploader.tsx` - Flag `skipCredits`
+### 4. `DeliverHero.tsx` -- Capa
 
-Adicionar prop opcional `skipCredits?: boolean`. Quando `true`, pula toda a logica de verificacao e consumo de creditos na Edge Function. Enviar flag no payload para o `r2-upload`.
+- Foto de capa: primeira foto da galeria (`photos[0]`) como `background-image` cobrindo viewport
+- Overlay escuro gradiente para legibilidade do texto
+- Nome do estudio no topo
+- Titulo da sessao centralizado com fonte personalizada
+- Botao "Ver Galeria" com animacao de scroll
+- Chevron animado apontando para baixo
 
-### 8. `supabase/functions/r2-upload/index.ts` - Suporte a `skipCredits`
+### 5. `DeliverPhotoGrid.tsx` -- Grid
 
-Quando `skipCredits: true` no body, pular as chamadas a `check_photo_credits` e `consume_photo_credits`. A validacao de permissao (usuario autenticado + dono da galeria) continua igual.
+- Masonry layout via CSS Columns (reutiliza classes `.masonry-grid` ja existentes)
+- Cada foto: `img` com `loading="lazy"`, sem bordas de selecao
+- Hover: overlay sutil + icone de download no canto inferior
+- Click: abre lightbox
+- Botao de download individual por foto (click no icone)
 
-### 9. `src/integrations/supabase/types.ts` - Atualizar tipos
+### 6. `DeliverLightbox.tsx` -- Lightbox Simplificado
 
-Refletir a nova coluna `tipo` nos tipos gerados.
+- Navegacao por setas e swipe
+- Zoom (pinch-to-zoom mobile, scroll desktop)
+- Botao de download (unica acao disponivel)
+- Sem: botao de selecao, favoritar, comentar
+- Usa `downloadPhoto()` do `downloadUtils.ts` existente
 
-## Etapas de Implementacao (ordem)
+### 7. `DeliverWelcomeModal.tsx` -- Modal de Boas-Vindas
 
-1. Migracao SQL (coluna `tipo`)
-2. Tipos TypeScript atualizados
-3. Hook `useSupabaseGalleries` com suporte a `tipo`
-4. Pagina `DeliverCreate.tsx` (3 etapas)
-5. Layout + Dashboard (popover "Nova Galeria")
-6. Rota no App.tsx
-7. PhotoUploader + Edge Function (flag `skipCredits`)
+- Dialog modal com mensagem do fotografo
+- Exibido uma vez por sessao (controle via `sessionStorage`)
+- Botao "Continuar" fecha o modal
 
-## Observacoes
+### 8. `DeliverHeader.tsx` -- Header
 
-- A visualizacao client-side da galeria de entrega (como o cliente ve) sera implementada em uma fase seguinte, reutilizando o `ClientGallery` com adaptacoes para o tipo `entrega`.
-- Planos de armazenamento serao configurados posteriormente conforme mencionado.
-- A listagem no Dashboard mostrara ambos os tipos, com badge visual diferenciando "Selecao" de "Entrega".
+- Logo do estudio centralizado
+- Nome da sessao com fonte customizada
+- Contagem de fotos
+- Data de expiracao (se definida)
+- Botao "Baixar Todas" (usa `downloadAllPhotos()` existente)
+
+### 9. Tela de Senha (reutilizacao parcial)
+
+Para galerias privadas, o `PasswordScreen.tsx` existente pode ser reutilizado pois e generico o suficiente (logo + campo de senha). Apenas o texto "Galeria Protegida" permanece.
+
+## Ordem de Implementacao
+
+1. Atualizar Edge Function `gallery-access` para detectar `tipo='entrega'`
+2. Criar componentes em `src/components/deliver/`
+3. Criar `ClientDeliverGallery.tsx`
+4. Integrar no `ClientGallery.tsx` existente (branch por tipo)
+5. Testes visuais
+
+## O Que NAO Muda
+
+- Nenhum componente de selecao e modificado
+- `PhotoCard.tsx`, `SelectionSummary.tsx`, `SelectionConfirmation.tsx` nao sao tocados
+- A rota `/g/:token` permanece a mesma -- o tipo e resolvido no backend
+- O sistema de download (`downloadUtils.ts`) e reutilizado como esta
