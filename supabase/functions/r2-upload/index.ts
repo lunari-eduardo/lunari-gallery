@@ -194,6 +194,7 @@ Deno.serve(async (req) => {
     const height = parseInt(formData.get("height") as string) || 0;
     const originalPath = formData.get("originalPath") as string | null;
     const uploadKey = formData.get("uploadKey") as string | null;
+    const skipCredits = formData.get("skipCredits") === "true";
 
     if (!file || !galleryId) {
       return new Response(JSON.stringify({ error: "Arquivo e galleryId são obrigatórios" }), {
@@ -250,29 +251,33 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 5. Check credits (without consuming) ─────────────────────────────────
-    const { data: isAdmin } = await supabase.rpc('has_role', {
-      _user_id: user.id,
-      _role: 'admin'
-    });
+    // ── 5. Check credits (without consuming) — skip for deliver galleries ──
+    if (!skipCredits) {
+      const { data: isAdmin } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin'
+      });
 
-    if (!isAdmin) {
-      const { data: hasCredits, error: creditError } = await supabase.rpc(
-        'check_photo_credits',
-        { _user_id: user.id, _photo_count: 1 }
-      );
-
-      if (creditError || !hasCredits) {
-        console.error(`[${requestId}] Credit check failed:`, creditError);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Créditos insuficientes',
-            code: 'INSUFFICIENT_CREDITS'
-          }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      if (!isAdmin) {
+        const { data: hasCredits, error: creditError } = await supabase.rpc(
+          'check_photo_credits',
+          { _user_id: user.id, _photo_count: 1 }
         );
+
+        if (creditError || !hasCredits) {
+          console.error(`[${requestId}] Credit check failed:`, creditError);
+          return new Response(
+            JSON.stringify({ 
+              error: 'Créditos insuficientes',
+              code: 'INSUFFICIENT_CREDITS'
+            }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        console.log(`[${requestId}] Credits verified (not consumed yet)`);
       }
-      console.log(`[${requestId}] Credits verified (not consumed yet)`);
+    } else {
+      console.log(`[${requestId}] skipCredits=true, skipping credit check`);
     }
 
     // ── 6. R2 credentials ────────────────────────────────────────────────────
@@ -371,21 +376,27 @@ Deno.serve(async (req) => {
 
     console.log(`[${requestId}] Photo saved to DB: ${photo.id}`);
 
-    // ── 9. Consume credits AFTER success ─────────────────────────────────────
-    if (!isAdmin) {
-      const { data: creditConsumed, error: consumeError } = await supabase.rpc(
-        'consume_photo_credits',
-        { _user_id: user.id, _gallery_id: galleryId, _photo_count: 1 }
-      );
+    // ── 9. Consume credits AFTER success — skip for deliver galleries ──────
+    if (!skipCredits) {
+      const { data: isAdmin } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin'
+      });
 
-      if (consumeError || !creditConsumed) {
-        // Credit consumption failed AFTER upload succeeded.
-        // Log but don't fail the request — the photo is already saved.
-        // This is a minor inconsistency (free photo) vs the old bug (lost credit).
-        console.error(`[${requestId}] ⚠️ Credit consumption failed after successful upload:`, consumeError);
-      } else {
-        console.log(`[${requestId}] Credit consumed successfully`);
+      if (!isAdmin) {
+        const { data: creditConsumed, error: consumeError } = await supabase.rpc(
+          'consume_photo_credits',
+          { _user_id: user.id, _gallery_id: galleryId, _photo_count: 1 }
+        );
+
+        if (consumeError || !creditConsumed) {
+          console.error(`[${requestId}] ⚠️ Credit consumption failed after successful upload:`, consumeError);
+        } else {
+          console.log(`[${requestId}] Credit consumed successfully`);
+        }
       }
+    } else {
+      console.log(`[${requestId}] skipCredits=true, skipping credit consumption`);
     }
 
     // ── 10. Update gallery photo count ───────────────────────────────────────

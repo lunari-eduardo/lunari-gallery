@@ -47,6 +47,7 @@ interface PhotoUploaderProps {
   maxLongEdge?: 1024 | 1920 | 2560;
   watermarkConfig?: WatermarkConfig;
   allowDownload?: boolean;
+  skipCredits?: boolean;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
@@ -68,6 +69,7 @@ export function PhotoUploader({
   maxLongEdge = 1920,
   watermarkConfig,
   allowDownload = false,
+  skipCredits = false,
   onUploadComplete,
   onUploadStart,
   onUploadingChange,
@@ -89,7 +91,7 @@ export function PhotoUploader({
       toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
     }
 
-    if (!isAdmin && !canUpload(validFiles.length)) {
+    if (!skipCredits && !isAdmin && !canUpload(validFiles.length)) {
       toast.error(`Créditos insuficientes. Você tem ${photoCredits} créditos e está tentando enviar ${validFiles.length} fotos.`);
       return;
     }
@@ -201,6 +203,10 @@ export function PhotoUploader({
       formData.append('width', compressed.width.toString());
       formData.append('height', compressed.height.toString());
       formData.append('uploadKey', uploadKey);
+
+      if (skipCredits) {
+        formData.append('skipCredits', 'true');
+      }
       
       if (originalPath) {
         formData.append('originalPath', originalPath);
@@ -423,7 +429,7 @@ export function PhotoUploader({
   return (
     <div className={cn('space-y-4', className)}>
       {/* Credit Warning */}
-      {!isAdmin && photoCredits < 10 && (
+      {!skipCredits && !isAdmin && photoCredits < 10 && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <span className="text-sm text-warning">
@@ -444,10 +450,10 @@ export function PhotoUploader({
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={() => !isAdmin && photoCredits === 0 ? null : fileInputRef.current?.click()}
+        onClick={() => !skipCredits && !isAdmin && photoCredits === 0 ? null : fileInputRef.current?.click()}
         className={cn(
           'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
-          !isAdmin && photoCredits === 0 
+         !skipCredits && !isAdmin && photoCredits === 0 
             ? 'border-muted-foreground/10 bg-muted/50 cursor-not-allowed opacity-60'
             : 'cursor-pointer',
           isDragging
@@ -460,7 +466,7 @@ export function PhotoUploader({
         <p className="text-sm text-muted-foreground mt-1">
           ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto
         </p>
-        {!isAdmin && (
+        {!skipCredits && !isAdmin && (
           <p className="text-xs text-muted-foreground mt-2 flex items-center justify-center gap-1">
             <Coins className="h-3 w-3" />
             {photoCredits} créditos disponíveis (1 foto = 1 crédito)

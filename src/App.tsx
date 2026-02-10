@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Clients from "./pages/Clients";
 import ClientProfile from "./pages/ClientProfile";
 import GalleryCreate from "./pages/GalleryCreate";
+import DeliverCreate from "./pages/DeliverCreate";
 import GalleryDetail from "./pages/GalleryDetail";
 import GalleryEdit from "./pages/GalleryEdit";
 import GalleryPreview from "./pages/GalleryPreview";
@@ -82,6 +83,11 @@ const App = () => (
               <Route path="/gallery/new" element={
                 <ProtectedRoute>
                   <Layout><GalleryCreate /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/deliver/new" element={
+                <ProtectedRoute>
+                  <Layout><DeliverCreate /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/gallery/:id" element={

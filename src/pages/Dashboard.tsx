@@ -1,12 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Grid, List, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Grid, List, Loader2, AlertCircle, MousePointerClick, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GalleryCard } from '@/components/GalleryCard';
 import { useSupabaseGalleries, Galeria } from '@/hooks/useSupabaseGalleries';
 import { GalleryStatus, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { clearGalleryStorage } from '@/lib/storage';
 import { isPast } from 'date-fns';
 
@@ -143,15 +148,38 @@ export default function Dashboard() {
             Gerencie as galerias de seleção dos seus clientes
           </p>
         </div>
-        <Button 
-          onClick={() => navigate('/gallery/new')}
-          variant="terracotta"
-          size="lg"
-          className="gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Nova Galeria
-        </Button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="terracotta" size="lg" className="gap-2">
+              <Plus className="h-5 w-5" />
+              Nova Galeria
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-2" align="end" sideOffset={8}>
+            <div className="space-y-1">
+              <button
+                onClick={() => navigate('/gallery/new')}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted transition-colors text-left"
+              >
+                <MousePointerClick className="h-4 w-4 text-primary shrink-0" />
+                <div>
+                  <p>Seleção</p>
+                  <p className="text-xs text-muted-foreground font-normal">Cliente seleciona fotos</p>
+                </div>
+              </button>
+              <button
+                onClick={() => navigate('/deliver/new')}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted transition-colors text-left"
+              >
+                <Send className="h-4 w-4 text-primary shrink-0" />
+                <div>
+                  <p>Entrega</p>
+                  <p className="text-xs text-muted-foreground font-normal">Download direto</p>
+                </div>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Stats */}

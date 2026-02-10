@@ -9,7 +9,9 @@ import {
   Users,
   User,
   LogOut,
-  Camera
+  Camera,
+  MousePointerClick,
+  Send
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
@@ -25,6 +27,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface LayoutProps {
   children: ReactNode;
@@ -33,7 +40,7 @@ interface LayoutProps {
 const navigation = [
   { name: 'Galerias', href: '/', icon: Images },
   { name: 'Clientes', href: '/clients', icon: Users },
-  { name: 'Nova Galeria', href: '/gallery/new', icon: ImagePlus },
+  { name: 'Nova Galeria', href: '__popover__', icon: ImagePlus },
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
@@ -71,6 +78,50 @@ export function Layout({ children }: LayoutProps) {
           <nav className="hidden md:flex items-center gap-1">
             {navigation.map((item) => {
               const Icon = item.icon;
+
+              // Popover for "Nova Galeria"
+              if (item.href === '__popover__') {
+                return (
+                  <Popover key={item.name}>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                          'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.name}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-52 p-2" align="center" sideOffset={8}>
+                      <div className="space-y-1">
+                        <Link
+                          to="/gallery/new"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted transition-colors"
+                        >
+                          <MousePointerClick className="h-4 w-4 text-primary" />
+                          <div>
+                            <p>Seleção</p>
+                            <p className="text-xs text-muted-foreground font-normal">Cliente seleciona fotos</p>
+                          </div>
+                        </Link>
+                        <Link
+                          to="/deliver/new"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted transition-colors"
+                        >
+                          <Send className="h-4 w-4 text-primary" />
+                          <div>
+                            <p>Entrega</p>
+                            <p className="text-xs text-muted-foreground font-normal">Download direto</p>
+                          </div>
+                        </Link>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                );
+              }
+
               const isActive = location.pathname === item.href;
               return (
                 <Link
@@ -144,6 +195,31 @@ export function Layout({ children }: LayoutProps) {
             <nav className="container py-4 space-y-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
+
+                // Popover for "Nova Galeria" on mobile
+                if (item.href === '__popover__') {
+                  return (
+                    <div key={item.name} className="space-y-1">
+                      <Link
+                        to="/gallery/new"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      >
+                        <MousePointerClick className="h-5 w-5" />
+                        Nova Seleção
+                      </Link>
+                      <Link
+                        to="/deliver/new"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      >
+                        <Send className="h-5 w-5" />
+                        Nova Entrega
+                      </Link>
+                    </div>
+                  );
+                }
+
                 const isActive = location.pathname === item.href;
                 return (
                   <Link
