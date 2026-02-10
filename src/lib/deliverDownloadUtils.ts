@@ -18,9 +18,9 @@ export interface DeliverDownloadablePhoto {
  * Build a download URL through the Deliver-specific route.
  */
 function buildDeliverDownloadUrl(storagePath: string, filename: string): string {
-  const encodedPath = encodeURIComponent(storagePath);
+  const safePath = storagePath.split('/').map(encodeURIComponent).join('/');
   const encodedFilename = encodeURIComponent(filename);
-  return `${R2_WORKER_URL}/deliver-download/${encodedPath}?filename=${encodedFilename}`;
+  return `${R2_WORKER_URL}/deliver-download/${safePath}?filename=${encodedFilename}`;
 }
 
 /**
