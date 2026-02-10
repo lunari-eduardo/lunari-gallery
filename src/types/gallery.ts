@@ -160,6 +160,7 @@ export interface GlobalSettings {
   emailTemplates: EmailTemplate[];
   faviconUrl?: string;
   discountPresets: DiscountPreset[];
+  lastSessionFont?: string;
 }
 
 export interface ExportData {

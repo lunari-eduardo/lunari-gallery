@@ -1,0 +1,1 @@
+ALTER TABLE public.gallery_settings ADD COLUMN IF NOT EXISTS last_session_font text;

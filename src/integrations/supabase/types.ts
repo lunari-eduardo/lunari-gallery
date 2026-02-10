@@ -1527,6 +1527,7 @@ export type Database = {
           default_gallery_permission: string | null
           default_watermark: Json | null
           favicon_url: string | null
+          last_session_font: string | null
           studio_logo_url: string | null
           studio_name: string | null
           theme_type: string | null
@@ -1541,6 +1542,7 @@ export type Database = {
           default_gallery_permission?: string | null
           default_watermark?: Json | null
           favicon_url?: string | null
+          last_session_font?: string | null
           studio_logo_url?: string | null
           studio_name?: string | null
           theme_type?: string | null
@@ -1555,6 +1557,7 @@ export type Database = {
           default_gallery_permission?: string | null
           default_watermark?: Json | null
           favicon_url?: string | null
+          last_session_font?: string | null
           studio_logo_url?: string | null
           studio_name?: string | null
           theme_type?: string | null

@@ -81,6 +81,7 @@ function rowsToSettings(
     activeThemeId: settingsRow.active_theme_id || undefined,
     defaultWatermark: parseWatermark(settingsRow.default_watermark),
     faviconUrl: settingsRow.favicon_url || undefined,
+    lastSessionFont: settingsRow.last_session_font || undefined,
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -231,6 +232,9 @@ export function useGallerySettings() {
       }
       if (data.defaultWatermark !== undefined) {
         updateData.default_watermark = data.defaultWatermark as unknown as Json;
+      }
+      if (data.lastSessionFont !== undefined) {
+        updateData.last_session_font = data.lastSessionFont || null;
       }
 
       // Nothing to update
