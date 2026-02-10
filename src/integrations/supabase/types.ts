@@ -1239,6 +1239,7 @@ export type Database = {
           storage_key: string
           thumb_path: string | null
           updated_at: string
+          upload_key: string | null
           user_id: string
           width: number | null
         }
@@ -1263,6 +1264,7 @@ export type Database = {
           storage_key: string
           thumb_path?: string | null
           updated_at?: string
+          upload_key?: string | null
           user_id: string
           width?: number | null
         }
@@ -1287,6 +1289,7 @@ export type Database = {
           storage_key?: string
           thumb_path?: string | null
           updated_at?: string
+          upload_key?: string | null
           user_id?: string
           width?: number | null
         }
@@ -2895,6 +2898,10 @@ export type Database = {
       calculate_manual_products_total: {
         Args: { produtos: Json }
         Returns: number
+      }
+      check_photo_credits: {
+        Args: { _photo_count: number; _user_id: string }
+        Returns: boolean
       }
       consume_photo_credits: {
         Args: { _gallery_id: string; _photo_count: number; _user_id: string }
