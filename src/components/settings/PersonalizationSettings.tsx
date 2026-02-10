@@ -22,16 +22,13 @@ export function PersonalizationSettings() {
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-muted-foreground">Identidade Visual</h3>
         
-        {/* Logo */}
-        <div className="lunari-card p-6">
+        {/* Logo + Favicon */}
+        <div className="lunari-card p-6 space-y-6">
           <LogoUploader
             logo={settings.studioLogo}
             onLogoChange={(logo) => updateSettings({ studioLogo: logo })}
           />
-        </div>
-
-        {/* Favicon */}
-        <div className="lunari-card p-6">
+          <div className="border-t border-border" />
           <FaviconUploader
             favicon={settings.faviconUrl}
             onFaviconChange={(favicon) => updateSettings({ faviconUrl: favicon })}
