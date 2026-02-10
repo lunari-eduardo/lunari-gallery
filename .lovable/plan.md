@@ -1,96 +1,90 @@
 
 
-# Correcao Definitiva de Download
+# Separacao Definitiva: Download Deliver vs Select
 
 ## Diagnostico
 
-O problema NAO esta no Worker (que ja tem o bypass para Deliver). O problema esta no frontend:
+O Worker tem o bypass `isDeliver` (linha 377), mas a rota `/download/` compartilha o mesmo fluxo para ambos os produtos. Isso causa fragilidade: qualquer mudanca no Select pode quebrar o Deliver e vice-versa.
 
-1. **`triggerBrowserDownload`** usa `target="_blank"` -- navegadores bloqueiam como popup
-2. **"Baixar Todas"** tenta disparar multiplos cliques em `<a target="_blank">` em loop -- apenas o primeiro funciona
-3. Nao existe suporte a ZIP -- o parametro `zipFilename` e recebido mas ignorado
+A solucao e criar uma **rota dedicada no Worker** e um **modulo dedicado no frontend** para downloads Deliver.
 
-## Solucao
-
-### 1. Reescrever `src/lib/downloadUtils.ts`
-
-**Download individual** -- Remover `target="_blank"`. O Worker ja retorna `Content-Disposition: attachment`, entao basta navegar com `<a href>` sem abrir nova aba. O navegador faz download sem sair da pagina.
+## Arquitetura proposta
 
 ```text
-triggerBrowserDownload:
-  - REMOVER target="_blank"
-  - REMOVER rel="noopener noreferrer"
-  - Manter apenas href + download + click()
+Gallery Select:
+  Frontend: downloadUtils.ts → /download/{path}
+  Worker: handleDownload() → verifica finalized_at + allowDownload
+
+Gallery Deliver:
+  Frontend: deliverDownloadUtils.ts → /deliver-download/{path}
+  Worker: handleDeliverDownload() → verifica APENAS tipo=entrega + foto pertence a galeria
 ```
 
-**Download em massa (ZIP)** -- Usar biblioteca `jszip` para criar ZIP no client-side:
+## Mudancas
+
+### 1. Worker: `cloudflare/workers/gallery-upload/index.ts`
+
+**Nova funcao `handleDeliverDownload`** (separada de `handleDownload`):
+
+- Extrai galleryId do path
+- Consulta galeria com `tipo=entrega` (rejeita se nao for entrega)
+- Verifica que a foto pertence a galeria (seguranca)
+- Serve o arquivo com `Content-Disposition: attachment`
+- SEM verificar `finalized_at`
+- SEM verificar `allowDownload`
+- SEM qualquer referencia a logica de selecao
+
+**Nova rota no handler principal**:
 
 ```text
-1. fetch() cada foto via Worker URL (Content-Disposition nao afeta fetch)
-2. Adicionar blob ao JSZip
-3. Gerar ZIP blob
-4. Criar URL.createObjectURL(zipBlob)
-5. Disparar download do ZIP via <a download>
-6. Revogar blob URL
+GET /deliver-download/{path} → handleDeliverDownload()
 ```
 
-**Download em massa (Mobile Deliver)** -- Sequencial com delays (mantido como fallback):
+**Manter `handleDownload` intacto** para Select (remover o bypass `isDeliver` que nao pertence ali):
 
 ```text
-1. Detectar mobile via window check
-2. Se mobile + Deliver: download sequencial com 1.5s delay
-3. Se desktop ou Select: sempre ZIP
+GET /download/{path} → handleDownload() (apenas Select, sempre exige finalized_at + allowDownload)
 ```
 
-### 2. Adicionar dependencia `jszip`
+### 2. Frontend: `src/lib/deliverDownloadUtils.ts` (NOVO)
 
-Necessaria para gerar ZIP no navegador.
+Modulo dedicado para downloads Deliver, independente de `downloadUtils.ts`:
 
-### 3. Atualizar callers
+- `buildDeliverDownloadUrl(path, filename)` → usa rota `/deliver-download/`
+- `downloadDeliverPhoto(galleryId, storagePath, filename)` → download individual via `<a>` direto
+- `downloadAllDeliverPhotos(galleryId, photos, zipFilename, onProgress)` → Desktop: ZIP via JSZip / Mobile: sequencial com delay
+- Reutiliza logica de ZIP e deteccao mobile (codigo proprio, sem importar de downloadUtils)
 
-**`src/lib/downloadUtils.ts`** -- Nova API:
+### 3. Frontend: `src/pages/ClientDeliverGallery.tsx`
 
-```text
-downloadPhoto(galleryId, storagePath, filename)
-  -> Sem target="_blank", download direto
+- Trocar imports de `downloadUtils` para `deliverDownloadUtils`
+- `handleDownloadSingle` → chamar `downloadDeliverPhoto`
+- `handleDownloadAll` → chamar `downloadAllDeliverPhotos`
 
-downloadAllPhotos(galleryId, photos, zipFilename, onProgress)
-  -> Desktop: gera ZIP via JSZip
-  -> Mobile (se isMobileDevice): sequencial
+### 4. Frontend: `src/components/deliver/DeliverLightbox.tsx`
 
-downloadAllPhotosSequential(galleryId, photos, onProgress)
-  -> Usado internamente para mobile
-```
+- Verificar se o lightbox tambem usa download. Se sim, garantir que usa o modulo Deliver.
 
-**Componentes que usam download (sem mudanca de interface, apenas comportamento interno melhora)**:
+### 5. Worker: Limpar `handleDownload`
 
-- `ClientDeliverGallery.tsx` -- ja chama `downloadPhoto` e `downloadAllPhotos` corretamente
-- `DeliverLightbox.tsx` -- ja chama `onDownload(photo)` corretamente
-- `DownloadModal.tsx` -- ja chama `downloadAllPhotos` corretamente
-- `FinalizedPreviewScreen.tsx` -- ja chama `downloadAllPhotos` corretamente
-- `Lightbox.tsx` -- ja chama `downloadPhoto` corretamente
-
-Nenhum componente precisa mudar. Apenas `downloadUtils.ts` muda internamente.
-
-### 4. Nome do ZIP
-
-Formato: `nome-da-sessao_fotos.zip` (sanitizado, sem caracteres especiais)
-
-Esse nome ja e passado como parametro `zipFilename` por todos os callers. Agora sera efetivamente usado.
+- Remover o bloco `isDeliver` (linhas 377-394) pois agora o Deliver tem rota propria
+- `handleDownload` volta a ser exclusivo para Select: sempre exige `finalized_at` + `allowDownload`
+- Isso elimina qualquer risco de interferencia cruzada
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `package.json` | Adicionar `jszip` como dependencia |
-| `src/lib/downloadUtils.ts` | Reescrever: individual sem popup, massa via ZIP |
+| `cloudflare/workers/gallery-upload/index.ts` | Nova rota `/deliver-download/` + funcao `handleDeliverDownload` + limpar bypass isDeliver do handleDownload |
+| `src/lib/deliverDownloadUtils.ts` | NOVO: modulo dedicado de download para Deliver |
+| `src/pages/ClientDeliverGallery.tsx` | Trocar imports para deliverDownloadUtils |
+| `src/components/deliver/DeliverLightbox.tsx` | Verificar e ajustar imports se necessario |
 
-## Resultado esperado
+## Resultado
 
-- Download individual: clique direto, sem popup, sem tela preta
-- Download em massa desktop: ZIP unico com barra de progresso
-- Download em massa mobile (Deliver): sequencial com delay
-- Gallery Select: ZIP obrigatorio no "Baixar Todas"
-- Gallery Deliver: ZIP no desktop, sequencial no mobile
-- Nenhuma mensagem tecnica visivel ao usuario
+- Deliver NUNCA passa pelo fluxo de Select
+- Erro "Gallery not finalized" impossivel em Deliver (rota diferente)
+- Mudancas futuras no Select nao afetam Deliver
+- Mudancas futuras no Deliver nao afetam Select
+- Apos mudanca no Worker, deploy manual via `wrangler deploy`
 
