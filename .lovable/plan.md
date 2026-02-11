@@ -1,170 +1,165 @@
 
 
-# Refino Visual e de Produto -- Galerias (Select e Deliver)
+# Reestruturacao Completa -- Pagina Gallery Deliver
 
 ## Resumo
 
-Modernizar a pagina de Galerias com foco em premium, reducao de ruido visual, e separacao clara entre Select (processo) e Deliver (finalizacao). Cada mudanca segue as regras de produto definidas.
+Reduzir de 4 abas para 3, eliminar duplicidades, reduzir cards largos, e reorganizar o conteudo para um fluxo logico e moderno.
 
 ---
 
-## 1. Sub-abas minimalistas (Select / Deliver)
+## Mudancas estruturais
 
-**Arquivo:** `src/pages/Dashboard.tsx` + `src/components/ui/tabs.tsx` (ou override via className)
+### Abas: de 4 para 3
 
-Remover o `TabsList` com background cinza (`bg-muted rounded-md p-1`) e substituir por tabs underline:
-- Sem background
-- Sem bordas
-- Texto neutro no estado inativo, texto foreground + underline fino (2px) no ativo
-- Alinhado a esquerda, na mesma linha visual do titulo "Suas Galerias"
-
-Implementacao: passar `className` customizado no `TabsList` e `TabsTrigger` no Dashboard para override do estilo padrao, sem alterar o componente base (evita quebrar outros usos de Tabs no app).
-
----
-
-## 2. Metricas inline (substituir cards grandes)
-
-**Arquivo:** `src/pages/Dashboard.tsx`
-
-Remover os grids de cards coloridos (`bg-amber-100`, `bg-green-100`, etc.) e substituir por uma unica linha de texto pequeno:
-
-- Select: `6 galerias · 1 em selecao · 2 concluidas · 0 expiradas`
-- Deliver: `2 entregas · 1 publicada · 0 expirada`
-
-Texto `text-sm text-muted-foreground`, sem caixas, sem sombras, sem backgrounds.
-
----
-
-## 3. Filtros como segmented control
-
-**Arquivo:** `src/pages/Dashboard.tsx`
-
-Substituir os `Button variant="outline"` por um grupo de controles segmentados:
-- Padding reduzido (`px-3 py-1`)
-- Border-radius menor (`rounded-md`)
-- Aparencia de segmented control (borda compartilhada, sem gap entre itens)
-- Ativo: background sutil (`bg-muted`), sem cor forte
-- Remover o toggle grid/list do Select (simplificacao visual)
-
----
-
-## 4. Menu de acoes (tres pontos) nos cards
-
-**Novos componentes/logica em:** `src/components/GalleryCard.tsx` (Select) e `src/components/DeliverGalleryCard.tsx` (Deliver)
-
-Adicionar um `DropdownMenu` com icone `MoreHorizontal` no canto superior direito de cada card:
-- Visivel no hover (desktop): `opacity-0 group-hover:opacity-100`
-- Sempre visivel no mobile
-- Opcoes: Editar, Compartilhar, Excluir
-- Excluir abre o `DeleteGalleryDialog` existente
-- Compartilhar abre o `SendGalleryModal` existente
-- Editar navega para `/gallery/:id` ou `/deliver/:id`
-
-O menu precisa de `stopPropagation` no click para nao disparar o `onClick` do card.
-
-Props adicionais necessarias nos cards: `onEdit`, `onShare`, `onDelete` (callbacks vindas do Dashboard).
-
----
-
-## 5. Card Select -- sem imagem, compacto
-
-**Arquivo:** `src/components/GalleryCard.tsx` (rewrite completo)
-
-Remover inteiramente a secao de preview com imagens (`aspect-[4/3]`, grid de fotos, overlays).
-
-Nova estrutura:
 ```text
-+------------------------------------------+
-| Nome da Sessao               Status  [⋯] |
-| Cliente                                   |
-| Progresso: 8/20    Data: 13 de fev        |
-+------------------------------------------+
+ANTES: Detalhes | Fotos | Acesso & Download | Compartilhamento
+DEPOIS: Compartilhamento | Fotos | Detalhes
 ```
 
-- Card sem thumbnail, sem placeholder
-- Altura menor (sem aspect-ratio de imagem)
-- `StatusBadge` existente para status
-- Progresso de selecao: `selectedCount/includedPhotos` + extras se houver
-- Data da sessao/prazo
-- Menu `⋯` no canto superior direito
-- Foco em densidade e leitura rapida
+A aba "Acesso & Download" e removida. Seu conteudo (privacidade, expiracao) migra para "Detalhes".
+
+### Aba padrao: Compartilhamento (primeira)
 
 ---
 
-## 6. Card Deliver -- com imagem, limpo
+## Aba 1 -- Compartilhamento
 
-**Arquivo:** `src/components/DeliverGalleryCard.tsx` (refactor)
+Conteudo:
 
-Remover:
-- Badge azul "Deliver" (saturado, redundante -- o usuario ja esta na aba Deliver)
-- Contagem de fotos duplicada (aparece na imagem E no conteudo)
-- Icone de Download no conteudo (nao funcional no card)
-- CTA "Ver entrega ->" (redundante, card inteiro e clicavel)
+1. **Linha de acoes horizontais** (botoes inline, sem cards grandes):
+   - Copiar link
+   - WhatsApp
+   - E-mail (em breve)
+   - Ver como cliente
 
-Manter:
-- Thumbnail (imagem da primeira foto ou placeholder discreto)
-- Nome da sessao
-- Nome do cliente
-- Status: Rascunho / Publicada / Expirada (badge pequeno, discreto)
-- Contagem de fotos (uma unica vez, no conteudo)
-- Menu `⋯`
+2. **Campo de mensagem** (sem card wrapper pesado):
+   - Label: "Mensagem de compartilhamento"
+   - Textarea
+   - Texto de apoio: "Essa mensagem sera usada ao compartilhar."
 
-Ajustar:
-- Mais respiro interno (padding maior)
-- Card mais espaoso que o Select
+**Removido:**
+- Card "Link da galeria" com URL crua e botao copiar (redundante com "Copiar link")
 
 ---
 
-## 7. Ajustes visuais gerais
+## Aba 2 -- Fotos
 
-**Arquivo:** `src/index.css`
+Sem mudancas estruturais grandes. Ajustes:
 
-- `.lunari-card`: reduzir `rounded-xl` para `rounded-lg`, reduzir shadow
-- `.lunari-card:hover`: shadow mais sutil
-- `.status-badge`: reduzir padding, tipografia mais discreta
-- Reduzir variaveis de sombra (`--shadow-sm`, `--shadow-md`)
+- Titulo: "3 fotos entregues" (ja existe)
+- Botao "Adicionar fotos" a direita (ja existe)
+- No hover de cada foto: icones de **Download** e **Excluir** (hoje so tem Excluir -- adicionar Download)
 
 ---
 
-## Arquivos modificados
+## Aba 3 -- Detalhes
+
+Reorganizado em 2 blocos visuais apenas:
+
+**Bloco 1 -- Informacoes da sessao**
+- Nome da sessao (input editavel)
+- Cliente (info read-only: nome, email, telefone)
+- Observacoes internas (textarea)
+
+**Bloco 2 -- Configuracoes**
+- Privacidade: Publica / Privada (switch + campo senha se privada)
+- Data de expiracao (date picker)
+- Permitir download ZIP (toggle) -- informativo, Deliver sempre permite download individual
+
+**Removido de Detalhes:**
+- Campo "Mensagem de boas-vindas" (movido para Compartilhamento como "Mensagem de compartilhamento")
+
+---
+
+## Header (pequeno refino)
+
+- Nome da sessao: `font-semibold` com peso maior
+- Badge de status: discreto (ja esta ok)
+- Meta info: linha menor, `text-sm text-muted-foreground`
+- Botoes: Salvar (outline) + Excluir (danger) -- hierarquia correta, ja existe
+
+---
+
+## Hierarquia visual
+
+- Remover `rounded-xl` dos containers internos, usar `rounded-lg`
+- Reduzir uso de `border bg-card` wrapper (usar divisores sutis onde possivel)
+- Mais espaco vertical entre secoes
+- Maximo 2 blocos visuais por aba
+
+---
+
+## Arquivo modificado
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/Dashboard.tsx` | Tabs underline, metricas inline, filtros segmented, passar callbacks de acoes para cards, remover toggle grid/list |
-| `src/components/GalleryCard.tsx` | Rewrite: card compacto sem imagem, com menu `⋯` |
-| `src/components/DeliverGalleryCard.tsx` | Refactor: remover badge Deliver, download, CTA, duplicacoes; adicionar menu `⋯` |
-| `src/index.css` | Reduzir sombras, radius, e estilos de `.lunari-card` e `.status-badge` |
+| `src/pages/DeliverDetail.tsx` | Reescrever estrutura de abas, mover conteudo, remover duplicidades, adicionar download por foto |
 
 ## Detalhes tecnicos
 
-### Menu de contexto nos cards
+### Tabs
 
-Cada card recebe callbacks:
 ```text
-interface CardMenuProps {
-  onEdit: () => void;
-  onShare: () => void;
-  onDelete: () => Promise<void>;
-  galleryName: string;
-}
+<Tabs defaultValue="share">
+  <TabsTrigger value="share">Compartilhamento</TabsTrigger>
+  <TabsTrigger value="photos">Fotos</TabsTrigger>
+  <TabsTrigger value="details">Detalhes</TabsTrigger>
+</Tabs>
 ```
 
-O `Dashboard.tsx` cria as funcoes inline:
-- `onEdit`: `navigate('/gallery/:id')` ou `navigate('/deliver/:id')`
-- `onShare`: abre state para `SendGalleryModal` (requer guardar a galeria selecionada em state)
-- `onDelete`: chama `deleteGallery(id)` do hook
+### Compartilhamento -- remocao do card de link
 
-O `DeleteGalleryDialog` e reutilizado via composicao dentro do menu.
+Remover o bloco inteiro das linhas 437-448 (card com Input readonly + Copy button). Manter apenas os 4 botoes de acao (ja inclui "Copiar link").
 
-### Tabs underline (sem alterar componente base)
+### Compartilhamento -- mensagem sem card wrapper
 
-Override via className no Dashboard:
+Substituir o `div.p-4.rounded-xl.border.bg-card` por um bloco simples:
 ```text
-TabsList: "bg-transparent p-0 h-auto border-b border-border"
-TabsTrigger: "bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 text-muted-foreground data-[state=active]:text-foreground"
+<div className="space-y-2">
+  <Label>Mensagem de compartilhamento</Label>
+  <Textarea ... />
+  <p className="text-xs text-muted-foreground">...</p>
+</div>
 ```
 
-### Filtros segmented control
+### Detalhes -- novo layout com 2 blocos
 
-Wrapper com `inline-flex border rounded-lg overflow-hidden`, cada botao sem gap, bordas internas via `border-r last:border-r-0`.
+Bloco 1 (informacoes):
+```text
+<div className="space-y-6 p-5 rounded-lg border">
+  // Nome da sessao (input)
+  // Separador sutil
+  // Cliente (read-only info)
+  // Separador sutil
+  // Observacoes internas (textarea)
+</div>
+```
+
+Bloco 2 (configuracoes):
+```text
+<div className="space-y-6 p-5 rounded-lg border">
+  // Privacidade switch + senha condicional
+  // Separador sutil
+  // Data de expiracao
+  // Separador sutil
+  // Download ZIP toggle
+</div>
+```
+
+### Fotos -- download individual
+
+Adicionar botao de download ao lado do botao de excluir no hover overlay:
+```text
+<a href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')} download>
+  <Button variant="secondary" size="icon"><Download /></Button>
+</a>
+<Button variant="destructive" size="icon" onClick={...}>
+  <Trash2 />
+</Button>
+```
+
+### Estado do campo welcomeMessage
+
+O campo `welcomeMessage` continua sendo salvo no banco como `mensagemBoasVindas`. Apenas muda de aba (de Detalhes para Compartilhamento) e de label (de "Mensagem de boas-vindas" para "Mensagem de compartilhamento"). O `handleSave` continua enviando `mensagemBoasVindas: welcomeMessage` -- sem mudanca na logica de persistencia.
 
