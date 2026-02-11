@@ -1,89 +1,106 @@
 
 
-# Fix Definitivo: Download Deliver sem depender de deploy do Worker
+# Exclusao completa de galerias: banco + R2
 
-## Diagnostico Final
+## Problema atual
 
-O codigo no repositorio esta correto (`tipo === 'entrega'` bypass na linha 373). Mas o Worker **deployado** na Cloudflare ainda roda a versao antiga que sempre exige `finalized_at`. Cada mudanca no Worker exige `wrangler deploy` manual, criando uma dependencia fragil.
+Ao excluir uma galeria, o `delete-photos` Edge Function deleta apenas dois caminhos por foto no R2:
+- `storage_key` (preview principal)
+- `original_path` (original sem marca d'agua)
 
-## Solucao: Fazer Deliver passar nas verificacoes existentes do Worker
+Mas cada foto pode ter ate **5 caminhos distintos** no R2:
 
-Em vez de depender de logica especial no Worker, vamos garantir que galerias Deliver **sempre tenham `finalized_at` preenchido** ao serem publicadas. Assim o Worker deployado (que verifica `finalized_at`) aceita o download.
+| Coluna | Exemplo | Deletado hoje? |
+|--------|---------|:-:|
+| `storage_key` | `galleries/id/xxx.jpg` | Sim |
+| `original_path` | `originals/id/xxx.jpg` | Sim |
+| `preview_path` | `galleries/id/yyy.jpg` | Nao |
+| `preview_wm_path` | `galleries/id/wm-zzz.jpg` | Nao |
+| `thumb_path` | `galleries/id/ttt.jpg` | Nao |
 
-Isso e mais robusto porque:
-- Funciona com QUALQUER versao do Worker (atual e futura)
-- Nao exige deploy manual
-- Deliver e Select usam a mesma rota `/download/` sem conflito
-- O campo `finalized_at` em Deliver significa "pronta para acesso" (publicada)
+Na pratica, `preview_path` e `thumb_path` costumam ser iguais a `storage_key`, mas isso nao e garantido. E `preview_wm_path` pode ser um arquivo separado.
 
-## Mudancas
+Alem disso, a query no frontend usa `select('id')` e nao pagina -- se a galeria tiver mais de 1000 fotos, o Supabase corta silenciosamente e fotos ficam orfas.
 
-### 1. `src/hooks/useSupabaseGalleries.ts` - sendGalleryMutation
+## Solucao
 
-Ao publicar uma galeria Deliver, adicionar `finalized_at` e garantir `allowDownload: true` nas configuracoes:
+### 1. Edge Function `delete-photos` -- deletar TODOS os caminhos
+
+Alterar o `select` para incluir todos os campos de path:
+
+```
+select: "id, storage_key, original_path, preview_path, preview_wm_path, thumb_path"
+```
+
+E na logica de exclusao, coletar todos os paths unicos (sem duplicatas) e deletar cada um:
 
 ```text
-ANTES (linha 504-512):
-  update({
-    status: 'enviado',
-    enviado_em: new Date().toISOString(),
-    prazo_selecao: prazoSelecao.toISOString(),
-    public_token: publicToken,
-  })
-
-DEPOIS:
-  // Detectar se e Deliver
-  const isDeliver = gallery.tipo === 'entrega';
-  
-  update({
-    status: 'enviado',
-    enviado_em: new Date().toISOString(),
-    prazo_selecao: prazoSelecao.toISOString(),
-    public_token: publicToken,
-    // Deliver: marcar como finalizada para permitir download via Worker
-    ...(isDeliver && {
-      finalized_at: new Date().toISOString(),
-      configuracoes: {
-        ...gallery.configuracoes,
-        allowDownload: true,
-      },
-    }),
-  })
+Para cada foto:
+  paths unicos = Set de [storage_key, original_path, preview_path, preview_wm_path, thumb_path]
+  remover nulls e duplicatas
+  deletar cada path do R2
 ```
 
-### 2. Correcao de dados existentes (SQL one-time)
+### 2. Frontend `useSupabaseGalleries.ts` -- paginar a busca de fotos
 
-Atualizar galerias Deliver existentes no banco para que tambem funcionem:
+Se a galeria tiver mais de 1000 fotos, a query atual perde registros. Solucao: buscar em loop ate nao ter mais resultados, ou usar `count` e paginar.
 
-```sql
-UPDATE galerias
-SET finalized_at = enviado_em,
-    configuracoes = COALESCE(configuracoes, '{}'::jsonb) || '{"allowDownload": true}'::jsonb
-WHERE tipo = 'entrega'
-  AND finalized_at IS NULL
-  AND status = 'enviado';
-```
+Simplificacao: como ja estamos passando os IDs para o Edge Function, podemos enviar em batches de 500.
 
-### 3. Worker: manter o codigo como esta
+### 3. `credit_ledger` FK -- tratar antes de deletar galeria
 
-O codigo do Worker no repositorio ja tem o bypass `isDeliver` (defensivo). Quando/se o Worker for deployado futuramente, ambas as protecoes estarao ativas (campo preenchido + bypass no codigo). Nenhum conflito.
-
-### 4. `src/lib/deliverDownloadUtils.ts` - sem mudanca
-
-Ja usa `/download/` (correto). Nenhuma alteracao necessaria.
+A FK `credit_ledger_gallery_id_fkey` tem `ON DELETE NO ACTION`. Isso pode bloquear a exclusao da galeria se houver registros no ledger. Solucao: setar `gallery_id = NULL` nos registros de `credit_ledger` antes de deletar (manter historico de creditos, so desvincular da galeria).
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/hooks/useSupabaseGalleries.ts` | sendGalleryMutation: adicionar `finalized_at` e `allowDownload` para Deliver |
-| Migration SQL | One-time fix para galerias Deliver existentes |
+| `supabase/functions/delete-photos/index.ts` | Buscar e deletar todos os 5 campos de path, eliminando duplicatas |
+| `src/hooks/useSupabaseGalleries.ts` | Paginar busca de fotos; desvincular `credit_ledger` antes de deletar |
 
-## Resultado
+## Secao tecnica
 
-- Download individual Deliver: funciona imediatamente (sem deploy do Worker)
-- Download ZIP Deliver: funciona imediatamente
-- Select: nenhuma mudanca, continua exigindo finalizacao real
-- Worker futuro: compativel com ambas as estrategias
-- Zero dependencia de deploy manual
+### delete-photos/index.ts
+
+Mudanca no select:
+```text
+ANTES: select("id, storage_key, original_path")
+DEPOIS: select("id, storage_key, original_path, preview_path, preview_wm_path, thumb_path")
+```
+
+Mudanca na logica de exclusao R2:
+```text
+ANTES:
+  if storage_key → deleteFromR2(storage_key)
+  if original_path != storage_key → deleteFromR2(original_path)
+
+DEPOIS:
+  paths = new Set()
+  for field in [storage_key, original_path, preview_path, preview_wm_path, thumb_path]:
+    if field != null → paths.add(field)
+  for path in paths:
+    deleteFromR2(path)
+```
+
+### useSupabaseGalleries.ts - deleteGalleryMutation
+
+```text
+ANTES:
+  select('id') → pega ate 1000
+  envia todos os IDs de uma vez
+
+DEPOIS:
+  Loop paginado: select('id').range(offset, offset+999)
+  Envia em batches de 500 para o Edge Function
+  Apos fotos, limpa credit_ledger:
+    supabase.from('credit_ledger').update({ gallery_id: null }).eq('gallery_id', id)
+  Entao deleta galeria (cascade cuida de galeria_fotos, galeria_acoes, cobrancas)
+```
+
+### Cascatas ja configuradas (sem mudanca necessaria)
+
+- `galeria_fotos` → ON DELETE CASCADE
+- `galeria_acoes` → ON DELETE CASCADE
+- `cobrancas` → ON DELETE CASCADE
+- `clientes_sessoes` → Tratado manualmente no codigo (set `galeria_id = null`)
 
