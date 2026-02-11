@@ -1,106 +1,170 @@
 
 
-# Exclusao completa de galerias: banco + R2
+# Refino Visual e de Produto -- Galerias (Select e Deliver)
 
-## Problema atual
+## Resumo
 
-Ao excluir uma galeria, o `delete-photos` Edge Function deleta apenas dois caminhos por foto no R2:
-- `storage_key` (preview principal)
-- `original_path` (original sem marca d'agua)
+Modernizar a pagina de Galerias com foco em premium, reducao de ruido visual, e separacao clara entre Select (processo) e Deliver (finalizacao). Cada mudanca segue as regras de produto definidas.
 
-Mas cada foto pode ter ate **5 caminhos distintos** no R2:
+---
 
-| Coluna | Exemplo | Deletado hoje? |
-|--------|---------|:-:|
-| `storage_key` | `galleries/id/xxx.jpg` | Sim |
-| `original_path` | `originals/id/xxx.jpg` | Sim |
-| `preview_path` | `galleries/id/yyy.jpg` | Nao |
-| `preview_wm_path` | `galleries/id/wm-zzz.jpg` | Nao |
-| `thumb_path` | `galleries/id/ttt.jpg` | Nao |
+## 1. Sub-abas minimalistas (Select / Deliver)
 
-Na pratica, `preview_path` e `thumb_path` costumam ser iguais a `storage_key`, mas isso nao e garantido. E `preview_wm_path` pode ser um arquivo separado.
+**Arquivo:** `src/pages/Dashboard.tsx` + `src/components/ui/tabs.tsx` (ou override via className)
 
-Alem disso, a query no frontend usa `select('id')` e nao pagina -- se a galeria tiver mais de 1000 fotos, o Supabase corta silenciosamente e fotos ficam orfas.
+Remover o `TabsList` com background cinza (`bg-muted rounded-md p-1`) e substituir por tabs underline:
+- Sem background
+- Sem bordas
+- Texto neutro no estado inativo, texto foreground + underline fino (2px) no ativo
+- Alinhado a esquerda, na mesma linha visual do titulo "Suas Galerias"
 
-## Solucao
+Implementacao: passar `className` customizado no `TabsList` e `TabsTrigger` no Dashboard para override do estilo padrao, sem alterar o componente base (evita quebrar outros usos de Tabs no app).
 
-### 1. Edge Function `delete-photos` -- deletar TODOS os caminhos
+---
 
-Alterar o `select` para incluir todos os campos de path:
+## 2. Metricas inline (substituir cards grandes)
 
-```
-select: "id, storage_key, original_path, preview_path, preview_wm_path, thumb_path"
-```
+**Arquivo:** `src/pages/Dashboard.tsx`
 
-E na logica de exclusao, coletar todos os paths unicos (sem duplicatas) e deletar cada um:
+Remover os grids de cards coloridos (`bg-amber-100`, `bg-green-100`, etc.) e substituir por uma unica linha de texto pequeno:
 
+- Select: `6 galerias · 1 em selecao · 2 concluidas · 0 expiradas`
+- Deliver: `2 entregas · 1 publicada · 0 expirada`
+
+Texto `text-sm text-muted-foreground`, sem caixas, sem sombras, sem backgrounds.
+
+---
+
+## 3. Filtros como segmented control
+
+**Arquivo:** `src/pages/Dashboard.tsx`
+
+Substituir os `Button variant="outline"` por um grupo de controles segmentados:
+- Padding reduzido (`px-3 py-1`)
+- Border-radius menor (`rounded-md`)
+- Aparencia de segmented control (borda compartilhada, sem gap entre itens)
+- Ativo: background sutil (`bg-muted`), sem cor forte
+- Remover o toggle grid/list do Select (simplificacao visual)
+
+---
+
+## 4. Menu de acoes (tres pontos) nos cards
+
+**Novos componentes/logica em:** `src/components/GalleryCard.tsx` (Select) e `src/components/DeliverGalleryCard.tsx` (Deliver)
+
+Adicionar um `DropdownMenu` com icone `MoreHorizontal` no canto superior direito de cada card:
+- Visivel no hover (desktop): `opacity-0 group-hover:opacity-100`
+- Sempre visivel no mobile
+- Opcoes: Editar, Compartilhar, Excluir
+- Excluir abre o `DeleteGalleryDialog` existente
+- Compartilhar abre o `SendGalleryModal` existente
+- Editar navega para `/gallery/:id` ou `/deliver/:id`
+
+O menu precisa de `stopPropagation` no click para nao disparar o `onClick` do card.
+
+Props adicionais necessarias nos cards: `onEdit`, `onShare`, `onDelete` (callbacks vindas do Dashboard).
+
+---
+
+## 5. Card Select -- sem imagem, compacto
+
+**Arquivo:** `src/components/GalleryCard.tsx` (rewrite completo)
+
+Remover inteiramente a secao de preview com imagens (`aspect-[4/3]`, grid de fotos, overlays).
+
+Nova estrutura:
 ```text
-Para cada foto:
-  paths unicos = Set de [storage_key, original_path, preview_path, preview_wm_path, thumb_path]
-  remover nulls e duplicatas
-  deletar cada path do R2
++------------------------------------------+
+| Nome da Sessao               Status  [⋯] |
+| Cliente                                   |
+| Progresso: 8/20    Data: 13 de fev        |
++------------------------------------------+
 ```
 
-### 2. Frontend `useSupabaseGalleries.ts` -- paginar a busca de fotos
+- Card sem thumbnail, sem placeholder
+- Altura menor (sem aspect-ratio de imagem)
+- `StatusBadge` existente para status
+- Progresso de selecao: `selectedCount/includedPhotos` + extras se houver
+- Data da sessao/prazo
+- Menu `⋯` no canto superior direito
+- Foco em densidade e leitura rapida
 
-Se a galeria tiver mais de 1000 fotos, a query atual perde registros. Solucao: buscar em loop ate nao ter mais resultados, ou usar `count` e paginar.
+---
 
-Simplificacao: como ja estamos passando os IDs para o Edge Function, podemos enviar em batches de 500.
+## 6. Card Deliver -- com imagem, limpo
 
-### 3. `credit_ledger` FK -- tratar antes de deletar galeria
+**Arquivo:** `src/components/DeliverGalleryCard.tsx` (refactor)
 
-A FK `credit_ledger_gallery_id_fkey` tem `ON DELETE NO ACTION`. Isso pode bloquear a exclusao da galeria se houver registros no ledger. Solucao: setar `gallery_id = NULL` nos registros de `credit_ledger` antes de deletar (manter historico de creditos, so desvincular da galeria).
+Remover:
+- Badge azul "Deliver" (saturado, redundante -- o usuario ja esta na aba Deliver)
+- Contagem de fotos duplicada (aparece na imagem E no conteudo)
+- Icone de Download no conteudo (nao funcional no card)
+- CTA "Ver entrega ->" (redundante, card inteiro e clicavel)
 
-## Arquivos
+Manter:
+- Thumbnail (imagem da primeira foto ou placeholder discreto)
+- Nome da sessao
+- Nome do cliente
+- Status: Rascunho / Publicada / Expirada (badge pequeno, discreto)
+- Contagem de fotos (uma unica vez, no conteudo)
+- Menu `⋯`
 
-| Arquivo | Acao |
-|---------|------|
-| `supabase/functions/delete-photos/index.ts` | Buscar e deletar todos os 5 campos de path, eliminando duplicatas |
-| `src/hooks/useSupabaseGalleries.ts` | Paginar busca de fotos; desvincular `credit_ledger` antes de deletar |
+Ajustar:
+- Mais respiro interno (padding maior)
+- Card mais espaoso que o Select
 
-## Secao tecnica
+---
 
-### delete-photos/index.ts
+## 7. Ajustes visuais gerais
 
-Mudanca no select:
+**Arquivo:** `src/index.css`
+
+- `.lunari-card`: reduzir `rounded-xl` para `rounded-lg`, reduzir shadow
+- `.lunari-card:hover`: shadow mais sutil
+- `.status-badge`: reduzir padding, tipografia mais discreta
+- Reduzir variaveis de sombra (`--shadow-sm`, `--shadow-md`)
+
+---
+
+## Arquivos modificados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/pages/Dashboard.tsx` | Tabs underline, metricas inline, filtros segmented, passar callbacks de acoes para cards, remover toggle grid/list |
+| `src/components/GalleryCard.tsx` | Rewrite: card compacto sem imagem, com menu `⋯` |
+| `src/components/DeliverGalleryCard.tsx` | Refactor: remover badge Deliver, download, CTA, duplicacoes; adicionar menu `⋯` |
+| `src/index.css` | Reduzir sombras, radius, e estilos de `.lunari-card` e `.status-badge` |
+
+## Detalhes tecnicos
+
+### Menu de contexto nos cards
+
+Cada card recebe callbacks:
 ```text
-ANTES: select("id, storage_key, original_path")
-DEPOIS: select("id, storage_key, original_path, preview_path, preview_wm_path, thumb_path")
+interface CardMenuProps {
+  onEdit: () => void;
+  onShare: () => void;
+  onDelete: () => Promise<void>;
+  galleryName: string;
+}
 ```
 
-Mudanca na logica de exclusao R2:
+O `Dashboard.tsx` cria as funcoes inline:
+- `onEdit`: `navigate('/gallery/:id')` ou `navigate('/deliver/:id')`
+- `onShare`: abre state para `SendGalleryModal` (requer guardar a galeria selecionada em state)
+- `onDelete`: chama `deleteGallery(id)` do hook
+
+O `DeleteGalleryDialog` e reutilizado via composicao dentro do menu.
+
+### Tabs underline (sem alterar componente base)
+
+Override via className no Dashboard:
 ```text
-ANTES:
-  if storage_key → deleteFromR2(storage_key)
-  if original_path != storage_key → deleteFromR2(original_path)
-
-DEPOIS:
-  paths = new Set()
-  for field in [storage_key, original_path, preview_path, preview_wm_path, thumb_path]:
-    if field != null → paths.add(field)
-  for path in paths:
-    deleteFromR2(path)
+TabsList: "bg-transparent p-0 h-auto border-b border-border"
+TabsTrigger: "bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 text-muted-foreground data-[state=active]:text-foreground"
 ```
 
-### useSupabaseGalleries.ts - deleteGalleryMutation
+### Filtros segmented control
 
-```text
-ANTES:
-  select('id') → pega ate 1000
-  envia todos os IDs de uma vez
-
-DEPOIS:
-  Loop paginado: select('id').range(offset, offset+999)
-  Envia em batches de 500 para o Edge Function
-  Apos fotos, limpa credit_ledger:
-    supabase.from('credit_ledger').update({ gallery_id: null }).eq('gallery_id', id)
-  Entao deleta galeria (cascade cuida de galeria_fotos, galeria_acoes, cobrancas)
-```
-
-### Cascatas ja configuradas (sem mudanca necessaria)
-
-- `galeria_fotos` → ON DELETE CASCADE
-- `galeria_acoes` → ON DELETE CASCADE
-- `cobrancas` → ON DELETE CASCADE
-- `clientes_sessoes` → Tratado manualmente no codigo (set `galeria_id = null`)
+Wrapper com `inline-flex border rounded-lg overflow-hidden`, cada botao sem gap, bordas internas via `border-r last:border-r-0`.
 
