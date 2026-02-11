@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Send, Trash2, Image, Upload, Link2, Copy, Eye,
-  Lock, Unlock, Calendar as CalendarIcon, Download, Share2,
+  ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
+  Lock, Unlock, Calendar as CalendarIcon, Download,
   MessageSquare, Mail, ExternalLink, Loader2, Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -103,8 +104,6 @@ export default function DeliverDetail() {
 
   const statusInfo = getDeliverStatusInfo(gallery.status, gallery.prazoSelecao);
   const isDraft = statusInfo.label === 'Rascunho';
-  const isPublished = statusInfo.label === 'Publicada';
-  const isExpired = statusInfo.label === 'Expirada';
   const galleryUrl = gallery.publicToken ? getGalleryUrl(gallery.publicToken) : '';
 
   const handleSave = async () => {
@@ -180,11 +179,11 @@ export default function DeliverDetail() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="font-display text-2xl md:text-3xl font-semibold">{gallery.nomeSessao || 'Sem título'}</h1>
+              <h1 className="font-display text-2xl md:text-3xl font-bold">{gallery.nomeSessao || 'Sem título'}</h1>
               <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
             </div>
             <p className="text-muted-foreground text-sm mt-1">
-              {gallery.clienteNome || 'Sem cliente'} • {format(gallery.createdAt, "dd MMM yyyy", { locale: ptBR })} • {photos.length} fotos
+              {gallery.clienteNome || 'Sem cliente'} · {format(gallery.createdAt, "dd MMM yyyy", { locale: ptBR })} · {photos.length} fotos
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -203,59 +202,64 @@ export default function DeliverDetail() {
         </div>
       </div>
 
-      {/* Internal Tabs */}
-      <Tabs defaultValue="details">
+      {/* Tabs: 3 abas — Compartilhamento | Fotos | Detalhes */}
+      <Tabs defaultValue="share">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="details">Detalhes</TabsTrigger>
-          <TabsTrigger value="photos">Fotos</TabsTrigger>
-          <TabsTrigger value="access">Acesso & Download</TabsTrigger>
           <TabsTrigger value="share">Compartilhamento</TabsTrigger>
+          <TabsTrigger value="photos">Fotos</TabsTrigger>
+          <TabsTrigger value="details">Detalhes</TabsTrigger>
         </TabsList>
 
-        {/* === DETALHES === */}
-        <TabsContent value="details" className="space-y-6 mt-4">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Client info */}
-            <div className="space-y-4 p-4 rounded-xl border bg-card">
-              <h3 className="font-display font-semibold text-lg">Cliente</h3>
-              <div className="space-y-2 text-sm">
-                <div><span className="text-muted-foreground">Nome:</span> {gallery.clienteNome || '—'}</div>
-                <div><span className="text-muted-foreground">Email:</span> {gallery.clienteEmail || '—'}</div>
-                <div><span className="text-muted-foreground">Telefone:</span> {gallery.clienteTelefone || '—'}</div>
-              </div>
+        {/* === COMPARTILHAMENTO === */}
+        <TabsContent value="share" className="space-y-8 mt-6">
+          {isDraft ? (
+            <div className="text-center py-16">
+              <Send className="h-8 w-8 text-muted-foreground mx-auto mb-4" />
+              <h3 className="font-display text-xl font-semibold mb-2">Publique primeiro</h3>
+              <p className="text-muted-foreground mb-6">Publique a entrega para habilitar o compartilhamento.</p>
+              <Button onClick={handlePublish} className="gap-2">
+                <Send className="h-4 w-4" />
+                Publicar entrega
+              </Button>
             </div>
-
-            {/* Session details */}
-            <div className="space-y-4 p-4 rounded-xl border bg-card">
-              <h3 className="font-display font-semibold text-lg">Sessão</h3>
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="sessionName">Nome da sessão</Label>
-                  <Input id="sessionName" value={sessionName} onChange={e => setSessionName(e.target.value)} />
-                </div>
-                <div>
-                  <Label htmlFor="welcomeMessage">Mensagem de boas-vindas</Label>
-                  <Textarea id="welcomeMessage" value={welcomeMessage} onChange={e => setWelcomeMessage(e.target.value)} rows={3} />
-                </div>
+          ) : (
+            <>
+              {/* Action buttons — inline, no cards */}
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" className="gap-2" onClick={() => copyToClipboard(galleryUrl)}>
+                  <Copy className="h-4 w-4" />
+                  Copiar link
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={openWhatsApp}>
+                  <MessageSquare className="h-4 w-4" />
+                  WhatsApp
+                </Button>
+                <Button variant="outline" className="gap-2" disabled>
+                  <Mail className="h-4 w-4" />
+                  E-mail (em breve)
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => window.open(`/g/${gallery.publicToken}`, '_blank')}>
+                  <ExternalLink className="h-4 w-4" />
+                  Ver como cliente
+                </Button>
               </div>
-            </div>
-          </div>
 
-          {/* Internal notes */}
-          <div className="p-4 rounded-xl border bg-card space-y-3">
-            <h3 className="font-display font-semibold text-lg">Observações internas</h3>
-            <Textarea
-              placeholder="Anotações privadas sobre esta entrega..."
-              value={internalNotes}
-              onChange={e => setInternalNotes(e.target.value)}
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">Estas notas são visíveis apenas para você.</p>
-          </div>
+              {/* Share message — simple block, no card wrapper */}
+              <div className="space-y-2">
+                <Label>Mensagem de compartilhamento</Label>
+                <Textarea
+                  value={shareMessage}
+                  onChange={e => setShareMessage(e.target.value)}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">Essa mensagem será usada ao compartilhar por WhatsApp.</p>
+              </div>
+            </>
+          )}
         </TabsContent>
 
         {/* === FOTOS === */}
-        <TabsContent value="photos" className="space-y-4 mt-4">
+        <TabsContent value="photos" className="space-y-4 mt-6">
           <div className="flex items-center justify-between">
             <h3 className="font-display font-semibold text-lg">{photos.length} fotos entregues</h3>
             <Button onClick={() => setShowUploader(true)} className="gap-2">
@@ -265,7 +269,7 @@ export default function DeliverDetail() {
           </div>
 
           {showUploader && (
-            <div className="border rounded-xl p-4 bg-card">
+            <div className="border rounded-lg p-4 bg-card">
               <PhotoUploader
                 galleryId={id!}
                 onUploadComplete={handleUploadComplete}
@@ -288,7 +292,16 @@ export default function DeliverDetail() {
                     className="w-full h-full object-cover"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    <a
+                      href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
+                      download={photo.originalFilename}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <Button variant="secondary" size="icon" className="h-8 w-8">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </a>
                     <Button
                       variant="destructive"
                       size="icon"
@@ -319,135 +332,91 @@ export default function DeliverDetail() {
           )}
         </TabsContent>
 
-        {/* === ACESSO & DOWNLOAD === */}
-        <TabsContent value="access" className="space-y-6 mt-4">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Public link */}
-            <div className="p-4 rounded-xl border bg-card space-y-4">
-              <h3 className="font-display font-semibold text-lg">Link da galeria</h3>
-              {galleryUrl ? (
-                <div className="flex gap-2">
-                  <Input value={galleryUrl} readOnly className="font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={() => copyToClipboard(galleryUrl)}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">O link será gerado ao publicar a entrega.</p>
-              )}
+        {/* === DETALHES === */}
+        <TabsContent value="details" className="space-y-6 mt-6">
+          {/* Block 1 — Session info */}
+          <div className="space-y-5 p-5 rounded-lg border">
+            <div className="space-y-2">
+              <Label htmlFor="sessionName">Nome da sessão</Label>
+              <Input id="sessionName" value={sessionName} onChange={e => setSessionName(e.target.value)} />
             </div>
 
-            {/* Privacy */}
-            <div className="p-4 rounded-xl border bg-card space-y-4">
-              <h3 className="font-display font-semibold text-lg">Privacidade</h3>
+            <Separator />
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-muted-foreground">Cliente</h4>
+              <div className="space-y-1 text-sm">
+                <div>{gallery.clienteNome || '—'}</div>
+                <div className="text-muted-foreground">{gallery.clienteEmail || '—'}</div>
+                <div className="text-muted-foreground">{gallery.clienteTelefone || '—'}</div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label htmlFor="internalNotes">Observações internas</Label>
+              <Textarea
+                id="internalNotes"
+                placeholder="Anotações privadas sobre esta entrega..."
+                value={internalNotes}
+                onChange={e => setInternalNotes(e.target.value)}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">Visíveis apenas para você.</p>
+            </div>
+          </div>
+
+          {/* Block 2 — Settings */}
+          <div className="space-y-5 p-5 rounded-lg border">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {isPrivate ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                  <span className="text-sm">{isPrivate ? 'Privada (com senha)' : 'Pública'}</span>
+                  <span className="text-sm font-medium">{isPrivate ? 'Privada (com senha)' : 'Pública'}</span>
                 </div>
                 <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
               </div>
               {isPrivate && (
-                <div>
+                <div className="space-y-1">
                   <Label htmlFor="password">Senha</Label>
                   <Input id="password" type="text" value={galleryPassword} onChange={e => setGalleryPassword(e.target.value)} />
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Expiration */}
-          <div className="p-4 rounded-xl border bg-card space-y-4">
-            <h3 className="font-display font-semibold text-lg">Expiração</h3>
-            <div className="flex items-center gap-4">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <CalendarIcon className="h-4 w-4" />
-                    {expirationDate ? format(expirationDate, "dd/MM/yyyy") : 'Definir data'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={expirationDate} onSelect={setExpirationDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-              {expirationDate && (
-                <Button variant="ghost" size="sm" onClick={() => setExpirationDate(undefined)}>Remover prazo</Button>
-              )}
-            </div>
-          </div>
+            <Separator />
 
-          {/* Download status */}
-          <div className="p-4 rounded-xl border bg-card space-y-2">
-            <h3 className="font-display font-semibold text-lg">Download</h3>
-            <div className="flex items-center gap-2 text-sm">
-              <Download className="h-4 w-4 text-primary" />
-              <span>Download sempre ativo para galerias de entrega</span>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* === COMPARTILHAMENTO === */}
-        <TabsContent value="share" className="space-y-6 mt-4">
-          {isDraft ? (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <Share2 className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-display text-xl font-semibold mb-2">Publique primeiro</h3>
-              <p className="text-muted-foreground mb-6">Publique a entrega para habilitar o compartilhamento.</p>
-              <Button onClick={handlePublish} className="gap-2">
-                <Send className="h-4 w-4" />
-                Publicar entrega
-              </Button>
-            </div>
-          ) : (
-            <>
-              {/* Quick actions */}
-              <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <Button variant="outline" className="h-auto flex-col gap-2 py-4" onClick={() => copyToClipboard(galleryUrl)}>
-                  <Copy className="h-5 w-5" />
-                  <span className="text-sm">Copiar link</span>
-                </Button>
-                <Button variant="outline" className="h-auto flex-col gap-2 py-4" onClick={openWhatsApp}>
-                  <MessageSquare className="h-5 w-5" />
-                  <span className="text-sm">WhatsApp</span>
-                </Button>
-                <Button variant="outline" className="h-auto flex-col gap-2 py-4" disabled>
-                  <Mail className="h-5 w-5" />
-                  <span className="text-sm">E-mail (em breve)</span>
-                </Button>
-                <Button variant="outline" className="h-auto flex-col gap-2 py-4" onClick={() => window.open(`/g/${gallery.publicToken}`, '_blank')}>
-                  <ExternalLink className="h-5 w-5" />
-                  <span className="text-sm">Ver como cliente</span>
-                </Button>
-              </div>
-
-              {/* Custom message */}
-              <div className="p-4 rounded-xl border bg-card space-y-3">
-                <h3 className="font-display font-semibold text-lg">Mensagem de compartilhamento</h3>
-                <Textarea
-                  value={shareMessage}
-                  onChange={e => setShareMessage(e.target.value)}
-                  rows={3}
-                />
-                <p className="text-xs text-muted-foreground">Esta mensagem será usada ao compartilhar por WhatsApp.</p>
-              </div>
-
-              {/* Link display */}
-              {galleryUrl && (
-                <div className="p-4 rounded-xl border bg-card space-y-3">
-                  <h3 className="font-display font-semibold text-lg">Link da galeria</h3>
-                  <div className="flex gap-2">
-                    <Input value={galleryUrl} readOnly className="font-mono text-xs" />
-                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(galleryUrl)}>
-                      <Copy className="h-4 w-4" />
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Data de expiração</span>
+              <div className="flex items-center gap-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      {expirationDate ? format(expirationDate, "dd/MM/yyyy") : 'Definir data'}
                     </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={expirationDate} onSelect={setExpirationDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+                {expirationDate && (
+                  <Button variant="ghost" size="sm" onClick={() => setExpirationDate(undefined)}>Remover</Button>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium">Download</span>
+                <p className="text-xs text-muted-foreground">Download sempre ativo para entregas</p>
+              </div>
+              <Download className="h-4 w-4 text-primary" />
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
