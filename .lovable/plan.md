@@ -1,77 +1,89 @@
 
 
-# Fix Definitivo: Download Deliver
+# Fix Definitivo: Download Deliver sem depender de deploy do Worker
 
-## Causa Raiz REAL
+## Diagnostico Final
 
-O erro `"Not found"` (texto puro, nao JSON) vem da **linha 651** do Worker -- o catch-all para rotas desconhecidas. Isso prova que a rota `/deliver-download/` **nao existe no Worker deployado**. O codigo esta no repositorio mas **nunca foi deployado via `wrangler deploy`**.
+O codigo no repositorio esta correto (`tipo === 'entrega'` bypass na linha 373). Mas o Worker **deployado** na Cloudflare ainda roda a versao antiga que sempre exige `finalized_at`. Cada mudanca no Worker exige `wrangler deploy` manual, criando uma dependencia fragil.
 
-Criar uma rota separada criou um problema: dependencia de deploy manual que nao aconteceu.
+## Solucao: Fazer Deliver passar nas verificacoes existentes do Worker
 
-## Solucao: Eliminar a rota separada
-
-Em vez de manter duas rotas que exigem deploy sincronizado, vamos usar a **mesma rota `/download/`** que ja funciona para Select -- e apenas ajustar a logica no Worker para detectar `tipo=entrega` e pular as verificacoes de finalizacao.
+Em vez de depender de logica especial no Worker, vamos garantir que galerias Deliver **sempre tenham `finalized_at` preenchido** ao serem publicadas. Assim o Worker deployado (que verifica `finalized_at`) aceita o download.
 
 Isso e mais robusto porque:
-- Usa infraestrutura ja deployada e testada
-- Nao exige novo deploy do Worker (apenas uma mudanca na logica)
-- Reduz complexidade de manutencao
+- Funciona com QUALQUER versao do Worker (atual e futura)
+- Nao exige deploy manual
+- Deliver e Select usam a mesma rota `/download/` sem conflito
+- O campo `finalized_at` em Deliver significa "pronta para acesso" (publicada)
 
-### 1. Worker: `cloudflare/workers/gallery-upload/index.ts`
+## Mudancas
 
-Modificar `handleDownload` para:
+### 1. `src/hooks/useSupabaseGalleries.ts` - sendGalleryMutation
 
-```text
-1. Buscar galeria com id + select id,tipo,finalized_at,configuracoes
-2. Se tipo = 'entrega':
-   - Pular verificacao de finalized_at
-   - Pular verificacao de allowDownload
-   - Ir direto para serveFileAsDownload
-3. Se tipo != 'entrega' (Select):
-   - Manter verificacao de finalized_at
-   - Manter verificacao de allowDownload
-```
-
-Remover `handleDeliverDownload` e a rota `/deliver-download/` (codigo morto).
-
-### 2. Frontend: `src/lib/deliverDownloadUtils.ts`
-
-Mudar para usar a rota `/download/` (mesma do Select):
+Ao publicar uma galeria Deliver, adicionar `finalized_at` e garantir `allowDownload: true` nas configuracoes:
 
 ```text
-ANTES:  /deliver-download/{path}
-DEPOIS: /download/{path}
+ANTES (linha 504-512):
+  update({
+    status: 'enviado',
+    enviado_em: new Date().toISOString(),
+    prazo_selecao: prazoSelecao.toISOString(),
+    public_token: publicToken,
+  })
+
+DEPOIS:
+  // Detectar se e Deliver
+  const isDeliver = gallery.tipo === 'entrega';
+  
+  update({
+    status: 'enviado',
+    enviado_em: new Date().toISOString(),
+    prazo_selecao: prazoSelecao.toISOString(),
+    public_token: publicToken,
+    // Deliver: marcar como finalizada para permitir download via Worker
+    ...(isDeliver && {
+      finalized_at: new Date().toISOString(),
+      configuracoes: {
+        ...gallery.configuracoes,
+        allowDownload: true,
+      },
+    }),
+  })
 ```
 
-Manter o modulo separado para clareza organizacional, mas apontar para a mesma rota.
+### 2. Correcao de dados existentes (SQL one-time)
 
-### 3. Nenhuma mudanca nos componentes
+Atualizar galerias Deliver existentes no banco para que tambem funcionem:
 
-`ClientDeliverGallery.tsx` e `DeliverLightbox.tsx` continuam importando de `deliverDownloadUtils.ts`. Apenas a URL interna muda.
+```sql
+UPDATE galerias
+SET finalized_at = enviado_em,
+    configuracoes = COALESCE(configuracoes, '{}'::jsonb) || '{"allowDownload": true}'::jsonb
+WHERE tipo = 'entrega'
+  AND finalized_at IS NULL
+  AND status = 'enviado';
+```
+
+### 3. Worker: manter o codigo como esta
+
+O codigo do Worker no repositorio ja tem o bypass `isDeliver` (defensivo). Quando/se o Worker for deployado futuramente, ambas as protecoes estarao ativas (campo preenchido + bypass no codigo). Nenhum conflito.
+
+### 4. `src/lib/deliverDownloadUtils.ts` - sem mudanca
+
+Ja usa `/download/` (correto). Nenhuma alteracao necessaria.
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `cloudflare/workers/gallery-upload/index.ts` | Ajustar `handleDownload` para detectar tipo=entrega e pular checks. Remover `handleDeliverDownload` e rota `/deliver-download/` |
-| `src/lib/deliverDownloadUtils.ts` | Mudar rota de `/deliver-download/` para `/download/` |
+| `src/hooks/useSupabaseGalleries.ts` | sendGalleryMutation: adicionar `finalized_at` e `allowDownload` para Deliver |
+| Migration SQL | One-time fix para galerias Deliver existentes |
 
-## Apos implementacao
+## Resultado
 
-Voce precisa fazer `wrangler deploy` no terminal. Dessa vez a mudanca e APENAS na funcao `handleDownload` que ja existe na rota `/download/` ja deployada -- entao mesmo que o deploy demore, a rota ja existe.
+- Download individual Deliver: funciona imediatamente (sem deploy do Worker)
+- Download ZIP Deliver: funciona imediatamente
+- Select: nenhuma mudanca, continua exigindo finalizacao real
+- Worker futuro: compativel com ambas as estrategias
+- Zero dependencia de deploy manual
 
----
-
-## Sobre tabela separada para Deliver
-
-NAO e recomendado criar uma tabela separada agora. Razoes:
-
-- A tabela `galerias` ja tem a coluna `tipo` que diferencia perfeitamente
-- Duplicar tabela criaria necessidade de manter migrations, RLS, triggers e queries em dobro
-- A separacao deve ser no **codigo** (rotas, modulos, componentes), nao no **schema**
-- Se no futuro Deliver crescer muito em funcionalidades exclusivas, ai sim pode-se avaliar. Mas hoje seria over-engineering
-
-A separacao ja esta bem feita:
-- Frontend: componentes Deliver separados (`DeliverHero`, `DeliverGrid`, etc.)
-- Frontend: modulo de download separado (`deliverDownloadUtils.ts`)
-- Backend: filtro `tipo=entrega` nas queries
