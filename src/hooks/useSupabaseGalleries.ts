@@ -501,6 +501,10 @@ export function useSupabaseGalleries() {
       const prazoSelecao = new Date();
       prazoSelecao.setDate(prazoSelecao.getDate() + (gallery.prazoSelecaoDias || 7));
 
+      // Deliver galleries: set finalized_at and allowDownload so the Worker
+      // (which checks these fields) allows downloads without a separate deploy
+      const isDeliver = gallery.tipo === 'entrega';
+
       const { error } = await supabase
         .from('galerias')
         .update({
@@ -508,6 +512,13 @@ export function useSupabaseGalleries() {
           enviado_em: new Date().toISOString(),
           prazo_selecao: prazoSelecao.toISOString(),
           public_token: publicToken,
+          ...(isDeliver && {
+            finalized_at: new Date().toISOString(),
+            configuracoes: {
+              ...((gallery.configuracoes || {}) as Record<string, any>),
+              allowDownload: true,
+            },
+          }),
         })
         .eq('id', id);
 
