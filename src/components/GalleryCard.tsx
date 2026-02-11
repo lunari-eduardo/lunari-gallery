@@ -1,99 +1,89 @@
 import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Image, User, AlertTriangle, Clock } from 'lucide-react';
+import { Calendar, User, AlertTriangle, Clock, MoreHorizontal, Pencil, Share2, Trash2 } from 'lucide-react';
 import { Gallery } from '@/types/gallery';
 import { StatusBadge } from './StatusBadge';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface GalleryCardProps {
   gallery: Gallery;
   onClick?: () => void;
+  onEdit?: () => void;
+  onShare?: () => void;
+  onDelete?: () => void;
 }
 
-export function GalleryCard({ gallery, onClick }: GalleryCardProps) {
+export function GalleryCard({ gallery, onClick, onEdit, onShare, onDelete }: GalleryCardProps) {
   const hoursUntilDeadline = differenceInHours(gallery.settings.deadline, new Date());
-  
-  // Use status from gallery (already calculated in transformation) instead of recalculating
   const isExpired = gallery.status === 'expired';
-  
-  // Only show deadline warning for active galleries (sent or in selection)
   const isActiveGallery = ['sent', 'selection_started'].includes(gallery.status);
   const isNearDeadline = isActiveGallery && hoursUntilDeadline <= 48 && hoursUntilDeadline > 0;
-
-  const previewPhotos = gallery.photos.slice(0, 4);
 
   return (
     <div 
       className={cn(
-        'lunari-card overflow-hidden cursor-pointer group',
-        isNearDeadline && 'ring-2 ring-warning/50',
-        isExpired && 'ring-2 ring-destructive/50 opacity-75'
+        'lunari-card p-4 cursor-pointer group relative',
+        isNearDeadline && 'ring-1 ring-warning/40',
+        isExpired && 'ring-1 ring-destructive/40 opacity-75'
       )}
       onClick={onClick}
     >
-      {/* Photo Preview Grid */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        <div className="grid grid-cols-2 grid-rows-2 h-full gap-0.5">
-          {previewPhotos.map((photo, i) => (
-            <div key={photo.id} className="relative overflow-hidden">
-              <img
-                src={photo.thumbnailUrl}
-                alt=""
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-            </div>
-          ))}
+      {/* Row 1: Name + Status + Menu */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold truncate leading-tight">
+            {gallery.sessionName}
+          </h3>
         </div>
-        
-        {/* Overlay with photo count */}
-        <div className="absolute bottom-2 right-2 bg-background/90 backdrop-blur-sm rounded-full px-2.5 py-1 flex items-center gap-1.5 text-xs font-medium">
-          <Image className="h-3.5 w-3.5" />
-          {gallery.photos.length}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <StatusBadge status={gallery.status} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="h-7 w-7 flex items-center justify-center rounded-md opacity-0 group-hover:opacity-100 md:opacity-0 max-md:opacity-100 hover:bg-muted transition-all"
+              >
+                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit?.(); }}>
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onShare?.(); }}>
+                <Share2 className="h-3.5 w-3.5 mr-2" />
+                Compartilhar
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-
-        {/* Warning overlay for near deadline */}
-        {isNearDeadline && !isExpired && (
-          <div className="absolute top-2 left-2 bg-warning text-warning-foreground rounded-full px-2.5 py-1 flex items-center gap-1.5 text-xs font-medium animate-pulse">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            {hoursUntilDeadline}h restantes
-          </div>
-        )}
-
-        {/* Expired overlay */}
-        {isExpired && (
-          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
-            <div className="bg-destructive text-destructive-foreground rounded-full px-3 py-1.5 flex items-center gap-1.5 text-sm font-medium">
-              <Clock className="h-4 w-4" />
-              Prazo expirado
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Card Content */}
-      <div className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="font-display text-lg font-semibold truncate">
-              {gallery.sessionName}
-            </h3>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <User className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">{gallery.clientName}</span>
-            </div>
-          </div>
-          <StatusBadge status={gallery.status} />
-        </div>
+      {/* Row 2: Client */}
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+        <User className="h-3 w-3 flex-shrink-0" />
+        <span className="truncate">{gallery.clientName}</span>
+      </div>
 
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>
-              {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
-            </span>
-          </div>
-          
-          <div className="text-right">
+      {/* Row 3: Progress + Date */}
+      <div className="flex items-center justify-between mt-3 text-xs">
+        <div className="flex items-center gap-3">
+          {/* Selection progress */}
+          <div>
             <span className="font-medium text-foreground">
               {gallery.selectedCount}
             </span>
@@ -101,24 +91,43 @@ export function GalleryCard({ gallery, onClick }: GalleryCardProps) {
               /{gallery.includedPhotos}
             </span>
             {gallery.extraCount > 0 && (
-              <span className="text-primary ml-1">
+              <span className="text-primary ml-0.5">
                 +{gallery.extraCount}
               </span>
             )}
           </div>
+
+          {/* Near deadline warning */}
+          {isNearDeadline && !isExpired && (
+            <span className="inline-flex items-center gap-1 text-warning">
+              <AlertTriangle className="h-3 w-3" />
+              {hoursUntilDeadline}h
+            </span>
+          )}
+
+          {isExpired && (
+            <span className="inline-flex items-center gap-1 text-destructive">
+              <Clock className="h-3 w-3" />
+              Expirada
+            </span>
+          )}
         </div>
 
-        {gallery.extraTotal > 0 && (
-          <div className="pt-2 border-t border-border">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Valor adicional</span>
-              <span className="font-semibold text-primary">
-                R$ {gallery.extraTotal.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        )}
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <Calendar className="h-3 w-3" />
+          <span>{format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}</span>
+        </div>
       </div>
+
+      {/* Extra value line */}
+      {gallery.extraTotal > 0 && (
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border text-xs">
+          <span className="text-muted-foreground">Valor adicional</span>
+          <span className="font-semibold text-primary">
+            R$ {gallery.extraTotal.toFixed(2)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

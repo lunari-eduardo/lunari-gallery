@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Grid, List, Loader2, AlertCircle, MousePointerClick, Send } from 'lucide-react';
+import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -120,7 +120,6 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const { galleries: supabaseGalleries, isLoading, error } = useSupabaseGalleries();
 
@@ -132,11 +131,9 @@ export default function Dashboard() {
     return supabaseGalleries.map(transformSupabaseToLocal);
   }, [supabaseGalleries]);
 
-  // Split by type
   const selectGalleries = useMemo(() => allGalleries.filter(g => g.tipo !== 'entrega'), [allGalleries]);
   const deliverGalleries = useMemo(() => allGalleries.filter(g => g.tipo === 'entrega'), [allGalleries]);
 
-  // Select tab filtering
   const filteredSelectGalleries = selectGalleries.filter((gallery) => {
     const matchesSearch =
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
@@ -145,7 +142,6 @@ export default function Dashboard() {
     return matchesSearch && matchesStatus;
   });
 
-  // Deliver tab filtering
   const filteredDeliverGalleries = deliverGalleries.filter((gallery) => {
     const matchesSearch =
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
@@ -169,10 +165,6 @@ export default function Dashboard() {
     expired: deliverGalleries.filter(g => g.status === 'expired').length,
   };
 
-  const subtitle = activeTab === 'select'
-    ? 'Gerencie as galerias de seleção dos seus clientes'
-    : 'Gerencie as entregas finais de fotos';
-
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -181,7 +173,6 @@ export default function Dashboard() {
           <h1 className="font-display text-3xl md:text-4xl font-semibold">
             Suas Galerias
           </h1>
-          <p className="text-muted-foreground mt-1">{subtitle}</p>
         </div>
         <Popover>
           <PopoverTrigger asChild>
@@ -217,31 +208,31 @@ export default function Dashboard() {
         </Popover>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - underline style */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList>
-          <TabsTrigger value="select">Select</TabsTrigger>
-          <TabsTrigger value="deliver">Deliver</TabsTrigger>
+        <TabsList className="bg-transparent p-0 h-auto rounded-none border-b border-border w-full justify-start">
+          <TabsTrigger 
+            value="select"
+            className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2.5 pt-1 text-muted-foreground data-[state=active]:text-foreground font-medium"
+          >
+            Select
+          </TabsTrigger>
+          <TabsTrigger 
+            value="deliver"
+            className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2.5 pt-1 text-muted-foreground data-[state=active]:text-foreground font-medium"
+          >
+            Deliver
+          </TabsTrigger>
         </TabsList>
 
         {/* ===== SELECT TAB ===== */}
-        <TabsContent value="select" className="space-y-6 mt-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Total', value: selectStats.total, color: 'bg-muted' },
-              { label: 'Em seleção', value: selectStats.inProgress, color: 'bg-amber-100 dark:bg-amber-900/30' },
-              { label: 'Concluídas', value: selectStats.completed, color: 'bg-green-100 dark:bg-green-900/30' },
-              { label: 'Expiradas', value: selectStats.expired, color: 'bg-red-100 dark:bg-red-900/30' },
-            ].map((stat) => (
-              <div key={stat.label} className={cn('rounded-xl p-4', stat.color)}>
-                <p className="text-2xl md:text-3xl font-display font-semibold">{stat.value}</p>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+        <TabsContent value="select" className="space-y-5 mt-4">
+          {/* Inline metrics */}
+          <p className="text-sm text-muted-foreground">
+            {selectStats.total} galerias · {selectStats.inProgress} em seleção · {selectStats.completed} concluídas · {selectStats.expired} expiradas
+          </p>
 
-          {/* Filters */}
+          {/* Filters - segmented control */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -252,26 +243,22 @@ export default function Dashboard() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-              {selectStatusFilters.map((filter) => (
-                <Button
+            <div className="inline-flex border border-border rounded-lg overflow-hidden">
+              {selectStatusFilters.map((filter, i) => (
+                <button
                   key={filter.value}
-                  variant={selectStatusFilter === filter.value ? 'default' : 'outline'}
-                  size="sm"
                   onClick={() => setSelectStatusFilter(filter.value)}
-                  className="whitespace-nowrap"
+                  className={cn(
+                    'px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap',
+                    i < selectStatusFilters.length - 1 && 'border-r border-border',
+                    selectStatusFilter === filter.value
+                      ? 'bg-muted text-foreground'
+                      : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  )}
                 >
                   {filter.label}
-                </Button>
+                </button>
               ))}
-            </div>
-            <div className="hidden md:flex gap-1 border rounded-lg p-1">
-              <Button variant={viewMode === 'grid' ? 'default' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('grid')}>
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('list')}>
-                <List className="h-4 w-4" />
-              </Button>
             </div>
           </div>
 
@@ -288,12 +275,16 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredSelectGalleries.length > 0 ? (
-            <div className={cn(
-              'grid gap-4 md:gap-6',
-              viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'
-            )}>
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredSelectGalleries.map((gallery) => (
-                <GalleryCard key={gallery.id} gallery={gallery} onClick={() => navigate(`/gallery/${gallery.id}`)} />
+                <GalleryCard
+                  key={gallery.id}
+                  gallery={gallery}
+                  onClick={() => navigate(`/gallery/${gallery.id}`)}
+                  onEdit={() => navigate(`/gallery/${gallery.id}`)}
+                  onShare={() => navigate(`/gallery/${gallery.id}`)}
+                  onDelete={() => navigate(`/gallery/${gallery.id}`)}
+                />
               ))}
             </div>
           ) : (
@@ -314,22 +305,13 @@ export default function Dashboard() {
         </TabsContent>
 
         {/* ===== DELIVER TAB ===== */}
-        <TabsContent value="deliver" className="space-y-6 mt-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Total', value: deliverStats.total, color: 'bg-muted' },
-              { label: 'Publicadas', value: deliverStats.published, color: 'bg-blue-100 dark:bg-blue-900/30' },
-              { label: 'Expiradas', value: deliverStats.expired, color: 'bg-red-100 dark:bg-red-900/30' },
-            ].map((stat) => (
-              <div key={stat.label} className={cn('rounded-xl p-4', stat.color)}>
-                <p className="text-2xl md:text-3xl font-display font-semibold">{stat.value}</p>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+        <TabsContent value="deliver" className="space-y-5 mt-4">
+          {/* Inline metrics */}
+          <p className="text-sm text-muted-foreground">
+            {deliverStats.total} entregas · {deliverStats.published} publicadas · {deliverStats.expired} expiradas
+          </p>
 
-          {/* Filters */}
+          {/* Filters - segmented control */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -340,17 +322,21 @@ export default function Dashboard() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-              {deliverStatusFilters.map((filter) => (
-                <Button
+            <div className="inline-flex border border-border rounded-lg overflow-hidden">
+              {deliverStatusFilters.map((filter, i) => (
+                <button
                   key={filter.value}
-                  variant={deliverStatusFilter === filter.value ? 'default' : 'outline'}
-                  size="sm"
                   onClick={() => setDeliverStatusFilter(filter.value)}
-                  className="whitespace-nowrap"
+                  className={cn(
+                    'px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap',
+                    i < deliverStatusFilters.length - 1 && 'border-r border-border',
+                    deliverStatusFilter === filter.value
+                      ? 'bg-muted text-foreground'
+                      : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  )}
                 >
                   {filter.label}
-                </Button>
+                </button>
               ))}
             </div>
           </div>
@@ -375,10 +361,13 @@ export default function Dashboard() {
                   gallery={gallery}
                   totalPhotos={gallery.totalFotos}
                   onClick={() => navigate(`/deliver/${gallery.id}`)}
-                 />
-               ))}
-             </div>
-           ) : (
+                  onEdit={() => navigate(`/deliver/${gallery.id}`)}
+                  onShare={() => navigate(`/deliver/${gallery.id}`)}
+                  onDelete={() => navigate(`/deliver/${gallery.id}`)}
+                />
+              ))}
+            </div>
+          ) : (
             <div className="text-center py-16">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Send className="h-8 w-8 text-muted-foreground" />
