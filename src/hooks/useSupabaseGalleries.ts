@@ -380,7 +380,7 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Delete gallery mutation
+  // Delete gallery mutation - with paginated photo fetch and complete R2 cleanup
   const deleteGalleryMutation = useMutation({
     mutationFn: async (id: string) => {
       // First, fetch gallery to get session_id before deletion
@@ -390,29 +390,50 @@ export function useSupabaseGalleries() {
         .eq('id', id)
         .maybeSingle();
 
-      // Delete photos from B2
-      const { data: photos } = await supabase
-        .from('galeria_fotos')
-        .select('id')
-        .eq('galeria_id', id);
+      // Fetch ALL photo IDs with pagination (Supabase caps at 1000 per query)
+      const allPhotoIds: string[] = [];
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let hasMore = true;
 
-      if (photos && photos.length > 0) {
+      while (hasMore) {
+        const { data: page } = await supabase
+          .from('galeria_fotos')
+          .select('id')
+          .eq('galeria_id', id)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (page && page.length > 0) {
+          allPhotoIds.push(...page.map((p) => p.id));
+          offset += PAGE_SIZE;
+          hasMore = page.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      // Delete photos from R2 in batches of 500
+      if (allPhotoIds.length > 0) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          await fetch(
-            `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/delete-photos`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({
-                galleryId: id,
-                photoIds: photos.map((p) => p.id),
-              }),
-            }
-          );
+          const BATCH_SIZE = 500;
+          for (let i = 0; i < allPhotoIds.length; i += BATCH_SIZE) {
+            const batch = allPhotoIds.slice(i, i + BATCH_SIZE);
+            await fetch(
+              `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/delete-photos`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                  galleryId: id,
+                  photoIds: batch,
+                }),
+              }
+            );
+          }
         }
       }
 
@@ -434,7 +455,13 @@ export function useSupabaseGalleries() {
         }
       }
 
-      // Then delete the gallery (cascade will handle photos in DB)
+      // Unlink credit_ledger entries to avoid FK constraint violation
+      await supabase
+        .from('credit_ledger')
+        .update({ gallery_id: null })
+        .eq('gallery_id', id);
+
+      // Then delete the gallery (cascade will handle photos in DB, acoes, cobrancas)
       const { error } = await supabase.from('galerias').delete().eq('id', id);
       if (error) throw error;
     },

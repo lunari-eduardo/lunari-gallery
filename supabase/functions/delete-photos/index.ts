@@ -156,10 +156,10 @@ serve(async (req) => {
       );
     }
 
-    // Get photos to delete (including both storage_key and original_path)
+    // Get photos to delete (all path fields for complete R2 cleanup)
     const { data: photos, error: photosError } = await supabaseAdmin
       .from("galeria_fotos")
-      .select("id, storage_key, original_path")
+      .select("id, storage_key, original_path, preview_path, preview_wm_path, thumb_path")
       .eq("galeria_id", galleryId)
       .eq("user_id", user.id)
       .in("id", photoIds);
@@ -171,7 +171,7 @@ serve(async (req) => {
       );
     }
 
-    // Delete from R2 (both preview and original)
+    // Delete ALL paths from R2 (deduplicated)
     const r2AccountId = Deno.env.get("R2_ACCOUNT_ID");
     const r2AccessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
     const r2SecretKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
@@ -180,14 +180,17 @@ serve(async (req) => {
     let deletedFromStorage = 0;
     if (r2AccountId && r2AccessKeyId && r2SecretKey) {
       for (const photo of photos) {
-        // Delete preview (galleries/{galleryId}/...)
-        if (photo.storage_key) {
-          const ok = await deleteFromR2(r2AccountId, r2AccessKeyId, r2SecretKey, r2BucketName, photo.storage_key);
-          if (ok) deletedFromStorage++;
+        // Collect all unique paths for this photo
+        const paths = new Set<string>();
+        const pathFields = ['storage_key', 'original_path', 'preview_path', 'preview_wm_path', 'thumb_path'] as const;
+        for (const field of pathFields) {
+          const val = (photo as any)[field];
+          if (val) paths.add(val);
         }
-        // Delete original (originals/{galleryId}/...) if different from storage_key
-        if (photo.original_path && photo.original_path !== photo.storage_key) {
-          await deleteFromR2(r2AccountId, r2AccessKeyId, r2SecretKey, r2BucketName, photo.original_path);
+        // Delete each unique path from R2
+        for (const path of paths) {
+          const ok = await deleteFromR2(r2AccountId, r2AccessKeyId, r2SecretKey, r2BucketName, path);
+          if (ok) deletedFromStorage++;
         }
       }
     } else {
