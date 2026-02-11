@@ -1,14 +1,21 @@
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Download, Image, User, Clock, Send } from 'lucide-react';
+import { Image, User, Clock, MoreHorizontal, Pencil, Share2, Trash2 } from 'lucide-react';
 import { Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface DeliverGalleryCardProps {
   gallery: Gallery;
   totalPhotos: number;
   onClick?: () => void;
+  onEdit?: () => void;
+  onShare?: () => void;
+  onDelete?: () => void;
 }
 
 function getDeliverStatus(gallery: Gallery): { label: string; variant: 'default' | 'destructive' | 'secondary' } {
@@ -17,7 +24,7 @@ function getDeliverStatus(gallery: Gallery): { label: string; variant: 'default'
   return { label: 'Rascunho', variant: 'secondary' };
 }
 
-export function DeliverGalleryCard({ gallery, totalPhotos, onClick }: DeliverGalleryCardProps) {
+export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onShare, onDelete }: DeliverGalleryCardProps) {
   const isExpired = gallery.status === 'expired';
   const status = getDeliverStatus(gallery);
 
@@ -25,7 +32,7 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick }: DeliverGal
     <div
       className={cn(
         'lunari-card overflow-hidden cursor-pointer group',
-        isExpired && 'ring-2 ring-destructive/50 opacity-75'
+        isExpired && 'ring-1 ring-destructive/40 opacity-75'
       )}
       onClick={onClick}
     >
@@ -39,22 +46,39 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick }: DeliverGal
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Image className="h-12 w-12 text-muted-foreground/40" />
+            <Image className="h-10 w-10 text-muted-foreground/30" />
           </div>
         )}
 
-        {/* Badge Deliver */}
-        <div className="absolute top-2 left-2">
-          <Badge className="bg-blue-600 hover:bg-blue-600 text-white gap-1 text-xs">
-            <Send className="h-3 w-3" />
-            Deliver
-          </Badge>
-        </div>
-
-        {/* Photo count */}
-        <div className="absolute bottom-2 right-2 bg-background/90 backdrop-blur-sm rounded-full px-2.5 py-1 flex items-center gap-1.5 text-xs font-medium">
-          <Image className="h-3.5 w-3.5" />
-          {totalPhotos} fotos
+        {/* ⋯ Menu - top right on image */}
+        <div className="absolute top-2 right-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="h-7 w-7 flex items-center justify-center rounded-md bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:bg-background transition-all"
+              >
+                <MoreHorizontal className="h-4 w-4 text-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit?.(); }}>
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onShare?.(); }}>
+                <Share2 className="h-3.5 w-3.5 mr-2" />
+                Compartilhar
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Expired overlay */}
@@ -69,27 +93,21 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick }: DeliverGal
       </div>
 
       {/* Card Content */}
-      <div className="p-4 space-y-3">
+      <div className="p-5 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="font-display text-lg font-semibold truncate">
+            <h3 className="text-sm font-semibold truncate leading-tight">
               {gallery.sessionName}
             </h3>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <User className="h-3.5 w-3.5 flex-shrink-0" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+              <User className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{gallery.clientName}</span>
             </div>
           </div>
-          <Badge variant={status.variant}>{status.label}</Badge>
+          <Badge variant={status.variant} className="text-[11px] shrink-0">{status.label}</Badge>
         </div>
 
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Download className="h-3.5 w-3.5" />
-            <span>{totalPhotos} fotos</span>
-          </div>
-          <span className="text-primary font-medium text-xs">Ver entrega →</span>
-        </div>
+        <p className="text-xs text-muted-foreground">{totalPhotos} fotos</p>
       </div>
     </div>
   );

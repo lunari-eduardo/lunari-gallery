@@ -62,9 +62,9 @@
     --gradient-card: linear-gradient(180deg, hsl(30 20% 99%) 0%, hsl(30 15% 96%) 100%);
     
     /* Shadows */
-    --shadow-sm: 0 1px 2px hsl(25 20% 15% / 0.04);
-    --shadow-md: 0 4px 12px hsl(25 20% 15% / 0.06);
-    --shadow-lg: 0 8px 24px hsl(25 20% 15% / 0.08);
+    --shadow-sm: 0 1px 2px hsl(25 20% 15% / 0.03);
+    --shadow-md: 0 3px 8px hsl(25 20% 15% / 0.04);
+    --shadow-lg: 0 6px 16px hsl(25 20% 15% / 0.06);
     --shadow-glow: 0 0 30px hsl(18 55% 55% / 0.15);
 
     /* Sidebar */
@@ -160,12 +160,12 @@
 
 @layer components {
   .lunari-card {
-    @apply bg-card rounded-xl border border-border/50 shadow-sm transition-all duration-300;
+    @apply bg-card rounded-lg border border-border/50 shadow-sm transition-all duration-200;
     background: var(--gradient-card);
   }
 
   .lunari-card:hover {
-    @apply shadow-md border-border;
+    @apply shadow-sm border-border;
   }
 
   .lunari-button-primary {
@@ -242,7 +242,7 @@
   }
 
   .status-badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium;
   }
 
   .status-created {
