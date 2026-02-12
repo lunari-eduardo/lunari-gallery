@@ -96,6 +96,8 @@ export interface Galeria {
   regrasCongeladas: RegrasCongeladas | null;
   // Gallery type
   tipo: 'selecao' | 'entrega';
+  // First photo key for thumbnail
+  firstPhotoKey: string | null;
   // Relations
   photos?: GaleriaPhoto[];
 }
@@ -168,6 +170,7 @@ function transformGaleria(row: any): Galeria {
     galleryPassword: row.gallery_password || null,
     regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
+    firstPhotoKey: row.galeria_fotos?.[0]?.storage_key || null,
   };
 }
 
@@ -246,7 +249,7 @@ export function useSupabaseGalleries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('galerias')
-        .select('*')
+        .select('*, galeria_fotos(storage_key)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
