@@ -191,7 +191,7 @@ export function ThemeConfig({
               className="h-32 rounded-xl p-4 flex flex-col items-center justify-center gap-3 border"
               style={{ backgroundColor: previewBg }}
             >
-              <p className="font-display text-lg font-semibold" style={{ color: emphasisColor }}>
+              <p className="text-lg font-semibold" style={{ color: emphasisColor }}>
                 Sua Galeria
               </p>
               <div className="flex gap-2">

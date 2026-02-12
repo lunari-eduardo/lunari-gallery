@@ -193,7 +193,7 @@ export default function Auth() {
             <Logo size="lg" variant="gallery" />
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-2xl font-display">
+            <CardTitle className="text-2xl font-bold">
               Bem-vindo
             </CardTitle>
             <CardDescription className="text-muted-foreground">

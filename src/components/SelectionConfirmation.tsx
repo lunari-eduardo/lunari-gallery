@@ -86,7 +86,7 @@ export function SelectionConfirmation({
             Voltar
           </Button>
           
-          <h1 className="font-display text-lg font-semibold">Confirmar Seleção</h1>
+          <h1 className="text-lg font-semibold">Confirmar Seleção</h1>
           
           <div className="w-20" />
         </div>
@@ -103,7 +103,7 @@ export function SelectionConfirmation({
                 <Image className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h3 className="font-display font-semibold">Fotos Selecionadas</h3>
+                <h3 className="font-semibold">Fotos Selecionadas</h3>
                 <p className="text-sm text-muted-foreground">
                   {selectedCount} fotos • {gallery.includedPhotos} incluídas
                   {extraCount > 0 && <span className="text-primary font-medium"> • {extraCount} extras</span>}
@@ -153,7 +153,7 @@ export function SelectionConfirmation({
                 <Camera className="h-5 w-5 text-foreground" />
               </div>
               <div>
-                <h3 className="font-display font-semibold">Resumo da Seleção</h3>
+                <h3 className="font-semibold">Resumo da Seleção</h3>
                 <p className="text-sm text-muted-foreground">
                   {format(currentDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </p>
@@ -231,7 +231,7 @@ export function SelectionConfirmation({
                       </p>
                     )}
                   </div>
-                  <p className="font-display text-2xl font-bold text-primary">
+                  <p className="text-2xl font-bold text-primary">
                     R$ {priceInfo.total.toFixed(2)}
                   </p>
                 </div>

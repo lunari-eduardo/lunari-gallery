@@ -94,12 +94,12 @@ export function PixPaymentScreen({
             className="h-12 mx-auto object-contain"
           />
         ) : studioName ? (
-          <h1 className="font-display text-xl font-semibold">{studioName}</h1>
+          <h1 className="text-xl font-semibold">{studioName}</h1>
         ) : null}
 
         {/* Title */}
         <div className="space-y-2">
-          <h2 className="font-display text-2xl font-bold">
+          <h2 className="text-2xl font-bold">
             Pagamento via PIX
           </h2>
           <p className="text-muted-foreground">
@@ -125,7 +125,7 @@ export function PixPaymentScreen({
         {/* Value */}
         <div className="lunari-card p-4">
           <p className="text-sm text-muted-foreground mb-1">Valor do pagamento</p>
-          <p className="font-display text-3xl font-bold text-green-600 dark:text-green-400">
+          <p className="text-3xl font-bold text-green-600 dark:text-green-400">
             R$ {valorTotal.toFixed(2)}
           </p>
         </div>

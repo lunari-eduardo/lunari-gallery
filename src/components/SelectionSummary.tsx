@@ -99,7 +99,7 @@ export function SelectionSummary({
   // Default card variant
   return (
     <div className="lunari-card p-4 md:p-6 space-y-4">
-      <h3 className="font-display text-lg font-semibold">Resumo da Seleção</h3>
+      <h3 className="text-lg font-semibold">Resumo da Seleção</h3>
       
       <div className="space-y-3">
         <div className="flex items-center justify-between">

@@ -92,7 +92,7 @@ export function PhotoCodesModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display">
+          <DialogTitle className="font-semibold">
             Códigos para separação das fotos
           </DialogTitle>
         </DialogHeader>

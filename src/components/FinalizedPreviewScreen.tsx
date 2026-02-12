@@ -142,7 +142,7 @@ export function FinalizedPreviewScreen({
           <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
             <Check className="h-4 w-4 text-primary" />
           </div>
-          <h2 className="font-display text-lg font-medium text-foreground">
+          <h2 className="text-lg font-semibold text-foreground">
             Seleção Confirmada
           </h2>
         </div>
@@ -155,7 +155,7 @@ export function FinalizedPreviewScreen({
         {sessionName && (
           <p 
             className="text-base sm:text-lg font-normal text-muted-foreground mb-4"
-            style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+            style={{ fontFamily: sessionFont || '"Inter", sans-serif' }}
           >
             {applyTitleCase(sessionName, titleCaseMode)}
           </p>

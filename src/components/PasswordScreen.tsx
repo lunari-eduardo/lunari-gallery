@@ -72,13 +72,13 @@ export function PasswordScreen({
 
           {/* Title */}
           <div>
-            <h1 className="font-display text-2xl font-semibold mb-2">
+            <h1 className="text-2xl font-bold mb-2">
               Galeria Protegida
             </h1>
             {sessionName && (
               <p 
                 className="text-2xl sm:text-3xl font-normal text-muted-foreground"
-                style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+                style={{ fontFamily: sessionFont || '"Inter", sans-serif' }}
               >
                 {applyTitleCase(sessionName, titleCaseMode)}
               </p>

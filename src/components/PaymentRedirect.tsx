@@ -76,7 +76,7 @@ export function PaymentRedirect({
 
         {/* Title */}
         <div className="space-y-2">
-          <h1 className="font-display text-2xl font-bold">
+          <h1 className="text-2xl font-bold">
             Redirecionando para {info.name}
           </h1>
           <p className="text-muted-foreground">
@@ -87,7 +87,7 @@ export function PaymentRedirect({
         {/* Value */}
         <div className="lunari-card p-6">
           <p className="text-sm text-muted-foreground mb-1">Valor do pagamento</p>
-          <p className={cn("font-display text-3xl font-bold", info.color)}>
+          <p className={cn("text-3xl font-bold", info.color)}>
             R$ {valorTotal.toFixed(2)}
           </p>
         </div>

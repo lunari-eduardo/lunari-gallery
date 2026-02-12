@@ -23,7 +23,7 @@ export default function Settings() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
       <div>
-        <h1 className="font-display text-3xl font-semibold">Configurações</h1>
+        <h1 className="text-3xl font-bold">Configurações</h1>
         <p className="text-muted-foreground mt-1">
           Configurações globais do seu estúdio
         </p>
