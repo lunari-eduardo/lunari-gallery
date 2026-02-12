@@ -5,8 +5,8 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save } from
-'lucide-react';
+  MessageSquare, Mail, ExternalLink, Loader2, Save
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -27,14 +27,14 @@ import { toast } from 'sonner';
 import { isPast } from 'date-fns';
 
 function getDeliverStatusInfo(status: string, prazoSelecao: Date | null) {
-  const isExpired = status === 'expirado' || status === 'expirada' || prazoSelecao && isPast(prazoSelecao) && ['enviado', 'publicada'].includes(status);
+  const isExpired = status === 'expirado' || status === 'expirada' || (prazoSelecao && isPast(prazoSelecao) && ['enviado', 'publicada'].includes(status));
   if (isExpired) return { label: 'Expirada', variant: 'destructive' as const, color: 'text-destructive' };
   if (status === 'enviado' || status === 'publicada') return { label: 'Publicada', variant: 'default' as const, color: 'text-primary' };
   return { label: 'Rascunho', variant: 'secondary' as const, color: 'text-muted-foreground' };
 }
 
 export default function DeliverDetail() {
-  const { id } = useParams<{id: string;}>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
     galleries,
@@ -44,7 +44,7 @@ export default function DeliverDetail() {
     deleteGallery,
     sendGallery,
     deletePhoto,
-    isLoading: galleriesLoading
+    isLoading: galleriesLoading,
   } = useSupabaseGalleries();
 
   const [photos, setPhotos] = useState<GaleriaPhoto[]>([]);
@@ -79,18 +79,18 @@ export default function DeliverDetail() {
   useEffect(() => {
     if (!id) return;
     setPhotosLoading(true);
-    fetchGalleryPhotos(id).
-    then(setPhotos).
-    catch(console.error).
-    finally(() => setPhotosLoading(false));
+    fetchGalleryPhotos(id)
+      .then(setPhotos)
+      .catch(console.error)
+      .finally(() => setPhotosLoading(false));
   }, [id]);
 
   if (galleriesLoading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>);
-
+      </div>
+    );
   }
 
   if (!gallery) {
@@ -98,8 +98,8 @@ export default function DeliverDetail() {
       <div className="text-center py-24">
         <h2 className="font-display text-2xl font-semibold mb-2">Galeria não encontrada</h2>
         <Button variant="outline" onClick={() => navigate('/galleries/deliver')}>Voltar</Button>
-      </div>);
-
+      </div>
+    );
   }
 
   const statusInfo = getDeliverStatusInfo(gallery.status, gallery.prazoSelecao);
@@ -111,15 +111,15 @@ export default function DeliverDetail() {
     setSaving(true);
     try {
       await updateGallery({ id, data: {
-          nomeSessao: sessionName,
-          mensagemBoasVindas: welcomeMessage,
-          permissao: isPrivate ? 'private' : 'public',
-          configuracoes: {
-            ...gallery.configuracoes,
-            notasInternas: internalNotes
-          },
-          prazoSelecao: expirationDate
-        } });
+        nomeSessao: sessionName,
+        mensagemBoasVindas: welcomeMessage,
+        permissao: isPrivate ? 'private' : 'public',
+        configuracoes: {
+          ...gallery.configuracoes,
+          notasInternas: internalNotes,
+        },
+        prazoSelecao: expirationDate,
+      }});
       toast.success('Alterações salvas');
     } catch {
       toast.error('Erro ao salvar');
@@ -147,7 +147,7 @@ export default function DeliverDetail() {
   const handlePhotoDelete = async (photoId: string) => {
     if (!id) return;
     await deletePhoto({ galleryId: id, photoId });
-    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    setPhotos(prev => prev.filter(p => p.id !== photoId));
   };
 
   const handleUploadComplete = (uploaded: UploadedPhoto[]) => {
@@ -187,12 +187,12 @@ export default function DeliverDetail() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isDraft &&
-            <Button onClick={handlePublish} className="gap-2">
+            {isDraft && (
+              <Button onClick={handlePublish} className="gap-2">
                 <Send className="h-4 w-4" />
                 Publicar entrega
               </Button>
-            }
+            )}
             <Button variant="outline" onClick={handleSave} disabled={saving} className="gap-2">
               <Save className="h-4 w-4" />
               {saving ? 'Salvando...' : 'Salvar'}
@@ -212,8 +212,8 @@ export default function DeliverDetail() {
 
         {/* === COMPARTILHAMENTO === */}
         <TabsContent value="share" className="space-y-8 mt-6">
-          {isDraft ?
-          <div className="text-center py-16">
+          {isDraft ? (
+            <div className="text-center py-16">
               <Send className="h-8 w-8 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-display text-xl font-semibold mb-2">Publique primeiro</h3>
               <p className="text-muted-foreground mb-6">Publique a entrega para habilitar o compartilhamento.</p>
@@ -221,9 +221,9 @@ export default function DeliverDetail() {
                 <Send className="h-4 w-4" />
                 Publicar entrega
               </Button>
-            </div> :
-
-          <>
+            </div>
+          ) : (
+            <>
               {/* Action buttons — inline, no cards */}
               <div className="flex flex-wrap gap-3">
                 <Button variant="outline" className="gap-2" onClick={() => copyToClipboard(galleryUrl)}>
@@ -248,14 +248,14 @@ export default function DeliverDetail() {
               <div className="space-y-2">
                 <Label>Mensagem de compartilhamento</Label>
                 <Textarea
-                value={shareMessage}
-                onChange={(e) => setShareMessage(e.target.value)}
-                rows={3} />
-
+                  value={shareMessage}
+                  onChange={e => setShareMessage(e.target.value)}
+                  rows={3}
+                />
                 <p className="text-xs text-muted-foreground">Essa mensagem será usada ao compartilhar por WhatsApp.</p>
               </div>
             </>
-          }
+          )}
         </TabsContent>
 
         {/* === FOTOS === */}
@@ -268,46 +268,46 @@ export default function DeliverDetail() {
             </Button>
           </div>
 
-          {showUploader &&
-          <div className="border rounded-lg p-4 bg-card">
+          {showUploader && (
+            <div className="border rounded-lg p-4 bg-card">
               <PhotoUploader
-              galleryId={id!}
-              onUploadComplete={handleUploadComplete}
-              skipCredits={true} />
-
+                galleryId={id!}
+                onUploadComplete={handleUploadComplete}
+                skipCredits={true}
+              />
             </div>
-          }
+          )}
 
-          {photosLoading ?
-          <div className="flex items-center justify-center py-16">
+          {photosLoading ? (
+            <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div> :
-          photos.length > 0 ?
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {photos.map((photo) =>
-            <div key={photo.id} className="group relative aspect-square rounded-lg overflow-hidden bg-muted">
+            </div>
+          ) : photos.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {photos.map(photo => (
+                <div key={photo.id} className="group relative aspect-square rounded-lg overflow-hidden bg-muted">
                   <img
-                src={getPhotoUrl({ storageKey: photo.storageKey }, 'thumbnail')}
-                alt={photo.originalFilename}
-                className="w-full h-full object-cover"
-                loading="lazy" />
-
+                    src={getPhotoUrl({ storageKey: photo.storageKey }, 'thumbnail')}
+                    alt={photo.originalFilename}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
                     <a
-                  href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
-                  download={photo.originalFilename}
-                  onClick={(e) => e.stopPropagation()}>
-
+                      href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
+                      download={photo.originalFilename}
+                      onClick={e => e.stopPropagation()}
+                    >
                       <Button variant="secondary" size="icon" className="h-8 w-8">
                         <Download className="h-4 w-4" />
                       </Button>
                     </a>
                     <Button
-                  variant="destructive"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => handlePhotoDelete(photo.id)}>
-
+                      variant="destructive"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handlePhotoDelete(photo.id)}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -315,10 +315,10 @@ export default function DeliverDetail() {
                     {photo.originalFilename}
                   </p>
                 </div>
-            )}
-            </div> :
-
-          <div className="text-center py-16">
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Image className="h-8 w-8 text-muted-foreground" />
               </div>
@@ -329,7 +329,7 @@ export default function DeliverDetail() {
                 Adicionar fotos
               </Button>
             </div>
-          }
+          )}
         </TabsContent>
 
         {/* === DETALHES === */}
@@ -338,7 +338,7 @@ export default function DeliverDetail() {
           <div className="space-y-5 p-5 rounded-lg border">
             <div className="space-y-2">
               <Label htmlFor="sessionName">Nome da sessão</Label>
-              <Input id="sessionName" value={sessionName} onChange={(e) => setSessionName(e.target.value)} />
+              <Input id="sessionName" value={sessionName} onChange={e => setSessionName(e.target.value)} />
             </div>
 
             <Separator />
@@ -360,9 +360,9 @@ export default function DeliverDetail() {
                 id="internalNotes"
                 placeholder="Anotações privadas sobre esta entrega..."
                 value={internalNotes}
-                onChange={(e) => setInternalNotes(e.target.value)}
-                rows={3} />
-
+                onChange={e => setInternalNotes(e.target.value)}
+                rows={3}
+              />
               <p className="text-xs text-muted-foreground">Visíveis apenas para você.</p>
             </div>
           </div>
@@ -377,12 +377,12 @@ export default function DeliverDetail() {
                 </div>
                 <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
               </div>
-              {isPrivate &&
-              <div className="space-y-1">
+              {isPrivate && (
+                <div className="space-y-1">
                   <Label htmlFor="password">Senha</Label>
-                  <Input id="password" type="text" value={galleryPassword} onChange={(e) => setGalleryPassword(e.target.value)} />
+                  <Input id="password" type="text" value={galleryPassword} onChange={e => setGalleryPassword(e.target.value)} />
                 </div>
-              }
+              )}
             </div>
 
             <Separator />
@@ -401,24 +401,24 @@ export default function DeliverDetail() {
                     <Calendar mode="single" selected={expirationDate} onSelect={setExpirationDate} initialFocus />
                   </PopoverContent>
                 </Popover>
-                {expirationDate &&
-                <Button variant="ghost" size="sm" onClick={() => setExpirationDate(undefined)}>Remover</Button>
-                }
+                {expirationDate && (
+                  <Button variant="ghost" size="sm" onClick={() => setExpirationDate(undefined)}>Remover</Button>
+                )}
               </div>
             </div>
 
             <Separator />
 
-            
-
-
-
-
-
-
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium">Download</span>
+                <p className="text-xs text-muted-foreground">Download sempre ativo para entregas</p>
+              </div>
+              <Download className="h-4 w-4 text-primary" />
+            </div>
           </div>
         </TabsContent>
       </Tabs>
-    </div>);
-
+    </div>
+  );
 }
