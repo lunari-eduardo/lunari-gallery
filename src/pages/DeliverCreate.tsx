@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Palette, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,9 @@ import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSettings } from '@/hooks/useSettings';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
-import { Client, GalleryPermission } from '@/types/gallery';
+import { Client, GalleryPermission, TitleCaseMode } from '@/types/gallery';
+import { FontSelect } from '@/components/FontSelect';
+import { DeliverPhotoManager } from '@/components/deliver/DeliverPhotoManager';
 
 const steps = [
   { id: 1, name: 'Dados', icon: User },
@@ -25,7 +27,7 @@ const steps = [
 export default function DeliverCreate() {
   const navigate = useNavigate();
   const { clients, isLoading: isLoadingClients, createClient } = useGalleryClients();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const { createGallery, updateGallery, sendGallery } = useSupabaseGalleries();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -38,11 +40,21 @@ export default function DeliverCreate() {
   const [galleryPassword, setGalleryPassword] = useState('');
   const [expirationDays, setExpirationDays] = useState(30);
 
+  // Font & case
+  const [sessionFont, setSessionFont] = useState('playfair');
+  const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
+
+  // Theme
+  const [clientMode, setClientMode] = useState<'light' | 'dark'>('dark');
+
   // Step 2: Photos
   const [supabaseGalleryId, setSupabaseGalleryId] = useState<string | null>(null);
   const [isCreatingGallery, setIsCreatingGallery] = useState(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [photoRefreshKey, setPhotoRefreshKey] = useState(0);
+  const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
+  const [photoCount, setPhotoCount] = useState(0);
 
   // Step 3: Message
   const [welcomeMessage, setWelcomeMessage] = useState('');
@@ -51,6 +63,14 @@ export default function DeliverCreate() {
   useEffect(() => {
     if (settings) {
       setExpirationDays(settings.defaultExpirationDays || 30);
+      if (settings.lastSessionFont) {
+        setSessionFont(settings.lastSessionFont);
+      }
+      if (settings.clientTheme === 'light') {
+        setClientMode('light');
+      } else {
+        setClientMode('dark');
+      }
     }
   }, [settings]);
 
@@ -86,6 +106,10 @@ export default function DeliverCreate() {
           allowExtraPhotos: false,
           watermark: { type: 'none', opacity: 0, position: 'center' },
           watermarkDisplay: 'none',
+          sessionFont,
+          titleCaseMode,
+          themeId: settings?.activeThemeId || undefined,
+          clientMode,
         },
       });
       setSupabaseGalleryId(result.id);
@@ -109,11 +133,10 @@ export default function DeliverCreate() {
         toast.error('Informe a senha para galeria privada');
         return;
       }
-      // Create gallery before going to photos step
       const id = await ensureGalleryCreated();
       if (!id) return;
     }
-    if (currentStep === 2 && uploadedPhotos.length === 0) {
+    if (currentStep === 2 && photoCount === 0 && uploadedPhotos.length === 0) {
       toast.error('Envie pelo menos uma foto');
       return;
     }
@@ -128,10 +151,29 @@ export default function DeliverCreate() {
     if (!supabaseGalleryId) return;
 
     try {
-      // Update welcome message
-      if (welcomeMessage.trim()) {
-        await updateGallery({ id: supabaseGalleryId, data: { mensagemBoasVindas: welcomeMessage } });
-      }
+      // Update gallery with final settings
+      await updateGallery({
+        id: supabaseGalleryId,
+        data: {
+          mensagemBoasVindas: welcomeMessage.trim() || undefined,
+          configuracoes: {
+            imageResizeOption: 2560,
+            allowDownload: true,
+            allowComments: false,
+            allowExtraPhotos: false,
+            watermark: { type: 'none', opacity: 0, position: 'center' },
+            watermarkDisplay: 'none',
+            sessionFont,
+            titleCaseMode,
+            coverPhotoId: coverPhotoId || undefined,
+            themeId: settings?.activeThemeId || undefined,
+            clientMode,
+          },
+        },
+      });
+
+      // Persist last used font
+      updateSettings({ lastSessionFont: sessionFont });
 
       // Send/publish gallery
       await sendGallery(supabaseGalleryId);
@@ -145,7 +187,38 @@ export default function DeliverCreate() {
 
   const handleUploadComplete = (photos: UploadedPhoto[]) => {
     setUploadedPhotos((prev) => [...prev, ...photos]);
+    setPhotoRefreshKey((k) => k + 1);
   };
+
+  const handleCoverChange = async (photoId: string | null) => {
+    setCoverPhotoId(photoId);
+    // Persist immediately if gallery exists
+    if (supabaseGalleryId) {
+      try {
+        const { data: gallery } = await (await import('@/integrations/supabase/client')).supabase
+          .from('galerias')
+          .select('configuracoes')
+          .eq('id', supabaseGalleryId)
+          .single();
+
+        const existingConfig = (gallery?.configuracoes as Record<string, unknown>) || {};
+        await updateGallery({
+          id: supabaseGalleryId,
+          data: {
+            configuracoes: {
+              ...existingConfig,
+              coverPhotoId: photoId,
+            },
+          },
+        });
+      } catch (e) {
+        console.error('Error saving cover photo:', e);
+      }
+    }
+  };
+
+  // Check if custom theme is available
+  const hasCustomTheme = settings?.themeType === 'custom' && settings?.customTheme;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -192,7 +265,10 @@ export default function DeliverCreate() {
       </div>
 
       {/* Step Content */}
-      <div className="max-w-2xl mx-auto">
+      <div className={cn(
+        'mx-auto',
+        currentStep === 2 ? 'max-w-4xl' : 'max-w-2xl'
+      )}>
         {/* Step 1: Data */}
         {currentStep === 1 && (
           <div className="space-y-6">
@@ -207,6 +283,18 @@ export default function DeliverCreate() {
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
                   placeholder="Ex: Ensaio Maria - Família"
+                />
+              </div>
+
+              {/* Font Select */}
+              <div className="space-y-2">
+                <Label>Fonte do Título</Label>
+                <FontSelect
+                  value={sessionFont}
+                  onChange={setSessionFont}
+                  previewText={sessionName || 'Ensaio Gestante'}
+                  titleCaseMode={titleCaseMode}
+                  onTitleCaseModeChange={setTitleCaseMode}
                 />
               </div>
 
@@ -296,6 +384,58 @@ export default function DeliverCreate() {
                 </p>
               </div>
             </div>
+
+            {/* Theme section */}
+            {hasCustomTheme && (
+              <div className="lunari-card p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-primary" />
+                  <h3 className="font-medium text-sm">Aparência da Galeria</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Usando tema personalizado: {settings!.customTheme!.name}
+                </p>
+
+                {/* Preview of custom theme */}
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                  <div className="flex gap-1.5">
+                    <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: settings!.customTheme!.primaryColor }} title="Cor primária" />
+                    <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: settings!.customTheme!.accentColor }} title="Cor de destaque" />
+                    <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: settings!.customTheme!.emphasisColor }} title="Cor de ênfase" />
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    Fundo {settings!.customTheme!.backgroundMode === 'dark' ? 'escuro' : 'claro'}
+                  </span>
+                </div>
+
+                {/* Client Mode Toggle */}
+                <div className="flex items-center gap-3 pt-2">
+                  <Label className="text-sm">Modo para esta galeria:</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={clientMode === 'light' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setClientMode('light')}
+                      className="gap-1"
+                    >
+                      <Sun className="h-3.5 w-3.5" />
+                      Claro
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={clientMode === 'dark' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setClientMode('dark')}
+                      className="gap-1"
+                    >
+                      <Moon className="h-3.5 w-3.5" />
+                      Escuro
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -305,24 +445,28 @@ export default function DeliverCreate() {
             <div className="lunari-card p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-lg font-semibold">Fotos da Entrega</h2>
-                {uploadedPhotos.length > 0 && (
-                  <span className="text-sm text-muted-foreground">
-                    {uploadedPhotos.length} foto(s) enviada(s)
-                  </span>
-                )}
               </div>
               <p className="text-sm text-muted-foreground">
                 As fotos serão armazenadas em alta resolução para download direto pelo cliente.
               </p>
               {supabaseGalleryId && (
-                <PhotoUploader
-                  galleryId={supabaseGalleryId}
-                  maxLongEdge={2560}
-                  allowDownload={true}
-                  skipCredits={true}
-                  onUploadComplete={handleUploadComplete}
-                  onUploadingChange={setIsUploading}
-                />
+                <>
+                  <PhotoUploader
+                    galleryId={supabaseGalleryId}
+                    maxLongEdge={2560}
+                    allowDownload={true}
+                    skipCredits={true}
+                    onUploadComplete={handleUploadComplete}
+                    onUploadingChange={setIsUploading}
+                  />
+                  <DeliverPhotoManager
+                    galleryId={supabaseGalleryId}
+                    refreshKey={photoRefreshKey}
+                    coverPhotoId={coverPhotoId}
+                    onCoverChange={handleCoverChange}
+                    onPhotosChange={setPhotoCount}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -362,7 +506,7 @@ export default function DeliverCreate() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Fotos:</span>
-                  <p className="font-medium">{uploadedPhotos.length}</p>
+                  <p className="font-medium">{photoCount || uploadedPhotos.length}</p>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Expira em:</span>
@@ -398,7 +542,7 @@ export default function DeliverCreate() {
           ) : (
             <Button
               onClick={handlePublish}
-              disabled={uploadedPhotos.length === 0}
+              disabled={(photoCount === 0 && uploadedPhotos.length === 0)}
               className="gap-2"
               variant="terracotta"
             >

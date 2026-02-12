@@ -18,11 +18,12 @@ interface DeliverPhotoGridProps {
   photos: DeliverPhoto[];
   onPhotoClick: (index: number) => void;
   onDownload: (photo: DeliverPhoto) => void;
+  bgColor?: string;
 }
 
-export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload }: DeliverPhotoGridProps) {
+export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: DeliverPhotoGridProps) {
   return (
-    <div className="bg-black min-h-screen px-2 sm:px-4 py-6">
+    <div className="min-h-screen px-2 sm:px-4 py-6" style={bgColor ? { backgroundColor: bgColor } : undefined}>
       <MasonryGrid className="max-w-7xl mx-auto">
         {photos.map((photo, index) => {
           const paths: PhotoPaths = {
