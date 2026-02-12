@@ -308,7 +308,7 @@ export default function Dashboard() {
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-              <h3 className="font-display text-xl font-semibold mb-2">Erro ao carregar galerias</h3>
+              <h3 className="text-xl font-semibold mb-2">Erro ao carregar galerias</h3>
               <p className="text-muted-foreground mb-4">Não foi possível conectar ao banco de dados.</p>
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
@@ -331,7 +331,7 @@ export default function Dashboard() {
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Search className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="font-display text-xl font-semibold mb-2">Nenhuma galeria encontrada</h3>
+              <h3 className="text-xl font-semibold mb-2">Nenhuma galeria encontrada</h3>
               <p className="text-muted-foreground mb-6">
                 {selectGalleries.length === 0 ? 'Crie sua primeira galeria para começar' : 'Tente ajustar os filtros ou criar uma nova galeria'}
               </p>
@@ -385,7 +385,7 @@ export default function Dashboard() {
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-              <h3 className="font-display text-xl font-semibold mb-2">Erro ao carregar galerias</h3>
+              <h3 className="text-xl font-semibold mb-2">Erro ao carregar galerias</h3>
               <p className="text-muted-foreground mb-4">Não foi possível conectar ao banco de dados.</p>
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
@@ -408,7 +408,7 @@ export default function Dashboard() {
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Send className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="font-display text-xl font-semibold mb-2">Nenhuma galeria de transfer</h3>
+              <h3 className="text-xl font-semibold mb-2">Nenhuma galeria de transfer</h3>
               <p className="text-muted-foreground mb-6">
                 Use esse modo para entregar as fotos finais aos seus clientes.
               </p>

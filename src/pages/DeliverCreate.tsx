@@ -225,7 +225,7 @@ export default function DeliverCreate() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="font-display text-2xl md:text-3xl font-semibold">Nova Entrega</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Nova Entrega</h1>
           <p className="text-muted-foreground text-sm">Envie fotos em alta resolução para download</p>
         </div>
       </div>
@@ -270,7 +270,7 @@ export default function DeliverCreate() {
         {currentStep === 1 && (
           <div className="space-y-6">
             <div className="lunari-card p-6 space-y-5">
-              <h2 className="font-display text-lg font-semibold">Dados da Entrega</h2>
+              <h2 className="text-lg font-semibold">Dados da Entrega</h2>
 
               {/* Session Name */}
               <div className="space-y-2">
@@ -422,7 +422,7 @@ export default function DeliverCreate() {
           <div className="space-y-6">
             <div className="lunari-card p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-display text-lg font-semibold">Fotos da Entrega</h2>
+                <h2 className="text-lg font-semibold">Fotos da Entrega</h2>
               </div>
               <p className="text-sm text-muted-foreground">
                 As fotos serão armazenadas em alta resolução para download direto pelo cliente.
@@ -454,7 +454,7 @@ export default function DeliverCreate() {
         {currentStep === 3 && (
           <div className="space-y-6">
             <div className="lunari-card p-6 space-y-4">
-              <h2 className="font-display text-lg font-semibold">Mensagem de Boas-Vindas</h2>
+              <h2 className="text-lg font-semibold">Mensagem de Boas-Vindas</h2>
               <p className="text-sm text-muted-foreground">
                 Esta mensagem será exibida quando o cliente acessar a galeria.
               </p>
@@ -468,7 +468,7 @@ export default function DeliverCreate() {
 
             {/* Summary */}
             <div className="lunari-card p-6 space-y-3">
-              <h3 className="font-display text-base font-semibold">Resumo</h3>
+              <h3 className="text-base font-semibold">Resumo</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-muted-foreground">Sessão:</span>

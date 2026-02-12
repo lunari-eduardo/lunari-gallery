@@ -28,7 +28,7 @@ export function Logo({ size = 'md', showText = true, variant = 'default', classN
         <div className="absolute inset-0 bg-primary/20 blur-lg rounded-full" />
       </div>
       {showText && (
-        <span className={cn('font-display font-semibold tracking-tight', sizes[size].text)}>
+        <span className={cn('font-semibold tracking-tight', sizes[size].text)}>
           {text}
         </span>
       )}

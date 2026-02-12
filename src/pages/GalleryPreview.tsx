@@ -69,7 +69,7 @@ export default function GalleryPreview() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-        <h2 className="font-display text-2xl font-semibold mb-2">
+        <h2 className="text-2xl font-bold mb-2">
           Galeria não encontrada
         </h2>
         <p className="text-muted-foreground mb-4">

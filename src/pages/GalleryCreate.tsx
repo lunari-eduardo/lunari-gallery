@@ -880,7 +880,7 @@ export default function GalleryCreate() {
       case 1:
         return <div className="space-y-6 animate-fade-in">
             <div className="flex items-center justify-between">
-              <p className="text-muted-foreground text-lg font-serif">
+              <p className="text-muted-foreground text-lg">
                 Dados do cliente e detalhes da sessão
               </p>
               {/* Assisted Mode Badge */}
@@ -1069,7 +1069,7 @@ export default function GalleryCreate() {
         return <div className="space-y-8 animate-fade-in">
             <div>
               
-              <p className="text-muted-foreground text-lg font-serif">
+              <p className="text-muted-foreground text-lg">
                 Defina como será a cobrança por fotos extras
               </p>
             </div>
@@ -1373,7 +1373,7 @@ export default function GalleryCreate() {
         return <div className="space-y-6 animate-fade-in">
             <div>
               
-              <p className="text-muted-foreground text-lg font-serif">
+              <p className="text-muted-foreground text-lg">
                 Adicione as fotos da sessão para o cliente selecionar
               </p>
             </div>
@@ -1424,7 +1424,7 @@ export default function GalleryCreate() {
         return <div className="space-y-8 animate-fade-in">
             <div>
               
-              <p className="text-muted-foreground font-serif text-xl">
+              <p className="text-muted-foreground text-xl">
                 Personalize a experiência do cliente
               </p>
             </div>
@@ -1601,7 +1601,7 @@ export default function GalleryCreate() {
       case 5:
         return <div className="space-y-6 animate-fade-in">
             <div>
-              <p className="text-muted-foreground text-lg font-serif">
+              <p className="text-muted-foreground text-lg">
                 Personalize a mensagem que o cliente verá ao acessar a galeria
               </p>
             </div>
@@ -1621,7 +1621,7 @@ export default function GalleryCreate() {
         return <div className="space-y-6 animate-fade-in">
             <div>
               
-              <p className="text-muted-foreground text-lg font-serif">
+              <p className="text-muted-foreground text-lg">
                 Confira as informações antes de criar a galeria
               </p>
             </div>
@@ -1741,7 +1741,7 @@ export default function GalleryCreate() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="font-display text-2xl md:text-3xl font-semibold">
+          <h1 className="text-2xl md:text-3xl font-bold">
             Nova Galeria
           </h1>
           <p className="text-muted-foreground text-sm">

@@ -773,7 +773,7 @@ export default function ClientGallery() {
             </div>
             
             <div>
-              <h1 className="font-display text-2xl font-semibold mb-2">
+              <h1 className="text-2xl font-bold mb-2">
                 Galeria não encontrada
               </h1>
               <p className="text-muted-foreground text-sm">
@@ -953,7 +953,7 @@ export default function ClientGallery() {
           <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <Check className="h-5 w-5 text-primary" />
-              <h2 className="font-display text-lg font-semibold text-primary">
+              <h2 className="text-lg font-semibold text-primary">
                 Seleção Confirmada!
               </h2>
             </div>

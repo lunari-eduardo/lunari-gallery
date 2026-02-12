@@ -66,7 +66,7 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">
+          <DialogTitle className="text-xl font-semibold">
             {isEditing ? 'Editar Cliente' : 'Novo Cliente'}
           </DialogTitle>
         </DialogHeader>

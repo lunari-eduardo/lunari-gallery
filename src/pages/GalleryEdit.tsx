@@ -179,7 +179,7 @@ export default function GalleryEdit() {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-        <h2 className="font-display text-2xl font-semibold mb-2">
+        <h2 className="text-2xl font-bold mb-2">
           Galeria não encontrada
         </h2>
         <p className="text-muted-foreground mb-4">
@@ -268,7 +268,7 @@ export default function GalleryEdit() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="font-display text-2xl md:text-3xl font-semibold">
+            <h1 className="text-2xl md:text-3xl font-bold">
               Editar Galeria
             </h1>
             <p className="text-muted-foreground">

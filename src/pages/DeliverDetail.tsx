@@ -96,7 +96,7 @@ export default function DeliverDetail() {
   if (!gallery) {
     return (
       <div className="text-center py-24">
-        <h2 className="font-display text-2xl font-semibold mb-2">Galeria não encontrada</h2>
+        <h2 className="text-2xl font-bold mb-2">Galeria não encontrada</h2>
         <Button variant="outline" onClick={() => navigate('/galleries/deliver')}>Voltar</Button>
       </div>
     );
@@ -179,7 +179,7 @@ export default function DeliverDetail() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="font-display text-2xl md:text-3xl font-bold">{gallery.nomeSessao || 'Sem título'}</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">{gallery.nomeSessao || 'Sem título'}</h1>
               <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
             </div>
             <p className="text-muted-foreground text-sm mt-1">
@@ -215,7 +215,7 @@ export default function DeliverDetail() {
           {isDraft ? (
             <div className="text-center py-16">
               <Send className="h-8 w-8 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-display text-xl font-semibold mb-2">Publique primeiro</h3>
+              <h3 className="text-xl font-semibold mb-2">Publique primeiro</h3>
               <p className="text-muted-foreground mb-6">Publique a entrega para habilitar o compartilhamento.</p>
               <Button onClick={handlePublish} className="gap-2">
                 <Send className="h-4 w-4" />
@@ -261,7 +261,7 @@ export default function DeliverDetail() {
         {/* === FOTOS === */}
         <TabsContent value="photos" className="space-y-4 mt-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-display font-semibold text-lg">{photos.length} fotos entregues</h3>
+            <h3 className="font-semibold text-lg">{photos.length} fotos entregues</h3>
             <Button onClick={() => setShowUploader(true)} className="gap-2">
               <Upload className="h-4 w-4" />
               Adicionar fotos
@@ -322,7 +322,7 @@ export default function DeliverDetail() {
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Image className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="font-display text-xl font-semibold mb-2">Nenhuma foto adicionada</h3>
+              <h3 className="text-xl font-semibold mb-2">Nenhuma foto adicionada</h3>
               <p className="text-muted-foreground mb-4">Adicione as fotos finais para esta entrega.</p>
               <Button onClick={() => setShowUploader(true)} className="gap-2">
                 <Upload className="h-4 w-4" />

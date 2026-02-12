@@ -97,7 +97,7 @@ export function ClientGalleryHeader({
         <div className="text-center py-3 border-t border-border/30 px-4">
           <h1 
             className="text-2xl sm:text-3xl font-normal tracking-wide"
-            style={{ fontFamily: sessionFont || '"Playfair Display", serif' }}
+            style={{ fontFamily: sessionFont || '"Inter", sans-serif' }}
           >
             {applyTitleCase(sessionName, titleCaseMode)}
           </h1>

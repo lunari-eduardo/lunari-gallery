@@ -32,7 +32,7 @@ export default function AccessDenied() {
             </div>
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-2xl font-display">
+            <CardTitle className="text-2xl font-bold">
               Acesso Não Disponível
             </CardTitle>
             <CardDescription className="text-muted-foreground">

@@ -122,7 +122,7 @@ export default function ClientProfile() {
               <User className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-2xl font-bold tracking-tight">{client.nome}</h1>
+              <h1 className="text-2xl font-bold tracking-tight">{client.nome}</h1>
               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                 {client.email && (
                   <span className="flex items-center gap-1">
