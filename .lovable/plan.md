@@ -1,166 +1,147 @@
 
-
-# Logo como Imagem + Thumbnail nos Cards + Acoes do Menu
+# Transfer Gallery: Fotos Persistentes, Capa, Fonte e Temas
 
 ## Resumo
 
-Tres mudancas principais:
-1. Usar as imagens de logo "Gallery Select" e "Gallery Transfer" no lugar do texto
-2. Adicionar thumbnail da primeira foto nos cards de Select
-3. Corrigir as acoes do menu de tres pontos (editar, compartilhar, excluir)
+Tres areas de mudanca na criacao de galerias Transfer:
+
+1. **Fotos persistentes apos upload** com grid grande, hover para excluir e selecionar como capa
+2. **Selecao de fonte** para titulo da galeria (mesma logica do Gallery Select)
+3. **Suporte a temas personalizados** (sistema/custom, claro/escuro) na criacao e nas telas do cliente
 
 ---
 
-## 1. Logos como imagem
+## 1. Fotos persistentes com grid e acoes
 
-Copiar os arquivos enviados para `src/assets/`:
-- `Gallery_Select.png` -> `src/assets/gallery-select-logo.png`
-- `Gallery_Transfer.png` -> `src/assets/gallery-transfer-logo.png`
+### Problema atual
 
-**Arquivo:** `src/pages/Dashboard.tsx`
+O `PhotoUploader` limpa fotos concluidas apos 2 segundos (linha 382-384). Na pagina `DeliverCreate`, apenas um contador e exibido.
 
-Substituir o `<h1>` com texto "Gallery Select" / "Gallery Transfer" por uma tag `<img>` importada como modulo ES6. A imagem tera altura fixa (~40px) com `object-contain` para manter proporcao.
+### Solucao
 
----
+Criar componente `DeliverPhotoManager` que:
+- Recebe `galleryId` e busca fotos do Supabase (`galeria_fotos`) em tempo real
+- Exibe grid responsivo largo (3-5 colunas), com container expandido para `max-w-4xl`
+- Cada foto tem hover com:
+  - Botao excluir (X canto superior direito)
+  - Botao "Definir como capa" (icone estrela/imagem canto superior esquerdo)
+  - Foto de capa recebe borda visual dourada/primaria + badge
+- Capa salva em `configuracoes.coverPhotoId` via `updateGallery`
+- `PhotoUploader` fica acima do grid para novos uploads
+- Apos upload completar, grid re-busca fotos automaticamente (via `refreshKey`)
+- Exclusao chama `delete-photos` edge function + remove do banco
 
-## 2. Thumbnail da primeira foto no card Select
+### Arquivo novo
+- `src/components/deliver/DeliverPhotoManager.tsx`
 
-### 2.1 Buscar primeira foto na query
+### Arquivos modificados
+- `src/pages/DeliverCreate.tsx` -- Integrar no Step 2, expandir container de `max-w-2xl` para `max-w-4xl` apenas no step 2
+- `src/pages/ClientDeliverGallery.tsx` -- Usar `coverPhotoId` para selecionar foto de capa do Hero
 
-**Arquivo:** `src/hooks/useSupabaseGalleries.ts`
+### Detalhes tecnicos
 
-Alterar a query de listagem para incluir a primeira foto de cada galeria:
-
+**DeliverPhotoManager -- busca de fotos:**
 ```text
-.select('*, galeria_fotos(storage_key)')
+supabase.from('galeria_fotos')
+  .select('id, storage_key, original_filename, width, height, preview_path, thumb_path')
+  .eq('galeria_id', galleryId)
+  .order('created_at')
 ```
 
-Com parametro para limitar a 1 foto por galeria. Como o Supabase JS suporta nested selects com limit, usaremos:
-
+**Grid layout:**
 ```text
-.select('*, galeria_fotos!galeria_fotos_galeria_id_fkey(storage_key)')
+grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3
 ```
 
-Na funcao `transformGaleria`, extrair o `storage_key` da primeira foto e expor como campo `firstPhotoKey` na interface `Galeria`.
+Cada item: `aspect-square` com `object-cover`, overlay escuro no hover com botoes.
 
-### 2.2 Passar para o Dashboard
-
-**Arquivo:** `src/pages/Dashboard.tsx`
-
-No `transformSupabaseToLocal`, mapear `galeria.firstPhotoKey` para o objeto da galeria para que o `GalleryCard` tenha acesso.
-
-### 2.3 Renderizar thumbnail no card
-
-**Arquivo:** `src/components/GalleryCard.tsx`
-
-Adicionar uma prop `thumbnailUrl?: string` ao card. Se presente, renderizar uma imagem quadrada (~56px) no lado esquerdo do card, sem bordas nem margem extra. O texto e informacoes ficam a direita da thumbnail.
-
-Layout:
-
+**Cover photo no ClientDeliverGallery (linha 85):**
 ```text
-+--+-----------------------------------------------+
-|  | Nome da Sessao              Status   [...]     |
-|  | Cliente                                        |
-|  | 8/20 +2                     13 de fev           |
-+--+-----------------------------------------------+
+// Antes: sempre photos[0]
+// Depois:
+const coverPhotoId = gallery.settings?.coverPhotoId;
+const coverPhoto = coverPhotoId
+  ? photos.find(p => p.id === coverPhotoId) || photos[0]
+  : photos[0];
 ```
-
-Se nao houver thumbnail, o card continua sem imagem (apenas texto).
 
 ---
 
-## 3. Acoes do menu de tres pontos
+## 2. Selecao de fonte para titulo
 
-### 3.1 Select cards
+Adicionar `FontSelect` na etapa 1 (Dados) do `DeliverCreate`, replicando a logica do `GalleryCreate`:
 
-**Arquivo:** `src/pages/Dashboard.tsx`
+### Arquivo modificado
+- `src/pages/DeliverCreate.tsx`
 
-Atualizar os callbacks passados ao `GalleryCard`:
+### Detalhes
 
-- **Editar**: `navigate(\`/gallery/\${gallery.id}/edit\`)` -- leva para edicao direta
-- **Compartilhar**: abrir `SendGalleryModal` com os dados da galeria
-- **Excluir**: abrir `DeleteGalleryDialog` para confirmar e excluir
-
-Para isso, o Dashboard precisara:
-- Importar `SendGalleryModal` e `DeleteGalleryDialog`
-- Estado para controlar qual galeria esta selecionada para compartilhar/excluir
-- Buscar `useSettings()` para passar ao `SendGalleryModal`
-- Usar `deleteGallery` do `useSupabaseGalleries` para a exclusao
-- Buscar os dados completos da `Galeria` (do Supabase) para o modal de compartilhamento
-
-### 3.2 Transfer cards
-
-**Arquivo:** `src/pages/Dashboard.tsx`
-
-Mesma logica:
-- **Editar**: `navigate(\`/deliver/\${gallery.id}\`)` -- pagina de gerenciamento
-- **Compartilhar**: abrir `SendGalleryModal`
-- **Excluir**: abrir `DeleteGalleryDialog`
+- Novos estados: `sessionFont` (default de `settings.lastSessionFont` ou `'playfair'`) e `titleCaseMode` (default `'normal'`)
+- Componente `FontSelect` abaixo do campo "Nome da sessao" com `previewText={sessionName}`
+- Na criacao da galeria, incluir no `configuracoes`: `sessionFont` e `titleCaseMode`
+- Na publicacao, salvar `lastSessionFont` no settings
 
 ---
 
-## Arquivos modificados
+## 3. Suporte a temas personalizados
+
+### Na criacao (DeliverCreate)
+
+Replicar a UI de tema do `GalleryCreate` (linhas 1519-1562):
+- Novos estados: `selectedThemeId` e `clientMode` ('light' | 'dark')
+- Inicializacao de `settings.activeThemeId` e `settings.clientTheme`
+- Se fotografo tem tema custom (`settings.themeType === 'custom'`), exibir preview das cores + toggle claro/escuro
+- Salvar `themeId` e `clientMode` no `configuracoes` da galeria
+
+### Nas telas do cliente (ClientDeliverGallery + sub-componentes)
+
+O backend (`gallery-access`) ja retorna `theme` e `clientMode` para galerias de entrega. Porem `ClientDeliverGallery` e seus componentes usam cores fixas (`bg-black text-white`).
+
+Mudancas:
+- `ClientDeliverGallery`: calcular `isDark`, `bgColor`, `textColor`, `primaryColor` a partir de `data.theme` e `data.clientMode`. Aplicar como style inline no container raiz e passar como props.
+- `DeliverHero`: receber `isDark` e ajustar overlay (mais claro em modo light)
+- `DeliverHeader`: substituir `bg-black/80` por cor dinamica baseada no tema
+- `DeliverPhotoGrid`: substituir `bg-black` por fundo dinamico
+
+### Arquivos modificados
+- `src/pages/DeliverCreate.tsx` -- estados de tema, UI de selecao, salvar no configuracoes
+- `src/pages/ClientDeliverGallery.tsx` -- calcular e aplicar cores do tema
+- `src/components/deliver/DeliverHero.tsx` -- receber props de tema
+- `src/components/deliver/DeliverHeader.tsx` -- cores dinamicas
+- `src/components/deliver/DeliverPhotoGrid.tsx` -- fundo dinamico
+
+### Logica de cores
+
+```text
+const isDark = data.clientMode === 'dark' ||
+  (data.theme?.backgroundMode === 'dark' && data.clientMode !== 'light');
+
+const bgColor = isDark ? '#1C1917' : '#FAF9F7';
+const textColor = isDark ? '#F5F5F4' : '#2D2A26';
+const primaryColor = data.theme?.primaryColor || (isDark ? '#FFFFFF' : '#1C1917');
+```
+
+---
+
+## Arquivos modificados (resumo)
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/assets/gallery-select-logo.png` | Novo -- logo Select |
-| `src/assets/gallery-transfer-logo.png` | Novo -- logo Transfer |
-| `src/pages/Dashboard.tsx` | Logos como imagem, acoes do menu (share modal, delete dialog), passar thumbnailUrl |
-| `src/components/GalleryCard.tsx` | Adicionar thumbnail a esquerda do card |
-| `src/hooks/useSupabaseGalleries.ts` | Incluir primeira foto na query de listagem |
+| `src/components/deliver/DeliverPhotoManager.tsx` | **Novo** -- Grid de fotos com delete e selecao de capa |
+| `src/pages/DeliverCreate.tsx` | FontSelect, tema, container expandido, photo manager |
+| `src/pages/ClientDeliverGallery.tsx` | Cover photo por ID, aplicar tema dinamico |
+| `src/components/deliver/DeliverHero.tsx` | Props de tema (isDark, cores) |
+| `src/components/deliver/DeliverHeader.tsx` | Cores dinamicas do tema |
+| `src/components/deliver/DeliverPhotoGrid.tsx` | Fundo dinamico baseado no tema |
 
 ---
 
-## Detalhes tecnicos
+## Sequencia de implementacao
 
-### Query com primeira foto
-
-```text
-const { data, error } = await supabase
-  .from('galerias')
-  .select('*, galeria_fotos(storage_key)')
-  .order('created_at', { ascending: false });
-```
-
-Na transformacao, pegar `row.galeria_fotos?.[0]?.storage_key` como `firstPhotoKey`.
-
-Nota: o Supabase retorna TODAS as fotos no nested select sem um `.limit()` no nested. Para evitar trazer todas, usaremos uma abordagem pragmatica: buscar apenas o `storage_key` (campo leve) e usar apenas o primeiro resultado no frontend. Alternativa: usar uma view ou RPC no banco.
-
-### Thumbnail URL no card
-
-```text
-const thumbnailUrl = gallery.firstPhotoKey
-  ? `${R2_PUBLIC_URL}/${gallery.firstPhotoKey}`
-  : undefined;
-```
-
-Usando `getDisplayUrl()` de `src/lib/photoUrl.ts`.
-
-### Estado de share/delete no Dashboard
-
-```text
-const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
-const [deleteGalleryId, setDeleteGalleryId] = useState<string | null>(null);
-
-// Para o SendGalleryModal, precisamos da Galeria original do Supabase
-const shareGaleria = supabaseGalleries.find(g => g.id === shareGalleryId);
-const deleteGallery = allGalleries.find(g => g.id === deleteGalleryId);
-```
-
-### GalleryCard com thumbnail
-
-Nova prop e layout horizontal com `flex`:
-
-```text
-<div className="flex gap-3">
-  {thumbnailUrl && (
-    <div className="w-14 h-14 rounded-md overflow-hidden flex-shrink-0">
-      <img src={thumbnailUrl} className="w-full h-full object-cover" />
-    </div>
-  )}
-  <div className="flex-1 min-w-0">
-    {/* conteudo existente */}
-  </div>
-</div>
-```
-
+1. Criar `DeliverPhotoManager` (grid + delete + capa)
+2. Integrar no `DeliverCreate` step 2 com container expandido
+3. Adicionar FontSelect no step 1
+4. Adicionar selecao de tema no step 1
+5. Salvar font + theme + coverPhotoId no configuracoes
+6. Atualizar `ClientDeliverGallery` para usar coverPhotoId
+7. Aplicar tema dinamico nos componentes do cliente Transfer
