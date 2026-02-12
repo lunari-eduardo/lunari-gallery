@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 import { TitleCaseMode } from '@/types/gallery';
 import { applyTitleCase } from '@/lib/textTransform';
@@ -49,18 +48,16 @@ export function PasswordScreen({
       )}
       style={themeStyles}
     >
-      {/* Header */}
-      <header className="flex items-center justify-center p-4 border-b border-border/50">
-        {studioLogo ? (
+      {/* Header - only show if photographer has a logo */}
+      {studioLogo && (
+        <header className="flex items-center justify-center p-4 border-b border-border/50">
           <img 
             src={studioLogo} 
             alt={studioName || 'Studio'} 
             className="h-[150px] sm:h-[150px] md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain"
           />
-        ) : (
-          <Logo size="sm" />
-        )}
-      </header>
+        </header>
+      )}
 
       {/* Content */}
       <main className="flex-1 flex items-center justify-center p-6">

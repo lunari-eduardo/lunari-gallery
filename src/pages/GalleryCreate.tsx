@@ -1038,24 +1038,26 @@ export default function GalleryCreate() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
-              <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={e => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
-            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
+                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={e => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
+              </div>
 
-            {/* Deadline - moved here from Configurações */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                <Label>Prazo de Seleção *</Label>
+              {/* Deadline */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <Label>Prazo de Seleção *</Label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Input type="number" min={1} max={90} value={customDays} onChange={e => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
+                  <span className="text-muted-foreground">dias</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Padrão: {settings.defaultExpirationDays || 10} dias
+                </p>
               </div>
-              <div className="flex items-center gap-3">
-                <Input type="number" min={1} max={90} value={customDays} onChange={e => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
-                <span className="text-muted-foreground">dias</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Configuração padrão: {settings.defaultExpirationDays || 10} dias
-              </p>
             </div>
             
             <div className="space-y-2">

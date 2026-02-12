@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Check, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { Lightbox } from '@/components/Lightbox';
 import { downloadAllPhotos, DownloadablePhoto } from '@/lib/downloadUtils';
@@ -124,14 +123,12 @@ export function FinalizedPreviewScreen({
       {/* Header com logo */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
         <div className="flex items-center justify-center px-4 py-4">
-          {studioLogoUrl ? (
+          {studioLogoUrl && (
             <img 
               src={studioLogoUrl} 
               alt={studioName || 'Logo do estúdio'} 
-              className="h-12 sm:h-14 md:h-16 max-w-[200px] sm:max-w-[280px] object-contain" 
+              className="h-[100px] sm:h-[120px] md:h-[150px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] object-contain" 
             />
-          ) : (
-            <Logo size="sm" variant="gallery" />
           )}
         </div>
       </header>
