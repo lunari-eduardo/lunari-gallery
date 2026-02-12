@@ -28,7 +28,7 @@ export function GalleryCard({ gallery, onClick, onEdit, onShare, onDelete }: Gal
   return (
     <div 
       className={cn(
-        'lunari-card p-4 cursor-pointer group relative',
+        'lunari-card p-4 cursor-pointer group relative hover:-translate-y-0.5 hover:shadow-md transition-all duration-200',
         isNearDeadline && 'ring-1 ring-warning/40',
         isExpired && 'ring-1 ring-destructive/40 opacity-75'
       )}
@@ -37,7 +37,7 @@ export function GalleryCard({ gallery, onClick, onEdit, onShare, onDelete }: Gal
       {/* Row 1: Name + Status + Menu */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold truncate leading-tight">
+          <h3 className="text-base font-semibold truncate leading-tight">
             {gallery.sessionName}
           </h3>
         </div>
