@@ -31,7 +31,7 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onSh
   return (
     <div
       className={cn(
-        'lunari-card overflow-hidden cursor-pointer group',
+        'lunari-card overflow-hidden cursor-pointer group hover:-translate-y-0.5 hover:shadow-md transition-all duration-200',
         isExpired && 'ring-1 ring-destructive/40 opacity-75'
       )}
       onClick={onClick}
@@ -96,7 +96,7 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onSh
       <div className="p-5 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold truncate leading-tight">
+            <h3 className="text-base font-semibold truncate leading-tight">
               {gallery.sessionName}
             </h3>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">

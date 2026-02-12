@@ -112,8 +112,8 @@ export function Layout({ children }: LayoutProps) {
                         >
                           <Send className="h-4 w-4 text-primary" />
                           <div>
-                            <p>Entrega</p>
-                            <p className="text-xs text-muted-foreground font-normal">Download direto</p>
+                          <p>Transfer</p>
+                            <p className="text-xs text-muted-foreground font-normal">Entrega final</p>
                           </div>
                         </Link>
                       </div>
@@ -216,7 +216,7 @@ export function Layout({ children }: LayoutProps) {
                         className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                       >
                         <Send className="h-5 w-5" />
-                        Nova Entrega
+                        Nova Transfer
                       </Link>
                     </div>
                   );

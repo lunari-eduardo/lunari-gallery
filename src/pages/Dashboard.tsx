@@ -165,14 +165,20 @@ export default function Dashboard() {
     expired: deliverGalleries.filter(g => g.status === 'expired').length,
   };
 
+  const title = activeTab === 'select' ? 'Gallery Select' : 'Gallery Transfer';
+  const subtitle = activeTab === 'select'
+    ? 'Gerencie as escolhas dos seus clientes.'
+    : 'Gerencie suas entregas finais.';
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="max-w-[1100px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl md:text-4xl font-semibold">
-            Suas Galerias
+            {title}
           </h1>
+          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
         </div>
         <Popover>
           <PopoverTrigger asChild>
@@ -199,8 +205,8 @@ export default function Dashboard() {
               >
                 <Send className="h-4 w-4 text-primary shrink-0" />
                 <div>
-                  <p>Entrega</p>
-                  <p className="text-xs text-muted-foreground font-normal">Download direto</p>
+                  <p>Transfer</p>
+                  <p className="text-xs text-muted-foreground font-normal">Entrega final de fotos</p>
                 </div>
               </button>
             </div>
@@ -221,7 +227,7 @@ export default function Dashboard() {
             value="deliver"
             className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2.5 pt-1 text-muted-foreground data-[state=active]:text-foreground font-medium"
           >
-            Deliver
+            Transfer
           </TabsTrigger>
         </TabsList>
 
@@ -262,7 +268,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Gallery Grid */}
+          {/* Gallery List - vertical */}
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -275,7 +281,7 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredSelectGalleries.length > 0 ? (
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="flex flex-col gap-3">
               {filteredSelectGalleries.map((gallery) => (
                 <GalleryCard
                   key={gallery.id}
@@ -304,11 +310,11 @@ export default function Dashboard() {
           )}
         </TabsContent>
 
-        {/* ===== DELIVER TAB ===== */}
+        {/* ===== TRANSFER TAB ===== */}
         <TabsContent value="deliver" className="space-y-5 mt-4">
           {/* Inline metrics */}
           <p className="text-sm text-muted-foreground">
-            {deliverStats.total} entregas · {deliverStats.published} publicadas · {deliverStats.expired} expiradas
+            {deliverStats.total} transfers · {deliverStats.published} publicadas · {deliverStats.expired} expiradas
           </p>
 
           {/* Filters - segmented control */}
@@ -341,7 +347,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Deliver Gallery Grid */}
+          {/* Transfer Gallery Grid */}
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -354,7 +360,7 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredDeliverGalleries.length > 0 ? (
-            <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {filteredDeliverGalleries.map((gallery) => (
                 <DeliverGalleryCard
                   key={gallery.id}
@@ -372,13 +378,13 @@ export default function Dashboard() {
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Send className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="font-display text-xl font-semibold mb-2">Nenhuma galeria de entrega</h3>
+              <h3 className="font-display text-xl font-semibold mb-2">Nenhuma galeria de transfer</h3>
               <p className="text-muted-foreground mb-6">
-                Você ainda não criou nenhuma galeria de entrega. Use esse modo para entregar as fotos finais aos seus clientes.
+                Use esse modo para entregar as fotos finais aos seus clientes.
               </p>
               <Button onClick={() => navigate('/deliver/new')} variant="terracotta">
                 <Plus className="h-4 w-4 mr-2" />
-                Criar galeria de entrega
+                Criar galeria de transfer
               </Button>
             </div>
           )}
