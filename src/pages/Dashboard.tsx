@@ -1,14 +1,27 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send } from 'lucide-react';
+import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { GalleryCard } from '@/components/GalleryCard';
 import { DeliverGalleryCard } from '@/components/DeliverGalleryCard';
+import { SendGalleryModal } from '@/components/SendGalleryModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useSupabaseGalleries, Galeria } from '@/hooks/useSupabaseGalleries';
+import { useSettings } from '@/hooks/useSettings';
 import { GalleryStatus, Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
+import { getDisplayUrl } from '@/lib/photoUrl';
 import {
   Popover,
   PopoverContent,
@@ -16,6 +29,9 @@ import {
 } from '@/components/ui/popover';
 import { clearGalleryStorage } from '@/lib/storage';
 import { isPast } from 'date-fns';
+
+import gallerySelectLogo from '@/assets/gallery-select-logo.png';
+import galleryTransferLogo from '@/assets/gallery-transfer-logo.png';
 
 const selectStatusFilters: { value: GalleryStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Todas' },
@@ -57,7 +73,7 @@ function mapSupabaseStatus(status: string): GalleryStatus {
 }
 
 // Transform Supabase gallery to local format for display
-function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao' | 'entrega'; totalFotos: number } {
+function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao' | 'entrega'; totalFotos: number; firstPhotoKey: string | null } {
   let status = mapSupabaseStatus(galeria.status);
   
   const hasDeadline = galeria.prazoSelecao !== null;
@@ -106,6 +122,7 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao'
     extraTotal: galeria.valorExtras,
     tipo: galeria.tipo,
     totalFotos: galeria.totalFotos,
+    firstPhotoKey: galeria.firstPhotoKey,
   };
 }
 
@@ -121,7 +138,16 @@ export default function Dashboard() {
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
   
-  const { galleries: supabaseGalleries, isLoading, error } = useSupabaseGalleries();
+  const { galleries: supabaseGalleries, isLoading, error, deleteGallery } = useSupabaseGalleries();
+  const { settings } = useSettings();
+
+  // Share & Delete modal state
+  const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
+  const [deleteGalleryId, setDeleteGalleryId] = useState<string | null>(null);
+
+  const shareGaleria = useMemo(() => 
+    supabaseGalleries.find(g => g.id === shareGalleryId) || null
+  , [supabaseGalleries, shareGalleryId]);
 
   useEffect(() => {
     clearGalleryStorage();
@@ -165,7 +191,14 @@ export default function Dashboard() {
     expired: deliverGalleries.filter(g => g.status === 'expired').length,
   };
 
-  const title = activeTab === 'select' ? 'Gallery Select' : 'Gallery Transfer';
+  const deleteTarget = allGalleries.find(g => g.id === deleteGalleryId);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteGalleryId) return;
+    await deleteGallery(deleteGalleryId);
+    setDeleteGalleryId(null);
+  };
+
   const subtitle = activeTab === 'select'
     ? 'Gerencie as escolhas dos seus clientes.'
     : 'Gerencie suas entregas finais.';
@@ -175,9 +208,11 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl md:text-4xl font-semibold">
-            {title}
-          </h1>
+          <img 
+            src={activeTab === 'select' ? gallerySelectLogo : galleryTransferLogo} 
+            alt={activeTab === 'select' ? 'Gallery Select' : 'Gallery Transfer'}
+            className="h-10 object-contain"
+          />
           <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
         </div>
         <Popover>
@@ -214,7 +249,7 @@ export default function Dashboard() {
         </Popover>
       </div>
 
-      {/* Tabs - underline style */}
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="bg-transparent p-0 h-auto rounded-none border-b border-border w-full justify-start">
           <TabsTrigger 
@@ -233,12 +268,10 @@ export default function Dashboard() {
 
         {/* ===== SELECT TAB ===== */}
         <TabsContent value="select" className="space-y-5 mt-4">
-          {/* Inline metrics */}
           <p className="text-sm text-muted-foreground">
             {selectStats.total} galerias · {selectStats.inProgress} em seleção · {selectStats.completed} concluídas · {selectStats.expired} expiradas
           </p>
 
-          {/* Filters - segmented control */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -268,7 +301,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Gallery List - vertical */}
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -286,10 +318,11 @@ export default function Dashboard() {
                 <GalleryCard
                   key={gallery.id}
                   gallery={gallery}
+                  thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
                   onClick={() => navigate(`/gallery/${gallery.id}`)}
-                  onEdit={() => navigate(`/gallery/${gallery.id}`)}
-                  onShare={() => navigate(`/gallery/${gallery.id}`)}
-                  onDelete={() => navigate(`/gallery/${gallery.id}`)}
+                  onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
+                  onShare={() => setShareGalleryId(gallery.id)}
+                  onDelete={() => setDeleteGalleryId(gallery.id)}
                 />
               ))}
             </div>
@@ -312,12 +345,10 @@ export default function Dashboard() {
 
         {/* ===== TRANSFER TAB ===== */}
         <TabsContent value="deliver" className="space-y-5 mt-4">
-          {/* Inline metrics */}
           <p className="text-sm text-muted-foreground">
             {deliverStats.total} transfers · {deliverStats.published} publicadas · {deliverStats.expired} expiradas
           </p>
 
-          {/* Filters - segmented control */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -347,7 +378,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Transfer Gallery Grid */}
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -368,8 +398,8 @@ export default function Dashboard() {
                   totalPhotos={gallery.totalFotos}
                   onClick={() => navigate(`/deliver/${gallery.id}`)}
                   onEdit={() => navigate(`/deliver/${gallery.id}`)}
-                  onShare={() => navigate(`/deliver/${gallery.id}`)}
-                  onDelete={() => navigate(`/deliver/${gallery.id}`)}
+                  onShare={() => setShareGalleryId(gallery.id)}
+                  onDelete={() => setDeleteGalleryId(gallery.id)}
                 />
               ))}
             </div>
@@ -390,6 +420,45 @@ export default function Dashboard() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Share Modal */}
+      {shareGaleria && (
+        <SendGalleryModal
+          isOpen={!!shareGalleryId}
+          onOpenChange={(open) => !open && setShareGalleryId(null)}
+          gallery={shareGaleria}
+          settings={settings}
+        />
+      )}
+
+      {/* Delete Dialog */}
+      <AlertDialog open={!!deleteGalleryId} onOpenChange={(open) => !open && setDeleteGalleryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir galeria?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>"{deleteTarget?.sessionName}"</strong>?
+              <br /><br />
+              <span className="text-destructive font-medium">
+                Esta ação é irreversível. Todas as fotos serão removidas permanentemente.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteConfirm();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
