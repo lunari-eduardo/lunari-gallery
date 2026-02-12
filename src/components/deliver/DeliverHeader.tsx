@@ -7,8 +7,6 @@ import { ptBR } from 'date-fns/locale';
 
 interface DeliverHeaderProps {
   sessionName: string;
-  studioName?: string;
-  studioLogoUrl?: string;
   photoCount: number;
   expirationDate?: string | null;
   sessionFont?: string;
@@ -21,7 +19,7 @@ interface DeliverHeaderProps {
 }
 
 export function DeliverHeader({
-  sessionName, studioName, studioLogoUrl, photoCount,
+  sessionName, photoCount,
   expirationDate, sessionFont, titleCaseMode = 'normal',
   onDownloadAll, isDownloading,
   isDark = true, bgColor, primaryColor,
@@ -44,16 +42,10 @@ export function DeliverHeader({
       }}
     >
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Left: logo + session name */}
-        <div className="flex items-center gap-3 min-w-0">
-          {studioLogoUrl ? (
-            <img src={studioLogoUrl} alt={studioName || ''} className="h-8 w-auto object-contain" />
-          ) : studioName ? (
-            <span className="text-sm font-medium tracking-wide" style={{ color: mutedText }}>{studioName}</span>
-          ) : null}
-          <span className="hidden sm:inline" style={{ color: mutedText }}>|</span>
+        {/* Left: session name only */}
+        <div className="min-w-0">
           <h2
-            className="text-sm md:text-base font-light truncate"
+            className="text-lg md:text-xl font-light truncate"
             style={{ color: headerText, ...(sessionFont ? { fontFamily: sessionFont } : {}) }}
           >
             {displayName}

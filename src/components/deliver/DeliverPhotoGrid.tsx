@@ -23,7 +23,7 @@ interface DeliverPhotoGridProps {
 
 export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: DeliverPhotoGridProps) {
   return (
-    <div className="min-h-screen px-2 sm:px-4 py-6" style={bgColor ? { backgroundColor: bgColor } : undefined}>
+    <div className="min-h-screen px-3 sm:px-6 lg:px-8 py-8" style={bgColor ? { backgroundColor: bgColor } : undefined}>
       <MasonryGrid className="max-w-7xl mx-auto">
         {photos.map((photo, index) => {
           const paths: PhotoPaths = {
@@ -37,22 +37,22 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: 
 
           return (
             <MasonryItem key={photo.id}>
-              <div className="group relative cursor-pointer overflow-hidden rounded-sm">
+              <div className="group relative cursor-pointer overflow-hidden">
                 <img
                   src={url}
                   alt={photo.originalFilename}
                   loading="lazy"
-                  className="w-full h-auto block transition-transform duration-500 group-hover:scale-[1.02]"
+                  className="w-full h-auto block transition-transform duration-700 group-hover:scale-[1.01]"
                   onClick={() => onPhotoClick(index)}
                 />
-                {/* Download overlay on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                {/* Subtle gradient overlay on hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onDownload(photo);
                   }}
-                  className="absolute bottom-3 right-3 p-2 bg-white/90 text-black rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:scale-110"
+                  className="absolute bottom-3 right-3 p-2 backdrop-blur-sm bg-white/20 text-white rounded-sm opacity-0 group-hover:opacity-100 transition-all duration-500 hover:bg-white/30"
                   title="Baixar foto"
                 >
                   <Download className="w-4 h-4" />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Palette, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -99,18 +99,17 @@ export default function DeliverCreate() {
         galleryPassword: galleryPermission === 'private' ? galleryPassword : undefined,
         prazoSelecaoDias: expirationDays,
         tipo: 'entrega',
-        configuracoes: {
-          imageResizeOption: 2560,
-          allowDownload: true,
-          allowComments: false,
-          allowExtraPhotos: false,
-          watermark: { type: 'none', opacity: 0, position: 'center' },
-          watermarkDisplay: 'none',
-          sessionFont,
-          titleCaseMode,
-          themeId: settings?.activeThemeId || undefined,
-          clientMode,
-        },
+          configuracoes: {
+            imageResizeOption: 2560,
+            allowDownload: true,
+            allowComments: false,
+            allowExtraPhotos: false,
+            watermark: { type: 'none', opacity: 0, position: 'center' },
+            watermarkDisplay: 'none',
+            sessionFont,
+            titleCaseMode,
+            clientMode,
+          },
       });
       setSupabaseGalleryId(result.id);
       return result.id;
@@ -166,7 +165,6 @@ export default function DeliverCreate() {
             sessionFont,
             titleCaseMode,
             coverPhotoId: coverPhotoId || undefined,
-            themeId: settings?.activeThemeId || undefined,
             clientMode,
           },
         },
@@ -217,8 +215,7 @@ export default function DeliverCreate() {
     }
   };
 
-  // Check if custom theme is available
-  const hasCustomTheme = settings?.themeType === 'custom' && settings?.customTheme;
+  // Theme: only light/dark mode (no custom theme colors)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -385,57 +382,38 @@ export default function DeliverCreate() {
               </div>
             </div>
 
-            {/* Theme section */}
-            {hasCustomTheme && (
-              <div className="lunari-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Palette className="h-4 w-4 text-primary" />
-                  <h3 className="font-medium text-sm">Aparência da Galeria</h3>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Usando tema personalizado: {settings!.customTheme!.name}
-                </p>
-
-                {/* Preview of custom theme */}
-                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                  <div className="flex gap-1.5">
-                    <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: settings!.customTheme!.primaryColor }} title="Cor primária" />
-                    <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: settings!.customTheme!.accentColor }} title="Cor de destaque" />
-                    <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: settings!.customTheme!.emphasisColor }} title="Cor de ênfase" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    Fundo {settings!.customTheme!.backgroundMode === 'dark' ? 'escuro' : 'claro'}
-                  </span>
-                </div>
-
-                {/* Client Mode Toggle */}
-                <div className="flex items-center gap-3 pt-2">
-                  <Label className="text-sm">Modo para esta galeria:</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={clientMode === 'light' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setClientMode('light')}
-                      className="gap-1"
-                    >
-                      <Sun className="h-3.5 w-3.5" />
-                      Claro
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={clientMode === 'dark' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setClientMode('dark')}
-                      className="gap-1"
-                    >
-                      <Moon className="h-3.5 w-3.5" />
-                      Escuro
-                    </Button>
-                  </div>
+            {/* Theme section - simple light/dark toggle */}
+            <div className="lunari-card p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                {clientMode === 'dark' ? <Moon className="h-4 w-4 text-primary" /> : <Sun className="h-4 w-4 text-primary" />}
+                <h3 className="font-medium text-sm">Aparência</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label className="text-sm">Modo:</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={clientMode === 'light' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setClientMode('light')}
+                    className="gap-1"
+                  >
+                    <Sun className="h-3.5 w-3.5" />
+                    Claro
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={clientMode === 'dark' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setClientMode('dark')}
+                    className="gap-1"
+                  >
+                    <Moon className="h-3.5 w-3.5" />
+                    Escuro
+                  </Button>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         )}
 

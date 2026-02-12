@@ -55,14 +55,11 @@ interface Props {
 export default function ClientDeliverGallery({ data }: Props) {
   const { gallery, studioSettings } = data;
 
-  // Theme calculations
-  const isDark = data.clientMode === 'dark' ||
-    (data.theme?.backgroundMode === 'dark' && data.clientMode !== 'light') ||
-    (!data.theme && !data.clientMode); // default to dark if no theme
-
+  // Theme: simple light/dark only
+  const isDark = data.clientMode === 'dark' || (!data.clientMode);
   const bgColor = isDark ? '#1C1917' : '#FAF9F7';
   const textColor = isDark ? '#F5F5F4' : '#2D2A26';
-  const primaryColor = data.theme?.primaryColor || (isDark ? '#FFFFFF' : '#1C1917');
+  const primaryColor = isDark ? '#FFFFFF' : '#1C1917';
 
   const [showWelcome, setShowWelcome] = useState(() => {
     const key = `deliver_welcome_${gallery.id}`;
@@ -161,8 +158,6 @@ export default function ClientDeliverGallery({ data }: Props) {
       <div id="deliver-gallery">
         <DeliverHeader
           sessionName={gallery.sessionName}
-          studioName={studioSettings?.studio_name}
-          studioLogoUrl={studioSettings?.studio_logo_url}
           photoCount={photos.length}
           expirationDate={gallery.expirationDate}
           sessionFont={sessionFont}
