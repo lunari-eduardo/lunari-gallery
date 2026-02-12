@@ -20,6 +20,7 @@ interface DeliverGalleryData {
     settings?: {
       sessionFont?: string;
       titleCaseMode?: TitleCaseMode;
+      coverPhotoId?: string;
     };
   };
   photos: Array<{
@@ -54,6 +55,15 @@ interface Props {
 export default function ClientDeliverGallery({ data }: Props) {
   const { gallery, studioSettings } = data;
 
+  // Theme calculations
+  const isDark = data.clientMode === 'dark' ||
+    (data.theme?.backgroundMode === 'dark' && data.clientMode !== 'light') ||
+    (!data.theme && !data.clientMode); // default to dark if no theme
+
+  const bgColor = isDark ? '#1C1917' : '#FAF9F7';
+  const textColor = isDark ? '#F5F5F4' : '#2D2A26';
+  const primaryColor = data.theme?.primaryColor || (isDark ? '#FFFFFF' : '#1C1917');
+
   const [showWelcome, setShowWelcome] = useState(() => {
     const key = `deliver_welcome_${gallery.id}`;
     return !sessionStorage.getItem(key) && !!gallery.welcomeMessage;
@@ -81,9 +91,14 @@ export default function ClientDeliverGallery({ data }: Props) {
     }));
   }, [data.photos]);
 
-  // Cover photo for hero
-  const coverPhoto: PhotoPaths | null = photos.length > 0
-    ? { storageKey: photos[0].storageKey, previewPath: photos[0].previewPath, width: photos[0].width, height: photos[0].height }
+  // Cover photo for hero - use coverPhotoId if set
+  const coverPhotoId = gallery.settings?.coverPhotoId;
+  const coverPhotoSource = coverPhotoId
+    ? photos.find(p => p.id === coverPhotoId) || photos[0]
+    : photos[0];
+
+  const coverPhoto: PhotoPaths | null = coverPhotoSource
+    ? { storageKey: coverPhotoSource.storageKey, previewPath: coverPhotoSource.previewPath, width: coverPhotoSource.width, height: coverPhotoSource.height }
     : null;
 
   // Set favicon
@@ -129,7 +144,7 @@ export default function ClientDeliverGallery({ data }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
       {/* Hero cover */}
       <DeliverHero
         coverPhoto={coverPhoto}
@@ -137,6 +152,8 @@ export default function ClientDeliverGallery({ data }: Props) {
         studioName={studioSettings?.studio_name}
         sessionFont={sessionFont}
         titleCaseMode={gallery.settings?.titleCaseMode}
+        isDark={isDark}
+        primaryColor={primaryColor}
         onEnter={() => setHeroEntered(true)}
       />
 
@@ -152,12 +169,16 @@ export default function ClientDeliverGallery({ data }: Props) {
           titleCaseMode={gallery.settings?.titleCaseMode}
           onDownloadAll={handleDownloadAll}
           isDownloading={isDownloading}
+          isDark={isDark}
+          bgColor={bgColor}
+          primaryColor={primaryColor}
         />
 
         <DeliverPhotoGrid
           photos={photos}
           onPhotoClick={(i) => setLightboxIndex(i)}
           onDownload={handleDownloadSingle}
+          bgColor={bgColor}
         />
       </div>
 

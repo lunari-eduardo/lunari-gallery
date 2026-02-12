@@ -9,10 +9,12 @@ interface DeliverHeroProps {
   studioName?: string;
   sessionFont?: string;
   titleCaseMode?: TitleCaseMode;
+  isDark?: boolean;
+  primaryColor?: string;
   onEnter: () => void;
 }
 
-export function DeliverHero({ coverPhoto, sessionName, studioName, sessionFont, titleCaseMode = 'normal', onEnter }: DeliverHeroProps) {
+export function DeliverHero({ coverPhoto, sessionName, studioName, sessionFont, titleCaseMode = 'normal', isDark = true, primaryColor, onEnter }: DeliverHeroProps) {
   const coverUrl = coverPhoto ? getPhotoUrl(coverPhoto, 'preview') : '/placeholder.svg';
   const displayName = applyTitleCase(sessionName, titleCaseMode);
 
@@ -24,6 +26,10 @@ export function DeliverHero({ coverPhoto, sessionName, studioName, sessionFont, 
     onEnter();
   };
 
+  const overlayGradient = isDark
+    ? 'from-black/40 via-black/20 to-black/60'
+    : 'from-black/30 via-black/10 to-black/40';
+
   return (
     <section className="relative h-screen w-full flex flex-col items-center justify-center overflow-hidden">
       {/* Background image */}
@@ -32,7 +38,7 @@ export function DeliverHero({ coverPhoto, sessionName, studioName, sessionFont, 
         style={{ backgroundImage: `url(${coverUrl})` }}
       />
       {/* Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+      <div className={`absolute inset-0 bg-gradient-to-b ${overlayGradient}`} />
 
       {/* Studio name top */}
       {studioName && (

@@ -54,6 +54,8 @@ export interface GaleriaConfiguracoes {
   titleCaseMode?: TitleCaseMode;
   // Internal notes (Deliver)
   notasInternas?: string;
+  // Cover photo for Deliver galleries
+  coverPhotoId?: string;
 }
 
 export interface Galeria {
