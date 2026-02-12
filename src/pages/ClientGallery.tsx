@@ -13,7 +13,6 @@ import {
   Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Logo } from '@/components/Logo';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
@@ -666,11 +665,8 @@ export default function ClientGallery() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Carregando galeria...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
       </div>
     );
   }
@@ -762,9 +758,6 @@ export default function ClientGallery() {
   if (galleryError || !gallery) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <header className="flex items-center justify-center p-4 border-b border-border/50">
-          <Logo size="sm" />
-        </header>
         
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md w-full text-center space-y-6">
@@ -927,14 +920,12 @@ export default function ClientGallery() {
       >
         <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
           <div className="flex items-center justify-center px-3 py-4">
-            {galleryResponse?.studioSettings?.studio_logo_url ? (
+            {galleryResponse?.studioSettings?.studio_logo_url && (
               <img 
                 src={galleryResponse.studioSettings.studio_logo_url} 
                 alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
                 className="h-10 max-w-[180px] object-contain"
               />
-            ) : (
-              <Logo size="sm" variant="gallery" />
             )}
           </div>
           <div className="text-center py-2 border-t border-border/30">
@@ -1068,17 +1059,15 @@ export default function ClientGallery() {
         )}
         style={themeStyles}
       >
-        <header className="flex items-center justify-center p-4 border-b border-border/50">
-          {galleryResponse?.studioSettings?.studio_logo_url ? (
+        {galleryResponse?.studioSettings?.studio_logo_url && (
+          <header className="flex items-center justify-center p-4 border-b border-border/50">
             <img 
               src={galleryResponse.studioSettings.studio_logo_url} 
               alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
               className="h-[150px] sm:h-[150px] md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain"
             />
-          ) : (
-            <Logo size="sm" variant="gallery" />
-          )}
-        </header>
+          </header>
+        )}
         
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md w-full text-center space-y-6 animate-slide-up">

@@ -1,5 +1,5 @@
 import { Gallery } from '@/types/gallery';
-import { Check, AlertCircle, TrendingDown } from 'lucide-react';
+import { Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas, formatFaixaDisplay, getFaixasFromRegras } from '@/lib/pricingUtils';
@@ -170,13 +170,6 @@ export function SelectionSummary({
               </span>
             </div>
             
-            {/* Show savings/discount indicator when progressive pricing applied */}
-            {economia !== undefined && economia > 0 && (
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-accent/20 text-accent-foreground text-sm">
-                <TrendingDown className="h-4 w-4 flex-shrink-0" />
-                <span>Economia: R$ {economia.toFixed(2)}</span>
-              </div>
-            )}
           </>
         )}
       </div>

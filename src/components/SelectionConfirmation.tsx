@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, TrendingDown, Loader2, Image } from 'lucide-react';
+import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, Loader2, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Gallery, GalleryPhoto } from '@/types/gallery';
 import { format } from 'date-fns';
@@ -96,9 +96,9 @@ export function SelectionConfirmation({
       <main className="flex-1 px-4 py-6 pb-28 overflow-y-auto">
         <div className="max-w-2xl mx-auto space-y-6">
           
-          {/* Selected Photos Section */}
+          {/* Selected Photos Count */}
           <div className="lunari-card overflow-hidden">
-            <div className="bg-primary/10 p-4 flex items-center gap-3 border-b border-border/50">
+            <div className="bg-primary/10 p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
                 <Image className="h-5 w-5 text-primary" />
               </div>
@@ -108,39 +108,6 @@ export function SelectionConfirmation({
                   {selectedCount} fotos • {gallery.includedPhotos} incluídas
                   {extraCount > 0 && <span className="text-primary font-medium"> • {extraCount} extras</span>}
                 </p>
-              </div>
-            </div>
-            
-            {/* Photos Grid - Scrollable */}
-            <div className="p-3 max-h-[280px] overflow-y-auto">
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
-                {selectedPhotos.map((photo, index) => (
-                  <div 
-                    key={photo.id} 
-                    className={cn(
-                      "relative aspect-square overflow-hidden rounded-md",
-                      index >= gallery.includedPhotos && "ring-2 ring-primary ring-inset"
-                    )}
-                  >
-                    <img
-                      src={photo.thumbnailUrl}
-                      alt={photo.filename}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                      <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                        <Check className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                    </div>
-                    {/* Extra badge */}
-                    {index >= gallery.includedPhotos && (
-                      <div className="absolute top-0.5 right-0.5 bg-primary text-primary-foreground text-[10px] px-1 rounded">
-                        Extra
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -250,13 +217,6 @@ export function SelectionConfirmation({
                   </div>
                 )}
                 
-                {/* Savings indicator for progressive pricing */}
-                {economia && economia > 0 && (
-                  <div className="flex items-center gap-2 mt-3 p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm">
-                    <TrendingDown className="h-4 w-4 flex-shrink-0" />
-                    <span>Você economizou R$ {economia.toFixed(2)}</span>
-                  </div>
-                )}
               </div>
             )}
 
