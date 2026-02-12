@@ -1,147 +1,168 @@
 
-# Transfer Gallery: Fotos Persistentes, Capa, Fonte e Temas
+
+# Refinamento Premium da Galeria Transfer (Cliente)
 
 ## Resumo
 
-Tres areas de mudanca na criacao de galerias Transfer:
+Quatro mudancas na experiencia do cliente Transfer:
 
-1. **Fotos persistentes apos upload** com grid grande, hover para excluir e selecionar como capa
-2. **Selecao de fonte** para titulo da galeria (mesma logica do Gallery Select)
-3. **Suporte a temas personalizados** (sistema/custom, claro/escuro) na criacao e nas telas do cliente
-
----
-
-## 1. Fotos persistentes com grid e acoes
-
-### Problema atual
-
-O `PhotoUploader` limpa fotos concluidas apos 2 segundos (linha 382-384). Na pagina `DeliverCreate`, apenas um contador e exibido.
-
-### Solucao
-
-Criar componente `DeliverPhotoManager` que:
-- Recebe `galleryId` e busca fotos do Supabase (`galeria_fotos`) em tempo real
-- Exibe grid responsivo largo (3-5 colunas), com container expandido para `max-w-4xl`
-- Cada foto tem hover com:
-  - Botao excluir (X canto superior direito)
-  - Botao "Definir como capa" (icone estrela/imagem canto superior esquerdo)
-  - Foto de capa recebe borda visual dourada/primaria + badge
-- Capa salva em `configuracoes.coverPhotoId` via `updateGallery`
-- `PhotoUploader` fica acima do grid para novos uploads
-- Apos upload completar, grid re-busca fotos automaticamente (via `refreshKey`)
-- Exclusao chama `delete-photos` edge function + remove do banco
-
-### Arquivo novo
-- `src/components/deliver/DeliverPhotoManager.tsx`
-
-### Arquivos modificados
-- `src/pages/DeliverCreate.tsx` -- Integrar no Step 2, expandir container de `max-w-2xl` para `max-w-4xl` apenas no step 2
-- `src/pages/ClientDeliverGallery.tsx` -- Usar `coverPhotoId` para selecionar foto de capa do Hero
-
-### Detalhes tecnicos
-
-**DeliverPhotoManager -- busca de fotos:**
-```text
-supabase.from('galeria_fotos')
-  .select('id, storage_key, original_filename, width, height, preview_path, thumb_path')
-  .eq('galeria_id', galleryId)
-  .order('created_at')
-```
-
-**Grid layout:**
-```text
-grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3
-```
-
-Cada item: `aspect-square` com `object-cover`, overlay escuro no hover com botoes.
-
-**Cover photo no ClientDeliverGallery (linha 85):**
-```text
-// Antes: sempre photos[0]
-// Depois:
-const coverPhotoId = gallery.settings?.coverPhotoId;
-const coverPhoto = coverPhotoId
-  ? photos.find(p => p.id === coverPhotoId) || photos[0]
-  : photos[0];
-```
+1. **Remover tema personalizado de cores** -- manter apenas toggle Claro/Escuro
+2. **Header: remover logo, aumentar nome da galeria**
+3. **Grid: fotos maiores com bordas retas** (sem rounded)
+4. **Aparencia premium geral** -- espacamento, tipografia, transicoes refinadas
 
 ---
 
-## 2. Selecao de fonte para titulo
+## 1. Remover tema personalizado -- apenas Claro/Escuro
 
-Adicionar `FontSelect` na etapa 1 (Dados) do `DeliverCreate`, replicando a logica do `GalleryCreate`:
+**Arquivo:** `src/pages/DeliverCreate.tsx`
 
-### Arquivo modificado
-- `src/pages/DeliverCreate.tsx`
-
-### Detalhes
-
-- Novos estados: `sessionFont` (default de `settings.lastSessionFont` ou `'playfair'`) e `titleCaseMode` (default `'normal'`)
-- Componente `FontSelect` abaixo do campo "Nome da sessao" com `previewText={sessionName}`
-- Na criacao da galeria, incluir no `configuracoes`: `sessionFont` e `titleCaseMode`
-- Na publicacao, salvar `lastSessionFont` no settings
-
----
-
-## 3. Suporte a temas personalizados
-
-### Na criacao (DeliverCreate)
-
-Replicar a UI de tema do `GalleryCreate` (linhas 1519-1562):
-- Novos estados: `selectedThemeId` e `clientMode` ('light' | 'dark')
-- Inicializacao de `settings.activeThemeId` e `settings.clientTheme`
-- Se fotografo tem tema custom (`settings.themeType === 'custom'`), exibir preview das cores + toggle claro/escuro
-- Salvar `themeId` e `clientMode` no `configuracoes` da galeria
-
-### Nas telas do cliente (ClientDeliverGallery + sub-componentes)
-
-O backend (`gallery-access`) ja retorna `theme` e `clientMode` para galerias de entrega. Porem `ClientDeliverGallery` e seus componentes usam cores fixas (`bg-black text-white`).
-
-Mudancas:
-- `ClientDeliverGallery`: calcular `isDark`, `bgColor`, `textColor`, `primaryColor` a partir de `data.theme` e `data.clientMode`. Aplicar como style inline no container raiz e passar como props.
-- `DeliverHero`: receber `isDark` e ajustar overlay (mais claro em modo light)
-- `DeliverHeader`: substituir `bg-black/80` por cor dinamica baseada no tema
-- `DeliverPhotoGrid`: substituir `bg-black` por fundo dinamico
-
-### Arquivos modificados
-- `src/pages/DeliverCreate.tsx` -- estados de tema, UI de selecao, salvar no configuracoes
-- `src/pages/ClientDeliverGallery.tsx` -- calcular e aplicar cores do tema
-- `src/components/deliver/DeliverHero.tsx` -- receber props de tema
-- `src/components/deliver/DeliverHeader.tsx` -- cores dinamicas
-- `src/components/deliver/DeliverPhotoGrid.tsx` -- fundo dinamico
-
-### Logica de cores
+Remover toda a secao "Aparencia da Galeria" que mostra preview de cores do tema custom (linhas 388-438). Substituir por um toggle simples Claro/Escuro que aparece sempre (nao apenas quando `hasCustomTheme`):
 
 ```text
-const isDark = data.clientMode === 'dark' ||
-  (data.theme?.backgroundMode === 'dark' && data.clientMode !== 'light');
-
-const bgColor = isDark ? '#1C1917' : '#FAF9F7';
-const textColor = isDark ? '#F5F5F4' : '#2D2A26';
-const primaryColor = data.theme?.primaryColor || (isDark ? '#FFFFFF' : '#1C1917');
+<div className="lunari-card p-6 space-y-4">
+  <Label>Modo da galeria:</Label>
+  <div className="flex gap-2">
+    <Button Claro />
+    <Button Escuro />
+  </div>
+</div>
 ```
+
+Remover a variavel `hasCustomTheme` e a condicional `{hasCustomTheme && ...}`.
+
+No `configuracoes`, remover `themeId` -- manter apenas `clientMode`.
+
+**Arquivo:** `src/pages/ClientDeliverGallery.tsx`
+
+Simplificar calculo de `isDark`: usar apenas `data.clientMode`. Se `clientMode === 'dark'` -> escuro, senao claro. Ignorar `data.theme?.backgroundMode`.
+
+Remover referencias a `data.theme?.primaryColor`, `accentColor`, `emphasisColor`. Usar cores fixas baseadas apenas em claro/escuro.
 
 ---
 
-## Arquivos modificados (resumo)
+## 2. Header: remover logo, aumentar nome da galeria
+
+**Arquivo:** `src/components/deliver/DeliverHeader.tsx`
+
+- Remover props `studioName`, `studioLogoUrl`
+- Remover toda a logica de renderizacao de logo/studio name e o separador `|`
+- Aumentar o nome da sessao de `text-sm md:text-base` para `text-lg md:text-xl`
+- Manter font-light e a fontFamily customizada
+- Resultado: header limpo com apenas o nome da galeria a esquerda e info + botao download a direita
+
+**Arquivo:** `src/pages/ClientDeliverGallery.tsx`
+
+Remover as props `studioName` e `studioLogoUrl` da chamada ao `DeliverHeader`.
+
+---
+
+## 3. Grid: fotos maiores com bordas retas
+
+**Arquivo:** `src/index.css` (masonry CSS)
+
+Reduzir quantidade de colunas para fotos maiores:
+- Mobile: 1 coluna (antes 2)
+- sm (640px): 2 colunas (antes 3)
+- lg (1024px): 3 colunas (antes 4)
+- xl (1280px): 3 colunas (antes 5)
+- 2xl (1536px): 4 colunas (antes 6)
+
+Aumentar gap entre fotos de `0.5rem` para `0.75rem`.
+
+**Arquivo:** `src/components/deliver/DeliverPhotoGrid.tsx`
+
+- Remover `rounded-sm` das fotos -- bordas completamente retas
+- Remover `rounded-full` do botao de download -- usar `rounded-none` ou `rounded-sm`
+- Aumentar padding lateral do container
+
+---
+
+## 4. Aparencia premium
+
+**Arquivo:** `src/components/deliver/DeliverPhotoGrid.tsx`
+
+- Hover mais sutil: `group-hover:scale-[1.01]` (antes 1.02)
+- Gradiente overlay mais elegante e sutil
+- Botao de download: fundo translucido com blur em vez de branco solido
+
+**Arquivo:** `src/components/deliver/DeliverHero.tsx`
+
+- Nenhuma mudanca estrutural necessaria (ja esta bom)
+
+---
+
+## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/deliver/DeliverPhotoManager.tsx` | **Novo** -- Grid de fotos com delete e selecao de capa |
-| `src/pages/DeliverCreate.tsx` | FontSelect, tema, container expandido, photo manager |
-| `src/pages/ClientDeliverGallery.tsx` | Cover photo por ID, aplicar tema dinamico |
-| `src/components/deliver/DeliverHero.tsx` | Props de tema (isDark, cores) |
-| `src/components/deliver/DeliverHeader.tsx` | Cores dinamicas do tema |
-| `src/components/deliver/DeliverPhotoGrid.tsx` | Fundo dinamico baseado no tema |
+| `src/pages/DeliverCreate.tsx` | Remover tema custom, simplificar para toggle claro/escuro sempre visivel |
+| `src/pages/ClientDeliverGallery.tsx` | Simplificar isDark, remover studioName/Logo do Header |
+| `src/components/deliver/DeliverHeader.tsx` | Remover logo, aumentar titulo |
+| `src/components/deliver/DeliverPhotoGrid.tsx` | Bordas retas, hover sutil, botao refinado |
+| `src/index.css` | Menos colunas no masonry (fotos maiores), gap maior |
 
 ---
 
-## Sequencia de implementacao
+## Detalhes tecnicos
 
-1. Criar `DeliverPhotoManager` (grid + delete + capa)
-2. Integrar no `DeliverCreate` step 2 com container expandido
-3. Adicionar FontSelect no step 1
-4. Adicionar selecao de tema no step 1
-5. Salvar font + theme + coverPhotoId no configuracoes
-6. Atualizar `ClientDeliverGallery` para usar coverPhotoId
-7. Aplicar tema dinamico nos componentes do cliente Transfer
+### DeliverCreate -- toggle simples
+
+Substituir bloco `{hasCustomTheme && (...)}` por bloco sem condicional:
+
+```text
+<div className="lunari-card p-6 space-y-4">
+  <div className="flex items-center gap-2">
+    <Sun/Moon icon />
+    <h3>Aparencia</h3>
+  </div>
+  <div className="flex items-center gap-3">
+    <Label>Modo:</Label>
+    <Button Claro (variant toggle) />
+    <Button Escuro (variant toggle) />
+  </div>
+</div>
+```
+
+### ClientDeliverGallery -- isDark simplificado
+
+```text
+const isDark = data.clientMode === 'dark';
+const bgColor = isDark ? '#1C1917' : '#FAF9F7';
+const textColor = isDark ? '#F5F5F4' : '#2D2A26';
+const primaryColor = isDark ? '#FFFFFF' : '#1C1917';
+```
+
+### DeliverHeader -- sem logo
+
+Remover props `studioName`, `studioLogoUrl`. Lado esquerdo fica apenas:
+
+```text
+<h2 className="text-lg md:text-xl font-light truncate"
+    style={{ color: headerText, fontFamily: sessionFont }}>
+  {displayName}
+</h2>
+```
+
+### Masonry CSS -- colunas reduzidas
+
+```text
+.masonry-grid { column-count: 1; column-gap: 0.75rem; }
+@media (min-width: 640px) { .masonry-grid { column-count: 2; } }
+@media (min-width: 1024px) { .masonry-grid { column-count: 3; } }
+@media (min-width: 1280px) { .masonry-grid { column-count: 3; } }
+@media (min-width: 1536px) { .masonry-grid { column-count: 4; } }
+```
+
+### DeliverPhotoGrid -- bordas retas + hover premium
+
+```text
+<div className="group relative cursor-pointer overflow-hidden">
+  <img ... className="... transition-transform duration-700 group-hover:scale-[1.01]" />
+  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent ..." />
+  <button className="... backdrop-blur-sm bg-white/20 text-white rounded-sm ...">
+    <Download />
+  </button>
+</div>
+```
+
