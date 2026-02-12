@@ -1,168 +1,106 @@
 
 
-# Refinamento Premium da Galeria Transfer (Cliente)
+# Remover Fonte Serif -- Usar Sans Moderna em Todo o Sistema
 
 ## Resumo
 
-Quatro mudancas na experiencia do cliente Transfer:
-
-1. **Remover tema personalizado de cores** -- manter apenas toggle Claro/Escuro
-2. **Header: remover logo, aumentar nome da galeria**
-3. **Grid: fotos maiores com bordas retas** (sem rounded)
-4. **Aparencia premium geral** -- espacamento, tipografia, transicoes refinadas
+Substituir Playfair Display (serif) por Inter (sans-serif) em todo o sistema, desde login ate telas do cliente. Adicionar peso maior (font-semibold/font-bold) nos titulos para compensar a perda de personalidade da serif.
 
 ---
 
-## 1. Remover tema personalizado -- apenas Claro/Escuro
+## Mudancas
 
-**Arquivo:** `src/pages/DeliverCreate.tsx`
+### 1. Configuracao global
 
-Remover toda a secao "Aparencia da Galeria" que mostra preview de cores do tema custom (linhas 388-438). Substituir por um toggle simples Claro/Escuro que aparece sempre (nao apenas quando `hasCustomTheme`):
+**`src/index.css`**
+- Remover import do Google Fonts para Playfair Display (manter apenas Inter)
+- Alterar regra CSS de `h1-h6` de `font-family: 'Playfair Display', serif` para `font-family: 'Inter', system-ui, sans-serif` com `font-weight: 600`
 
-```text
-<div className="lunari-card p-6 space-y-4">
-  <Label>Modo da galeria:</Label>
-  <div className="flex gap-2">
-    <Button Claro />
-    <Button Escuro />
-  </div>
-</div>
-```
+**`tailwind.config.ts`**
+- Alterar `fontFamily.display` de `['"Playfair Display"', 'serif']` para `['Inter', 'system-ui', 'sans-serif']`
 
-Remover a variavel `hasCustomTheme` e a condicional `{hasCustomTheme && ...}`.
+### 2. Classes nos componentes (~23 arquivos)
 
-No `configuracoes`, remover `themeId` -- manter apenas `clientMode`.
+Substituicao global em todos os arquivos:
+- `font-display` -> `font-sans` (ou remover, ja que body usa Inter)
+- `font-serif` -> remover
+- Garantir que titulos com `font-display` recebam `font-semibold` ou `font-bold` para peso adequado
 
-**Arquivo:** `src/pages/ClientDeliverGallery.tsx`
+**Arquivos afetados:**
+- `src/pages/GalleryCreate.tsx` (7 ocorrencias de font-serif, 1 font-display)
+- `src/pages/Dashboard.tsx` (4 font-display)
+- `src/pages/DeliverCreate.tsx`
+- `src/pages/DeliverDetail.tsx` (3 font-display)
+- `src/pages/GalleryDetail.tsx`
+- `src/pages/GalleryEdit.tsx`
+- `src/pages/GalleryPreview.tsx`
+- `src/pages/Clients.tsx`
+- `src/pages/Credits.tsx`
+- `src/pages/CreditsCheckout.tsx`
+- `src/pages/Settings.tsx`
+- `src/pages/Account.tsx`
+- `src/pages/Auth.tsx`
+- `src/pages/AccessDenied.tsx`
+- `src/pages/ClientGallery.tsx`
+- `src/pages/ClientProfile.tsx`
+- `src/components/Logo.tsx`
+- `src/components/FinalizedPreviewScreen.tsx`
+- `src/components/SelectionConfirmation.tsx`
+- `src/components/SelectionSummary.tsx`
+- `src/components/ClientGalleryHeader.tsx`
+- `src/components/PasswordScreen.tsx`
+- `src/components/settings/ThemeConfig.tsx`
+- `src/components/GalleryCard.tsx`
+- `src/components/DeliverGalleryCard.tsx`
 
-Simplificar calculo de `isDark`: usar apenas `data.clientMode`. Se `clientMode === 'dark'` -> escuro, senao claro. Ignorar `data.theme?.backgroundMode`.
+### 3. Fallback em estilos inline
 
-Remover referencias a `data.theme?.primaryColor`, `accentColor`, `emphasisColor`. Usar cores fixas baseadas apenas em claro/escuro.
-
----
-
-## 2. Header: remover logo, aumentar nome da galeria
-
-**Arquivo:** `src/components/deliver/DeliverHeader.tsx`
-
-- Remover props `studioName`, `studioLogoUrl`
-- Remover toda a logica de renderizacao de logo/studio name e o separador `|`
-- Aumentar o nome da sessao de `text-sm md:text-base` para `text-lg md:text-xl`
-- Manter font-light e a fontFamily customizada
-- Resultado: header limpo com apenas o nome da galeria a esquerda e info + botao download a direita
-
-**Arquivo:** `src/pages/ClientDeliverGallery.tsx`
-
-Remover as props `studioName` e `studioLogoUrl` da chamada ao `DeliverHeader`.
-
----
-
-## 3. Grid: fotos maiores com bordas retas
-
-**Arquivo:** `src/index.css` (masonry CSS)
-
-Reduzir quantidade de colunas para fotos maiores:
-- Mobile: 1 coluna (antes 2)
-- sm (640px): 2 colunas (antes 3)
-- lg (1024px): 3 colunas (antes 4)
-- xl (1280px): 3 colunas (antes 5)
-- 2xl (1536px): 4 colunas (antes 6)
-
-Aumentar gap entre fotos de `0.5rem` para `0.75rem`.
-
-**Arquivo:** `src/components/deliver/DeliverPhotoGrid.tsx`
-
-- Remover `rounded-sm` das fotos -- bordas completamente retas
-- Remover `rounded-full` do botao de download -- usar `rounded-none` ou `rounded-sm`
-- Aumentar padding lateral do container
-
----
-
-## 4. Aparencia premium
-
-**Arquivo:** `src/components/deliver/DeliverPhotoGrid.tsx`
-
-- Hover mais sutil: `group-hover:scale-[1.01]` (antes 1.02)
-- Gradiente overlay mais elegante e sutil
-- Botao de download: fundo translucido com blur em vez de branco solido
-
-**Arquivo:** `src/components/deliver/DeliverHero.tsx`
-
-- Nenhuma mudanca estrutural necessaria (ja esta bom)
-
----
-
-## Arquivos modificados
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/DeliverCreate.tsx` | Remover tema custom, simplificar para toggle claro/escuro sempre visivel |
-| `src/pages/ClientDeliverGallery.tsx` | Simplificar isDark, remover studioName/Logo do Header |
-| `src/components/deliver/DeliverHeader.tsx` | Remover logo, aumentar titulo |
-| `src/components/deliver/DeliverPhotoGrid.tsx` | Bordas retas, hover sutil, botao refinado |
-| `src/index.css` | Menos colunas no masonry (fotos maiores), gap maior |
+Onde houver `fontFamily: '"Playfair Display", serif'` como fallback em codigo (ex: `FinalizedPreviewScreen.tsx`), substituir por `'Inter', sans-serif`.
 
 ---
 
 ## Detalhes tecnicos
 
-### DeliverCreate -- toggle simples
+### index.css -- antes/depois
 
-Substituir bloco `{hasCustomTheme && (...)}` por bloco sem condicional:
-
+Antes:
 ```text
-<div className="lunari-card p-6 space-y-4">
-  <div className="flex items-center gap-2">
-    <Sun/Moon icon />
-    <h3>Aparencia</h3>
-  </div>
-  <div className="flex items-center gap-3">
-    <Label>Modo:</Label>
-    <Button Claro (variant toggle) />
-    <Button Escuro (variant toggle) />
-  </div>
-</div>
+@import url('...Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600...');
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', serif;
+  font-medium tracking-tight;
+}
 ```
 
-### ClientDeliverGallery -- isDark simplificado
-
+Depois:
 ```text
-const isDark = data.clientMode === 'dark';
-const bgColor = isDark ? '#1C1917' : '#FAF9F7';
-const textColor = isDark ? '#F5F5F4' : '#2D2A26';
-const primaryColor = isDark ? '#FFFFFF' : '#1C1917';
+@import url('...Inter:wght@300;400;500;600;700...');
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-semibold tracking-tight;
+}
 ```
 
-### DeliverHeader -- sem logo
-
-Remover props `studioName`, `studioLogoUrl`. Lado esquerdo fica apenas:
+### tailwind.config.ts
 
 ```text
-<h2 className="text-lg md:text-xl font-light truncate"
-    style={{ color: headerText, fontFamily: sessionFont }}>
-  {displayName}
-</h2>
+fontFamily: {
+  display: ['Inter', 'system-ui', 'sans-serif'],
+  sans: ['Inter', 'system-ui', 'sans-serif'],
+}
 ```
 
-### Masonry CSS -- colunas reduzidas
+### Padrao de substituicao nos componentes
 
-```text
-.masonry-grid { column-count: 1; column-gap: 0.75rem; }
-@media (min-width: 640px) { .masonry-grid { column-count: 2; } }
-@media (min-width: 1024px) { .masonry-grid { column-count: 3; } }
-@media (min-width: 1280px) { .masonry-grid { column-count: 3; } }
-@media (min-width: 1536px) { .masonry-grid { column-count: 4; } }
-```
+| Classe antiga | Classe nova |
+|---------------|-------------|
+| `font-display text-2xl font-semibold` | `text-2xl font-bold` |
+| `font-display text-xl font-semibold` | `text-xl font-semibold` |
+| `font-display font-semibold` | `font-semibold` |
+| `font-serif` | (remover) |
+| `font-display text-lg font-medium` | `text-lg font-semibold` |
 
-### DeliverPhotoGrid -- bordas retas + hover premium
-
-```text
-<div className="group relative cursor-pointer overflow-hidden">
-  <img ... className="... transition-transform duration-700 group-hover:scale-[1.01]" />
-  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent ..." />
-  <button className="... backdrop-blur-sm bg-white/20 text-white rounded-sm ...">
-    <Download />
-  </button>
-</div>
-```
+Titulos grandes (h1, text-2xl+) usarao `font-bold`. Titulos menores (text-lg, text-xl) usarao `font-semibold`.
 
