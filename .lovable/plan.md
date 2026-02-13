@@ -1,106 +1,120 @@
 
-
-# Remover Fonte Serif -- Usar Sans Moderna em Todo o Sistema
+# Refinamento do Modal de Compartilhamento
 
 ## Resumo
 
-Substituir Playfair Display (serif) por Inter (sans-serif) em todo o sistema, desde login ate telas do cliente. Adicionar peso maior (font-semibold/font-bold) nos titulos para compensar a perda de personalidade da serif.
+Redesenhar o modal "Compartilhar Galeria" com layout mais compacto e otimizado para desktop. Adicionar preview visual do link (similar a como aparece no WhatsApp) com logo do fotografo, nome da sessao e frase de chamada.
+
+---
+
+## Layout proposto
+
+O modal sera dividido em duas colunas lado a lado:
+
+```text
++----------------------------------------------------------+
+|  Compartilhar Galeria                               [X]  |
++---------------------------+------------------------------+
+|                           |                              |
+|  PREVIEW DO LINK          |  Cliente: Eduardo Valmor     |
+|  +---------------------+ |  Tel: (51) 99828-7948        |
+|  | [Logo Fotografo]    | |  Prazo: 16 de fev            |
+|  | Nome da Sessao      | |                              |
+|  | Clique e escolha    | |  Link da Galeria      [copy] |
+|  | suas fotos!         | |  gallery.lunarihub.com/g/... |
+|  | gallery.lunarihub.. | |                              |
+|  +---------------------+ |  Mensagem para o cliente     |
+|                           |  +------------------------+  |
+|                           |  | Ola Eduardo...         |  |
+|                           |  +------------------------+  |
+|                           |                              |
+|                           |  [Copiar Msg] [WhatsApp]     |
+|                           |  [Email - em breve]          |
++---------------------------+------------------------------+
+```
 
 ---
 
 ## Mudancas
 
-### 1. Configuracao global
+### Arquivo: `src/components/SendGalleryModal.tsx`
 
-**`src/index.css`**
-- Remover import do Google Fonts para Playfair Display (manter apenas Inter)
-- Alterar regra CSS de `h1-h6` de `font-family: 'Playfair Display', serif` para `font-family: 'Inter', system-ui, sans-serif` com `font-weight: 600`
+**Props**: Nenhuma mudanca nas props (settings ja contem `studioLogo`).
 
-**`tailwind.config.ts`**
-- Alterar `fontFamily.display` de `['"Playfair Display"', 'serif']` para `['Inter', 'system-ui', 'sans-serif']`
+**Layout**:
+- Reduzir `sm:max-w-2xl` para `sm:max-w-3xl` (mais largo mas com conteudo compacto em 2 colunas)
+- Substituir layout vertical `space-y-6` por `grid grid-cols-[280px_1fr] gap-6`
+- Coluna esquerda: Preview visual do link compartilhado
+- Coluna direita: Info do cliente + link + mensagem + botoes
 
-### 2. Classes nos componentes (~23 arquivos)
+**Coluna esquerda -- Preview do Link**:
+- Card visual simulando como o link aparece no WhatsApp/redes sociais
+- Mostrar logo do fotografo (`settings.studioLogo`) centralizado no topo do card
+- Se nao houver logo, mostrar icone placeholder (Camera)
+- Abaixo: nome da sessao (`gallery.nomeSessao`) em negrito
+- Abaixo: frase "Clique e escolha suas fotos!"
+- Abaixo: dominio `gallery.lunarihub.com` em texto pequeno/muted
+- Estilo: borda, fundo `bg-muted/50`, cantos arredondados -- simulando OG card
 
-Substituicao global em todos os arquivos:
-- `font-display` -> `font-sans` (ou remover, ja que body usa Inter)
-- `font-serif` -> remover
-- Garantir que titulos com `font-display` recebam `font-semibold` ou `font-bold` para peso adequado
-
-**Arquivos afetados:**
-- `src/pages/GalleryCreate.tsx` (7 ocorrencias de font-serif, 1 font-display)
-- `src/pages/Dashboard.tsx` (4 font-display)
-- `src/pages/DeliverCreate.tsx`
-- `src/pages/DeliverDetail.tsx` (3 font-display)
-- `src/pages/GalleryDetail.tsx`
-- `src/pages/GalleryEdit.tsx`
-- `src/pages/GalleryPreview.tsx`
-- `src/pages/Clients.tsx`
-- `src/pages/Credits.tsx`
-- `src/pages/CreditsCheckout.tsx`
-- `src/pages/Settings.tsx`
-- `src/pages/Account.tsx`
-- `src/pages/Auth.tsx`
-- `src/pages/AccessDenied.tsx`
-- `src/pages/ClientGallery.tsx`
-- `src/pages/ClientProfile.tsx`
-- `src/components/Logo.tsx`
-- `src/components/FinalizedPreviewScreen.tsx`
-- `src/components/SelectionConfirmation.tsx`
-- `src/components/SelectionSummary.tsx`
-- `src/components/ClientGalleryHeader.tsx`
-- `src/components/PasswordScreen.tsx`
-- `src/components/settings/ThemeConfig.tsx`
-- `src/components/GalleryCard.tsx`
-- `src/components/DeliverGalleryCard.tsx`
-
-### 3. Fallback em estilos inline
-
-Onde houver `fontFamily: '"Playfair Display", serif'` como fallback em codigo (ex: `FinalizedPreviewScreen.tsx`), substituir por `'Inter', sans-serif`.
+**Coluna direita -- compactada**:
+- Info do cliente: inline (nome, telefone, prazo em uma linha)
+- Link: campo + botao copiar (menor, `h-10`)
+- Mensagem: area com `max-h-[150px]`
+- Botoes: `Copiar Mensagem` e `WhatsApp` lado a lado em `grid-cols-2`, email abaixo menor
 
 ---
 
 ## Detalhes tecnicos
 
-### index.css -- antes/depois
-
-Antes:
-```text
-@import url('...Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600...');
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Playfair Display', serif;
-  font-medium tracking-tight;
-}
-```
-
-Depois:
-```text
-@import url('...Inter:wght@300;400;500;600;700...');
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-semibold tracking-tight;
-}
-```
-
-### tailwind.config.ts
+### Preview card do link (coluna esquerda)
 
 ```text
-fontFamily: {
-  display: ['Inter', 'system-ui', 'sans-serif'],
-  sans: ['Inter', 'system-ui', 'sans-serif'],
-}
+<div className="flex flex-col items-center justify-center p-6 rounded-xl border bg-muted/30 h-full">
+  {settings.studioLogo ? (
+    <img src={settings.studioLogo} alt="Logo" className="h-16 max-w-[180px] object-contain mb-4" />
+  ) : (
+    <Camera className="h-10 w-10 text-muted-foreground mb-4" />
+  )}
+  <h3 className="font-semibold text-base text-center">
+    {gallery.nomeSessao || 'Sessao de Fotos'}
+  </h3>
+  <p className="text-sm text-muted-foreground mt-1">
+    Clique e escolha suas fotos!
+  </p>
+  <span className="text-xs text-muted-foreground/60 mt-3">
+    gallery.lunarihub.com
+  </span>
+</div>
 ```
 
-### Padrao de substituicao nos componentes
+### Botoes lado a lado
 
-| Classe antiga | Classe nova |
-|---------------|-------------|
-| `font-display text-2xl font-semibold` | `text-2xl font-bold` |
-| `font-display text-xl font-semibold` | `text-xl font-semibold` |
-| `font-display font-semibold` | `font-semibold` |
-| `font-serif` | (remover) |
-| `font-display text-lg font-medium` | `text-lg font-semibold` |
+```text
+<div className="grid grid-cols-2 gap-2">
+  <Button Copiar (outline, h-10) />
+  <Button WhatsApp (terracotta, h-10) />
+</div>
+<Button Email disabled (outline, h-9, text-sm) />
+```
 
-Titulos grandes (h1, text-2xl+) usarao `font-bold`. Titulos menores (text-lg, text-xl) usarao `font-semibold`.
+### Info do cliente compacta
 
+Remover o card grande com avatar. Usar uma linha simples:
+
+```text
+<div className="flex items-center gap-3 text-sm">
+  <span className="font-medium">{clienteNome}</span>
+  <span className="text-muted-foreground">{formattedPhone}</span>
+  <span className="text-muted-foreground">Ate {prazo}</span>
+</div>
+```
+
+---
+
+## Arquivo modificado
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/components/SendGalleryModal.tsx` | Redesign completo: 2 colunas, preview de link, layout compacto |
+
+Nenhum outro arquivo precisa ser modificado -- as props e dados ja existentes sao suficientes.
