@@ -1,21 +1,28 @@
 // Production domain for gallery URLs
 const PRODUCTION_GALLERY_DOMAIN = 'https://gallery.lunarihub.com';
 
+// Supabase URL for edge functions
+const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL
+  ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+  : 'https://tlnjspsywycbudhewsfv.supabase.co/functions/v1';
+
 /**
  * Generates a gallery URL for the client using the production domain.
- * @param publicToken The gallery's public token
- * @param photographerDomain Optional custom domain for the photographer (future feature)
- * @returns Full URL to the gallery
  */
 export function getGalleryUrl(publicToken: string, photographerDomain?: string): string {
   if (!publicToken) return '';
-  
-  // Priority: 
-  // 1. Photographer's custom domain (e.g., galeria.fotografojose.com.br)
-  // 2. Production gallery domain
   const baseDomain = photographerDomain || PRODUCTION_GALLERY_DOMAIN;
-  
   return `${baseDomain}/g/${publicToken}`;
+}
+
+/**
+ * Generates a gallery URL that goes through the OG edge function.
+ * This URL serves dynamic Open Graph meta tags for WhatsApp/social previews,
+ * then redirects normal users to the actual gallery.
+ */
+export function getGalleryOgUrl(publicToken: string): string {
+  if (!publicToken) return '';
+  return `${SUPABASE_FUNCTIONS_URL}/gallery-og?token=${publicToken}`;
 }
 
 /**
