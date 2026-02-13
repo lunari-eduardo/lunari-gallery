@@ -44,7 +44,7 @@ serve(async (req) => {
     // 2. Check if gallery is a DELIVER type (completely different product)
     if (gallery.tipo === 'entrega') {
       // Password check for private deliver galleries
-      if (gallery.permissao === 'private') {
+      if (gallery.permissao === 'private' && gallery.gallery_password) {
         if (!password) {
           const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
           const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
@@ -241,7 +241,7 @@ serve(async (req) => {
     }
 
     // 3. Check password for private galleries
-    if (gallery.permissao === "private") {
+    if (gallery.permissao === "private" && gallery.gallery_password) {
     // If no password provided, request it
       if (!password) {
         // Extract clientMode from gallery config for password screen theming
