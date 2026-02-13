@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.mercadopago-refresh-token]
 verify_jwt = false
+
+[functions.gallery-og]
+verify_jwt = false

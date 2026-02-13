@@ -23,6 +23,15 @@ function isBot(userAgent: string): boolean {
   return BOT_USER_AGENTS.some((bot) => ua.includes(bot));
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 const GALLERY_BASE_URL = "https://gallery.lunarihub.com";
 
 Deno.serve(async (req) => {
@@ -75,10 +84,9 @@ Deno.serve(async (req) => {
       .single();
 
     const sessionName = gallery.nome_sessao || "Sessão de Fotos";
-    const studioName = settings?.studio_name || "";
     const studioLogo = settings?.studio_logo_url || "";
 
-    const ogTitle = studioName ? `${sessionName} | ${studioName}` : sessionName;
+    const ogTitle = sessionName;
     const ogDescription = "Clique e escolha suas fotos!";
 
     const html = `<!DOCTYPE html>
@@ -115,12 +123,3 @@ Deno.serve(async (req) => {
     return new Response("Internal error", { status: 500, headers: corsHeaders });
   }
 });
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
