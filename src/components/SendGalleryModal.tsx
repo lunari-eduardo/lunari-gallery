@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, MessageCircle, Mail, Check, Send, Link, Phone, Calendar, Lock, Camera } from 'lucide-react';
+import { Copy, MessageCircle, Mail, Check, Send, Link, Phone, Calendar, Lock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { GlobalSettings } from '@/types/gallery';
 import { Galeria } from '@/hooks/useSupabaseGalleries';
-import { getGalleryUrl } from '@/lib/galleryUrl';
+import { getGalleryUrl, getGalleryOgUrl } from '@/lib/galleryUrl';
 
 interface SendGalleryModalProps {
   isOpen: boolean;
@@ -48,13 +48,21 @@ export function SendGalleryModal({
     ? getGalleryUrl(gallery.publicToken)
     : null;
 
+  // OG URL for WhatsApp previews - serves dynamic meta tags
+  const ogLink = gallery.publicToken
+    ? getGalleryOgUrl(gallery.publicToken)
+    : null;
+
   const gallerySentTemplate = useMemo(() => {
     return settings.emailTemplates.find((t) => t.type === 'gallery_sent');
   }, [settings.emailTemplates]);
 
+  // Use OG link in messages so WhatsApp fetches dynamic preview
+  const messageLink = ogLink || clientLink;
+
   const fullMessage = useMemo(() => {
-    if (!gallerySentTemplate || !clientLink) {
-      let msg = `Olá${gallery.clienteNome ? ` ${gallery.clienteNome}` : ''}! 🎉\n\nSua galeria de fotos está pronta!\n\n📸 ${gallery.nomeSessao || 'Sessão de Fotos'}\n\n🔗 Link: ${clientLink || '[link]'}`;
+    if (!gallerySentTemplate || !messageLink) {
+      let msg = `Olá${gallery.clienteNome ? ` ${gallery.clienteNome}` : ''}! 🎉\n\nSua galeria de fotos está pronta!\n\n📸 ${gallery.nomeSessao || 'Sessão de Fotos'}\n\n🔗 Link: ${messageLink || '[link]'}`;
       if (gallery.permissao === 'private' && gallery.galleryPassword) {
         msg += `\n\n🔐 Senha: ${gallery.galleryPassword}`;
       }
@@ -68,7 +76,7 @@ export function SendGalleryModal({
     let message = gallerySentTemplate.body
       .replace(/{cliente}/g, gallery.clienteNome || 'Cliente')
       .replace(/{galeria}/g, gallery.nomeSessao || 'Galeria')
-      .replace(/{link}/g, clientLink)
+      .replace(/{link}/g, messageLink)
       .replace(/{estudio}/g, settings.studioName || 'Estúdio')
       .replace(/{prazo}/g, gallery.prazoSelecao
         ? format(gallery.prazoSelecao, "dd/MM/yyyy", { locale: ptBR })
@@ -80,7 +88,7 @@ export function SendGalleryModal({
     }
 
     return message;
-  }, [gallerySentTemplate, clientLink, gallery, settings.studioName]);
+  }, [gallerySentTemplate, messageLink, gallery, settings.studioName]);
 
   const handleCopyMessage = async () => {
     await navigator.clipboard.writeText(fullMessage);
@@ -133,8 +141,8 @@ export function SendGalleryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader className="pb-2">
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="pb-4">
           <DialogTitle className="flex items-center gap-3 text-lg">
             <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
               <Send className="h-4 w-4 text-primary" />
@@ -143,130 +151,105 @@ export function SendGalleryModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-[260px_1fr] gap-6">
-          {/* Left Column - Link Preview */}
-          <div className="flex flex-col items-center justify-center p-6 rounded-xl border border-border bg-muted/30">
-            {settings.studioLogo ? (
-              <img
-                src={settings.studioLogo}
-                alt="Logo"
-                className="h-16 max-w-[180px] object-contain mb-4"
-              />
-            ) : (
-              <Camera className="h-10 w-10 text-muted-foreground mb-4" />
+        <div className="space-y-5">
+          {/* Client Info */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <span className="font-medium text-base">{gallery.clienteNome || 'Cliente'}</span>
+            {formattedPhone && (
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Phone className="h-3.5 w-3.5" />
+                {formattedPhone}
+              </span>
             )}
-            <h3 className="font-semibold text-base text-center">
-              {gallery.nomeSessao || 'Sessão de Fotos'}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-1 text-center">
-              Clique e escolha suas fotos!
-            </p>
-            <span className="text-xs text-muted-foreground/60 mt-3">
-              gallery.lunarihub.com
-            </span>
+            {gallery.prazoSelecao && (
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" />
+                Até {format(gallery.prazoSelecao, "dd 'de' MMM", { locale: ptBR })}
+              </span>
+            )}
+            {gallery.permissao === 'private' && (
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" />
+                Senha
+              </span>
+            )}
           </div>
 
-          {/* Right Column - Info + Actions */}
-          <div className="space-y-4">
-            {/* Client Info - compact inline */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-              <span className="font-medium">{gallery.clienteNome || 'Cliente'}</span>
-              {formattedPhone && (
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Phone className="h-3.5 w-3.5" />
-                  {formattedPhone}
-                </span>
-              )}
-              {gallery.prazoSelecao && (
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Até {format(gallery.prazoSelecao, "dd 'de' MMM", { locale: ptBR })}
-                </span>
-              )}
-              {gallery.permissao === 'private' && (
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Lock className="h-3.5 w-3.5" />
-                  Senha
-                </span>
-              )}
-            </div>
-
-            {/* Link */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium flex items-center gap-1.5 text-muted-foreground">
-                <Link className="h-3.5 w-3.5" />
-                Link da Galeria
-              </label>
-              <div className="flex gap-2">
-                <div className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono truncate">
-                  {clientLink}
-                </div>
-                <Button
-                  onClick={handleCopyLink}
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 flex-shrink-0"
-                >
-                  {isLinkCopied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
+          {/* Link */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium flex items-center gap-1.5 text-muted-foreground">
+              <Link className="h-3.5 w-3.5" />
+              Link da Galeria
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-mono truncate">
+                {clientLink}
               </div>
-            </div>
-
-            <Separator />
-
-            {/* Message */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Mensagem para o cliente</label>
-              <div className="rounded-lg border border-border bg-muted/30 p-3 max-h-[150px] overflow-y-auto">
-                <p className="text-sm whitespace-pre-line leading-relaxed">
-                  {fullMessage}
-                </p>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={handleCopyMessage}
-                  variant="outline"
-                  className="justify-center gap-2 h-10"
-                >
-                  {isCopied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                  {isCopied ? 'Copiada!' : 'Copiar Mensagem'}
-                </Button>
-
-                <Button
-                  onClick={handleWhatsApp}
-                  variant="terracotta"
-                  className="justify-center gap-2 h-10"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  WhatsApp
-                  {formattedPhone && (
-                    <span className="text-xs opacity-80">→ {formattedPhone}</span>
-                  )}
-                </Button>
-              </div>
-
               <Button
+                onClick={handleCopyLink}
                 variant="outline"
-                className="w-full justify-center gap-2 h-9 text-sm opacity-50 cursor-not-allowed"
-                disabled
+                size="icon"
+                className="h-10 w-10 flex-shrink-0"
               >
-                <Mail className="h-4 w-4" />
-                Enviar por Email
-                <span className="text-xs bg-muted px-2 py-0.5 rounded">Em breve</span>
+                {isLinkCopied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
               </Button>
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Message */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Mensagem para o cliente</label>
+            <div className="rounded-lg border border-border bg-muted/30 p-4 max-h-[200px] overflow-y-auto">
+              <p className="text-sm whitespace-pre-line leading-relaxed">
+                {fullMessage}
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={handleCopyMessage}
+                variant="outline"
+                className="justify-center gap-2 h-11"
+              >
+                {isCopied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                {isCopied ? 'Copiada!' : 'Copiar Mensagem'}
+              </Button>
+
+              <Button
+                onClick={handleWhatsApp}
+                variant="terracotta"
+                className="justify-center gap-2 h-11"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+                {formattedPhone && (
+                  <span className="text-xs opacity-80">→ {formattedPhone}</span>
+                )}
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full justify-center gap-2 h-10 text-sm opacity-50 cursor-not-allowed"
+              disabled
+            >
+              <Mail className="h-4 w-4" />
+              Enviar por Email
+              <span className="text-xs bg-muted px-2 py-0.5 rounded">Em breve</span>
+            </Button>
           </div>
         </div>
       </DialogContent>
