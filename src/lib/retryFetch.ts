@@ -7,6 +7,7 @@ export interface RetryOptions {
   baseDelay?: number;
   maxDelay?: number;
   retryableErrors?: string[];
+  signal?: AbortSignal;
   onRetry?: (attempt: number, error: Error, delay: number) => void;
 }
 
@@ -37,12 +38,14 @@ export async function retryWithBackoff<T>(
     baseDelay = 1000,
     maxDelay = 10000,
     retryableErrors = defaultRetryableErrors,
+    signal,
     onRetry,
   } = options;
 
   let lastError: Error = new Error('Unknown error');
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (signal?.aborted) throw new Error('Cancelado');
     try {
       return await fn();
     } catch (error) {

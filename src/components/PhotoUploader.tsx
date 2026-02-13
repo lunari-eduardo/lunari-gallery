@@ -1,23 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw, Coins, AlertTriangle } from 'lucide-react';
+import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw, Coins, AlertTriangle, StopCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { 
-  compressImage, 
-  isValidImageType, 
-  formatFileSize,
-  CompressionOptions,
-  WatermarkConfig
-} from '@/lib/imageCompression';
+import { isValidImageType, formatFileSize, type WatermarkConfig } from '@/lib/imageCompression';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { 
-  retryWithBackoff, 
-  getUploadErrorMessage, 
-  getOptimalBatchSize 
-} from '@/lib/retryFetch';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
+import { UploadPipeline, type PipelineItem, type UploadResult } from '@/lib/uploadPipeline';
 
 export interface UploadedPhoto {
   id: string;
@@ -28,18 +18,6 @@ export interface UploadedPhoto {
   mimeType: string;
   width: number;
   height: number;
-}
-
-interface PhotoUploadItem {
-  id: string;
-  file: File;
-  preview: string;
-  status: 'pending' | 'compressing' | 'uploading' | 'saving' | 'done' | 'error';
-  progress: number;
-  error?: string;
-  result?: UploadedPhoto;
-  retryCount?: number;
-  uploadKey?: string;
 }
 
 interface PhotoUploaderProps {
@@ -54,16 +32,6 @@ interface PhotoUploaderProps {
   className?: string;
 }
 
-/** Generate a deterministic upload key for idempotency */
-async function generateUploadKey(galleryId: string, fileName: string, fileSize: number): Promise<string> {
-  const raw = `${galleryId}:${fileName}:${fileSize}`;
-  const buffer = new TextEncoder().encode(raw);
-  const hash = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(hash).slice(0, 12))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 export function PhotoUploader({
   galleryId,
   maxLongEdge = 1920,
@@ -75,18 +43,78 @@ export function PhotoUploader({
   onUploadingChange,
   className,
 }: PhotoUploaderProps) {
-  const [items, setItems] = useState<PhotoUploadItem[]>([]);
+  const [items, setItems] = useState<PipelineItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadTriggeredRef = useRef(false);
-  
+  const pipelineRef = useRef<UploadPipeline | null>(null);
+  const completedResults = useRef<UploadResult[]>([]);
+
   const { photoCredits, isAdmin, canUpload, refetch: refetchCredits } = usePhotoCredits();
 
-  const addFiles = useCallback((files: FileList | File[]) => {
+  // Lazy-init pipeline
+  const getPipeline = useCallback(() => {
+    if (!pipelineRef.current) {
+      pipelineRef.current = new UploadPipeline({
+        galleryId,
+        maxLongEdge,
+        quality: 0.8,
+        watermarkConfig,
+        allowDownload,
+        skipCredits,
+        maxCompressionSlots: 2,
+        onItemUpdate: (item) => {
+          setItems(prev => prev.map(i => i.id === item.id ? { ...item } : i));
+        },
+        onItemDone: (item) => {
+          if (item.result) {
+            completedResults.current.push(item.result);
+            refetchCredits();
+          }
+        },
+        onPipelineComplete: () => {
+          const results = completedResults.current;
+          const currentItems = pipelineRef.current?.items || [];
+          const errorCount = currentItems.filter(i => i.status === 'error').length;
+
+          setIsUploading(false);
+          onUploadingChange?.(false);
+
+          if (results.length > 0) {
+            if (errorCount > 0) {
+              toast.warning(`${results.length} foto(s) enviada(s), ${errorCount} com erro.`);
+            } else {
+              toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
+            }
+            onUploadComplete?.(results as UploadedPhoto[]);
+          } else if (errorCount > 0) {
+            toast.error('Falha ao enviar fotos. Tente novamente.');
+          }
+
+          completedResults.current = [];
+
+          // Clear done items after delay
+          setTimeout(() => {
+            setItems(prev => prev.filter(i => i.status !== 'done'));
+          }, 2000);
+        },
+      });
+    }
+    return pipelineRef.current;
+  }, [galleryId, maxLongEdge, watermarkConfig, allowDownload, skipCredits, onUploadComplete, onUploadingChange, refetchCredits]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      pipelineRef.current?.destroy();
+      pipelineRef.current = null;
+    };
+  }, []);
+
+  const addFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     const validFiles = fileArray.filter(isValidImageType);
-    
+
     if (validFiles.length !== fileArray.length) {
       toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
     }
@@ -96,311 +124,43 @@ export function PhotoUploader({
       return;
     }
 
-    const newItems: PhotoUploadItem[] = validFiles.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      preview: URL.createObjectURL(file),
-      status: 'pending',
-      progress: 0,
-      retryCount: 0,
-    }));
+    // Refresh session before starting
+    if (!isUploading) {
+      console.log('[PhotoUploader] Refreshing session token before pipeline...');
+      await supabase.auth.refreshSession();
+    }
 
-    setItems((prev) => [...prev, ...newItems]);
-  }, [isAdmin, canUpload, photoCredits]);
+    const pipeline = getPipeline();
+    const newItems = pipeline.add(validFiles);
+    setItems(prev => [...prev, ...newItems]);
+
+    if (!isUploading) {
+      setIsUploading(true);
+      onUploadStart?.();
+      onUploadingChange?.(true);
+    }
+  }, [isAdmin, canUpload, photoCredits, skipCredits, isUploading, getPipeline, onUploadStart, onUploadingChange]);
 
   const removeItem = useCallback((id: string) => {
-    setItems((prev) => {
-      const item = prev.find((i) => i.id === id);
-      if (item) {
-        URL.revokeObjectURL(item.preview);
-      }
-      return prev.filter((i) => i.id !== id);
-    });
+    pipelineRef.current?.revokePreview(id);
+    setItems(prev => prev.filter(i => i.id !== id));
   }, []);
 
-  const updateItem = useCallback((id: string, updates: Partial<PhotoUploadItem>) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
+  const retryItem = useCallback((id: string) => {
+    pipelineRef.current?.retry(id);
   }, []);
 
-  const uploadSingleFile = async (item: PhotoUploadItem): Promise<UploadedPhoto | null> => {
-    try {
-      let originalPath: string | null = null;
-
-      // Generate upload key for idempotency
-      const uploadKey = item.uploadKey || await generateUploadKey(galleryId, item.file.name, item.file.size);
-      updateItem(item.id, { uploadKey });
-
-      // Step 1: If allowDownload, upload original to R2 first
-      if (allowDownload) {
-        updateItem(item.id, { status: 'uploading', progress: 5 });
-        console.log(`[PhotoUploader] allowDownload=true, uploading original to R2 first: ${item.file.name}`);
-        
-        const R2_WORKER_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
-        
-        const originalFormData = new FormData();
-        originalFormData.append('file', item.file, item.file.name);
-        originalFormData.append('galleryId', galleryId);
-        originalFormData.append('originalFilename', item.file.name);
-
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error('Sessão expirada. Faça login novamente.');
-        }
-
-        const r2Response = await fetch(`${R2_WORKER_URL}/upload-original`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${session.access_token}` },
-          body: originalFormData,
-        });
-
-        if (!r2Response.ok) {
-          const errorData = await r2Response.json().catch(() => ({ error: 'Upload failed' }));
-          console.error('[PhotoUploader] R2 original upload FAILED:', errorData);
-          throw new Error(`Falha no upload do original: ${errorData.error || 'Erro desconhecido'}`);
-        }
-
-        const r2Data = await r2Response.json();
-        if (!r2Data?.success || !r2Data?.photo?.storageKey) {
-          throw new Error('Falha no upload do original: resposta inválida');
-        }
-        
-        originalPath = r2Data.photo.storageKey;
-        console.log(`[PhotoUploader] Original saved to R2: ${originalPath}`);
-        updateItem(item.id, { progress: 20 });
-      }
-
-      // Step 2: Compress
-      updateItem(item.id, { status: 'compressing', progress: allowDownload ? 25 : 10 });
-      
-      const compressionOptions: Partial<CompressionOptions> = {
-        maxLongEdge,
-        quality: 0.8,
-        removeExif: true,
-        watermark: watermarkConfig,
-      };
-      
-      let compressed;
-      try {
-        compressed = await compressImage(item.file, compressionOptions);
-      } catch (compressionError) {
-        const errorMessage = compressionError instanceof Error 
-          ? compressionError.message 
-          : 'Erro ao processar imagem';
-        throw new Error(errorMessage);
-      }
-      
-      updateItem(item.id, { progress: allowDownload ? 40 : 30 });
-
-      // Step 3: Upload preview to R2 via Edge Function
-      updateItem(item.id, { status: 'uploading', progress: allowDownload ? 50 : 40 });
-
-      const formData = new FormData();
-      formData.append('file', compressed.blob, compressed.filename);
-      formData.append('galleryId', galleryId);
-      formData.append('originalFilename', item.file.name);
-      formData.append('width', compressed.width.toString());
-      formData.append('height', compressed.height.toString());
-      formData.append('uploadKey', uploadKey);
-
-      if (skipCredits) {
-        formData.append('skipCredits', 'true');
-      }
-      
-      if (originalPath) {
-        formData.append('originalPath', originalPath);
-      }
-
-      const result = await retryWithBackoff(
-        async () => {
-          const { data, error } = await supabase.functions.invoke('r2-upload', {
-            body: formData,
-          });
-
-          if (error) {
-            throw new Error(error.message || 'Falha ao enviar foto');
-          }
-
-          if (!data?.success) {
-            if (data?.code === 'INSUFFICIENT_CREDITS') {
-              throw new Error('Créditos insuficientes');
-            }
-            throw new Error(data?.error || 'Falha ao enviar foto');
-          }
-
-          return data;
-        },
-        {
-          maxAttempts: 3,
-          baseDelay: 2000,
-          onRetry: (attempt, error, delay) => {
-            updateItem(item.id, { 
-              progress: allowDownload ? 50 : 40,
-              error: `Tentativa ${attempt + 1}...` 
-            });
-            console.log(`[PhotoUploader] Retry ${attempt} for ${item.file.name}: ${error.message}`);
-          },
-        }
-      );
-
-      updateItem(item.id, { status: 'done', progress: 100, error: undefined });
-      
-      refetchCredits();
-
-      return {
-        id: result.photo.id,
-        filename: result.photo.filename,
-        originalFilename: result.photo.originalFilename,
-        storageKey: result.photo.storageKey,
-        fileSize: result.photo.fileSize,
-        mimeType: result.photo.mimeType,
-        width: result.photo.width,
-        height: result.photo.height,
-      };
-    } catch (error) {
-      const errorObj = error instanceof Error ? error : new Error(String(error));
-      const message = getUploadErrorMessage(errorObj);
-      updateItem(item.id, { status: 'error', error: message });
-      console.error('[PhotoUploader] Upload error:', error);
-      return null;
-    }
-  };
-
-  const retryItem = useCallback(async (id: string) => {
-    const item = items.find((i) => i.id === id);
-    if (!item || item.status !== 'error') return;
-
-    const currentRetryCount = item.retryCount || 0;
-    if (currentRetryCount >= 3) {
-      toast.error('Número máximo de tentativas excedido. Tente novamente mais tarde.');
-      return;
-    }
-
-    updateItem(id, { 
-      status: 'pending', 
-      progress: 0, 
-      error: undefined,
-      retryCount: currentRetryCount + 1,
-    });
-
-    const result = await uploadSingleFile(item);
-    if (result) {
-      toast.success(`Foto "${item.file.name}" enviada com sucesso!`);
-      onUploadComplete?.([result]);
-    }
-  }, [items, updateItem, onUploadComplete]);
-
-  const startUpload = async () => {
-    const pendingItems = items.filter((item) => item.status === 'pending');
-    if (pendingItems.length === 0) return;
-
-    // Force token refresh before starting batch
-    console.log('[PhotoUploader] Refreshing session token before batch...');
-    await supabase.auth.refreshSession();
-
-    setIsUploading(true);
-    onUploadStart?.();
-    onUploadingChange?.(true);
-
-    const results: UploadedPhoto[] = [];
-
-    const batchSize = getOptimalBatchSize();
-    console.log(`[PhotoUploader] Using batch size: ${batchSize} for ${pendingItems.length} files`);
-
-    for (let i = 0; i < pendingItems.length; i += batchSize) {
-      const batch = pendingItems.slice(i, i + batchSize);
-      const batchResults = await Promise.all(
-        batch.map((item) => uploadSingleFile(item))
-      );
-      results.push(...batchResults.filter((r): r is UploadedPhoto => r !== null));
-    }
-
-    // ── Auto-retry failed photos (up to 2 rounds) ───────────────────────────
-    for (let retryRound = 0; retryRound < 2; retryRound++) {
-      // Re-read items from state to get current statuses
-      const currentItems = await new Promise<PhotoUploadItem[]>(resolve => {
-        setItems(prev => {
-          resolve(prev);
-          return prev;
-        });
-      });
-      
-      const failedItems = currentItems.filter(i => i.status === 'error' && (i.retryCount || 0) <= retryRound + 1);
-      if (failedItems.length === 0) break;
-
-      const delay = retryRound === 0 ? 5000 : 10000;
-      console.log(`[PhotoUploader] Auto-retry round ${retryRound + 1}: ${failedItems.length} failed items, waiting ${delay}ms`);
-      await new Promise(r => setTimeout(r, delay));
-
-      // Refresh token again before retry round
-      await supabase.auth.refreshSession();
-
-      for (const failedItem of failedItems) {
-        updateItem(failedItem.id, { 
-          status: 'pending', 
-          progress: 0, 
-          error: undefined,
-          retryCount: (failedItem.retryCount || 0) + 1,
-        });
-      }
-
-      for (let i = 0; i < failedItems.length; i += batchSize) {
-        const batch = failedItems.slice(i, i + batchSize);
-        const retryResults = await Promise.all(
-          batch.map((item) => uploadSingleFile(item))
-        );
-        results.push(...retryResults.filter((r): r is UploadedPhoto => r !== null));
-      }
-    }
-
+  const cancelAll = useCallback(() => {
+    pipelineRef.current?.cancel();
     setIsUploading(false);
     onUploadingChange?.(false);
-    uploadTriggeredRef.current = false;
+  }, [onUploadingChange]);
 
-    // Re-read final state for error count
-    const finalItems = await new Promise<PhotoUploadItem[]>(resolve => {
-      setItems(prev => {
-        resolve(prev);
-        return prev;
-      });
-    });
-    const errorCount = finalItems.filter(i => i.status === 'error').length;
-
-    if (results.length > 0) {
-      if (errorCount > 0) {
-        toast.warning(`${results.length} foto(s) enviada(s), ${errorCount} com erro.`);
-      } else {
-        toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
-      }
-      onUploadComplete?.(results);
-    } else if (errorCount > 0) {
-      toast.error('Falha ao enviar fotos. Tente novamente.');
-    }
-
-    // Clear completed items after a delay
-    setTimeout(() => {
-      setItems((prev) => prev.filter((item) => item.status !== 'done'));
-    }, 2000);
-  };
-
-  // Auto-upload when files are added
-  useEffect(() => {
-    const pendingItems = items.filter((item) => item.status === 'pending');
-    if (pendingItems.length > 0 && !isUploading && !uploadTriggeredRef.current) {
-      uploadTriggeredRef.current = true;
-      startUpload();
-    }
-  }, [items, isUploading]);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      addFiles(e.dataTransfer.files);
-    },
-    [addFiles]
-  );
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -412,19 +172,16 @@ export function PhotoUploader({
     setIsDragging(false);
   }, []);
 
-  const pendingCount = items.filter((i) => i.status === 'pending').length;
-  const completedCount = items.filter((i) => i.status === 'done').length;
-  const errorCount = items.filter((i) => i.status === 'error').length;
-  const inProgressCount = items.filter((i) => 
-    i.status === 'compressing' || i.status === 'uploading' || i.status === 'saving'
+  const pendingCount = items.filter(i => i.status === 'queued').length;
+  const completedCount = items.filter(i => i.status === 'done').length;
+  const errorCount = items.filter(i => i.status === 'error').length;
+  const inProgressCount = items.filter(i =>
+    i.status === 'compressing' || i.status === 'uploading-original' || i.status === 'uploading-preview'
   ).length;
 
-  const totalOriginalSize = items.reduce((sum, i) => sum + i.file.size, 0);
-  const totalCompressedSize = items
-    .filter((i) => i.result)
-    .reduce((sum, i) => sum + (i.result?.fileSize || 0), 0);
-  const savedBytes = totalOriginalSize - totalCompressedSize;
-  const savedPercent = totalOriginalSize > 0 ? Math.round((savedBytes / totalOriginalSize) * 100) : 0;
+  const overallProgress = items.length > 0
+    ? Math.round(items.reduce((sum, i) => sum + i.progress, 0) / items.length)
+    : 0;
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -433,7 +190,7 @@ export function PhotoUploader({
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <span className="text-sm text-warning">
-            {photoCredits === 0 
+            {photoCredits === 0
               ? 'Você não tem créditos. Compre mais para enviar fotos.'
               : `Você tem apenas ${photoCredits} créditos restantes.`
             }
@@ -453,7 +210,7 @@ export function PhotoUploader({
         onClick={() => !skipCredits && !isAdmin && photoCredits === 0 ? null : fileInputRef.current?.click()}
         className={cn(
           'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
-         !skipCredits && !isAdmin && photoCredits === 0 
+          !skipCredits && !isAdmin && photoCredits === 0
             ? 'border-muted-foreground/10 bg-muted/50 cursor-not-allowed opacity-60'
             : 'cursor-pointer',
           isDragging
@@ -500,12 +257,18 @@ export function PhotoUploader({
                 </span>
               )}
             </div>
-            {completedCount > 0 && savedPercent > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Economia: {formatFileSize(savedBytes)} ({savedPercent}%)
-              </p>
+            {isUploading && (
+              <Button variant="ghost" size="sm" onClick={cancelAll} className="text-destructive hover:text-destructive">
+                <StopCircle className="h-3 w-3 mr-1" />
+                Cancelar tudo
+              </Button>
             )}
           </div>
+
+          {/* Overall progress bar */}
+          {isUploading && items.length > 1 && (
+            <Progress value={overallProgress} className="h-1.5" />
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {items.map((item) => (
@@ -520,7 +283,7 @@ export function PhotoUploader({
                 />
 
                 {/* Status Overlay */}
-                {item.status !== 'pending' && (
+                {item.status !== 'queued' && (
                   <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
                     {item.status === 'done' ? (
                       <CheckCircle2 className="h-8 w-8 text-green-400" />
@@ -530,7 +293,7 @@ export function PhotoUploader({
                         <p className="text-xs text-white mt-1 px-2 text-center line-clamp-2">
                           {item.error}
                         </p>
-                        {(item.retryCount || 0) < 3 && (
+                        {item.retryCount < 3 && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -548,8 +311,8 @@ export function PhotoUploader({
                         <Loader2 className="h-6 w-6 text-white animate-spin" />
                         <p className="text-xs text-white mt-1">
                           {item.status === 'compressing' && 'Comprimindo...'}
-                          {item.status === 'uploading' && 'Enviando...'}
-                          {item.status === 'saving' && 'Salvando...'}
+                          {item.status === 'uploading-original' && 'Enviando original...'}
+                          {item.status === 'uploading-preview' && 'Enviando...'}
                         </p>
                         <Progress value={item.progress} className="w-3/4 mt-2 h-1" />
                       </>
@@ -557,8 +320,8 @@ export function PhotoUploader({
                   </div>
                 )}
 
-                {/* Remove Button (only for pending or error) */}
-                {(item.status === 'pending' || item.status === 'error') && (
+                {/* Remove Button (only for queued or error) */}
+                {(item.status === 'queued' || item.status === 'error') && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
