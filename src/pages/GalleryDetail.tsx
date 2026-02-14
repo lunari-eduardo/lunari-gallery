@@ -723,6 +723,37 @@ export default function GalleryDetail() {
             </div>
 
             <div>
+              {/* Botão de códigos com filtro de favoritas */}
+              {selectedPhotos.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  <Button 
+                    variant="terracotta" 
+                    className="w-full"
+                    onClick={() => {
+                      setCodesFilter('all');
+                      setIsCodesModalOpen(true);
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Códigos para separação das fotos
+                  </Button>
+                  
+                  {favoritePhotos.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        setCodesFilter('favorites');
+                        setIsCodesModalOpen(true);
+                      }}
+                    >
+                      <Heart className="h-4 w-4 mr-2" />
+                      Códigos só das favoritas ({favoritePhotos.length})
+                    </Button>
+                  )}
+                </div>
+              )}
+
               <SelectionSummary 
                 gallery={galleryForSummary} 
                 regrasCongeladas={regrasCongeladas}
@@ -752,37 +783,6 @@ export default function GalleryDetail() {
                       refetchCobranca();
                     }}
                   />
-                </div>
-              )}
-
-              {/* Botão de códigos com filtro de favoritas */}
-              {selectedPhotos.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <Button 
-                    variant="terracotta" 
-                    className="w-full"
-                    onClick={() => {
-                      setCodesFilter('all');
-                      setIsCodesModalOpen(true);
-                    }}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Códigos para separação das fotos
-                  </Button>
-                  
-                  {favoritePhotos.length > 0 && (
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      onClick={() => {
-                        setCodesFilter('favorites');
-                        setIsCodesModalOpen(true);
-                      }}
-                    >
-                      <Heart className="h-4 w-4 mr-2" />
-                      Códigos só das favoritas ({favoritePhotos.length})
-                    </Button>
-                  )}
                 </div>
               )}
             </div>
