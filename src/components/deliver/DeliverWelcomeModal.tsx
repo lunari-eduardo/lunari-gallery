@@ -7,13 +7,15 @@ interface DeliverWelcomeModalProps {
   message: string;
   sessionName?: string;
   clientName?: string;
+  studioName?: string;
 }
 
-export function DeliverWelcomeModal({ open, onClose, message, sessionName, clientName }: DeliverWelcomeModalProps) {
+export function DeliverWelcomeModal({ open, onClose, message, sessionName, clientName, studioName }: DeliverWelcomeModalProps) {
   // Replace placeholders
   const formatted = message
     .replace(/\{cliente\}/gi, clientName || 'Cliente')
-    .replace(/\{sessao\}/gi, sessionName || 'Sessão');
+    .replace(/\{sessao\}/gi, sessionName || 'Sessão')
+    .replace(/\{estudio\}/gi, studioName || 'Estúdio');
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>

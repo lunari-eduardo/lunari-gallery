@@ -195,6 +195,7 @@ export default function ClientDeliverGallery({ data }: Props) {
         message={gallery.welcomeMessage || ''}
         sessionName={gallery.sessionName}
         clientName={gallery.clientName}
+        studioName={studioSettings?.studio_name}
       />
     </div>
   );

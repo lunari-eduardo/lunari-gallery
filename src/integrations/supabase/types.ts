@@ -1532,6 +1532,7 @@ export type Database = {
           default_expiration_days: number | null
           default_gallery_permission: string | null
           default_watermark: Json | null
+          default_welcome_message: string | null
           favicon_url: string | null
           last_session_font: string | null
           studio_logo_url: string | null
@@ -1539,6 +1540,7 @@ export type Database = {
           theme_type: string | null
           updated_at: string | null
           user_id: string
+          welcome_message_enabled: boolean | null
         }
         Insert: {
           active_theme_id?: string | null
@@ -1547,6 +1549,7 @@ export type Database = {
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
           default_watermark?: Json | null
+          default_welcome_message?: string | null
           favicon_url?: string | null
           last_session_font?: string | null
           studio_logo_url?: string | null
@@ -1554,6 +1557,7 @@ export type Database = {
           theme_type?: string | null
           updated_at?: string | null
           user_id: string
+          welcome_message_enabled?: boolean | null
         }
         Update: {
           active_theme_id?: string | null
@@ -1562,6 +1566,7 @@ export type Database = {
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
           default_watermark?: Json | null
+          default_welcome_message?: string | null
           favicon_url?: string | null
           last_session_font?: string | null
           studio_logo_url?: string | null
@@ -1569,6 +1574,7 @@ export type Database = {
           theme_type?: string | null
           updated_at?: string | null
           user_id?: string
+          welcome_message_enabled?: boolean | null
         }
         Relationships: [
           {

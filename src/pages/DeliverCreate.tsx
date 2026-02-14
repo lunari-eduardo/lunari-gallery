@@ -12,6 +12,7 @@ import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal, ClientFormData } from '@/components/ClientModal';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSettings } from '@/hooks/useSettings';
+import { useGallerySettings } from '@/hooks/useGallerySettings';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { Client, GalleryPermission, TitleCaseMode } from '@/types/gallery';
@@ -28,6 +29,7 @@ export default function DeliverCreate() {
   const navigate = useNavigate();
   const { clients, isLoading: isLoadingClients, createClient } = useGalleryClients();
   const { settings, updateSettings } = useSettings();
+  const { settings: gallerySettings } = useGallerySettings();
   const { createGallery, updateGallery, sendGallery } = useSupabaseGalleries();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -73,6 +75,16 @@ export default function DeliverCreate() {
       }
     }
   }, [settings]);
+
+  // Initialize welcome message from global gallery settings
+  useEffect(() => {
+    if (gallerySettings) {
+      const globalEnabled = gallerySettings.welcomeMessageEnabled ?? true;
+      if (globalEnabled && gallerySettings.defaultWelcomeMessage) {
+        setWelcomeMessage(gallerySettings.defaultWelcomeMessage);
+      }
+    }
+  }, [gallerySettings]);
 
   const handleClientCreate = async (data: ClientFormData) => {
     const newClient = await createClient(data);

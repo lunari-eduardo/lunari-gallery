@@ -900,9 +900,9 @@ export default function ClientGallery() {
 
   // Parse welcome message
   const welcomeMessage = gallery.settings.welcomeMessage
-    .replace('{cliente}', gallery.clientName.split(' ')[0])
+    .replace('{cliente}', (gallery.clientName || 'Cliente').split(' ')[0])
     .replace('{sessao}', gallery.sessionName)
-    .replace('{estudio}', 'Studio Lunari');
+    .replace('{estudio}', galleryResponse?.studioSettings?.studio_name || 'Estúdio');
 
   // ✨ PRIMEIRA VERIFICAÇÃO: Galeria confirmada = modo read-only
   // Deve vir ANTES de showWelcome para garantir que galerias confirmadas
