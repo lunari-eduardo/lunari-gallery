@@ -82,6 +82,8 @@ function rowsToSettings(
     defaultWatermark: parseWatermark(settingsRow.default_watermark),
     faviconUrl: settingsRow.favicon_url || undefined,
     lastSessionFont: settingsRow.last_session_font || undefined,
+    defaultWelcomeMessage: settingsRow.default_welcome_message || undefined,
+    welcomeMessageEnabled: settingsRow.welcome_message_enabled ?? true,
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -235,6 +237,12 @@ export function useGallerySettings() {
       }
       if (data.lastSessionFont !== undefined) {
         updateData.last_session_font = data.lastSessionFont || null;
+      }
+      if (data.defaultWelcomeMessage !== undefined) {
+        updateData.default_welcome_message = data.defaultWelcomeMessage || null;
+      }
+      if (data.welcomeMessageEnabled !== undefined) {
+        updateData.welcome_message_enabled = data.welcomeMessageEnabled;
       }
 
       // Nothing to update

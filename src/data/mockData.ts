@@ -45,6 +45,7 @@ export const mockGlobalSettings: GlobalSettings = {
   ],
   faviconUrl: undefined,
   discountPresets: [],
+  welcomeMessageEnabled: true,
 };
 
 export const defaultWelcomeMessage = `Olá {cliente}! 💕

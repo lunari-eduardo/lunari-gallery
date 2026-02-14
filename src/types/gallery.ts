@@ -161,6 +161,8 @@ export interface GlobalSettings {
   faviconUrl?: string;
   discountPresets: DiscountPreset[];
   lastSessionFont?: string;
+  defaultWelcomeMessage?: string;
+  welcomeMessageEnabled?: boolean;
 }
 
 export interface ExportData {

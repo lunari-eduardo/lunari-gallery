@@ -181,6 +181,7 @@ export default function GalleryCreate() {
 
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
+  const [welcomeMessageEnabled, setWelcomeMessageEnabled] = useState(true);
   const [customDays, setCustomDays] = useState(10);
   const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(1920);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>('standard');
@@ -215,6 +216,14 @@ export default function GalleryCreate() {
       // Initialize font from last used
       if (settings.lastSessionFont) {
         setSessionFont(settings.lastSessionFont);
+      }
+      // Initialize welcome message from global settings
+      const globalEnabled = settings.welcomeMessageEnabled ?? true;
+      setWelcomeMessageEnabled(globalEnabled);
+      if (globalEnabled && settings.defaultWelcomeMessage) {
+        setWelcomeMessage(settings.defaultWelcomeMessage);
+      } else if (!globalEnabled) {
+        setWelcomeMessage('');
       }
     }
   }, [settings]);
@@ -1608,15 +1617,33 @@ export default function GalleryCreate() {
               </p>
             </div>
 
-            <div className="max-w-2xl space-y-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-primary" />
-                <Label>Mensagem de Saudação</Label>
+            <div className="max-w-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <Label>Mensagem de Saudação</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm text-muted-foreground">Ativar mensagem</Label>
+                  <Switch
+                    checked={welcomeMessageEnabled}
+                    onCheckedChange={(checked) => {
+                      setWelcomeMessageEnabled(checked);
+                      if (!checked) setWelcomeMessage('');
+                      else if (settings?.defaultWelcomeMessage) setWelcomeMessage(settings.defaultWelcomeMessage);
+                      else setWelcomeMessage(defaultWelcomeMessage);
+                    }}
+                  />
+                </div>
               </div>
-              <Textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={8} className="resize-none" />
-              <p className="text-xs text-muted-foreground">
-                Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
-              </p>
+              {welcomeMessageEnabled && (
+                <>
+                  <Textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={8} className="resize-none" />
+                  <p className="text-xs text-muted-foreground">
+                    Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
+                  </p>
+                </>
+              )}
             </div>
           </div>;
       case 6:
