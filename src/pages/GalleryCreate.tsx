@@ -194,7 +194,7 @@ export default function GalleryCreate() {
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
 
-   // Read global watermark settings from photographer_accounts
+  // Read global watermark settings from photographer_accounts
   const { settings: watermarkGlobalSettings } = useWatermarkSettings();
 
   // Initialize from settings
@@ -353,7 +353,7 @@ export default function GalleryCreate() {
       setPackageName(gestaoParams.pacote_nome);
 
       // Lookup package to get fotos_incluidas and valor_foto_extra
-      const packageFromGestao = gestaoPackages.find(pkg => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
+      const packageFromGestao = gestaoPackages.find((pkg) => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
       if (packageFromGestao) {
         console.log('🔗 Found package:', packageFromGestao);
 
@@ -395,7 +395,7 @@ export default function GalleryCreate() {
 
     // Step 4: Find and select client by ID
     if (gestaoParams.cliente_id) {
-      const clientFromGestao = clients.find(c => c.id === gestaoParams.cliente_id);
+      const clientFromGestao = clients.find((c) => c.id === gestaoParams.cliente_id);
       if (clientFromGestao) {
         console.log('🔗 Found client:', clientFromGestao.name);
         setSelectedClient(clientFromGestao);
@@ -761,8 +761,8 @@ export default function GalleryCreate() {
     }
   };
   const handlePhotoUploadComplete = (photos: UploadedPhoto[]) => {
-    setUploadedPhotos(prev => [...prev, ...photos]);
-    setUploadedCount(prev => prev + photos.length);
+    setUploadedPhotos((prev) => [...prev, ...photos]);
+    setUploadedCount((prev) => prev + photos.length);
   };
   const handleSaveClient = async (clientData: ClientFormData) => {
     try {
@@ -811,7 +811,7 @@ export default function GalleryCreate() {
     }]);
   };
   const updateDiscountPackage = (id: string, field: keyof DiscountPackage, value: number | null) => {
-    setDiscountPackages(discountPackages.map(pkg => pkg.id === id ? {
+    setDiscountPackages(discountPackages.map((pkg) => pkg.id === id ? {
       ...pkg,
       [field]: value
     } : pkg));
@@ -835,10 +835,10 @@ export default function GalleryCreate() {
     toast.success('Predefinição salva com sucesso!');
   };
   const loadPreset = (presetId: string) => {
-    const preset = settings.discountPresets?.find(p => p.id === presetId);
+    const preset = settings.discountPresets?.find((p) => p.id === presetId);
     if (preset) {
       // Clonar os pacotes com novos IDs
-      const clonedPackages = preset.packages.map(pkg => ({
+      const clonedPackages = preset.packages.map((pkg) => ({
         ...pkg,
         id: generateId()
       }));
@@ -847,7 +847,7 @@ export default function GalleryCreate() {
     }
   };
   const removeDiscountPackage = (id: string) => {
-    setDiscountPackages(discountPackages.filter(pkg => pkg.id !== id));
+    setDiscountPackages(discountPackages.filter((pkg) => pkg.id !== id));
   };
   const getSaleModeLabel = () => {
     switch (saleMode) {
@@ -893,7 +893,7 @@ export default function GalleryCreate() {
             {/* Gallery Permission */}
             <div className="space-y-4">
               <Label className="text-base font-medium">Permissão da Galeria</Label>
-              <RadioGroup value={galleryPermission} onValueChange={v => {
+              <RadioGroup value={galleryPermission} onValueChange={(v) => {
               setGalleryPermission(v as GalleryPermission);
               if (v === 'public') {
                 setSelectedClient(null);
@@ -955,7 +955,7 @@ export default function GalleryCreate() {
                       
                       {/* Option: Disable password protection */}
                       <div className="flex items-center space-x-2">
-                        <Checkbox id="passwordDisabled" checked={passwordDisabled} onCheckedChange={checked => {
+                        <Checkbox id="passwordDisabled" checked={passwordDisabled} onCheckedChange={(checked) => {
                     setPasswordDisabled(checked as boolean);
                     if (checked) {
                       setUseExistingPassword(false);
@@ -975,7 +975,7 @@ export default function GalleryCreate() {
                           {/* Client HAS password registered */}
                           {selectedClient.galleryPassword ? <>
                               <div className="flex items-center space-x-2">
-                                <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={checked => setUseExistingPassword(checked as boolean)} />
+                                <Checkbox id="useExisting" checked={useExistingPassword} onCheckedChange={(checked) => setUseExistingPassword(checked as boolean)} />
                                 <label htmlFor="useExisting" className="text-sm font-medium leading-none">
                                   Usar senha cadastrada
                                 </label>
@@ -989,9 +989,9 @@ export default function GalleryCreate() {
                               
                               {/* Input for new password when unchecked */}
                               {!useExistingPassword && <div className="space-y-2 ml-6">
-                                  <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                                  <Input placeholder="Nova senha para esta galeria" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
                                   <div className="flex items-center space-x-2">
-                                    <Checkbox id="saveToClient" checked={savePasswordToClient} onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} />
+                                    <Checkbox id="saveToClient" checked={savePasswordToClient} onCheckedChange={(checked) => setSavePasswordToClient(checked as boolean)} />
                                     <label htmlFor="saveToClient" className="text-xs text-muted-foreground">
                                       Salvar esta senha no cadastro do cliente
                                     </label>
@@ -1002,9 +1002,9 @@ export default function GalleryCreate() {
                               <p className="text-xs text-muted-foreground">
                                 Este cliente não possui senha cadastrada
                               </p>
-                              <Input placeholder="Definir senha para a galeria" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                              <Input placeholder="Definir senha para a galeria" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
                               <div className="flex items-center space-x-2">
-                                <Checkbox id="saveToClient" checked={savePasswordToClient} onCheckedChange={checked => setSavePasswordToClient(checked as boolean)} />
+                                <Checkbox id="saveToClient" checked={savePasswordToClient} onCheckedChange={(checked) => setSavePasswordToClient(checked as boolean)} />
                                 <label htmlFor="saveToClient" className="text-xs text-muted-foreground">
                                   Salvar esta senha no cadastro do cliente
                                 </label>
@@ -1019,7 +1019,7 @@ export default function GalleryCreate() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="sessionName">Nome da Sessão *</Label>
-                <Input id="sessionName" placeholder="Ex: Ensaio Gestante" value={sessionName} onChange={e => setSessionName(e.target.value)} />
+                <Input id="sessionName" placeholder="Ex: Ensaio Gestante" value={sessionName} onChange={(e) => setSessionName(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="packageName">Pacote</Label>
@@ -1034,14 +1034,14 @@ export default function GalleryCreate() {
                   setFixedPrice(pkg.valorFotoExtra);
                 }
               }} disabled={isLoadingPackages} /> : (/* Other plans or no packages: Simple text input */
-              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={e => setPackageName(e.target.value)} />)}
+              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={(e) => setPackageName(e.target.value)} />)}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
-                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={e => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
+                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={(e) => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
               </div>
 
               {/* Deadline */}
@@ -1051,7 +1051,7 @@ export default function GalleryCreate() {
                   <Label>Prazo de Seleção *</Label>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Input type="number" min={1} max={90} value={customDays} onChange={e => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
+                  <Input type="number" min={1} max={90} value={customDays} onChange={(e) => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
                   <span className="text-muted-foreground">dias</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1081,7 +1081,7 @@ export default function GalleryCreate() {
               {/* Left Block - Sale Mode */}
               <div className="space-y-4">
                 <Label className="text-base font-medium">Configurar venda de fotos?</Label>
-                <RadioGroup value={saleMode} onValueChange={v => setSaleMode(v as SaleMode)} className="flex flex-col gap-4">
+                <RadioGroup value={saleMode} onValueChange={(v) => setSaleMode(v as SaleMode)} className="flex flex-col gap-4">
                   {/* No Sale */}
                   <div>
                     <RadioGroupItem value="no_sale" id="sale-no" className="peer sr-only" />
@@ -1133,7 +1133,7 @@ export default function GalleryCreate() {
                 
                 {/* Payment Method Selection - Only when sale_with_payment */}
                 {saleMode === 'sale_with_payment' && <div className="mt-4 pt-4 border-t border-border/50">
-                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={method => setSelectedPaymentMethod(method as PaymentMethod)} />
+                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={(method) => setSelectedPaymentMethod(method as PaymentMethod)} />
                   </div>}
               </div>
 
@@ -1210,7 +1210,7 @@ export default function GalleryCreate() {
                       {/* Manual Pricing Model selection (default or override mode) */}
                       <div className="space-y-4">
                         <Label className="text-base font-medium">Qual formato de preço?</Label>
-                        <RadioGroup value={pricingModel} onValueChange={v => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
+                        <RadioGroup value={pricingModel} onValueChange={(v) => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
                           {/* Fixed Price */}
                           <div>
                             <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
@@ -1229,7 +1229,7 @@ export default function GalleryCreate() {
                               
                               {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
                                   <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={e => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={e => e.stopPropagation()} />
+                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={(e) => e.stopPropagation()} />
                                 </div>}
                             </Label>
                           </div>
@@ -1267,7 +1267,7 @@ export default function GalleryCreate() {
                                 <SelectValue placeholder="Carregar" />
                               </SelectTrigger>
                               <SelectContent>
-                                {settings.discountPresets.map(preset => <SelectItem key={preset.id} value={preset.id}>
+                                {settings.discountPresets.map((preset) => <SelectItem key={preset.id} value={preset.id}>
                                     {preset.name}
                                   </SelectItem>)}
                               </SelectContent>
@@ -1294,11 +1294,11 @@ export default function GalleryCreate() {
                               <div className="flex-1 grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">De</Label>
-                                  <Input type="number" min={1} value={pkg.minPhotos} onChange={e => updateDiscountPackage(pkg.id, 'minPhotos', parseInt(e.target.value) || 1)} className="h-8" />
+                                  <Input type="number" min={1} value={pkg.minPhotos} onChange={(e) => updateDiscountPackage(pkg.id, 'minPhotos', parseInt(e.target.value) || 1)} className="h-8" />
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">Até</Label>
-                                  {index === discountPackages.length - 1 ? <Input type="text" value={pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} onChange={e => {
+                                  {index === discountPackages.length - 1 ? <Input type="text" value={pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} onChange={(e) => {
                           const val = e.target.value;
                           if (val === '' || val === '∞') {
                             updateDiscountPackage(pkg.id, 'maxPhotos', null);
@@ -1308,11 +1308,11 @@ export default function GalleryCreate() {
                               updateDiscountPackage(pkg.id, 'maxPhotos', num);
                             }
                           }
-                        }} placeholder="∞" className="h-8 text-center" /> : <Input type="number" min={pkg.minPhotos} value={pkg.maxPhotos ?? ''} onChange={e => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)} className="h-8" />}
+                        }} placeholder="∞" className="h-8 text-center" /> : <Input type="number" min={pkg.minPhotos} value={pkg.maxPhotos ?? ''} onChange={(e) => updateDiscountPackage(pkg.id, 'maxPhotos', parseInt(e.target.value) || pkg.minPhotos)} className="h-8" />}
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs text-muted-foreground">R$</Label>
-                                  <Input type="number" min={0} step={0.01} value={pkg.pricePerPhoto} onChange={e => updateDiscountPackage(pkg.id, 'pricePerPhoto', parseFloat(e.target.value) || 0)} className="h-8" />
+                                  <Input type="number" min={0} step={0.01} value={pkg.pricePerPhoto} onChange={(e) => updateDiscountPackage(pkg.id, 'pricePerPhoto', parseFloat(e.target.value) || 0)} className="h-8" />
                                 </div>
                               </div>
                               <Button type="button" variant="ghost" size="icon" onClick={() => removeDiscountPackage(pkg.id)} className="text-destructive hover:text-destructive h-8 w-8">
@@ -1325,7 +1325,7 @@ export default function GalleryCreate() {
                   {/* Charge Type */}
                   <div className="space-y-3">
                     <Label className="text-base font-medium">Tipo de cobrança</Label>
-                    <Select value={chargeType} onValueChange={v => setChargeType(v as ChargeType)}>
+                    <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1353,11 +1353,11 @@ export default function GalleryCreate() {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="presetName">Nome da predefinição</Label>
-                    <Input id="presetName" value={presetName} onChange={e => setPresetName(e.target.value)} placeholder="Ex: Casamentos, Ensaios..." />
+                    <Input id="presetName" value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="Ex: Casamentos, Ensaios..." />
                   </div>
                   <div className="p-3 rounded-lg bg-muted/50">
                     <p className="text-sm text-muted-foreground mb-2">Faixas a salvar:</p>
-                    {discountPackages.map(pkg => <p key={pkg.id} className="text-sm">
+                    {discountPackages.map((pkg) => <p key={pkg.id} className="text-sm">
                         {pkg.minPhotos} - {pkg.maxPhotos === null ? '∞' : pkg.maxPhotos} fotos: R$ {pkg.pricePerPhoto.toFixed(2)}
                       </p>)}
                   </div>
@@ -1383,18 +1383,18 @@ export default function GalleryCreate() {
             {isCreatingGallery ? <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                 <p className="text-muted-foreground">Preparando galeria para uploads...</p>
-              </div> : supabaseGalleryId ? <PhotoUploader 
-                galleryId={supabaseGalleryId} 
-                maxLongEdge={imageResizeOption} 
-                watermarkConfig={{
-                  mode: watermarkType === 'standard' ? 'system' : watermarkType === 'custom' ? 'custom' : 'none',
-                  customPathHorizontal: watermarkSettings.path,
-                  customPathVertical: watermarkSettings.path,
-                  opacity: watermarkOpacity,
-                }}
-                allowDownload={allowDownload}
-                onUploadComplete={handlePhotoUploadComplete} 
-              /> : <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
+              </div> : supabaseGalleryId ? <PhotoUploader
+            galleryId={supabaseGalleryId}
+            maxLongEdge={imageResizeOption}
+            watermarkConfig={{
+              mode: watermarkType === 'standard' ? 'system' : watermarkType === 'custom' ? 'custom' : 'none',
+              customPathHorizontal: watermarkSettings.path,
+              customPathVertical: watermarkSettings.path,
+              opacity: watermarkOpacity
+            }}
+            allowDownload={allowDownload}
+            onUploadComplete={handlePhotoUploadComplete} /> :
+          <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
                 <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">
                   Preparando área de upload...
@@ -1441,7 +1441,7 @@ export default function GalleryCreate() {
                     <Image className="h-4 w-4 text-primary" />
                     <Label>Tamanho das Imagens</Label>
                   </div>
-                  <Select value={String(imageResizeOption)} onValueChange={v => setImageResizeOption(parseInt(v) as ImageResizeOption)}>
+                  <Select value={String(imageResizeOption)} onValueChange={(v) => setImageResizeOption(parseInt(v) as ImageResizeOption)}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -1464,7 +1464,7 @@ export default function GalleryCreate() {
                   </div>
                   
                   {/* Watermark Type */}
-                  <RadioGroup value={watermarkType} onValueChange={v => setWatermarkType(v as WatermarkType)} className="flex flex-wrap gap-2">
+                  <RadioGroup value={watermarkType} onValueChange={(v) => setWatermarkType(v as WatermarkType)} className="flex flex-wrap gap-2">
                     <div className="flex items-center">
                       <RadioGroupItem value="standard" id="wm-standard" className="peer sr-only" />
                       <Label htmlFor="wm-standard" className="px-3 py-1.5 text-sm rounded-lg border cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary">
@@ -1487,23 +1487,23 @@ export default function GalleryCreate() {
 
                   {/* Watermark Preview */}
                   {(watermarkType === 'standard' || watermarkType === 'custom') && <div className="space-y-4 p-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-4">
-                        <div className="h-12 flex items-center justify-center bg-black/80 rounded px-2">
-                          <img src={watermarkType === 'custom' && watermarkSettings?.path ? watermarkSettings.path : "/watermarks/horizontal.png"} alt="Proteção" className="h-8 object-contain" style={{
-                        opacity: watermarkOpacity / 100
-                      }} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">
-                            {watermarkType === 'custom' ? 'Sua marca em mosaico' : 'Linhas diagonais'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {watermarkType === 'custom' 
-                              ? (watermarkSettings?.path ? 'Logo repetido cobrindo toda a foto' : 'Configure em Configurações > Personalização')
-                              : 'Padrão de proteção cobrindo toda a foto'}
-                          </p>
-                        </div>
-                      </div>
+                      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                       
                       {/* Opacity Slider */}
                       <div className="space-y-2">
@@ -1511,7 +1511,7 @@ export default function GalleryCreate() {
                           <Label className="text-sm">Opacidade</Label>
                           <span className="text-sm font-medium text-muted-foreground">{watermarkOpacity}%</span>
                         </div>
-                        <Slider value={[watermarkOpacity]} onValueChange={value => setWatermarkOpacity(value[0])} min={10} max={100} step={5} className="w-full" />
+                        <Slider value={[watermarkOpacity]} onValueChange={(value) => setWatermarkOpacity(value[0])} min={10} max={100} step={5} className="w-full" />
                       </div>
                     </div>}
                 </div>
@@ -1613,7 +1613,7 @@ export default function GalleryCreate() {
                 <MessageSquare className="h-4 w-4 text-primary" />
                 <Label>Mensagem de Saudação</Label>
               </div>
-              <Textarea value={welcomeMessage} onChange={e => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={8} className="resize-none" />
+              <Textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} placeholder="Personalize a mensagem de boas-vindas..." rows={8} className="resize-none" />
               <p className="text-xs text-muted-foreground">
                 Use {'{cliente}'}, {'{sessao}'}, {'{estudio}'} para personalização automática.
               </p>
