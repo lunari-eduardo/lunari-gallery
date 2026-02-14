@@ -1,88 +1,112 @@
 
 
-# Correcao: Galeria privada "sem senha" bloqueia acesso do cliente
+# Mensagem Padrao Global + Correcao de Slugs {estudio} e {cliente}
 
-## Problema identificado
+## Problemas identificados
 
-Quando o fotografo seleciona "Privada" + "Sem protecao por senha", a galeria e salva no banco com:
-- `permissao = 'private'`
-- `gallery_password = null`
+### 1. Slug `{estudio}` hardcoded como "Studio Lunari"
+Em `src/pages/ClientGallery.tsx` (linha 905), o slug `{estudio}` esta fixo:
+```
+.replace('{estudio}', 'Studio Lunari');
+```
+Deveria usar o nome real do estudio vindo do backend: `galleryResponse?.studioSettings?.studio_name`
 
-Na Edge Function `gallery-access`, a logica verifica:
-1. `gallery.permissao === 'private'` -> exige senha
-2. Cliente nao envia senha -> retorna `requiresPassword: true`
-3. Cliente digita qualquer senha -> compara com `null` -> sempre falha
+### 2. Slug `{cliente}` parcialmente correto
+O `{cliente}` usa `gallery.clientName.split(' ')[0]` (primeiro nome). A logica esta funcional, mas depende de `clientName` estar preenchido na galeria. Quando nao ha cliente, retorna string vazia. Sera adicionado fallback para "Cliente".
 
-O mesmo ocorre quando o cliente nao tem senha cadastrada e o fotografo nao digita nenhuma: `gallery_password` fica `null` mas `permissao` continua `'private'`.
+### 3. Sem mensagem padrao global configuravel
+Atualmente, a mensagem de boas-vindas vem de uma constante hardcoded (`defaultWelcomeMessage` em `mockData.ts`). O fotografo nao pode personalizar um modelo padrao global em "Personalizacao", nem ativar/desativar mensagem.
 
-## Causa raiz
-
-A checkbox "Sem protecao por senha" apenas controla o estado local `passwordDisabled`, mas o campo `permissao` continua como `'private'`. O backend interpreta `'private'` como "exigir senha sempre".
+---
 
 ## Solucao
 
-Corrigir a Edge Function `gallery-access` para tratar galerias privadas **sem senha definida** como acesso livre (sem solicitar senha). Essa abordagem e mais segura que mudar o frontend, pois:
-- Corrige galerias ja criadas com esse problema
-- Mantem a distincao semantica entre publica/privada
-- Nao quebra galerias existentes que tem senha
+### A. Corrigir `{estudio}` no ClientGallery.tsx
 
-## Mudancas tecnicas
+**Arquivo**: `src/pages/ClientGallery.tsx` (linha 905)
 
-### 1. Edge Function `supabase/functions/gallery-access/index.ts`
-
-Na secao de verificacao de senha para galerias de selecao (por volta da linha 160), adicionar uma condicao:
-
-**Antes:**
-```text
-if (gallery.permissao === "private") {
-  if (!password) {
-    return { requiresPassword: true, ... };
-  }
-  if (password !== gallery.gallery_password) {
-    return { error: "Senha incorreta" };
-  }
-}
+Substituir:
+```
+.replace('{estudio}', 'Studio Lunari');
+```
+Por:
+```
+.replace('{estudio}', galleryResponse?.studioSettings?.studio_name || 'Estudio');
 ```
 
-**Depois:**
-```text
-if (gallery.permissao === "private" && gallery.gallery_password) {
-  if (!password) {
-    return { requiresPassword: true, ... };
-  }
-  if (password !== gallery.gallery_password) {
-    return { error: "Senha incorreta" };
-  }
-}
-// Se permissao = 'private' mas gallery_password e null/vazio,
-// tratar como acesso livre (fotografo escolheu "sem senha")
+### B. Adicionar fallback para `{cliente}`
+
+Na mesma linha 903, garantir fallback:
+```
+.replace('{cliente}', (gallery.clientName || 'Cliente').split(' ')[0])
 ```
 
-### 2. Mesma correcao para galerias de entrega (deliver)
+### C. Adicionar campo de mensagem padrao global no banco
 
-Na secao de verificacao de senha para galerias tipo `entrega` (por volta da linha 48), aplicar a mesma logica:
+**Migracao SQL**: Adicionar coluna `default_welcome_message` e `welcome_message_enabled` na tabela `gallery_settings`:
 
-**Antes:**
 ```text
-if (gallery.permissao === 'private') {
+ALTER TABLE gallery_settings 
+ADD COLUMN default_welcome_message text,
+ADD COLUMN welcome_message_enabled boolean DEFAULT true;
 ```
 
-**Depois:**
-```text
-if (gallery.permissao === 'private' && gallery.gallery_password) {
-```
+### D. Atualizar `useGallerySettings.ts`
 
-### 3. Nenhuma mudanca no frontend
+- Ler `default_welcome_message` e `welcome_message_enabled` do banco
+- Adicionar ao tipo `GlobalSettings` os novos campos: `defaultWelcomeMessage?: string` e `welcomeMessageEnabled?: boolean`
+- Suportar persistencia via `updateSettings`
 
-O frontend ja funciona corretamente:
-- `passwordDisabled = true` faz `galleryPassword = undefined` ser salvo como `null`
-- A UI mostra as opcoes corretas
-- Apenas o backend precisa respeitar que `password = null` significa "sem protecao"
+### E. Adicionar secao "Mensagem Padrao" em Personalizacao
 
-## Impacto
+**Arquivo**: `src/components/settings/PersonalizationSettings.tsx`
 
-- Galerias ja criadas com esse bug serao corrigidas automaticamente
-- Galerias com senha definida continuam protegidas normalmente
-- Galerias publicas nao sao afetadas
-- Galerias de entrega (deliver) tambem sao corrigidas
+Dentro da secao "Comunicacao", adicionar um card com:
+- Switch para ativar/desativar mensagem de boas-vindas globalmente
+- Textarea para editar o template padrao da mensagem
+- Dica com os slugs disponiveis: `{cliente}`, `{sessao}`, `{estudio}`
 
+### F. Usar mensagem global como default na criacao da galeria
+
+**Arquivo**: `src/pages/GalleryCreate.tsx`
+
+No `useEffect` que inicializa a partir de `settings`:
+- Se `settings.welcomeMessageEnabled` for `true` e `settings.defaultWelcomeMessage` existir, usar como valor inicial do `welcomeMessage`
+- Se `false`, inicializar com string vazia
+- Manter textarea editavel para o fotografo personalizar por galeria
+
+Adicionar toggle no Step 5 (Mensagem) para ativar/desativar a mensagem naquela galeria especifica.
+
+### G. Aplicar mesma correcao ao DeliverCreate e DeliverWelcomeModal
+
+**Arquivo**: `src/components/deliver/DeliverWelcomeModal.tsx`
+- Ja usa `{cliente}` e `{sessao}` corretamente
+- Adicionar suporte a `{estudio}` usando o studioName do contexto
+
+**Arquivo**: `src/pages/DeliverCreate.tsx`
+- Inicializar mensagem com template global quando disponivel
+
+---
+
+## Detalhes tecnicos
+
+### Arquivos modificados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/pages/ClientGallery.tsx` | Corrigir `{estudio}` para usar `studioSettings.studio_name` |
+| `src/types/gallery.ts` | Adicionar `defaultWelcomeMessage` e `welcomeMessageEnabled` ao `GlobalSettings` |
+| `src/hooks/useGallerySettings.ts` | Ler/salvar novos campos do banco |
+| `src/components/settings/PersonalizationSettings.tsx` | Adicionar card de mensagem padrao |
+| `src/pages/GalleryCreate.tsx` | Inicializar mensagem do settings global; adicionar toggle on/off |
+| `src/pages/DeliverCreate.tsx` | Inicializar mensagem do settings global |
+| `src/components/deliver/DeliverWelcomeModal.tsx` | Adicionar suporte a `{estudio}` |
+| `src/data/mockData.ts` | Atualizar fallback com novos campos |
+| Migracao SQL | Adicionar colunas `default_welcome_message` e `welcome_message_enabled` |
+
+### Fluxo final
+
+1. Fotografo configura mensagem padrao em Personalizacao (com toggle global)
+2. Ao criar galeria, Step 5 pre-carrega o template global (se ativo)
+3. Fotografo pode editar livremente ou desativar para aquela galeria
+4. Quando cliente acessa, `{estudio}` resolve para o nome real do estudio, `{cliente}` resolve para o primeiro nome do cliente, `{sessao}` resolve para o nome da sessao
