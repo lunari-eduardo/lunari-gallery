@@ -21,6 +21,11 @@ import { GalleryPhoto } from '@/types/gallery';
 
 type CodeFormat = 'windows' | 'mac' | 'lightroom' | 'txt';
 
+function removeExtension(filename: string): string {
+  const lastDot = filename.lastIndexOf('.');
+  return lastDot > 0 ? filename.slice(0, lastDot) : filename;
+}
+
 interface PhotoCodesModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,13 +60,13 @@ export function PhotoCodesModal({
   const generateCode = (): string => {
     if (selectedPhotos.length === 0) return 'Nenhuma foto selecionada';
     
-    // Usar nome original para exportação (essencial para fotógrafos)
-    const filenames = selectedPhotos.map(p => p.originalFilename || p.filename);
+    // Usar nome original sem extensão (compatível com qualquer formato RAW/JPEG)
+    const filenames = selectedPhotos.map(p => removeExtension(p.originalFilename || p.filename));
     
     switch (format) {
       case 'windows':
         // Windows Explorer search: "filename1" OR "filename2"
-        return filenames.map(f => `"${f.replace('.jpg', '').replace('.jpeg', '').replace('.png', '')}"`).join(' OR ');
+        return filenames.map(f => `"${f}"`).join(' OR ');
       
       case 'mac':
         // Mac Finder: filename1.jpg OR filename2.jpg
