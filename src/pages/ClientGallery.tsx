@@ -111,6 +111,7 @@ export default function ClientGallery() {
   
   // Payment return detection state
   const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
+  const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
   
   // Password state
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -436,7 +437,7 @@ export default function ClientGallery() {
     onSuccess: (data) => {
       // PIX Manual - show internal payment screen
       if (data.requiresPayment && data.paymentMethod === 'pix_manual' && data.pixData) {
-        setIsConfirmed(true);
+        // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
         setPixPaymentData({
           chavePix: data.pixData.chavePix || '',
           nomeTitular: data.pixData.nomeTitular || '',
@@ -452,7 +453,7 @@ export default function ClientGallery() {
       
       // Checkout externo (InfinitePay/MercadoPago) - redirect BEFORE confirming
       if (data.requiresPayment && data.checkoutUrl) {
-        setIsConfirmed(true);
+        // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
         setPaymentInfo({
           checkoutUrl: data.checkoutUrl,
           provedor: data.provedor || 'pagamento',
@@ -501,8 +502,11 @@ export default function ClientGallery() {
       
       const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'confirmado' || 
                                  supabaseGallery?.finalized_at;
-      setIsConfirmed(!!isAlreadyConfirmed);
-      if (isAlreadyConfirmed) {
+      // Don't treat aguardando_pagamento as confirmed
+      const isAwaitingPayment = supabaseGallery?.status_selecao === 'aguardando_pagamento';
+      
+      setIsConfirmed(!!isAlreadyConfirmed && !isAwaitingPayment);
+      if (isAlreadyConfirmed && !isAwaitingPayment) {
         setCurrentStep('confirmed');
         setShowWelcome(false);
       }
@@ -752,6 +756,76 @@ export default function ClientGallery() {
         backgroundMode={effectiveBackgroundMode}
       />
     );
+  }
+
+  // Pending payment screen - gallery awaiting payment (aguardando_pagamento)
+  if (galleryResponse?.pendingPayment) {
+    const pendingPaymentMethod = galleryResponse.paymentMethod;
+    const pendingPixDados = galleryResponse.pixDados;
+    const pendingCheckoutUrl = galleryResponse.checkoutUrl;
+    const pendingValorTotal = galleryResponse.valorTotal || 0;
+    const pendingBgMode = galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+
+    const handlePixPaymentConfirmed = async () => {
+      setIsConfirmingPixPayment(true);
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            galleryId: galleryResponse.galleryId, 
+            action: 'finalize_payment' 
+          }),
+        });
+        
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Erro ao confirmar pagamento');
+        }
+        
+        toast.success('Pagamento informado com sucesso!', {
+          description: 'O fotógrafo será notificado para verificar.',
+        });
+        
+        // Refetch gallery to show finalized state
+        await refetchGallery();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Erro ao informar pagamento');
+      } finally {
+        setIsConfirmingPixPayment(false);
+      }
+    };
+
+    // PIX Manual - show PIX payment screen
+    if (pendingPaymentMethod === 'pix_manual' && pendingPixDados) {
+      return (
+        <PixPaymentScreen
+          chavePix={pendingPixDados.chavePix || ''}
+          nomeTitular={pendingPixDados.nomeTitular || ''}
+          tipoChave={pendingPixDados.tipoChave}
+          valorTotal={pendingValorTotal}
+          studioName={galleryResponse.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+          onPaymentConfirmed={handlePixPaymentConfirmed}
+          themeStyles={themeStyles}
+          backgroundMode={pendingBgMode}
+          isConfirming={isConfirmingPixPayment}
+        />
+      );
+    }
+
+    // InfinitePay/MercadoPago - show redirect to checkout
+    if (pendingCheckoutUrl) {
+      return (
+        <PaymentRedirect
+          checkoutUrl={pendingCheckoutUrl}
+          provedor={pendingPaymentMethod || 'pagamento'}
+          valorTotal={pendingValorTotal}
+          themeStyles={themeStyles}
+          backgroundMode={pendingBgMode}
+        />
+      );
+    }
   }
 
   // Error state - gallery not found
@@ -1168,6 +1242,35 @@ export default function ClientGallery() {
 
   // Render Payment Step - PIX Manual (internal)
   if (currentStep === 'payment' && pixPaymentData) {
+    const handlePixFinalizePayment = async () => {
+      setIsConfirmingPixPayment(true);
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            galleryId, 
+            action: 'finalize_payment' 
+          }),
+        });
+        
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Erro ao confirmar pagamento');
+        }
+        
+        setIsConfirmed(true);
+        setCurrentStep('confirmed');
+        toast.success('Pagamento informado com sucesso!', {
+          description: 'O fotógrafo será notificado para verificar.',
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Erro ao informar pagamento');
+      } finally {
+        setIsConfirmingPixPayment(false);
+      }
+    };
+
     return (
       <PixPaymentScreen
         chavePix={pixPaymentData.chavePix}
@@ -1176,13 +1279,8 @@ export default function ClientGallery() {
         valorTotal={pixPaymentData.valorTotal}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
-        onPaymentConfirmed={() => {
-          // Client indicates they've paid - go to confirmed step
-          setCurrentStep('confirmed');
-          toast.success('Obrigado!', {
-            description: 'Aguarde a confirmação do pagamento pelo fotógrafo.',
-          });
-        }}
+        onPaymentConfirmed={handlePixFinalizePayment}
+        isConfirming={isConfirmingPixPayment}
         themeStyles={themeStyles}
         backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
       />

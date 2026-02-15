@@ -153,7 +153,94 @@ serve(async (req) => {
       );
     }
 
-    // 3. Check if gallery is finalized (show preview of selected photos)
+    // 3a. Check if gallery is awaiting payment (selection confirmed but payment pending)
+    if (gallery.status_selecao === 'aguardando_pagamento') {
+      // Fetch studio settings
+      const { data: settings } = await supabase
+        .from("gallery_settings")
+        .select("studio_name, studio_logo_url, favicon_url")
+        .eq("user_id", gallery.user_id)
+        .single();
+
+      // Build theme data
+      const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+      const themeId = galleryConfig?.themeId as string | undefined;
+      const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+      
+      let themeData = null;
+      if (themeId) {
+        const { data: theme } = await supabase
+          .from("gallery_themes")
+          .select("*")
+          .eq("id", themeId)
+          .maybeSingle();
+        if (theme) {
+          themeData = {
+            id: theme.id, name: theme.name,
+            backgroundMode: theme.background_mode || 'light',
+            primaryColor: theme.primary_color, accentColor: theme.accent_color,
+            emphasisColor: theme.emphasis_color,
+          };
+        }
+      }
+      if (!themeData) {
+        themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+      }
+
+      // Determine payment data to return
+      const saleSettings = galleryConfig?.saleSettings as Record<string, unknown> | null;
+      const paymentMethod = saleSettings?.paymentMethod as string | undefined;
+      const pixDados = galleryConfig?.pixDados as Record<string, unknown> | null;
+
+      // For InfinitePay/MercadoPago, find the pending cobranca with checkout URL
+      let pendingCheckoutUrl: string | null = null;
+      let pendingProvedor: string | null = null;
+      let pendingCobrancaId: string | null = null;
+      let pendingValor: number | null = null;
+
+      if (paymentMethod !== 'pix_manual') {
+        const { data: pendingCobranca } = await supabase
+          .from("cobrancas")
+          .select("id, ip_checkout_url, mp_payment_link, provedor, valor, status")
+          .eq("galeria_id", gallery.id)
+          .eq("status", "pendente")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (pendingCobranca) {
+          pendingCheckoutUrl = pendingCobranca.ip_checkout_url || pendingCobranca.mp_payment_link;
+          pendingProvedor = pendingCobranca.provedor;
+          pendingCobrancaId = pendingCobranca.id;
+          pendingValor = pendingCobranca.valor;
+        }
+      }
+
+      console.log("⏳ Gallery awaiting payment:", gallery.id, "method:", paymentMethod);
+
+      return new Response(
+        JSON.stringify({
+          pendingPayment: true,
+          galleryId: gallery.id,
+          sessionName: gallery.nome_sessao,
+          paymentMethod: paymentMethod || pendingProvedor || 'pix_manual',
+          pixDados: pixDados,
+          checkoutUrl: pendingCheckoutUrl,
+          cobrancaId: pendingCobrancaId,
+          valorTotal: pendingValor || gallery.valor_extras || 0,
+          studioSettings: settings || null,
+          theme: themeData,
+          clientMode,
+          settings: {
+            sessionFont: galleryConfig?.sessionFont || undefined,
+            titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3b. Check if gallery is finalized (show preview of selected photos)
     const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
     
     if (isFinalized) {

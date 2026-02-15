@@ -434,10 +434,14 @@ Deno.serve(async (req) => {
     }
 
     // 6. NOW it's safe to confirm selection - payment was created successfully (if required)
+    // CONDITIONAL FINALIZATION: Only finalize immediately if no payment is required
+    // For PIX Manual, InfinitePay, MercadoPago: set aguardando_pagamento, finalize later
+    const shouldFinalizeNow = !shouldCreatePayment;
+    
     const updateData: Record<string, unknown> = {
       status: 'selecao_completa',
-      status_selecao: 'confirmado',
-      finalized_at: new Date().toISOString(),
+      status_selecao: shouldFinalizeNow ? 'confirmado' : 'aguardando_pagamento',
+      finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
       fotos_selecionadas: selectedCount || 0,
       valor_extras: valorTotal,
       status_pagamento: statusPagamento,
@@ -500,7 +504,8 @@ Deno.serve(async (req) => {
           qtd_fotos_extra: novoQtdFotosExtra, // CUMULATIVE: total extras across all cycles
           valor_foto_extra: valorUnitario, // Last unit price used
           valor_total_foto_extra: novoValorTotalFotoExtra, // CUMULATIVE: total value across all cycles
-          status_galeria: 'concluida',
+          // Only mark as concluida if finalizing now (no pending payment)
+          status_galeria: shouldFinalizeNow ? 'concluida' : 'em_selecao',
           updated_at: new Date().toISOString(),
         })
         .eq('session_id', gallery.session_id);

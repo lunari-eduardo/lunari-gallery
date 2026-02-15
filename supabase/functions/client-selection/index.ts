@@ -7,8 +7,8 @@ const corsHeaders = {
 
 interface RequestBody {
   galleryId: string;
-  photoId: string;
-  action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite';
+  photoId?: string;
+  action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment';
   comment?: string;
 }
 
@@ -28,9 +28,73 @@ Deno.serve(async (req) => {
     const { galleryId, photoId, action, comment } = body;
 
     // Validate required fields
-    if (!galleryId || !photoId || !action) {
+    if (!galleryId || !action) {
       return new Response(
-        JSON.stringify({ error: 'galleryId, photoId e action são obrigatórios' }),
+        JSON.stringify({ error: 'galleryId e action são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Handle finalize_payment action (PIX Manual confirmation by client)
+    if (action === 'finalize_payment') {
+      const { data: gallery, error: galleryError } = await supabase
+        .from('galerias')
+        .select('id, status_selecao, session_id')
+        .eq('id', galleryId)
+        .single();
+
+      if (galleryError || !gallery) {
+        return new Response(
+          JSON.stringify({ error: 'Galeria não encontrada' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (gallery.status_selecao !== 'aguardando_pagamento') {
+        return new Response(
+          JSON.stringify({ error: 'Esta galeria não está aguardando pagamento' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Finalize the gallery
+      const now = new Date().toISOString();
+      await supabase
+        .from('galerias')
+        .update({
+          status_selecao: 'confirmado',
+          finalized_at: now,
+          status_pagamento: 'aguardando_confirmacao',
+          updated_at: now,
+        })
+        .eq('id', galleryId);
+
+      // Update session if linked
+      if (gallery.session_id) {
+        await supabase
+          .from('clientes_sessoes')
+          .update({ status_galeria: 'concluida', updated_at: now })
+          .eq('session_id', gallery.session_id);
+      }
+
+      // Log action
+      await supabase.from('galeria_acoes').insert({
+        galeria_id: galleryId,
+        tipo: 'pagamento_informado',
+        descricao: 'Cliente informou pagamento PIX manual',
+        user_id: null,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, message: 'Pagamento informado com sucesso' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // For photo actions, photoId is required
+    if (!photoId) {
+      return new Response(
+        JSON.stringify({ error: 'photoId é obrigatório para esta ação' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
