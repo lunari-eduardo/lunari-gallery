@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Copy, CheckCircle, Clock, QrCode } from 'lucide-react';
+import { Copy, CheckCircle, Clock, QrCode, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import { generatePixPayload } from '@/lib/pixGenerator';
@@ -17,6 +25,7 @@ interface PixPaymentScreenProps {
   onPaymentConfirmed?: () => void;
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
+  isConfirming?: boolean;
 }
 
 export function PixPaymentScreen({
@@ -30,9 +39,11 @@ export function PixPaymentScreen({
   onPaymentConfirmed,
   themeStyles = {},
   backgroundMode = 'light',
+  isConfirming = false,
 }: PixPaymentScreenProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Generate valid PIX EMV payload with value
   const pixPayload = generatePixPayload({
@@ -64,6 +75,11 @@ export function PixPaymentScreen({
     } catch (err) {
       toast.error('Erro ao copiar');
     }
+  };
+
+  const handleConfirmPayment = () => {
+    setShowConfirmModal(false);
+    onPaymentConfirmed?.();
   };
 
   const getTipoChaveLabel = (tipo?: string) => {
@@ -165,10 +181,23 @@ export function PixPaymentScreen({
           </p>
         </div>
 
-        {/* Recipient Info */}
-        <div className="text-sm text-muted-foreground">
-          <p>Titular: <span className="font-medium text-foreground">{nomeTitular}</span></p>
-        </div>
+        {/* Inform Payment Button */}
+        {onPaymentConfirmed && (
+          <div className="space-y-2">
+            <Button
+              variant="terracotta"
+              onClick={() => setShowConfirmModal(true)}
+              className="w-full"
+              disabled={isConfirming}
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              {isConfirming ? 'Confirmando...' : 'Informar pagamento'}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Este pagamento possui confirmação manual. Clique aqui após realizar o Pix.
+            </p>
+          </div>
+        )}
 
         {/* Waiting Notice */}
         <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
@@ -185,18 +214,6 @@ export function PixPaymentScreen({
             </div>
           </div>
         </div>
-
-        {/* Payment Confirmed Button */}
-        {onPaymentConfirmed && (
-          <Button
-            variant="terracotta"
-            onClick={onPaymentConfirmed}
-            className="w-full"
-          >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Já realizei o pagamento
-          </Button>
-        )}
 
         {/* Back button */}
         {onBack && (
@@ -216,6 +233,27 @@ export function PixPaymentScreen({
           Nunca compartilhe senhas ou dados sensíveis.
         </p>
       </div>
+
+      {/* Confirmation Modal */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar pagamento</DialogTitle>
+            <DialogDescription>
+              Ao confirmar, o fotógrafo será notificado para verificar o pagamento manualmente.
+              Se possível, envie o comprovante para agilizar a validação.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setShowConfirmModal(false)}>
+              Cancelar
+            </Button>
+            <Button variant="terracotta" onClick={handleConfirmPayment} disabled={isConfirming}>
+              {isConfirming ? 'Confirmando...' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

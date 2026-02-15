@@ -304,13 +304,25 @@ Deno.serve(async (req: Request) => {
             total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
             valor_total_vendido: valorAtual + valorCobranca,
             status_pagamento: 'pago',
+            // FINALIZE GALLERY: Payment confirmed, now finalize
+            status_selecao: 'confirmado',
+            finalized_at: new Date().toISOString(),
           })
           .eq('id', cobranca.galeria_id);
 
         if (updateExtrasError) {
           console.error('❌ Error updating galeria extras:', updateExtrasError);
         } else {
-          console.log(`✅ Galeria extras updated: ${extrasAtuais} + ${extrasNovas} = ${extrasAtuais + extrasNovas}`);
+          console.log(`✅ Galeria extras updated and FINALIZED: ${extrasAtuais} + ${extrasNovas} = ${extrasAtuais + extrasNovas}`);
+        }
+        
+        // Update session status to concluida if linked
+        if (cobranca.session_id) {
+          await supabase
+            .from('clientes_sessoes')
+            .update({ status_galeria: 'concluida', updated_at: new Date().toISOString() })
+            .eq('session_id', cobranca.session_id);
+          console.log(`✅ Session ${cobranca.session_id} status updated to concluida`);
         }
       }
     }

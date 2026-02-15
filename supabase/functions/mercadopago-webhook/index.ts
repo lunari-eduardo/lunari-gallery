@@ -249,6 +249,8 @@ Deno.serve(async (req) => {
                 .update({
                   status_pagamento: 'pago',
                   status: 'selecao_completa',
+                  // FINALIZE GALLERY: Payment confirmed
+                  status_selecao: 'confirmado',
                   finalized_at: now,
                   total_fotos_extras_vendidas: (galeria.total_fotos_extras_vendidas || 0) + (cobranca.qtd_fotos || 0),
                   valor_total_vendido: (galeria.valor_total_vendido || 0) + cobranca.valor,
@@ -258,7 +260,7 @@ Deno.serve(async (req) => {
               if (galeriaError) {
                 console.error('Erro ao atualizar galeria:', galeriaError);
               } else {
-                console.log('Galeria atualizada, pagamento aprovado');
+                console.log('Galeria atualizada e FINALIZADA, pagamento aprovado');
               }
             }
           }
@@ -277,6 +279,9 @@ Deno.serve(async (req) => {
                 .update({
                   valor_pago: (sessao.valor_pago || 0) + cobranca.valor,
                   status_pagamento_fotos_extra: 'pago',
+                  // FINALIZE SESSION: Payment confirmed
+                  status_galeria: 'concluida',
+                  updated_at: new Date().toISOString(),
                 })
                 .eq('session_id', cobranca.session_id);
             }
