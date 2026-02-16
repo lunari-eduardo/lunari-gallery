@@ -1,131 +1,122 @@
 
-# Melhorias na Galeria do Cliente: Colunas Mobile, Desconto Progressivo e Menu de Filtros
+# Padronizacao de Status: `galerias.status_selecao` e `clientes_sessoes.status_galeria`
 
-## 1. Colunas responsivas no mobile
+## Diagnostico atual
 
-**Problema**: No mobile (smartphones), o masonry grid mostra apenas 1 coluna. Em tablets, mostra 2.
+### Tabela `galerias` - coluna `status` (ciclo de vida principal)
+| Valor atual no DB | Significado |
+|---|---|
+| `rascunho` | Galeria criada, nao publicada |
+| `enviado` | Galeria publicada/enviada ao cliente |
+| `selecao_iniciada` | Cliente acessou e comecou a selecionar |
+| `selecao_completa` | Selecao finalizada (com ou sem pagamento) |
 
-**Correcao no CSS** (`src/index.css`):
+**Sem mudanca necessaria** - estes valores ja estao coerentes.
 
-Alterar os breakpoints do `.masonry-grid`:
-
-| Breakpoint | Atual | Novo |
+### Tabela `galerias` - coluna `status_selecao` (sub-estado da selecao)
+| Valor atual | Constraint DB | Significado |
 |---|---|---|
-| Base (< 640px) | 1 coluna | **2 colunas** |
-| sm (640px - tablets pequenos) | 2 colunas | **3 colunas** |
-| lg (1024px+) | 3 colunas | 3 colunas (sem mudanca) |
-| xl (1280px+) | 3 colunas | 3 colunas (sem mudanca) |
-| 2xl (1536px+) | 4 colunas | 4 colunas (sem mudanca) |
+| `em_andamento` | Sim | Selecao em andamento |
+| `confirmado` | Sim | Selecao confirmada/finalizada |
+| `bloqueado` | Sim | Selecao bloqueada |
+| `aguardando_pagamento` | Sim | Aguardando pagamento para finalizar |
 
-Isso garante 2 colunas em smartphones e 3 em tablets sem alterar desktop.
+**Problema**: `confirmado` deveria ser `selecao_completa` para alinhar com `galerias.status`.
 
----
+### Tabela `clientes_sessoes` - coluna `status_galeria`
+| Valor atual no DB | Onde e escrito | Significado |
+|---|---|---|
+| `criada` | `useSupabaseGalleries.ts` (criacao) | Galeria criada |
+| `enviada` | `useSupabaseGalleries.ts` (publicacao) | Galeria enviada |
+| `em_selecao` | `client-selection`, `confirm-selection` | Cliente selecionando |
+| `selecao_iniciada` | legado (DB existente) | Mesmo que `em_selecao` |
+| `selecao_completa` | legado (DB existente) | Selecao completa |
+| `concluida` | webhooks, `confirm-selection`, `client-selection` | Selecao finalizada |
+| `excluida` | `useSupabaseGalleries.ts` (exclusao) | Galeria excluida |
 
-## 2. Contador de desconto progressivo
-
-Criar um novo componente `DiscountProgressBar` que sera exibido na parte inferior da galeria, acima da barra de selecao (bottom bar).
-
-**Logica**: O componente recebe as `regrasCongeladas` (ou `discountPackages` de galerias standalone) e calcula:
-- Faixa de preco atual (baseada no total de extras selecionadas)
-- Proxima faixa de preco (se existir)
-- Quantas fotos faltam para ativar o proximo desconto
-- Porcentagem de desconto atual vs preco base
-
-**Visual**:
-- Barra horizontal com indicadores de faixas (segmentos)
-- Cada faixa mostra: intervalo de fotos + valor por foto
-- Faixa ativa destacada com cor primaria
-- Texto "Faltam X fotos para desconto de Y%" abaixo
-- Segue tema aplicado (dark/light) e cores customizadas
-- Responsivo: compacto no mobile, expandido no desktop
-- Estilo neutro e elegante, sem cores saturadas
-
-**Compatibilidade**: Funciona com ambos os tipos de regras:
-- Galerias vinculadas ao Gestao (regras congeladas com faixas global/categoria)
-- Galerias standalone (discountPackages convertidos para regras)
-
-**Visibilidade**: So aparece quando existem faixas de desconto progressivo (modelo `global` ou `categoria` com mais de 1 faixa). Nao aparece em modo `fixo`.
-
-**Posicionamento**: Fixo na parte inferior, logo acima do `SelectionSummary` bottom-bar. Aparece/desaparece suavemente conforme o cliente seleciona fotos extras.
+**Problema**: `concluida` e `selecao_completa` significam a mesma coisa. E `selecao_iniciada` vs `em_selecao` tambem.
 
 ---
 
-## 3. Menu hamburger com filtros
+## Padrao proposto
 
-Substituir o botao de ajuda isolado no header por um menu hamburger (tres risquinhos) que abre um Sheet (painel lateral) com:
+### `galerias.status_selecao` (4 valores)
+| Novo valor | Antigo | Significado |
+|---|---|---|
+| `em_andamento` | `em_andamento` | Sem mudanca |
+| `selecao_completa` | `confirmado` | **Renomear** - selecao finalizada |
+| `bloqueado` | `bloqueado` | Sem mudanca |
+| `aguardando_pagamento` | `aguardando_pagamento` | Sem mudanca |
 
-**Opcoes do menu**:
-1. **Fotos favoritas** - Filtro que mostra apenas fotos marcadas como favoritas
-2. **Fotos selecionadas** - Filtro que mostra apenas fotos ja selecionadas
-3. **Todas as fotos** - Mostra todas (estado padrao)
-4. **Instrucoes de uso** - Abre o modal `HelpInstructionsModal` existente
-
-**Implementacao**:
-- Usar componente `Sheet` (side="left") para o menu lateral
-- Adicionar estado `filterMode: 'all' | 'favorites' | 'selected'` no `ClientGallery.tsx`
-- Filtrar `localPhotos` antes de passar para o `MasonryGrid`
-- Icone de menu (Menu/hamburguer) no header, lado esquerdo
-- Mostrar contadores ao lado de cada filtro (ex: "Favoritas (5)")
-- Seguir tema aplicado (cores, dark/light)
+### `clientes_sessoes.status_galeria` (5 valores + excluida)
+| Novo valor | Antigos | Significado |
+|---|---|---|
+| `enviada` | `enviada`, `criada` | Galeria criada/publicada |
+| `em_selecao` | `em_selecao`, `selecao_iniciada` | Cliente acessou e esta selecionando |
+| `selecao_completa` | `concluida`, `selecao_completa` | Selecao finalizada |
+| `expirada` | *(novo)* | Galeria expirada |
+| `excluida` | `excluida` | Galeria removida |
 
 ---
 
-## Arquivos modificados
+## Mudancas necessarias
+
+### 1. Migration SQL
+
+```sql
+-- 1. Atualizar dados existentes em galerias.status_selecao
+UPDATE galerias SET status_selecao = 'selecao_completa' WHERE status_selecao = 'confirmado';
+
+-- 2. Atualizar constraint
+ALTER TABLE galerias DROP CONSTRAINT galerias_status_selecao_check;
+ALTER TABLE galerias ADD CONSTRAINT galerias_status_selecao_check 
+  CHECK (status_selecao = ANY (ARRAY[
+    'em_andamento', 'selecao_completa', 'bloqueado', 'aguardando_pagamento'
+  ]));
+
+-- 3. Atualizar dados existentes em clientes_sessoes.status_galeria
+UPDATE clientes_sessoes SET status_galeria = 'em_selecao' WHERE status_galeria = 'selecao_iniciada';
+UPDATE clientes_sessoes SET status_galeria = 'selecao_completa' WHERE status_galeria = 'concluida';
+UPDATE clientes_sessoes SET status_galeria = 'enviada' WHERE status_galeria = 'criada';
+
+-- 4. Adicionar constraint em clientes_sessoes (nao tem nenhum hoje)
+ALTER TABLE clientes_sessoes ADD CONSTRAINT sessoes_status_galeria_check 
+  CHECK (status_galeria IS NULL OR status_galeria = ANY (ARRAY[
+    'enviada', 'em_selecao', 'selecao_completa', 'expirada', 'excluida'
+  ]));
+```
+
+### 2. Edge Functions (substituir `confirmado` por `selecao_completa` e `concluida` por `selecao_completa`)
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/index.css` | Alterar column-count do masonry para 2 colunas no mobile base |
-| `src/components/DiscountProgressBar.tsx` | **Novo** - Componente de progresso de desconto |
-| `src/components/ClientGalleryHeader.tsx` | Adicionar menu hamburger com Sheet de filtros |
-| `src/pages/ClientGallery.tsx` | Adicionar estado de filtro, integrar DiscountProgressBar |
-| `src/components/HelpInstructionsModal.tsx` | Sem mudanca (reutilizado) |
+| `supabase/functions/confirm-selection/index.ts` | `'confirmado'` -> `'selecao_completa'`, `'concluida'` -> `'selecao_completa'` |
+| `supabase/functions/gallery-access/index.ts` | `status_selecao === 'confirmado'` -> `'selecao_completa'` |
+| `supabase/functions/infinitepay-webhook/index.ts` | `status_selecao: 'confirmado'` -> `'selecao_completa'`, `status_galeria: 'concluida'` -> `'selecao_completa'` |
+| `supabase/functions/mercadopago-webhook/index.ts` | `status_selecao: 'confirmado'` -> `'selecao_completa'`, `status_galeria: 'concluida'` -> `'selecao_completa'` |
+| `supabase/functions/check-payment-status/index.ts` | `status_selecao: 'confirmado'` -> `'selecao_completa'`, `status_galeria: 'concluida'` -> `'selecao_completa'` |
+| `supabase/functions/client-selection/index.ts` | `status_selecao === 'confirmado'` -> `'selecao_completa'`, `status_galeria: 'concluida'` -> `'selecao_completa'` |
+
+### 3. Frontend (substituir `confirmado` por `selecao_completa`)
+
+| Arquivo | Mudanca |
+|---|---|
+| `src/pages/ClientGallery.tsx` | `=== 'confirmado'` -> `=== 'selecao_completa'` |
+| `src/hooks/useSupabaseGalleries.ts` | `status_selecao: 'confirmado'` -> `'selecao_completa'`, `status_galeria: 'concluida'` nao existe aqui mas `status_galeria: 'criada'` -> `'enviada'` na criacao |
+| `src/pages/GalleryDetail.tsx` | `statusSelecao === 'confirmado'` -> `'selecao_completa'` |
+| `src/components/StatusBadge.tsx` | Adicionar `'selecao_completa'` ao mapeamento de selection status, remover `'confirmado'` |
+| `src/pages/Dashboard.tsx` | `'confirmada'` -> `'selecao_completa'` no mapeamento de status |
+
+### 4. Trigger `sync_gallery_status_to_session` (DB function)
+
+Atualizar o mapeamento dentro da funcao para usar os novos termos (`selecao_completa` em vez de `concluida`).
 
 ---
 
-## Detalhes tecnicos
-
-### DiscountProgressBar
+## Resumo dos termos padronizados
 
 ```text
-Props:
-- regrasCongeladas: RegrasCongeladas | null
-- totalExtras: number (extras acumuladas)
-- extraPhotoPrice: number (preco base fallback)
-- saleSettings: gallery.saleSettings (para discountPackages standalone)
-
-Logica interna:
-1. Extrair faixas de getFaixasFromRegras()
-2. Se faixas.length < 2, nao renderizar nada
-3. Encontrar faixa atual com encontrarFaixaPreco(totalExtras)
-4. Encontrar proxima faixa (a seguinte na lista ordenada)
-5. Calcular: faltam = proximaFaixa.min - totalExtras
-6. Calcular desconto%: ((precoBase - faixaAtual.valor) / precoBase) * 100
-7. Renderizar barra segmentada + texto informativo
-```
-
-### Filtro no ClientGallery
-
-```text
-Estado: filterMode: 'all' | 'favorites' | 'selected'
-
-Filtragem antes do MasonryGrid:
-const displayPhotos = filterMode === 'favorites' 
-  ? localPhotos.filter(p => p.isFavorite)
-  : filterMode === 'selected'
-  ? localPhotos.filter(p => p.isSelected)
-  : localPhotos;
-
-O lightbox continua usando localPhotos completo para navegacao.
-```
-
-### Menu lateral (Sheet)
-
-```text
-Posicao: lado esquerdo (side="left")
-Conteudo:
-- Header com titulo "Menu"
-- Lista de filtros com icones e contadores
-- Separador
-- Item "Instrucoes de uso" que fecha o Sheet e abre o HelpModal
-- Segue tema (bg-background, text-foreground)
+galerias.status:          rascunho -> enviado -> selecao_iniciada -> selecao_completa
+galerias.status_selecao:  em_andamento -> aguardando_pagamento -> selecao_completa
+clientes_sessoes.status_galeria:  enviada -> em_selecao -> selecao_completa | expirada | excluida
 ```
