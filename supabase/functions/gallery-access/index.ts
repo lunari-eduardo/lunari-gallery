@@ -241,7 +241,7 @@ serve(async (req) => {
     }
 
     // 3b. Check if gallery is finalized (show preview of selected photos)
-    const isFinalized = gallery.status_selecao === 'confirmado' || gallery.finalized_at;
+    const isFinalized = gallery.status_selecao === 'selecao_completa' || gallery.finalized_at;
     
     if (isFinalized) {
       // Fetch studio settings for logo on finalized screen

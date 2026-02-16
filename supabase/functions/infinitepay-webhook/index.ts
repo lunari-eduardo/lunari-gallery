@@ -305,7 +305,7 @@ Deno.serve(async (req: Request) => {
             valor_total_vendido: valorAtual + valorCobranca,
             status_pagamento: 'pago',
             // FINALIZE GALLERY: Payment confirmed, now finalize
-            status_selecao: 'confirmado',
+            status_selecao: 'selecao_completa',
             finalized_at: new Date().toISOString(),
           })
           .eq('id', cobranca.galeria_id);
@@ -320,9 +320,9 @@ Deno.serve(async (req: Request) => {
         if (cobranca.session_id) {
           await supabase
             .from('clientes_sessoes')
-            .update({ status_galeria: 'concluida', updated_at: new Date().toISOString() })
+            .update({ status_galeria: 'selecao_completa', updated_at: new Date().toISOString() })
             .eq('session_id', cobranca.session_id);
-          console.log(`✅ Session ${cobranca.session_id} status updated to concluida`);
+          console.log(`✅ Session ${cobranca.session_id} status updated to selecao_completa`);
         }
       }
     }

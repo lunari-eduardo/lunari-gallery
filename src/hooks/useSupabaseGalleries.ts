@@ -319,7 +319,7 @@ export function useSupabaseGalleries() {
           .from('clientes_sessoes')
           .update({
             galeria_id: result.id,
-            status_galeria: 'criada',
+            status_galeria: 'enviada',
             updated_at: new Date().toISOString(),
           })
           .eq('session_id', data.sessionId);
@@ -604,7 +604,7 @@ export function useSupabaseGalleries() {
         .from('galerias')
         .update({
           status: 'selecao_completa',
-          status_selecao: 'confirmado',
+          status_selecao: 'selecao_completa',
           finalized_at: new Date().toISOString(),
         })
         .eq('id', id);
