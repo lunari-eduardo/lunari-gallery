@@ -278,7 +278,7 @@ export default function ClientGallery() {
       includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) ?? 0,
       extraPhotoPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) ?? 0,
       status: 'sent' as Gallery['status'],
-      selectionStatus: (isEdgeFunctionFormat ? supabaseGallery.selectionStatus : supabaseGallery.status_selecao) === 'confirmado' ? 'confirmed' : 'in_progress',
+      selectionStatus: (isEdgeFunctionFormat ? supabaseGallery.selectionStatus : supabaseGallery.status_selecao) === 'selecao_completa' ? 'confirmed' : 'in_progress',
       createdAt: new Date(),
       updatedAt: new Date(),
       saleSettings: (() => {
@@ -502,7 +502,7 @@ export default function ClientGallery() {
         });
       });
       
-      const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'confirmado' || 
+      const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'selecao_completa' || 
                                  supabaseGallery?.finalized_at;
       // Don't treat aguardando_pagamento as confirmed
       const isAwaitingPayment = supabaseGallery?.status_selecao === 'aguardando_pagamento';

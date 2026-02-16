@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       await supabase
         .from('galerias')
         .update({
-          status_selecao: 'confirmado',
+          status_selecao: 'selecao_completa',
           finalized_at: now,
           status_pagamento: 'aguardando_confirmacao',
           updated_at: now,
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       if (gallery.session_id) {
         await supabase
           .from('clientes_sessoes')
-          .update({ status_galeria: 'concluida', updated_at: now })
+          .update({ status_galeria: 'selecao_completa', updated_at: now })
           .eq('session_id', gallery.session_id);
       }
 
@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
     }
 
     // 3. Check if selection is already confirmed
-    if (gallery.status_selecao === 'confirmado' || gallery.finalized_at) {
+    if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
       return new Response(
         JSON.stringify({ error: 'A seleção desta galeria já foi confirmada' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

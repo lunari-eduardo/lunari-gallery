@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
     }
 
     // 2. Check if selection is already confirmed
-    if (gallery.status_selecao === 'confirmado' || gallery.finalized_at) {
+    if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
       return new Response(
         JSON.stringify({ error: 'A seleção desta galeria já foi confirmada' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -440,7 +440,7 @@ Deno.serve(async (req) => {
     
     const updateData: Record<string, unknown> = {
       status: 'selecao_completa',
-      status_selecao: shouldFinalizeNow ? 'confirmado' : 'aguardando_pagamento',
+      status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
       finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
       fotos_selecionadas: selectedCount || 0,
       valor_extras: valorTotal,
@@ -505,7 +505,7 @@ Deno.serve(async (req) => {
           valor_foto_extra: valorUnitario, // Last unit price used
           valor_total_foto_extra: novoValorTotalFotoExtra, // CUMULATIVE: total value across all cycles
           // Only mark as concluida if finalizing now (no pending payment)
-          status_galeria: shouldFinalizeNow ? 'concluida' : 'em_selecao',
+          status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
           updated_at: new Date().toISOString(),
         })
         .eq('session_id', gallery.session_id);
@@ -513,7 +513,7 @@ Deno.serve(async (req) => {
       if (sessionError) {
         console.error('Session update error:', sessionError);
       } else {
-        console.log(`✅ Session ${gallery.session_id} updated: ${novoQtdFotosExtra} cumulative extras, R$ ${valorUnitario}/photo, total R$ ${novoValorTotalFotoExtra}, status=concluida`);
+        console.log(`✅ Session ${gallery.session_id} updated: ${novoQtdFotosExtra} cumulative extras, R$ ${valorUnitario}/photo, total R$ ${novoValorTotalFotoExtra}, status=selecao_completa`);
       }
     }
 

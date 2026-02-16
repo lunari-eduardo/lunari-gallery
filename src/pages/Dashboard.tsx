@@ -101,7 +101,7 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao'
       discountPackages: [],
     },
     status,
-    selectionStatus: galeria.statusSelecao === 'confirmado' ? 'confirmed' : 'in_progress',
+    selectionStatus: galeria.statusSelecao === 'selecao_completa' ? 'confirmed' : 'in_progress',
     settings: {
       welcomeMessage: galeria.mensagemBoasVindas || '',
       deadline,

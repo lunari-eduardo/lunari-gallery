@@ -38,7 +38,7 @@ const statusTranslation: Record<string, GalleryStatus | SelectionStatus> = {
   'confirmed': 'confirmed',
   'blocked': 'blocked',
   'em_andamento': 'in_progress',
-  'confirmado': 'confirmed',
+  'selecao_completa': 'confirmed',
   'bloqueado': 'blocked',
 };
 

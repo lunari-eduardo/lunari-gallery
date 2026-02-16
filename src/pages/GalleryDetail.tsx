@@ -341,9 +341,8 @@ export default function GalleryDetail() {
     navigate('/');
   };
 
-  // Check if gallery can be reactivated (supports both 'confirmado' and 'confirmada')
-  const canReactivate = supabaseGallery.statusSelecao === 'confirmado' || 
-                        supabaseGallery.statusSelecao === 'confirmada' || 
+  // Check if gallery can be reactivated
+  const canReactivate = supabaseGallery.statusSelecao === 'selecao_completa' || 
                         supabaseGallery.status === 'selecao_completa' ||
                         supabaseGallery.status === 'expirado' ||
                         supabaseGallery.status === 'expirada' ||
@@ -405,7 +404,7 @@ export default function GalleryDetail() {
       discountPackages: [],
     },
     status: getStatusDisplay(supabaseGallery.status),
-    selectionStatus: supabaseGallery.statusSelecao === 'confirmada' ? 'confirmed' : 'in_progress',
+    selectionStatus: supabaseGallery.statusSelecao === 'selecao_completa' ? 'confirmed' : 'in_progress',
     settings: {
       welcomeMessage: supabaseGallery.mensagemBoasVindas || '',
       deadline,
