@@ -22,7 +22,8 @@ import { PasswordScreen } from '@/components/PasswordScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
-import { ClientGalleryHeader } from '@/components/ClientGalleryHeader';
+import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
+import { DiscountProgressBar } from '@/components/DiscountProgressBar';
 import { DownloadModal } from '@/components/DownloadModal';
 import { getPhotoUrl, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -91,6 +92,7 @@ export default function ClientGallery() {
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [hasAutoOpenedDownload, setHasAutoOpenedDownload] = useState(false);
   
   
@@ -1329,27 +1331,47 @@ export default function ClientGallery() {
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
         studioName={galleryResponse?.studioSettings?.studio_name}
         contactEmail={null}
+        filterMode={filterMode}
+        onFilterChange={setFilterMode}
+        favoritesCount={localPhotos.filter(p => p.isFavorite).length}
       />
 
       {/* Main Content - Full width gallery */}
-      <main className="flex-1 py-2 pb-20">
+      <main className="flex-1 py-2 pb-28">
         <MasonryGrid>
-          {localPhotos.map((photo, index) => (
-            <MasonryItem key={photo.id}>
-              <PhotoCard
-                photo={photo}
-                isSelected={photo.isSelected}
-                allowComments={gallery.settings.allowComments}
-                disabled={isBlocked}
-                onSelect={() => toggleSelection(photo.id)}
-                onViewFullscreen={() => setLightboxIndex(index)}
-                onComment={() => {}}
-                onFavorite={() => handleFavorite(photo.id)}
-              />
-            </MasonryItem>
-          ))}
+          {(filterMode === 'favorites' 
+            ? localPhotos.filter(p => p.isFavorite)
+            : filterMode === 'selected'
+            ? localPhotos.filter(p => p.isSelected)
+            : localPhotos
+          ).map((photo) => {
+            const originalIndex = localPhotos.findIndex(p => p.id === photo.id);
+            return (
+              <MasonryItem key={photo.id}>
+                <PhotoCard
+                  photo={photo}
+                  isSelected={photo.isSelected}
+                  allowComments={gallery.settings.allowComments}
+                  disabled={isBlocked}
+                  onSelect={() => toggleSelection(photo.id)}
+                  onViewFullscreen={() => setLightboxIndex(originalIndex)}
+                  onComment={() => {}}
+                  onFavorite={() => handleFavorite(photo.id)}
+                />
+              </MasonryItem>
+            );
+          })}
         </MasonryGrid>
       </main>
+
+      {/* Discount Progress Bar */}
+      <DiscountProgressBar
+        regrasCongeladas={regrasCongeladas}
+        totalExtras={totalExtrasAcumuladas}
+        extraPhotoPrice={gallery.extraPhotoPrice}
+        saleSettings={gallery.saleSettings}
+        includedPhotos={gallery.includedPhotos}
+      />
 
       {/* Bottom Bar Summary */}
       <SelectionSummary 
