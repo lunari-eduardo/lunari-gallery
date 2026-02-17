@@ -1,41 +1,80 @@
 
-# Correção: `infinitepay-create-link` com deploy desatualizado
+# Correcao: Pagamentos InfinitePay nao atualizando galeria + botao "Confirmar Pago"
 
-## Causa raiz
+## Causa raiz (2 problemas)
 
-Os logs mostram claramente o erro:
+### Problema 1: Edge functions desatualizadas (deploy antigo)
+As edge functions foram editadas no codigo (para usar `selecao_completa` em vez de `confirmado`) mas **nunca foram redeployadas**. A versao em execucao ainda usa termos antigos que podem conflitar com os novos constraints do banco.
 
+### Problema 2: Constraint `galeria_acoes_tipo_check` bloqueando acoes
+O constraint da tabela `galeria_acoes` so permite 6 tipos:
+- `criada`, `enviada`, `cliente_acessou`, `cliente_confirmou`, `selecao_reaberta`, `expirada`
+
+Mas as edge functions tentam inserir tipos que **nao existem** no constraint:
+- `pagamento_informado` (em `client-selection`)
+- `pagamento_confirmado` (em `mercadopago-webhook`)
+- `foto_selecionada`, `foto_desmarcada`, `foto_favoritada` (em `client-selection`)
+
+Os logs do banco confirmam o erro no momento exato do pagamento:
 ```
-[infinitepay-create-link] Error: Usuário não autenticado (line 28)
+"new row for relation 'galeria_acoes' violates check constraint 'galeria_acoes_tipo_check'"
 ```
 
-A versão **deployada** da edge function `infinitepay-create-link` contém validação de autenticação de usuário que **não existe no código atual do repositório**. Isso significa que a função está rodando uma versão antiga que exige JWT/auth, mas quando `confirm-selection` a invoca via `supabase.functions.invoke()`, não envia token de usuário (usa service role internamente).
+Isso faz com que o fluxo de confirmacao falhe parcialmente - a cobranca atualiza para "pago" mas a galeria nao e finalizada.
 
-O código no repositório está correto -- ele aceita `userId` no body e busca o handle diretamente. O problema é que a função nunca foi re-deployada após a última atualização.
-
-## Correção
-
-**Redeployar** a edge function `infinitepay-create-link` a partir do código atual do repositório. Nenhuma mudança de código é necessária.
-
-## Outros modos afetados
-
-| Provedor | Afetado? | Motivo |
+## Estado atual no banco (evidencia)
+| Registro | Status | Problema |
 |---|---|---|
-| InfinitePay | Sim | Deploy desatualizado com auth antiga |
-| Mercado Pago | Não | Código já está correto e sem auth bloqueante |
-| PIX Manual | Não | Não invoca edge function externa |
+| Cobranca `47863ef5` | `pago` | OK - atualizado corretamente |
+| Galeria `bf563230` | `status_pagamento: pendente`, `status_selecao: aguardando_pagamento` | Nao foi atualizada |
 
-## Como prevenir no futuro
+## Correcoes
 
-O problema ocorreu porque as edge functions foram editadas no código mas não foram re-deployadas. Para prevenir:
+### 1. Migration SQL - Ampliar constraint `galeria_acoes_tipo_check`
+Adicionar todos os tipos de acao usados pelas edge functions e frontend:
 
-1. **Sempre redeployar** edge functions após qualquer alteração no código
-2. **Testar após deploy** chamando a função com curl/invoke para validar
-3. **Monitorar logs** após mudanças para detectar erros de versão desatualizada
+```sql
+ALTER TABLE galeria_acoes DROP CONSTRAINT galeria_acoes_tipo_check;
+ALTER TABLE galeria_acoes ADD CONSTRAINT galeria_acoes_tipo_check 
+  CHECK (tipo = ANY (ARRAY[
+    'criada', 'enviada', 'cliente_acessou', 'cliente_confirmou', 
+    'selecao_reaberta', 'expirada',
+    'pagamento_informado', 'pagamento_confirmado',
+    'foto_selecionada', 'foto_desmarcada', 'foto_favoritada',
+    'galeria_excluida'
+  ]));
+```
 
-## Ação
+### 2. Corrigir galeria travada
+Atualizar manualmente a galeria que ficou presa com pagamento pendente:
 
-| Passo | Descrição |
+```sql
+UPDATE galerias 
+SET status_pagamento = 'pago', 
+    status_selecao = 'selecao_completa', 
+    finalized_at = NOW()
+WHERE id = 'bf563230-1473-413a-be10-85c8d65ce955' 
+  AND status_pagamento = 'pendente';
+```
+
+### 3. Redeployar TODAS as edge functions de pagamento
+Garantir que as versoes atuais (com `selecao_completa`) estejam rodando:
+- `check-payment-status`
+- `infinitepay-webhook`
+- `confirm-selection`
+- `client-selection`
+- `gallery-access`
+- `mercadopago-webhook`
+
+### 4. Nenhuma mudanca de codigo necessaria
+O codigo no repositorio ja esta correto. O problema e exclusivamente de deploy desatualizado + constraint restritivo.
+
+## Arquivos afetados
+
+| Arquivo | Mudanca |
 |---|---|
-| 1 | Redeployar `infinitepay-create-link` |
-| 2 | Testar o fluxo de pagamento InfinitePay novamente |
+| Nova migration SQL | Ampliar `galeria_acoes_tipo_check` + corrigir galeria travada |
+| 6 edge functions | Redeploy (sem mudanca de codigo) |
+
+## Por que o "Confirmar Pago" nao funciona
+O botao chama `check-payment-status` com `forceUpdate: true`. A funcao atualiza a cobranca para "pago" com sucesso, mas quando tenta atualizar a galeria (definindo `status_selecao: 'selecao_completa'`), a versao antiga deployada pode estar usando `'confirmado'` que viola o constraint. Alem disso, se o fluxo tenta registrar uma acao em `galeria_acoes`, falha no constraint de tipo.
