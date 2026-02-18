@@ -760,6 +760,89 @@ export default function ClientGallery() {
     );
   }
 
+  // Expired gallery screen
+  if (galleryResponse?.expired) {
+    const expiredBgMode = galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+    const expiredFont = getFontFamilyById(galleryResponse?.settings?.sessionFont);
+    const expiredTitleCase = (galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal';
+    const expiredSessionName = galleryResponse?.sessionName || '';
+    const expiredStudioLogo = galleryResponse?.studioSettings?.studio_logo_url;
+    const expiredStudioName = galleryResponse?.studioSettings?.studio_name;
+
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center p-6"
+        style={{
+          ...themeStyles,
+          fontFamily: expiredFont || undefined,
+        }}
+      >
+        {/* Studio logo */}
+        {expiredStudioLogo && (
+          <div className="mb-8">
+            <img
+              src={expiredStudioLogo}
+              alt={expiredStudioName || 'Studio'}
+              className="h-12 object-contain mx-auto"
+            />
+          </div>
+        )}
+
+        <div className="max-w-sm w-full text-center space-y-6">
+          {/* Icon */}
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
+            style={{ backgroundColor: 'hsl(var(--muted))' }}
+          >
+            <Clock className="h-9 w-9" style={{ color: 'hsl(var(--muted-foreground))' }} />
+          </div>
+
+          {/* Session name */}
+          {expiredSessionName && (
+            <p
+              className="text-sm font-medium tracking-wide uppercase"
+              style={{ color: 'hsl(var(--muted-foreground))' }}
+            >
+              {applyTitleCase(expiredSessionName, expiredTitleCase)}
+            </p>
+          )}
+
+          {/* Main message */}
+          <div className="space-y-3">
+            <h1
+              className="text-2xl font-bold"
+              style={{ color: 'hsl(var(--foreground))' }}
+            >
+              Galeria expirada
+            </h1>
+            <p
+              className="text-base leading-relaxed"
+              style={{ color: 'hsl(var(--muted-foreground))' }}
+            >
+              O prazo de acesso à galeria expirou.
+            </p>
+            <p
+              className="text-sm leading-relaxed"
+              style={{ color: 'hsl(var(--muted-foreground))' }}
+            >
+              Para visualizar novamente, entre em contato com o fotógrafo e solicite a liberação.
+            </p>
+          </div>
+
+          {/* Studio name fallback */}
+          {!expiredStudioLogo && expiredStudioName && (
+            <p
+              className="text-xs pt-4 border-t"
+              style={{ color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }}
+            >
+              {expiredStudioName}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Pending payment screen - gallery awaiting payment (aguardando_pagamento)
   if (galleryResponse?.pendingPayment) {
     const pendingPaymentMethod = galleryResponse.paymentMethod;

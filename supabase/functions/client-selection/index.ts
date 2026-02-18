@@ -122,6 +122,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // 2.5. Check if gallery is expired
+    if (gallery.status === 'expirado' || 
+        (gallery.prazo_selecao && new Date(gallery.prazo_selecao) < new Date())) {
+      return new Response(
+        JSON.stringify({ error: 'O prazo desta galeria expirou' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // 3. Check if selection is already confirmed
     if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
       return new Response(

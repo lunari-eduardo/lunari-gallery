@@ -319,7 +319,7 @@ serve(async (req) => {
     }
 
     // 3. Check if gallery is in valid status for selection
-    const validStatuses = ["enviado", "selecao_iniciada"];
+    const validStatuses = ["enviado", "selecao_iniciada", "expirado"];
     if (!validStatuses.includes(gallery.status)) {
       return new Response(
         JSON.stringify({ error: "Galeria não disponível", code: "NOT_AVAILABLE" }),
@@ -327,7 +327,80 @@ serve(async (req) => {
       );
     }
 
-    // 3. Check password for private galleries
+    // 3.5. Check expiration for selection galleries
+    const isExpired = gallery.status === 'expirado' || 
+      (gallery.prazo_selecao && new Date(gallery.prazo_selecao) < new Date());
+
+    if (isExpired) {
+      // Update gallery status to expired if not already
+      if (gallery.status !== 'expirado') {
+        await supabase.from('galerias').update({ 
+          status: 'expirado',
+          updated_at: new Date().toISOString()
+        }).eq('id', gallery.id);
+
+        // Sync to clientes_sessoes
+        if (gallery.session_id) {
+          await supabase.from('clientes_sessoes').update({ 
+            status_galeria: 'expirada',
+            updated_at: new Date().toISOString()
+          }).eq('session_id', gallery.session_id);
+        }
+      }
+
+      // Fetch studio settings for branding on expiration screen
+      const { data: expiredSettings } = await supabase
+        .from("gallery_settings")
+        .select("studio_name, studio_logo_url, favicon_url")
+        .eq("user_id", gallery.user_id)
+        .single();
+
+      // Build theme data for expiration screen
+      const expiredGalleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+      const expiredThemeId = expiredGalleryConfig?.themeId as string | undefined;
+      const expiredClientMode = (expiredGalleryConfig?.clientMode as 'light' | 'dark') || 'light';
+
+      let expiredThemeData = null;
+      if (expiredThemeId) {
+        const { data: expiredTheme } = await supabase
+          .from("gallery_themes")
+          .select("*")
+          .eq("id", expiredThemeId)
+          .maybeSingle();
+        if (expiredTheme) {
+          expiredThemeData = {
+            id: expiredTheme.id, name: expiredTheme.name,
+            backgroundMode: expiredTheme.background_mode || 'light',
+            primaryColor: expiredTheme.primary_color,
+            accentColor: expiredTheme.accent_color,
+            emphasisColor: expiredTheme.emphasis_color,
+          };
+        }
+      }
+      if (!expiredThemeData) {
+        expiredThemeData = { id: 'system', name: 'Sistema', backgroundMode: expiredClientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+      }
+
+      console.log("⏰ Gallery expired:", gallery.id);
+
+      return new Response(
+        JSON.stringify({
+          expired: true,
+          galleryId: gallery.id,
+          sessionName: gallery.nome_sessao,
+          studioSettings: expiredSettings || null,
+          theme: expiredThemeData,
+          clientMode: expiredClientMode,
+          settings: {
+            sessionFont: expiredGalleryConfig?.sessionFont || undefined,
+            titleCaseMode: expiredGalleryConfig?.titleCaseMode || 'normal',
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3.6. Check password for private galleries
     if (gallery.permissao === "private" && gallery.gallery_password) {
     // If no password provided, request it
       if (!password) {
