@@ -760,30 +760,33 @@ export default function ClientGallery() {
     );
   }
 
-  // Expired gallery screen
+  // Expired gallery screen - always light background
   if (galleryResponse?.expired) {
-    const expiredBgMode = galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
     const expiredFont = getFontFamilyById(galleryResponse?.settings?.sessionFont);
     const expiredTitleCase = (galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal';
     const expiredSessionName = galleryResponse?.sessionName || '';
     const expiredStudioLogo = galleryResponse?.studioSettings?.studio_logo_url;
     const expiredStudioName = galleryResponse?.studioSettings?.studio_name;
 
+    // Always use light background for expired screen
+    const expiredBgStyle: React.CSSProperties = {
+      backgroundColor: '#FAF9F7',
+      color: '#2D2A26',
+      fontFamily: expiredFont || 'Inter, system-ui, sans-serif',
+    };
+
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center p-6"
-        style={{
-          ...themeStyles,
-          fontFamily: expiredFont || undefined,
-        }}
+        style={expiredBgStyle}
       >
-        {/* Studio logo */}
+        {/* Studio logo - larger */}
         {expiredStudioLogo && (
-          <div className="mb-8">
+          <div className="mb-10">
             <img
               src={expiredStudioLogo}
               alt={expiredStudioName || 'Studio'}
-              className="h-12 object-contain mx-auto"
+              style={{ height: '80px', maxWidth: '240px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
             />
           </div>
         )}
@@ -792,38 +795,38 @@ export default function ClientGallery() {
           {/* Icon */}
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
-            style={{ backgroundColor: 'hsl(var(--muted))' }}
+            style={{ backgroundColor: '#EDE9E4' }}
           >
-            <Clock className="h-9 w-9" style={{ color: 'hsl(var(--muted-foreground))' }} />
+            <Clock className="h-9 w-9" style={{ color: '#8A8078' }} />
           </div>
 
           {/* Session name */}
           {expiredSessionName && (
             <p
-              className="text-sm font-medium tracking-wide uppercase"
-              style={{ color: 'hsl(var(--muted-foreground))' }}
+              className="text-sm tracking-widest uppercase"
+              style={{ color: '#8A8078', fontWeight: 400 }}
             >
               {applyTitleCase(expiredSessionName, expiredTitleCase)}
             </p>
           )}
 
           {/* Main message */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <h1
-              className="text-2xl font-bold"
-              style={{ color: 'hsl(var(--foreground))' }}
+              className="text-2xl"
+              style={{ color: '#2D2A26', fontWeight: 600 }}
             >
               Galeria expirada
             </h1>
             <p
               className="text-base leading-relaxed"
-              style={{ color: 'hsl(var(--muted-foreground))' }}
+              style={{ color: '#5A534A', fontWeight: 400 }}
             >
               O prazo de acesso à galeria expirou.
             </p>
             <p
               className="text-sm leading-relaxed"
-              style={{ color: 'hsl(var(--muted-foreground))' }}
+              style={{ color: '#8A8078', fontWeight: 400 }}
             >
               Para visualizar novamente, entre em contato com o fotógrafo e solicite a liberação.
             </p>
@@ -832,8 +835,8 @@ export default function ClientGallery() {
           {/* Studio name fallback */}
           {!expiredStudioLogo && expiredStudioName && (
             <p
-              className="text-xs pt-4 border-t"
-              style={{ color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border))' }}
+              className="text-xs pt-4"
+              style={{ color: '#8A8078', borderTop: '1px solid #E5E0D9', fontWeight: 400 }}
             >
               {expiredStudioName}
             </p>
