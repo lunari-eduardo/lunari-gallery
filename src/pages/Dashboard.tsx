@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/popover';
 import { clearGalleryStorage } from '@/lib/storage';
 import { isPast } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 import gallerySelectLogo from '@/assets/gallery-select-logo.png';
 import galleryTransferLogo from '@/assets/gallery-transfer-logo.png';
@@ -152,6 +153,23 @@ export default function Dashboard() {
   useEffect(() => {
     clearGalleryStorage();
   }, []);
+
+  // Sync expired galleries to database
+  useEffect(() => {
+    if (!supabaseGalleries.length) return;
+    const expiredGalleries = supabaseGalleries.filter(g => {
+      const isActive = ['enviado', 'selecao_iniciada'].includes(g.status);
+      return isActive && g.prazoSelecao && isPast(g.prazoSelecao);
+    });
+    if (expiredGalleries.length > 0) {
+      expiredGalleries.forEach(async (g) => {
+        await supabase
+          .from('galerias')
+          .update({ status: 'expirado', updated_at: new Date().toISOString() })
+          .eq('id', g.id);
+      });
+    }
+  }, [supabaseGalleries]);
 
   const allGalleries = useMemo(() => {
     return supabaseGalleries.map(transformSupabaseToLocal);

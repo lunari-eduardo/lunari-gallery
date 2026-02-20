@@ -118,12 +118,6 @@ export function GalleryCard({ gallery, thumbnailUrl, onClick, onEdit, onShare, o
                 </span>
               )}
 
-              {isExpired && (
-                <span className="inline-flex items-center gap-1 text-destructive">
-                  <Clock className="h-3 w-3" />
-                  Expirada
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-1 text-muted-foreground">
