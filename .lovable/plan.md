@@ -1,70 +1,104 @@
 
 
-# Correção: Status de expiração no banco + badge duplicado
+# Correção: Sincronização de expiração com `clientes_sessoes`
 
-## Problema 1: Status não atualiza para "expirado" no banco
+## Causa raiz
 
-A expiração só é gravada no banco quando o **cliente** acessa a galeria (via `gallery-access` edge function). Se o cliente nunca acessa, o status permanece como `enviado` ou `selecao_iniciada` no banco, mesmo com o prazo vencido.
+O `useEffect` de sincronização no Dashboard (adicionado recentemente) atualiza `galerias.status` para `expirado`, mas **nunca atualiza `clientes_sessoes.status_galeria`** para `expirada`. O projeto Gestao lê exclusivamente de `clientes_sessoes`, então nunca vê a mudança de status.
 
-O Dashboard do fotógrafo faz apenas um check local (`isPast(prazoSelecao)`) na linha 82-84 de `Dashboard.tsx` e mostra como "expired" na UI, mas **nunca escreve essa mudança no banco**.
+Adicionalmente, a reativação (`reopenSelectionMutation`) também não sincroniza de volta para `clientes_sessoes`, deixando o status como `expirada` mesmo após reativar.
 
-### Correção
+## Correções
 
-No `Dashboard.tsx`, após detectar que uma galeria está expirada via `isPast()`, fazer um `supabase.update()` para gravar `status: 'expirado'` no banco. Isso garante que o status persista e esteja correto para todas as consultas.
+### 1. Dashboard sync -- adicionar sync de `clientes_sessoes` (`src/pages/Dashboard.tsx`)
 
-Implementação: adicionar um `useEffect` no Dashboard que, ao carregar as galerias, identifica quais têm prazo vencido mas status ainda ativo no banco (`enviado` ou `selecao_iniciada`) e faz um batch update para `expirado`. Alternativa mais simples: atualizar dentro da própria função `transformSupabaseToLocal` usando uma chamada assíncrona separada.
-
-A abordagem escolhida: criar um `useEffect` no Dashboard que verifica galerias com prazo vencido e atualiza o banco em lote. Isso evita chamadas redundantes e mantém a lógica centralizada.
+Alterar o `useEffect` de sincronização para:
+- Buscar o `sessionId` de cada galeria expirada
+- Atualizar tanto `galerias.status` quanto `clientes_sessoes.status_galeria`
+- Usar `Promise.all` em vez de `forEach(async)` para tratar erros corretamente
+- Invalidar queries após as atualizações
 
 ```typescript
-// No Dashboard.tsx, após carregar galleries
 useEffect(() => {
-  const expiredGalleries = galleries.filter(g => {
+  if (!supabaseGalleries.length) return;
+  const expiredGalleries = supabaseGalleries.filter(g => {
     const isActive = ['enviado', 'selecao_iniciada'].includes(g.status);
-    const hasExpired = g.prazoSelecao && isPast(g.prazoSelecao);
-    return isActive && hasExpired;
+    return isActive && g.prazoSelecao && isPast(g.prazoSelecao);
   });
+  if (expiredGalleries.length === 0) return;
 
-  if (expiredGalleries.length > 0) {
-    // Update each expired gallery in the database
-    expiredGalleries.forEach(async (g) => {
+  const syncExpired = async () => {
+    await Promise.all(expiredGalleries.map(async (g) => {
       await supabase
         .from('galerias')
         .update({ status: 'expirado', updated_at: new Date().toISOString() })
         .eq('id', g.id);
-    });
-  }
-}, [galleries]);
+
+      // Sync to clientes_sessoes so Gestao sees the change
+      if (g.sessionId) {
+        await supabase
+          .from('clientes_sessoes')
+          .update({ status_galeria: 'expirada', updated_at: new Date().toISOString() })
+          .eq('session_id', g.sessionId);
+      }
+    }));
+    // Refresh data after syncing
+    refetchGalleries();
+  };
+  syncExpired();
+}, [supabaseGalleries]);
 ```
 
-Note: usamos `galleries` (dados crus do Supabase, ou seja, o array de `Galeria`) e não o array transformado.
+### 2. Reativacao -- sincronizar `clientes_sessoes` de volta (`src/hooks/useSupabaseGalleries.ts`)
 
-## Problema 2: Badge duplicado "Expirada"
+No `reopenSelectionMutation`, após atualizar `galerias`, buscar o `session_id` e atualizar `clientes_sessoes.status_galeria` de volta para `em_selecao`:
 
-No `GalleryCard.tsx`, quando `status === 'expired'`, existem **dois indicadores**:
+```typescript
+// After updating galerias, sync session status
+const { data: gallery } = await supabase
+  .from('galerias')
+  .select('session_id')
+  .eq('id', id)
+  .single();
 
-1. **Linha 60**: `<StatusBadge status={gallery.status} />` -- mostra badge "Expirada" no canto superior direito
-2. **Linhas 121-126**: Texto inline "Expirada" com ícone de Clock no canto inferior esquerdo (ao lado do contador de fotos)
+if (gallery?.session_id) {
+  await supabase
+    .from('clientes_sessoes')
+    .update({ status_galeria: 'em_selecao', updated_at: new Date().toISOString() })
+    .eq('session_id', gallery.session_id);
+}
+```
 
-O badge inferior esquerdo (apontado pela seta na imagem) deve ser removido, mantendo apenas o `StatusBadge` superior direito.
+### 3. Corrigir galeria travada no banco
 
-### Correção
+Atualizar manualmente a galeria da sessao especifica que ja expirou:
 
-Remover o bloco de linhas 121-126 do `GalleryCard.tsx`:
+```sql
+UPDATE galerias SET status = 'expirado', updated_at = NOW()
+WHERE session_id = 'workflow-1771555514317-0gdkcymsiau' AND status = 'enviado';
 
-```tsx
-// REMOVER este bloco:
-{isExpired && (
-  <span className="inline-flex items-center gap-1 text-destructive">
-    <Clock className="h-3 w-3" />
-    Expirada
-  </span>
-)}
+UPDATE clientes_sessoes SET status_galeria = 'expirada', updated_at = NOW()
+WHERE session_id = 'workflow-1771555514317-0gdkcymsiau';
 ```
 
 ## Arquivos modificados
 
-| Arquivo | Mudança |
+| Arquivo | Mudanca |
 |---|---|
-| `src/pages/Dashboard.tsx` | Adicionar useEffect para gravar status `expirado` no banco quando prazo vence |
-| `src/components/GalleryCard.tsx` | Remover indicador duplicado de "Expirada" (linhas 121-126) |
+| `src/pages/Dashboard.tsx` | Adicionar sync de `clientes_sessoes` no useEffect + usar `Promise.all` |
+| `src/hooks/useSupabaseGalleries.ts` | Adicionar sync de `clientes_sessoes` na reativacao |
+| Migration SQL | Corrigir galeria travada |
+
+## Fluxo corrigido
+
+```text
+Dashboard carrega -> detecta prazo vencido
+  -> Atualiza galerias.status = 'expirado'
+  -> Atualiza clientes_sessoes.status_galeria = 'expirada'  (NOVO)
+  -> Gestao ve status atualizado
+
+Fotografo reativa galeria
+  -> galerias.status = 'selecao_iniciada'
+  -> clientes_sessoes.status_galeria = 'em_selecao'  (NOVO)
+  -> Gestao ve status restaurado
+```
