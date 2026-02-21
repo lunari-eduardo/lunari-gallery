@@ -648,6 +648,20 @@ export function useSupabaseGalleries() {
 
       if (error) throw error;
 
+      // Sync clientes_sessoes so Gestão sees the reactivation
+      const { data: gallery } = await supabase
+        .from('galerias')
+        .select('session_id')
+        .eq('id', id)
+        .single();
+
+      if (gallery?.session_id) {
+        await supabase
+          .from('clientes_sessoes')
+          .update({ status_galeria: 'em_selecao', updated_at: new Date().toISOString() })
+          .eq('session_id', gallery.session_id);
+      }
+
       // Add action
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
