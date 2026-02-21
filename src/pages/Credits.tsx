@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Camera, Infinity, ShoppingCart, History, CheckCircle2 } from 'lucide-react';
+import { Camera, Infinity, ShoppingCart, History, CheckCircle2, Sparkles, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 export default function Credits() {
   const navigate = useNavigate();
@@ -23,6 +24,17 @@ export default function Credits() {
         <h1 className="text-2xl font-bold tracking-tight">Créditos</h1>
         <p className="text-muted-foreground">
           Gerencie seus créditos de foto
+        </p>
+      </div>
+
+      {/* Texto de posicionamento */}
+      <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
+        <p className="text-sm text-foreground/80 leading-relaxed">
+          O Gallery Select transforma sua entrega em experiência profissional.
+          <br />
+          <span className="text-muted-foreground">
+            Créditos flexíveis, sem validade e sem mensalidade.
+          </span>
         </p>
       </div>
 
@@ -133,6 +145,74 @@ export default function Credits() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Seção de Upgrades */}
+      {!isAdmin && (
+        <div className="space-y-4 pt-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-medium text-muted-foreground">
+              Leve seu Gallery para o próximo nível
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Upgrade 1 - Studio */}
+            <Card className="border-dashed">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Integração com Lunari Studio</CardTitle>
+                <CardDescription>
+                  Studio Pro + Gallery Select 2k
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Integre seleção com gestão completa. Controle clientes, orçamentos, agenda e fluxo de trabalho em um único sistema.
+                </p>
+                <p className="text-lg font-semibold">
+                  R$ 44,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full gap-2"
+                  onClick={() => toast.info('Em breve!')}
+                >
+                  Conhecer Studio
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Upgrade 2 - Completo */}
+            <Card className="border-dashed">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Estrutura Profissional Completa</CardTitle>
+                <CardDescription>
+                  Studio Pro + Select 2k + Transfer 20GB
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Gestão, seleção e armazenamento integrados. Mais controle, mais segurança e uma operação profissional do início ao fim.
+                </p>
+                <p className="text-lg font-semibold">
+                  R$ 64,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full gap-2"
+                  onClick={() => toast.info('Em breve!')}
+                >
+                  Ver plano completo
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
     </div>

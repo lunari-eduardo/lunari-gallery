@@ -2,17 +2,15 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, 
   Camera, 
   Check, 
-  CreditCard, 
   Loader2, 
   Lock, 
   Package, 
@@ -21,7 +19,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PixPaymentDisplay } from '@/components/credits/PixPaymentDisplay';
-import { CardPaymentForm } from '@/components/credits/CardPaymentForm';
 import { cn } from '@/lib/utils';
 
 export default function CreditsCheckout() {
@@ -36,7 +33,6 @@ export default function CreditsCheckout() {
   } = useCreditPackages();
 
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [email, setEmail] = useState(user?.email || '');
   const [pixData, setPixData] = useState<{
     qrCodeBase64: string;
@@ -78,36 +74,6 @@ export default function CreditsCheckout() {
     } catch (error) {
       console.error('Erro ao criar PIX:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao criar pagamento PIX');
-    }
-  };
-
-  const handleCardPayment = async (cardToken: string) => {
-    if (!selectedPackage) return;
-    if (!email) {
-      toast.error('Informe seu e-mail');
-      return;
-    }
-
-    try {
-      const result = await createPayment({
-        packageId: selectedPackage.id,
-        paymentMethod: 'credit_card',
-        cardToken,
-        payerEmail: email,
-      });
-
-      if (result.status === 'approved') {
-        setPaymentSuccess(true);
-        toast.success('Pagamento aprovado! Créditos adicionados.');
-        setTimeout(() => {
-          navigate('/credits');
-        }, 2000);
-      } else {
-        toast.error(`Pagamento ${result.status_detail || 'não aprovado'}`);
-      }
-    } catch (error) {
-      console.error('Erro ao processar cartão:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao processar pagamento');
     }
   };
 
@@ -325,60 +291,34 @@ export default function CreditsCheckout() {
                       />
                     </div>
 
-                    {/* Método de pagamento */}
-                    <Tabs 
-                      value={paymentMethod} 
-                      onValueChange={(v) => setPaymentMethod(v as 'pix' | 'credit_card')}
-                    >
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="pix" className="gap-2">
-                          <Smartphone className="h-4 w-4" />
-                          PIX
-                        </TabsTrigger>
-                        <TabsTrigger value="credit_card" className="gap-2">
-                          <CreditCard className="h-4 w-4" />
-                          Cartão
-                        </TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="pix" className="mt-4">
-                        <div className="space-y-4">
-                          <div className="p-4 bg-muted rounded-lg text-center">
-                            <Smartphone className="h-8 w-8 mx-auto mb-2 text-primary" />
-                            <p className="text-sm text-muted-foreground">
-                              Pague instantaneamente com PIX
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Créditos liberados em segundos após confirmação
-                            </p>
-                          </div>
-                          
-                          <Button
-                            className="w-full"
-                            size="lg"
-                            onClick={handlePixPayment}
-                            disabled={isCreatingPayment || !email}
-                          >
-                            {isCreatingPayment ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Gerando PIX...
-                              </>
-                            ) : (
-                              `Gerar PIX de ${formattedPrice}`
-                            )}
-                          </Button>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="credit_card" className="mt-4">
-                        <CardPaymentForm
-                          onSubmit={handleCardPayment}
-                          isProcessing={isCreatingPayment}
-                          amount={selectedPackage.price_cents}
-                        />
-                      </TabsContent>
-                    </Tabs>
+                    {/* PIX direto */}
+                    <div className="space-y-4">
+                      <div className="p-4 bg-muted rounded-lg text-center">
+                        <Smartphone className="h-8 w-8 mx-auto mb-2 text-primary" />
+                        <p className="text-sm text-muted-foreground">
+                          Pague instantaneamente com PIX
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Créditos liberados em segundos após confirmação
+                        </p>
+                      </div>
+                      
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        onClick={handlePixPayment}
+                        disabled={isCreatingPayment || !email}
+                      >
+                        {isCreatingPayment ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Gerando PIX...
+                          </>
+                        ) : (
+                          `Gerar PIX de ${formattedPrice}`
+                        )}
+                      </Button>
+                    </div>
 
                     {/* Segurança */}
                     <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
