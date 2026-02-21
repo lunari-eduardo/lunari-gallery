@@ -154,21 +154,24 @@ export default function Dashboard() {
     clearGalleryStorage();
   }, []);
 
-  // Sync expired galleries to database
+  // Sync expired galleries to database (trigger auto-syncs clientes_sessoes)
   useEffect(() => {
     if (!supabaseGalleries.length) return;
     const expiredGalleries = supabaseGalleries.filter(g => {
       const isActive = ['enviado', 'selecao_iniciada'].includes(g.status);
       return isActive && g.prazoSelecao && isPast(g.prazoSelecao);
     });
-    if (expiredGalleries.length > 0) {
-      expiredGalleries.forEach(async (g) => {
+    if (expiredGalleries.length === 0) return;
+
+    const syncExpired = async () => {
+      await Promise.all(expiredGalleries.map(async (g) => {
         await supabase
           .from('galerias')
           .update({ status: 'expirado', updated_at: new Date().toISOString() })
           .eq('id', g.id);
-      });
-    }
+      }));
+    };
+    syncExpired();
   }, [supabaseGalleries]);
 
   const allGalleries = useMemo(() => {
