@@ -1,110 +1,98 @@
-# Estruturação dos Planos Gallery Select
+# Planos Combo na pagina de compra + Layout mobile-friendly
 
 ## Resumo
 
-Atualizar os pacotes de creditos no banco de dados, redesenhar a pagina de creditos e checkout com o novo posicionamento, e simplificar o checkout para apenas PIX por enquanto. Adicionar secao de upgrades (Studio e plano completo) na pagina de creditos.
+Adicionar os planos combo (Studio e Completo) como produtos compraveis no banco de dados e na pagina de checkout, redesenhar o layout das paginas de creditos e checkout para um visual mais simples e mobile-friendly (menos cards, mais lista), e adicionar descricao sobre creditos nao vencerem.
 
-## 1. Atualizar pacotes no banco de dados
+## 1. Banco de dados -- novos pacotes combo
 
-Migration SQL para atualizar os 4 pacotes existentes com novos nomes, precos e descricoes:
+Inserir 2 novos registros na tabela `gallery_credit_packages` para os combos. Eles serao diferenciados dos pacotes avulsos por uma convencao no nome e por um campo de metadados que pode ser adicionado via description ou um novo campo. Como a tabela nao tem campo de "tipo", usaremos a convencao de nome + description para diferenciar.
 
-
-| Pacote atual        | Novo nome  | Creditos   | Preco antigo | Novo preco            |
-| ------------------- | ---------- | ---------- | ------------ | --------------------- |
-| Starter (2.000)     | Select 2k  | 2.000      | R$ 19,00     | R$ 19,90 (1990 cents) |
-| Basic (5.000)       | Select 5k  | 5.000      | R$ 39,00     | R$ 39,90 (3990 cents) |
-| Pro (10.000)        | Select 10k | 10.000     | R$ 69,00     | R$ 69,90 (6990 cents) |
-| Enterprise (20.000) | Select 15k | **15.000** | R$ 99,00     | R$ 94,90 (9490 cents) |
+Novos pacotes:
 
 
-O ultimo pacote muda de 20.000 para 15.000 creditos.
+| Nome                                   | Creditos | Preco                 | sort_order | Descricao                                                                            |
+| -------------------------------------- | -------- | --------------------- | ---------- | ------------------------------------------------------------------------------------ |
+| Studio Pro + Select 2k                 | 2000     | R$ 44,90 (4490 cents) | 10         | Integracao com Lunari Studio. Gestao completa + selecao profissional. Mensal.        |
+| Studio Pro + Select 2k + Transfer 20GB | 2000     | R$ 64,90 (6490 cents) | 11         | Estrutura profissional completa. Gestao, selecao e armazenamento integrados. Mensal. |
 
-Descricoes atualizadas com o texto estrategico fornecido.
 
-## 2. Redesenhar pagina de Creditos (`src/pages/Credits.tsx`)
+**Nota**: Estes sao planos mensais. Por enquanto, a compra via PIX funcionara como pagamento avulso do primeiro mes. A recorrencia sera implementada futuramente.
 
-- Manter saldo atual no topo
-- Adicionar texto de posicionamento: "O Gallery Select organiza e valoriza a seleção das fotos. Mais controle para você, mais clareza para seu cliente."
-- Manter historico de compras
-- Adicionar secao "Leve seu Gallery para o proximo nivel" no final com:
-  - Upgrade 1: Studio Pro + Gallery Select 2k (R$ 44,90/mes) com descricao
-  - Upgrade 2: Studio Pro + Select 2k + Transfer 20GB (R$ 64,90/mes) com descricao
-  - Botoes discretos: "Conhecer Studio" e "Ver plano completo"
-  - Estilo sutil, sem destaque agressivo
+## 2. Pagina de Creditos (`src/pages/Credits.tsx`) -- layout simplificado
 
-## 3. Simplificar Checkout para PIX (`src/pages/CreditsCheckout.tsx`)
+Mudancas:
 
-- Remover a aba de cartao de credito (Tabs com PIX/Cartao)
-- Manter apenas o fluxo de PIX
-- Remover import de `CardPaymentForm`
-- O checkout fica: selecionar pacote -> informar email -> gerar PIX
-- Manter a referencia "Pagamento seguro via Mercado Pago"
+- Remover o wrapper `Card` do saldo -- exibir saldo de forma mais direta e limpa
+- Manter texto de posicionamento
+- Adicionar frase "Os seus creditos nao vencem e podem ser usados a qualquer momento" junto ao saldo
+- Historico de compras: manter como lista simples sem card wrapper pesado
+- Secao de upgrades: tornar menos "card-like", mais lista/texto simples
+- Reduzir padding e espacamento geral para visual mais compacto/mobile
 
-## 4. Atualizar cards de pacotes no checkout
+## 3. Pagina de Checkout (`src/pages/CreditsCheckout.tsx`) -- layout single-column + combos
 
-Os cards ja leem do banco, entao os novos nomes/precos/descricoes serao refletidos automaticamente apos a migration.
+Mudancas principais:
+
+- Mudar layout de 2 colunas (lg:grid-cols-5) para **single column** -- mais mobile-friendly
+- Pacotes avulsos: exibir em lista vertical simples (1 coluna) em vez de grid 2x2
+- Adicionar separador visual e secao "Planos mensais" abaixo dos pacotes avulsos, listando os combos
+- Checkout (email + PIX) aparece abaixo do pacote selecionado, inline, sem sidebar
+- Remover info box "Como funcionam os creditos" e mover texto para subtitulo simples
+- Adicionar texto "Os seus créditos não expiram e podem ser usados a qualquer momento" na descricao
+
+Fluxo:
+
+1. Usuario ve lista de pacotes avulsos (Select 2k, 5k, 10k, 15k)
+2. Abaixo, ve secao "Planos mensais" com os 2 combos
+3. Seleciona qualquer um
+4. Formulario de email + botao PIX aparece abaixo
+5. Gera PIX, mostra QR code
+
+## 4. Separacao visual avulsos vs combos
+
+Na pagina de checkout, os pacotes serao separados em 2 grupos:
+
+- **Pacotes avulsos** (sort_order 1-9): "Creditos avulsos"
+- **Planos mensais** (sort_order >= 10): "Planos mensais"
+
+Isso sera feito com um simples filter no array de packages retornado pelo hook.
 
 ## Detalhes tecnicos
 
 ### Migration SQL
 
 ```sql
-UPDATE gallery_credit_packages
-SET name = 'Select 2k',
-    credits = 2000,
-    price_cents = 1990,
-    description = 'Para quem esta comecando a organizar suas selecoes de forma profissional.',
-    updated_at = NOW()
-WHERE sort_order = 1;
-
-UPDATE gallery_credit_packages
-SET name = 'Select 5k',
-    credits = 5000,
-    price_cents = 3990,
-    description = 'Para fotografos em crescimento que ja tem volume recorrente.',
-    updated_at = NOW()
-WHERE sort_order = 2;
-
-UPDATE gallery_credit_packages
-SET name = 'Select 10k',
-    credits = 10000,
-    price_cents = 6990,
-    description = 'Pensado para quem ja opera com constancia.',
-    updated_at = NOW()
-WHERE sort_order = 3;
-
-UPDATE gallery_credit_packages
-SET name = 'Select 15k',
-    credits = 15000,
-    price_cents = 9490,
-    description = 'Para fotógrafos que tratam selecao como parte estrategica da experiencia do cliente.',
-    updated_at = NOW()
-WHERE sort_order = 4;
+INSERT INTO gallery_credit_packages (name, credits, price_cents, description, sort_order, active)
+VALUES 
+  ('Studio Pro + Select 2k', 2000, 4490, 'Integre selecao com gestao completa. Controle clientes, orcamentos, agenda e fluxo de trabalho em um unico sistema. Plano mensal.', 10, true),
+  ('Studio Pro + Select 2k + Transfer 20GB', 2000, 6490, 'Gestao, selecao e armazenamento integrados. Mais controle, mais seguranca e uma operacao profissional do inicio ao fim. Plano mensal.', 11, true);
 ```
 
 ### `src/pages/Credits.tsx`
 
-- Adicionar texto de posicionamento abaixo do header
-- Adicionar secao de upgrades no final da pagina:
-  - Dois cards lado a lado (desktop) ou empilhados (mobile)
-  - Card 1: "Integracao com Lunari Studio" - R$ 44,90/mes
-  - Card 2: "Estrutura Profissional Completa" - R$ 64,90/mes
-  - Botoes com `variant="outline"` (discretos)
-  - Os botoes nao terao acao funcional agora (apenas `toast.info("Em breve")` ou link externo futuro)
+- Remover Card wrapper do saldo -- usar div simples com border
+- Adicionar "Seus creditos nao vencem e podem ser usados a qualquer momento" como subtexto
+- Simplificar secao de upgrades para texto + botao, sem Card com border-dashed
+- Layout mais compacto, menos spacing
 
 ### `src/pages/CreditsCheckout.tsx`
 
-- Remover `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` do checkout
-- Remover import de `CardPaymentForm`
-- Remover import de `CreditCard` icon
-- Manter o fluxo direto: email + botao "Gerar PIX"
-- Manter `PixPaymentDisplay` para o QR code
+- Mudar de `lg:grid-cols-5` para layout single-column (`max-w-lg mx-auto`)
+- Pacotes em lista vertical: cada pacote como linha horizontal (nome | creditos | preco) em vez de card grande
+- Separar com heading: "Creditos avulsos" e "Planos mensais"
+- Seção de checkout (email + PIX) renderiza inline abaixo quando pacote selecionado
+- Mover texto de creditos nao expirarem para subtitulo da pagina
+
+### `src/hooks/useCreditPackages.ts`
+
+Sem mudancas -- o hook ja retorna todos os pacotes ativos ordenados por sort_order.
 
 ## Arquivos modificados
 
 
-| Arquivo                         | Mudanca                                            |
-| ------------------------------- | -------------------------------------------------- |
-| Nova migration SQL              | Atualizar nomes, precos e descricoes dos 4 pacotes |
-| `src/pages/Credits.tsx`         | Texto de posicionamento + secao de upgrades        |
-| `src/pages/CreditsCheckout.tsx` | Remover aba de cartao, manter apenas PIX           |
+| Arquivo                         | Mudanca                                                             |
+| ------------------------------- | ------------------------------------------------------------------- |
+| Nova migration SQL              | Inserir 2 pacotes combo                                             |
+| `src/pages/Credits.tsx`         | Layout simplificado, menos cards, texto sobre nao vencer            |
+| `src/pages/CreditsCheckout.tsx` | Single-column, lista vertical, secao combos, texto sobre nao vencer |
