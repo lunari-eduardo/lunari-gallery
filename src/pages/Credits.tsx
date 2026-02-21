@@ -5,8 +5,7 @@ import { useCreditPackages } from '@/hooks/useCreditPackages';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
-import { Camera, Infinity, ShoppingCart, History, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Camera, Infinity, ShoppingCart, History, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -141,56 +140,56 @@ export default function Credits() {
         </div>
       )}
 
-      {/* Seção de Upgrades - simplificada */}
+      {/* Bloco estratégico de upgrade */}
       {!isAdmin && (
-        <div className="space-y-3 pt-2">
-          <Separator />
-          <p className="text-sm text-muted-foreground">
-            Leve seu Gallery para o próximo nível
-          </p>
+        <div className="bg-muted/50 rounded-xl p-5 md:p-6 space-y-4 mt-4">
+          <div>
+            <h2 className="text-base font-semibold">Cresça com uma estrutura completa</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Para quem quer integrar gestão, seleção e armazenamento em um único fluxo profissional.
+            </p>
+          </div>
 
-          <div className="space-y-2">
-            {/* Upgrade 1 - Studio */}
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Integração com Lunari Studio</p>
-                <p className="text-xs text-muted-foreground">
-                  Studio Pro + Gallery Select 2k
-                </p>
-                <p className="text-sm font-semibold mt-1">
-                  R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
-                </p>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="ml-3 shrink-0 gap-1"
-                onClick={() => toast.info('Em breve!')}
-              >
-                Conhecer
-                <ArrowRight className="h-3 w-3" />
+          <div className="grid grid-cols-1 gap-3">
+            {/* Card 1 - Studio */}
+            <div className="rounded-lg border bg-card p-5 space-y-3">
+              <p className="text-sm font-semibold">Studio Pro + Gallery Select 2k</p>
+              <p className="text-xs text-muted-foreground">
+                Gestão completa com Lunari Studio + 2.000 créditos mensais incluídos
+              </p>
+              <ul className="space-y-1">
+                {['Integração automática com Gallery', 'Controle de clientes', 'Agenda', 'Fluxo de trabalho', 'Automações de pagamentos'].map((b) => (
+                  <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xl font-bold text-primary">
+                R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
+              </p>
+              <Button size="sm" className="px-5" onClick={() => toast.info('Em breve!')}>
+                Quero integrar
               </Button>
             </div>
 
-            {/* Upgrade 2 - Completo */}
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Estrutura Profissional Completa</p>
-                <p className="text-xs text-muted-foreground">
-                  Studio Pro + Select 2k + Transfer 20GB
-                </p>
-                <p className="text-sm font-semibold mt-1">
-                  R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
-                </p>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="ml-3 shrink-0 gap-1"
-                onClick={() => toast.info('Em breve!')}
-              >
-                Ver plano
-                <ArrowRight className="h-3 w-3" />
+            {/* Card 2 - Completo */}
+            <div className="relative rounded-lg border bg-card p-5 space-y-3">
+              <Badge className="absolute -top-2.5 left-4 text-xs">Mais completo</Badge>
+              <p className="text-sm font-semibold">Studio Pro + Select 2k + Transfer 20GB</p>
+              <ul className="space-y-1">
+                {['Gestão completa', 'Créditos mensais incluídos', 'Entrega profissional no seu estilo'].map((b) => (
+                  <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xl font-bold text-primary">
+                R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
+              </p>
+              <Button size="sm" className="px-5" onClick={() => toast.info('Em breve!')}>
+                Estruturar meu negócio
               </Button>
             </div>
           </div>
