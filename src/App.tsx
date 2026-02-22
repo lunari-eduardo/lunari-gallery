@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import Account from "./pages/Account";
 import Credits from "./pages/Credits";
 import CreditsCheckout from "./pages/CreditsCheckout";
+import CreditsPayment from "./pages/CreditsPayment";
 import Admin from "./pages/Admin";
 import Auth from "./pages/Auth";
 import AccessDenied from "./pages/AccessDenied";
@@ -140,6 +141,11 @@ const App = () => (
               <Route path="/credits/checkout" element={
                 <ProtectedRoute>
                   <CreditsCheckout />
+                </ProtectedRoute>
+              } />
+              <Route path="/credits/checkout/pay" element={
+                <ProtectedRoute>
+                  <CreditsPayment />
                 </ProtectedRoute>
               } />
               <Route path="/admin" element={

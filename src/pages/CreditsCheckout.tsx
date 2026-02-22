@@ -1,364 +1,368 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthContext } from '@/contexts/AuthContext';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
+import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ArrowLeft, 
   Camera, 
   Check, 
-  Loader2, 
-  Lock, 
-  Smartphone 
+  Image, 
+  Users, 
+  Palette, 
+  ShieldCheck,
+  Minus,
+  Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PixPaymentDisplay } from '@/components/credits/PixPaymentDisplay';
 import { cn } from '@/lib/utils';
+
+const BENEFITS_AVULSO = [
+  { icon: Image, label: 'Galerias ilimitadas' },
+  { icon: Users, label: 'Clientes ilimitados' },
+  { icon: Camera, label: 'Até 2560px de resolução' },
+  { icon: Palette, label: 'Presets de galerias' },
+  { icon: ShieldCheck, label: 'Sem taxa ou comissão' },
+];
+
+const COMBO_PLANS = [
+  {
+    name: 'Studio Pro + Select 2k',
+    monthlyPrice: 4490,
+    yearlyPrice: 45259,
+    credits: 2000,
+    benefits: [
+      'Sistema completo de gestão',
+      '2.000 créditos mensais',
+      'Integração automática com Gallery',
+      'Controle de clientes',
+      'Fluxo de trabalho',
+      'Automações de pagamentos',
+    ],
+    buttonLabel: 'Assinar',
+    highlight: false,
+  },
+  {
+    name: 'Studio Pro + Select 2k + Transfer 20GB',
+    monthlyPrice: 6490,
+    yearlyPrice: 66198,
+    credits: 2000,
+    benefits: [
+      'Gestão completa',
+      '2.000 créditos mensais',
+      '20GB de armazenamento profissional',
+      'Entrega profissional no seu estilo',
+    ],
+    buttonLabel: 'Assinar',
+    highlight: true,
+    tag: 'Mais completo',
+  },
+];
+
+const COMPARISON_ROWS = [
+  { label: 'Preço', avulso: 'A partir de R$ 19,90', pro: 'R$ 44,90/mês', full: 'R$ 64,90/mês' },
+  { label: 'Clientes ilimitados', avulso: true, pro: true, full: true },
+  { label: 'Galerias ilimitadas', avulso: true, pro: true, full: true },
+  { label: 'Resolução até 2560px', avulso: true, pro: true, full: true },
+  { label: 'Créditos mensais', avulso: false, pro: '2.000', full: '2.000' },
+  { label: 'Armazenamento', avulso: false, pro: false, full: '20GB' },
+  { label: 'Gestão de clientes', avulso: false, pro: true, full: true },
+  { label: 'Controle financeiro', avulso: false, pro: true, full: true },
+  { label: 'Entrega profissional', avulso: false, pro: false, full: true },
+];
 
 export default function CreditsCheckout() {
   const navigate = useNavigate();
-  const { user } = useAuthContext();
-  const { 
-    packages, 
-    isLoadingPackages, 
-    createPayment, 
-    checkPayment, 
-    isCreatingPayment 
-  } = useCreditPackages();
+  const { packages, isLoadingPackages } = useCreditPackages();
+  const { photoCredits } = usePhotoCredits();
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
-  const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
-  const [email, setEmail] = useState(user?.email || '');
-  const [pixData, setPixData] = useState<{
-    qrCodeBase64: string;
-    pixCopiaECola: string;
-    expiration: string;
-    purchaseId: string;
-  } | null>(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-
-  // Separar pacotes avulsos e combos
   const avulsos = packages?.filter(p => p.sort_order < 10) || [];
-  const combos = packages?.filter(p => p.sort_order >= 10) || [];
 
-  const formattedPrice = selectedPackage 
-    ? (selectedPackage.price_cents / 100).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-      })
-    : '';
+  const formatPrice = (cents: number) =>
+    (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const handlePixPayment = async () => {
-    if (!selectedPackage) return;
-    if (!email) {
-      toast.error('Informe seu e-mail');
-      return;
-    }
-
-    try {
-      const result = await createPayment({
-        packageId: selectedPackage.id,
-        paymentMethod: 'pix',
-        payerEmail: email,
-      });
-
-      if (result.pix) {
-        setPixData({
-          qrCodeBase64: result.pix.qr_code_base64,
-          pixCopiaECola: result.pix.qr_code,
-          expiration: result.pix.expiration,
-          purchaseId: result.purchase_id,
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao criar PIX:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao criar pagamento PIX');
-    }
-  };
-
-  const handleCheckStatus = async () => {
-    if (!pixData?.purchaseId) {
-      return { status: 'pending' };
-    }
-    const result = await checkPayment(pixData.purchaseId);
-    return result;
-  };
-
-  const handlePixSuccess = () => {
-    setPaymentSuccess(true);
-    toast.success('Pagamento confirmado! Créditos adicionados.');
-    setTimeout(() => {
-      navigate('/credits');
-    }, 2000);
-  };
-
-  const handleReset = () => {
-    setPixData(null);
-    setPaymentSuccess(false);
-    setSelectedPackage(null);
-  };
-
-  const isLocked = !!paymentSuccess || !!pixData;
-
-  const PackageRow = ({ pkg }: { pkg: CreditPackage }) => {
-    const isSelected = selectedPackage?.id === pkg.id;
-    const price = (pkg.price_cents / 100).toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
+  const handleBuy = (pkg: CreditPackage) => {
+    navigate('/credits/checkout/pay', {
+      state: {
+        packageId: pkg.id,
+        packageName: pkg.name,
+        credits: pkg.credits,
+        priceCents: pkg.price_cents,
+      },
     });
-    const isCombo = pkg.sort_order >= 10;
-
-    return (
-      <button
-        onClick={() => {
-          if (!isLocked) setSelectedPackage(pkg);
-        }}
-        disabled={isLocked}
-        className={cn(
-          "w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all",
-          "hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed",
-          isSelected 
-            ? "border-primary bg-primary/5" 
-            : "border-border bg-card"
-        )}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          {isSelected ? (
-            <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-              <Check className="h-3 w-3 text-primary-foreground" />
-            </div>
-          ) : (
-            <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30 shrink-0" />
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{pkg.name}</p>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Camera className="h-3 w-3" />
-              <span>{pkg.credits.toLocaleString('pt-BR')} créditos</span>
-              {isCombo && <span className="text-primary font-medium ml-1">• mensal</span>}
-            </div>
-          </div>
-        </div>
-        <span className="text-sm font-semibold text-primary shrink-0 ml-2">
-          {price}
-          {isCombo && <span className="text-xs font-normal text-muted-foreground">/mês</span>}
-        </span>
-      </button>
-    );
   };
+
+  const handleComboSubscribe = () => {
+    toast.info('Em breve!');
+  };
+
+  // Select 10k highlight (sort_order === 3 typically)
+  const isHighlighted = (pkg: CreditPackage) => pkg.sort_order === 3;
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      {/* Header */}
-      <header className="border-b bg-background">
-        <div className="container max-w-lg py-3 flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => navigate('/credits')}
-            className="gap-1.5"
-          >
+    <div className="min-h-screen bg-background">
+      {/* Back button */}
+      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container max-w-6xl py-3 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/credits')} className="gap-1.5">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          <div className="h-4 w-px bg-border" />
-          <span className="text-sm text-muted-foreground">Compra de Créditos</span>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container max-w-2xl py-6 space-y-8">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Comprar Créditos</h1>
-          <p className="text-sm text-muted-foreground">
-            Seus créditos não expiram e podem ser usados a qualquer momento
+      {/* ═══ HERO ═══ */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/8 via-primary/3 to-transparent" />
+        <div className="relative container max-w-6xl pt-16 pb-40 md:pb-48 text-center space-y-6">
+          <Badge variant="secondary" className="text-xs tracking-wider uppercase">
+            Créditos
+          </Badge>
+          <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-foreground max-w-2xl mx-auto text-balance">
+            Organize e profissionalize o processo de seleção de fotos
+          </h1>
+          <p className="text-muted-foreground text-base md:text-lg max-w-xl mx-auto">
+            Créditos flexíveis, sem validade e sem mensalidade.
           </p>
-        </div>
 
-        {/* Pacotes avulsos */}
+          {/* Balance pill */}
+          <div className="inline-flex flex-col items-center gap-1.5 rounded-2xl border bg-card/80 backdrop-blur-sm px-8 py-4 shadow-sm">
+            <span className="text-sm text-muted-foreground">Créditos disponíveis</span>
+            <span className="text-2xl font-bold text-foreground">
+              {photoCredits.toLocaleString('pt-BR')}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Seus créditos não expiram e podem ser usados a qualquer momento.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SELECT AVULSO CARDS ═══ */}
+      <section className="container max-w-6xl -mt-28 md:-mt-32 relative z-[1] pb-20">
         {isLoadingPackages ? (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-16 rounded-lg" />
+              <Skeleton key={i} className="h-96 rounded-2xl" />
             ))}
           </div>
         ) : (
-          <>
-            <div className="space-y-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Créditos avulsos
-              </p>
-              <div className="space-y-2">
-                {avulsos.map((pkg) => (
-                  <PackageRow key={pkg.id} pkg={pkg} />
-                ))}
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {avulsos.map((pkg) => {
+              const highlighted = isHighlighted(pkg);
+              return (
+                <div
+                  key={pkg.id}
+                  className={cn(
+                    'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
+                    highlighted
+                      ? 'border-primary shadow-md ring-1 ring-primary/20'
+                      : 'border-border shadow-sm'
+                  )}
+                >
+                  {highlighted && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs gap-1">
+                      <Star className="h-3 w-3" />
+                      Mais escolhido
+                    </Badge>
+                  )}
 
-            {/* Checkout inline for avulso */}
-            {selectedPackage && selectedPackage.sort_order < 10 && !pixData && !paymentSuccess && (
-              <div className="rounded-lg border p-4 bg-card space-y-4 shadow-sm">
-                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-                  <div>
-                    <p className="text-sm font-medium">{selectedPackage.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedPackage.credits.toLocaleString('pt-BR')} créditos
-                    </p>
-                  </div>
-                  <p className="text-base font-bold text-primary">{formattedPrice}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-sm">E-mail para recibo</Label>
-                  <Input id="email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
-                <div className="space-y-3">
-                  <div className="p-3 bg-muted rounded-lg text-center">
-                    <Smartphone className="h-6 w-6 mx-auto mb-1.5 text-primary" />
-                    <p className="text-xs text-muted-foreground">Pague instantaneamente com PIX</p>
-                  </div>
-                  <Button className="w-full" size="lg" onClick={handlePixPayment} disabled={isCreatingPayment || !email}>
-                    {isCreatingPayment ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Gerando PIX...</>) : `Gerar PIX de ${formattedPrice}`}
-                  </Button>
-                </div>
-                <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
-                  <Lock className="h-3 w-3" />Pagamento seguro via Mercado Pago
-                </p>
-              </div>
-            )}
-
-            {/* Micro-trigger */}
-            <p className="text-center text-sm text-muted-foreground/70 italic py-2">
-              Usa créditos com frequência? Um plano mensal pode sair mais vantajoso no longo prazo.
-            </p>
-
-            {/* Bloco estratégico de upgrade */}
-            {combos.length > 0 && (
-              <div className="bg-muted/50 rounded-xl p-6 md:p-8 space-y-5">
-                <div>
-                  <h2 className="text-lg font-semibold">Cresça com uma estrutura completa</h2>
+                  <p className="text-lg font-semibold text-foreground">{pkg.name}</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Para quem quer integrar gestão, seleção e armazenamento em um único fluxo profissional.
+                    {pkg.credits.toLocaleString('pt-BR')} créditos
                   </p>
+
+                  <p className="text-3xl font-bold text-primary mt-5">
+                    {formatPrice(pkg.price_cents)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">pagamento único</p>
+
+                  <Button
+                    className="mt-6 px-8"
+                    size="lg"
+                    onClick={() => handleBuy(pkg)}
+                  >
+                    Comprar
+                  </Button>
+
+                  <ul className="mt-6 space-y-2.5 flex-1">
+                    {BENEFITS_AVULSO.map(({ icon: Icon, label }) => (
+                      <li key={label} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                        <Icon className="h-4 w-4 text-primary/70 shrink-0" />
+                        {label}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {combos.map((pkg, idx) => {
-                    const isSelected = selectedPackage?.id === pkg.id;
-                    const comboPrice = (pkg.price_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    const isSecond = idx === 1;
-                    const benefits = idx === 0
-                      ? ['Integração automática com Gallery', 'Controle de clientes', 'Agenda', 'Fluxo de trabalho', 'Automações de pagamentos']
-                      : ['Gestão completa', 'Créditos mensais incluídos', 'Entrega profissional no seu estilo'];
-                    const buttonLabel = idx === 0 ? 'Quero integrar' : 'Estruturar meu negócio';
+      {/* ═══ MICRO-TRIGGER ═══ */}
+      <div className="text-center pb-20">
+        <p className="text-sm text-muted-foreground/70 italic">
+          Usa créditos com frequência? Um plano mensal pode sair mais vantajoso no longo prazo.
+        </p>
+      </div>
 
+      {/* ═══ COMBOS ═══ */}
+      <section className="container max-w-5xl pb-20 space-y-10">
+        <div className="text-center space-y-3">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
+            Cresça com uma estrutura completa
+          </h2>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Para quem quer integrar gestão, seleção e armazenamento em um único sistema profissional.
+          </p>
+        </div>
+
+        {/* Toggle */}
+        <div className="flex justify-center">
+          <div className="inline-flex items-center rounded-full border bg-muted/50 p-1 gap-0.5">
+            <button
+              onClick={() => setBillingPeriod('monthly')}
+              className={cn(
+                'rounded-full px-5 py-2 text-sm font-medium transition-all',
+                billingPeriod === 'monthly'
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setBillingPeriod('yearly')}
+              className={cn(
+                'rounded-full px-5 py-2 text-sm font-medium transition-all flex items-center gap-2',
+                billingPeriod === 'yearly'
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Anual
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                -16%
+              </Badge>
+            </button>
+          </div>
+        </div>
+
+        {/* Combo cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {COMBO_PLANS.map((plan) => {
+            const priceCents = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+            const priceLabel = formatPrice(priceCents);
+            return (
+              <div
+                key={plan.name}
+                className={cn(
+                  'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
+                  plan.highlight
+                    ? 'border-primary shadow-md ring-1 ring-primary/20'
+                    : 'border-border shadow-sm'
+                )}
+              >
+                {plan.tag && (
+                  <Badge className="absolute -top-3 left-6 text-xs">
+                    {plan.tag}
+                  </Badge>
+                )}
+
+                <p className="text-lg font-semibold text-foreground">{plan.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {plan.credits.toLocaleString('pt-BR')} créditos mensais incluídos
+                </p>
+
+                <ul className="mt-6 space-y-2.5 flex-1">
+                  {plan.benefits.map((b) => (
+                    <li key={b} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                      <Check className="h-4 w-4 mt-0.5 text-primary/70 shrink-0" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="text-2xl font-bold text-primary mt-6">
+                  {priceLabel}
+                  <span className="text-sm font-normal text-muted-foreground">
+                    /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                  </span>
+                </p>
+                {billingPeriod === 'yearly' && (
+                  <p className="text-xs text-primary/80 mt-1">
+                    Economize 16% em relação ao mensal
+                  </p>
+                )}
+
+                <Button className="mt-6 px-8" size="lg" onClick={handleComboSubscribe}>
+                  {plan.buttonLabel}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ═══ INSTITUTIONAL BUTTONS ═══ */}
+      <div className="flex justify-center gap-4 pb-20">
+        <Button variant="outline" className="px-6" onClick={() => toast.info('Em breve!')}>
+          Conheça o Select
+        </Button>
+        <Button variant="outline" className="px-6" onClick={() => toast.info('Em breve!')}>
+          Conheça o Transfer
+        </Button>
+      </div>
+
+      {/* ═══ COMPARISON TABLE ═══ */}
+      <section className="container max-w-5xl pb-20 space-y-8">
+        <h2 className="text-2xl font-bold tracking-tight text-center text-foreground">
+          Comparação de Planos
+        </h2>
+
+        <div className="overflow-x-auto rounded-2xl border shadow-sm bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="text-left px-6 py-4 font-medium text-muted-foreground w-1/4">Recurso</th>
+                <th className="text-center px-6 py-4 font-semibold text-foreground">Select Avulso</th>
+                <th className="text-center px-6 py-4 font-semibold text-foreground">Studio Pro + Select</th>
+                <th className="text-center px-6 py-4 font-semibold text-foreground">
+                  <div className="flex items-center justify-center gap-2">
+                    Studio Pro + Select + Transfer
+                    <Badge className="text-[10px]">Completo</Badge>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON_ROWS.map((row, i) => (
+                <tr key={row.label} className={cn('border-b last:border-0', i % 2 === 0 && 'bg-muted/10')}>
+                  <td className="px-6 py-4 font-medium text-foreground">{row.label}</td>
+                  {(['avulso', 'pro', 'full'] as const).map((col) => {
+                    const val = row[col];
                     return (
-                      <button
-                        key={pkg.id}
-                        onClick={() => { if (!isLocked) setSelectedPackage(pkg); }}
-                        disabled={isLocked}
-                        className={cn(
-                          "relative text-left rounded-lg border p-6 bg-card transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed",
-                          isSelected ? "border-primary ring-2 ring-primary/20" : "border-border"
+                      <td key={col} className="px-6 py-4 text-center">
+                        {val === true ? (
+                          <Check className="h-4 w-4 text-primary mx-auto" />
+                        ) : val === false ? (
+                          <Minus className="h-4 w-4 text-muted-foreground/40 mx-auto" />
+                        ) : (
+                          <span className="text-foreground">{val}</span>
                         )}
-                      >
-                        {isSecond && (
-                          <Badge className="absolute -top-2.5 left-4 text-xs">Mais completo</Badge>
-                        )}
-                        <p className="text-base font-semibold">{pkg.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {pkg.credits.toLocaleString('pt-BR')} créditos mensais incluídos
-                        </p>
-
-                        <ul className="mt-4 space-y-1.5">
-                          {benefits.map((b) => (
-                            <li key={b} className="flex items-start gap-2 text-sm text-muted-foreground">
-                              <Check className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
-                              {b}
-                            </li>
-                          ))}
-                        </ul>
-
-                        <p className="text-2xl font-bold text-primary mt-5">
-                          {comboPrice}<span className="text-sm font-normal text-muted-foreground">/mês</span>
-                        </p>
-
-                        <span className={cn(
-                          "inline-flex items-center justify-center mt-4 px-6 py-2 rounded-md text-sm font-medium transition-colors",
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-primary/10 text-primary hover:bg-primary/20"
-                        )}>
-                          {buttonLabel}
-                        </span>
-                      </button>
+                      </td>
                     );
                   })}
-                </div>
-              </div>
-            )}
-
-            {/* Checkout inline for combo */}
-            {selectedPackage && selectedPackage.sort_order >= 10 && !pixData && !paymentSuccess && (
-              <div className="rounded-lg border p-4 bg-card space-y-4 shadow-sm">
-                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-                  <div>
-                    <p className="text-sm font-medium">{selectedPackage.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedPackage.credits.toLocaleString('pt-BR')} créditos
-                    </p>
-                  </div>
-                  <p className="text-base font-bold text-primary">{formattedPrice}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="email-combo" className="text-sm">E-mail para recibo</Label>
-                  <Input id="email-combo" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
-                <div className="space-y-3">
-                  <div className="p-3 bg-muted rounded-lg text-center">
-                    <Smartphone className="h-6 w-6 mx-auto mb-1.5 text-primary" />
-                    <p className="text-xs text-muted-foreground">Pague instantaneamente com PIX</p>
-                  </div>
-                  <Button className="w-full" size="lg" onClick={handlePixPayment} disabled={isCreatingPayment || !email}>
-                    {isCreatingPayment ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Gerando PIX...</>) : `Gerar PIX de ${formattedPrice}`}
-                  </Button>
-                </div>
-                <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
-                  <Lock className="h-3 w-3" />Pagamento seguro via Mercado Pago
-                </p>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* PIX / Success states */}
-        {paymentSuccess ? (
-          <div className="rounded-lg border p-6 text-center bg-card">
-            <div className="text-4xl mb-3">🎉</div>
-            <h3 className="text-lg font-semibold text-primary">Pagamento Confirmado!</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              {selectedPackage?.credits.toLocaleString('pt-BR')} créditos adicionados
-            </p>
-            <p className="text-xs text-muted-foreground mt-3">Redirecionando...</p>
-          </div>
-        ) : pixData ? (
-          <div className="rounded-lg border p-4 bg-card space-y-4">
-            <PixPaymentDisplay
-              qrCodeBase64={pixData.qrCodeBase64}
-              pixCopiaECola={pixData.pixCopiaECola}
-              expiration={pixData.expiration}
-              onCheckStatus={handleCheckStatus}
-              onSuccess={handlePixSuccess}
-            />
-            <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleReset}>
-              Escolher outro pacote
-            </Button>
-          </div>
-        ) : null}
-      </main>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
