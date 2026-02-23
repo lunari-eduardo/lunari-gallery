@@ -1,151 +1,204 @@
 
 
-# Video de Lembranca - Motor de Video 9:16 Client-Side
+# Evolucao do Modulo Lembranca: 10 Fotos, Multi-Layout e Video Colagem
 
 ## Resumo
 
-Adicionar a opcao de gerar um video curto (max 10s) no formato 9:16 (stories) ao modulo de Lembranca existente. O video sera gerado 100% no browser usando Canvas API + `captureStream()` + `MediaRecorder`, sem dependencias externas ou servidor.
+Expandir o modulo para aceitar ate 10 fotos, com divisao automatica inteligente para layouts de imagem, selecao de foto destaque, e novo modo de video colagem animada para 6+ fotos.
 
-## Roteiros inteligentes por quantidade de fotos
+---
 
-| Fotos | Duracao total | Tempo/foto | Comportamento |
-|-------|-------------|------------|---------------|
-| 1     | 6s          | 6s         | Zoom lento continuo (Ken Burns). Frase centralizada com fade-in aos 2s |
-| 2     | 8s          | 4s cada    | Crossfade entre fotos. Frase aparece com fade na 2a foto |
-| 3     | 9s          | 3s cada    | Foto 1: introducao pura. Foto 2: frase aparece com fade. Foto 3: encerramento sem texto |
-| 4-5   | 10s         | 2.5-2s     | Sequencia ritmica. Frase aparece na 3a foto. Crossfade suave entre todas |
-| 6-7   | 10s         | ~1.5s      | Ritmo dinamico. Frase no meio (foto 3 ou 4). Encerramento so imagem |
-
-## Efeitos visuais
-
-- **Ken Burns**: zoom lento de 1.0x a 1.08x em cada foto (sensacao cinematica)
-- **Crossfade**: transicao suave entre fotos (0.5s de blend)
-- **Fade-in do texto**: opacidade de 0 a 1 em 0.6s quando a frase aparece
-- **Fade to black/white**: ultimo 0.8s do video faz fade para a cor de fundo
-
-## Arquitetura tecnica
-
-### Motor de video: `MemoryVideoEngine.ts` (novo)
-
-Arquivo utilitario puro (sem React) que:
-1. Recebe: lista de `HTMLImageElement`, texto, isDark, font, duracao
-2. Cria um `OffscreenCanvas` (ou canvas oculto) 1080x1920
-3. Usa `canvas.captureStream(30)` para capturar a 30fps
-4. Cria `MediaRecorder` com `video/webm; codecs=vp9` (fallback para `vp8`)
-5. Executa loop de animacao com `requestAnimationFrame`
-6. Desenha cada frame: foto atual com zoom + crossfade + texto
-7. Para o recorder apos a duracao total
-8. Retorna um `Blob` do video
-
-```text
-Timeline de um video de 3 fotos (9s):
-|--- Foto 1 (3s) ---|--- Foto 2 (3s) ---|--- Foto 3 (3s) ---|
-     zoom 1.0->1.08      zoom + texto         zoom + fade out
-                    |fade|            |fade|
-                    0.5s              0.5s
-```
-
-### Componente: `MemoryVideoPreview.tsx` (novo)
-
-- Recebe as mesmas props que `MemoryCanvas`
-- Usa `MemoryVideoEngine` para gerar o video
-- Mostra um `<video>` com autoplay + loop + muted para preview
-- Botoes: "Salvar video" (download .webm) e "Compartilhar" (Web Share API)
-- Estado: `generating` (com progresso), `ready`, `error`
-
-### Integracao no fluxo existente
-
-**Arquivo: `MemoryLayoutPicker.tsx`**
-- Adicionar toggle "Imagem / Video" acima dos layouts
-- Tipo exportado: `MemoryOutputType = 'image' | 'video'`
-- Quando "Video" selecionado, os layouts de colagem nao se aplicam (video e sempre fullscreen por foto)
-
-**Arquivo: `MemoryCreator.tsx`**
-- Novo estado: `outputType: 'image' | 'video'`
-- No step `preview`: renderizar `MemoryCanvas` se imagem, `MemoryVideoPreview` se video
-- Aumentar `maxSelection` para 7 quando video selecionado
+## 1. Selecao expandida para 10 fotos
 
 **Arquivo: `MemoryPhotoSelector.tsx`**
-- Aceitar `maxSelection` dinamico (4 para imagem, 7 para video)
+- Alterar maxSelection padrao de 4 para 10
+- Adicionar funcionalidade de "foto destaque": ao dar um segundo tap numa foto ja selecionada, ela se torna destaque (indicador visual diferente, ex: estrela dourada em vez de check)
+- Apenas 1 foto destaque por vez
 
-## Detalhes do motor de animacao
+**Arquivo: `MemoryCreator.tsx`**
+- Remover logica condicional de maxSelection por outputType (sempre 10)
+- Novo estado: `highlightId: string | null` -- a foto escolhida como destaque
+- Passar highlightId para MemoryCanvas e MemoryVideoPreview
 
-### Calculo de timeline
+---
+
+## 2. Layouts de imagem com divisao automatica
+
+**Arquivo: `MemoryCanvas.tsx`** -- reescrever logica de renderizacao
+
+**Regra de divisao:**
+- 1-5 fotos: gera 1 imagem (layout unico)
+- 6-10 fotos: gera automaticamente 2 imagens (divide fotos pela metade)
+
+**Layouts disponiveis (substituem os atuais solo/dupla/colagem):**
+
+Para cada bloco de fotos (1-5), o layout e automatico baseado na quantidade:
+
+| Fotos no bloco | Layout |
+|---|---|
+| 1 | Foto unica centralizada + frase |
+| 2 | 2 fotos empilhadas, destaque ocupa 60% da altura |
+| 3 | Destaque grande (esquerda 60% largura), 2 menores empilhadas a direita |
+| 4 | Destaque grande no topo (60% altura), 3 fotos embaixo lado a lado |
+| 5 | Destaque grande (esquerda 60%), grid 2x2 a direita |
+
+Se a foto destaque esta no bloco, ela recebe a posicao maior. Se nao ha destaque, a primeira foto do bloco assume.
+
+**Para 6-10 fotos:** o sistema divide automaticamente em 2 blocos e gera 2 PNGs. O preview mostra ambas imagens em sequencia com swipe/scroll. Os botoes "Salvar" e "Compartilhar" exportam ambas.
+
+**Arquivo: `MemoryLayoutPicker.tsx`**
+- Remover os botoes solo/dupla/colagem (o layout agora e automatico)
+- Manter apenas o toggle Imagem/Video
+- Mostrar texto explicativo baseado na quantidade de fotos: "Sera gerada 1 imagem" ou "Serao geradas 2 imagens"
+
+---
+
+## 3. Video Colagem Animada (6-10 fotos)
+
+**Arquivo: `MemoryVideoEngine.ts`** -- adicionar novo modo `collage`
+
+**Logica de decisao automatica:**
+- 1-5 fotos: modo slideshow (existente, sem alteracoes)
+- 6-10 fotos: modo colagem animada
+
+**Modo colagem animada:**
+- Canvas 1080x1920 dividido em quadros fixos
+- Cada quadro exibe uma foto com movimento lento independente
+- Duracao: 8-10 segundos
+- Frase aparece centralizada com overlay semi-transparente no meio do video
+
+**Layouts de grid por quantidade:**
+
+| Fotos | Grid | Disposicao |
+|---|---|---|
+| 6 | 2x3 | 2 colunas, 3 linhas |
+| 7 | Assimetrico | 1 grande (topo 40%) + 3+3 embaixo |
+| 8 | 2x4 | 2 colunas, 4 linhas |
+| 9 | 3x3 | Grid uniforme |
+| 10 | Assimetrico | 2 grandes (topo) + 2 fileiras de 4 |
+
+**Movimentos sutis por quadro (independentes):**
+Cada foto recebe um dos 3 movimentos aleatorios (seed baseado no index):
+- Zoom lento: 1.0x a 1.04x (metade do Ken Burns normal)
+- Pan horizontal: deslocamento de 0 a 20px
+- Pan vertical: deslocamento de 0 a 15px
+
+Velocidades ligeiramente diferentes por quadro (multiplicador 0.8x a 1.2x baseado no index). Gap de 4px entre quadros. Cantos sem arredondamento.
+
+**Integracao no engine:**
 
 ```text
-function buildTimeline(photoCount, totalDuration):
-  timePerPhoto = totalDuration / photoCount
-  crossfadeDuration = 0.5s (fixo)
-  
-  Para cada foto:
-    startTime = i * timePerPhoto
-    endTime = startTime + timePerPhoto
-    showText = (regra por quantidade, conforme tabela)
-    
-  fadeOutStart = totalDuration - 0.8s
+function generateCollageVideo(opts):
+  1. Calcular grid layout (posicoes x,y,w,h de cada celula)
+  2. Para cada frame:
+     - Para cada celula: calcular zoom/pan individual
+     - Clipar ao retangulo da celula (ctx.save/clip/restore)
+     - Desenhar foto com transformacao
+  3. Texto: overlay central com fundo semi-transparente (a partir de 40% do tempo)
+  4. Fade out final 0.8s
 ```
 
-### Render loop (simplificado)
+**Arquivo: `MemoryVideoPreview.tsx`**
+- Passar highlightId para que o engine possa posicionar a foto destaque na celula maior (quando grid assimetrico)
+
+---
+
+## 4. Fluxo atualizado do usuario
 
 ```text
-Em cada frame (requestAnimationFrame):
-  currentTime = (performance.now() - startTime) / 1000
-  
-  1. Determinar foto atual e proxima (baseado em currentTime)
-  2. Calcular progresso do crossfade (0 a 1)
-  3. Calcular zoom (1.0 + 0.08 * progressoDaFoto)
-  4. Desenhar foto atual com zoom (drawImageCover com escala)
-  5. Se em crossfade: desenhar proxima foto com globalAlpha
-  6. Se momento do texto: desenhar com fade-in
-  7. Se no fade final: overlay com globalAlpha crescente
-  
-  Se currentTime >= totalDuration: parar recorder
+Passo 1: Selecionar fotos (1 a 10)
+  - Tap para selecionar
+  - Segundo tap em foto selecionada = marcar como destaque (estrela)
+  - Tap no destaque = remover destaque (volta a check normal)
+
+Passo 2: Escrever frase (opcional, sem alteracoes)
+
+Passo 3: Escolher formato
+  - Toggle: [Imagem] [Video]
+  - Texto informativo automatico:
+    - Imagem + 1-5 fotos: "Sera gerada 1 imagem"
+    - Imagem + 6-10 fotos: "Serao geradas 2 imagens"
+    - Video + 1-5 fotos: "Video slideshow cinematografico"
+    - Video + 6-10 fotos: "Video colagem animada"
+
+Passo 4: Preview
+  - Imagem: canvas(es) com scroll se 2 imagens
+  - Video: player com autoplay loop
 ```
 
-### Formato de saida
+---
 
-- `video/webm; codecs=vp9` (suporte Chrome, Edge, Firefox)
-- Fallback: `video/webm; codecs=vp8`
-- Fallback final (Safari): `video/mp4` via `MediaRecorder` se disponivel, senao exportar como GIF ou manter apenas imagem
-- Safari nao suporta `MediaRecorder` em todas as versoes -- detectar e desabilitar opcao de video quando indisponivel
-
-### Compatibilidade
-
-```text
-if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported('video/webm')) {
-  // Esconder opcao de video, mostrar apenas imagem
-}
-```
-
-## Arquivos a criar/modificar
+## 5. Arquivos a criar/modificar
 
 | Arquivo | Acao |
 |---|---|
-| `src/components/deliver/memory/MemoryVideoEngine.ts` | Criar -- motor de animacao e gravacao de video |
-| `src/components/deliver/memory/MemoryVideoPreview.tsx` | Criar -- componente de preview e export do video |
-| `src/components/deliver/memory/MemoryLayoutPicker.tsx` | Modificar -- adicionar toggle Imagem/Video |
-| `src/components/deliver/memory/MemoryCreator.tsx` | Modificar -- estado outputType, renderizar video ou imagem |
-| `src/components/deliver/memory/MemoryPhotoSelector.tsx` | Modificar -- maxSelection dinamico |
+| `src/components/deliver/memory/MemoryPhotoSelector.tsx` | Modificar -- maxSelection=10, logica de destaque (segundo tap) |
+| `src/components/deliver/memory/MemoryCreator.tsx` | Modificar -- maxSelection=10, estado highlightId, passar para filhos |
+| `src/components/deliver/memory/MemoryLayoutPicker.tsx` | Modificar -- remover botoes de layout, manter toggle formato, texto informativo |
+| `src/components/deliver/memory/MemoryCanvas.tsx` | Modificar -- layouts automaticos por quantidade, divisao em 2 imagens para 6+, foto destaque maior |
+| `src/components/deliver/memory/MemoryVideoEngine.ts` | Modificar -- adicionar modo colagem animada para 6+ fotos com movimentos independentes por quadro |
+| `src/components/deliver/memory/MemoryVideoPreview.tsx` | Modificar -- passar highlightId ao engine |
 
-## Fluxo atualizado do usuario
+Nenhum arquivo novo sera criado.
+
+---
+
+## 6. Detalhes tecnicos do video colagem
+
+### Calculo de celulas do grid
 
 ```text
-Passo 1: Selecionar fotos (1 a 7)
-Passo 2: Escrever frase (opcional)
-Passo 3: Escolher formato
-  --> Toggle: [Imagem] [Video]
-  --> Se imagem: escolher layout (solo/dupla/colagem)
-  --> Se video: sem escolha de layout (fullscreen automatico)
-Passo 4: Preview
-  --> Imagem: canvas estatico (existente)
-  --> Video: geracao + preview com <video> autoplay loop
-  --> Botoes: Salvar / Compartilhar
+function calculateGrid(photoCount):
+  configs predefinidos por quantidade (6-10)
+  cada celula = { x, y, w, h, isLarge }
+  celulas "large" reservadas para foto destaque
+  gap fixo de 4px entre celulas
 ```
 
-## Limitacoes conhecidas (V1)
+### Render loop da colagem
 
-- Safari (iOS/macOS): `MediaRecorder` com WebM tem suporte limitado. Em dispositivos sem suporte, a opcao "Video" ficara oculta e apenas "Imagem" estara disponivel
-- Formato WebM (nao MP4): alguns apps de edicao podem nao reconhecer. Porem, WhatsApp e Instagram aceitam WebM para stories
-- Sem audio/musica (conforme requisito)
-- Maximo 7 fotos / 10 segundos
+```text
+Para cada frame:
+  elapsed = tempo decorrido
+  
+  Para cada celula (i):
+    // Movimento independente
+    seed = i * 137  // pseudo-aleatorio deterministico
+    moveType = seed % 3  // zoom, panX, panY
+    speed = 0.8 + (seed % 5) * 0.1  // velocidade variada
+    progress = elapsed * speed / totalDuration
+    
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(celula.x, celula.y, celula.w, celula.h)
+    ctx.clip()
+    
+    // Aplicar transformacao baseada no moveType
+    drawImageCover(ctx, img, x_ajustado, y_ajustado, w, h, zoom)
+    
+    ctx.restore()
+  
+  // Texto centralizado com overlay
+  if elapsed > totalDuration * 0.4:
+    drawCenteredTextWithOverlay(...)
+  
+  // Fade out
+  if elapsed > totalDuration - 0.8:
+    drawFadeOut(...)
+```
+
+### Export de multiplas imagens (canvas)
+
+```text
+Para 6-10 fotos no modo imagem:
+  bloco1 = fotos[0..metade]
+  bloco2 = fotos[metade..fim]
+  
+  canvas1 = renderizar layout do bloco1
+  canvas2 = renderizar layout do bloco2
+  
+  Preview: mostrar ambos empilhados com scroll
+  Download: salvar ambos como lembranca-1.png e lembranca-2.png
+  Share: compartilhar ambos via Web Share API (files array)
+```
 
