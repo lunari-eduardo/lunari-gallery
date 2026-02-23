@@ -75,7 +75,7 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
               className="w-1.5 h-1.5 rounded-full transition-all duration-500"
               style={{
                 backgroundColor: i <= stepIndex ? textColor : (isDark ? '#44403C' : '#D6D3D1'),
-                opacity: i <= stepIndex ? 0.8 : 0.3,
+                opacity: i <= stepIndex ? 1 : 0.4,
               }}
             />
           ))}
@@ -89,7 +89,7 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
       {/* Step title */}
       <div className="text-center px-6 py-2 flex-shrink-0">
         <h3
-          className="text-lg font-light tracking-wide"
+          className="text-xl font-light tracking-wide"
           style={{ color: textColor, fontFamily: sessionFont }}
         >
           {stepLabels[step]}

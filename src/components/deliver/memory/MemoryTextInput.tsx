@@ -11,7 +11,7 @@ export function MemoryTextInput({ value, onChange, isDark, maxLength = 80 }: Pro
 
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-md mx-auto">
-      <p className="text-sm tracking-wide opacity-60" style={{ color: mutedColor }}>
+      <p className="text-sm tracking-wide opacity-80" style={{ color: mutedColor }}>
         Opcional — adicione uma frase pessoal
       </p>
 
@@ -22,14 +22,14 @@ export function MemoryTextInput({ value, onChange, isDark, maxLength = 80 }: Pro
         }}
         placeholder="Um momento que vou guardar para sempre"
         rows={2}
-        className="w-full text-center text-lg leading-relaxed resize-none border-0 bg-transparent focus:outline-none focus:ring-0 placeholder:opacity-30"
+        className="w-full text-center text-lg leading-relaxed resize-none border-0 bg-transparent focus:outline-none focus:ring-0 placeholder:opacity-50"
         style={{
           color: textColor,
           caretColor: textColor,
         }}
       />
 
-      <span className="text-xs opacity-40" style={{ color: mutedColor }}>
+      <span className="text-xs opacity-60" style={{ color: mutedColor }}>
         {value.length}/{maxLength}
       </span>
     </div>

@@ -18,13 +18,23 @@ interface Props {
   sessionName?: string;
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  // Fetch as blob to avoid CORS tainted canvas
+  const resp = await fetch(url);
+  const blob = await resp.blob();
+  const objectUrl = URL.createObjectURL(blob);
+
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Image load failed'));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -56,6 +66,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
 export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessionFont, sessionName }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hasRendered = useRef(false);
   const [rendering, setRendering] = useState(false);
   const [rendered, setRendered] = useState(false);
 
@@ -63,13 +74,20 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
   const textColor = isDark ? '#F5F5F4' : '#2D2A26';
   const fontFamily = sessionFont || 'Georgia, serif';
 
-  const selectedPhotos = selectedIds
-    .map(id => photos.find(p => p.id === id))
-    .filter(Boolean) as MemoryPhoto[];
+  // Stable key for dependencies
+  const selectedKey = selectedIds.join(',');
 
   const render = useCallback(async () => {
     const canvas = canvasRef.current;
-    if (!canvas || selectedPhotos.length === 0) return;
+    if (!canvas) return;
+
+    // Resolve photos inside callback to avoid unstable dependency
+    const selectedPhotos = selectedIds
+      .map(id => photos.find(p => p.id === id))
+      .filter(Boolean) as MemoryPhoto[];
+
+    if (selectedPhotos.length === 0) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -79,7 +97,7 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, W, H);
 
-    // Load images
+    // Load images via fetch->blob->objectURL (no CORS issues)
     const images: HTMLImageElement[] = [];
     for (const photo of selectedPhotos) {
       const paths: PhotoPaths = {
@@ -117,9 +135,7 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
       const areaH = H * 0.65;
       const startY = PAD;
       const half = (areaW - gap) / 2;
-      // Left: large photo
       drawImageCover(ctx, images[0], PAD, startY, half, areaH);
-      // Right: stack
       const rightX = PAD + half + gap;
       if (images.length === 2) {
         drawImageCover(ctx, images[1], rightX, startY, half, areaH);
@@ -130,7 +146,6 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
       } else {
         const topH = (areaH - gap) / 2;
         drawImageCover(ctx, images[1], rightX, startY, half, topH);
-        // Bottom right split
         const bottomW = (half - gap) / 2;
         drawImageCover(ctx, images[2], rightX, startY + topH + gap, bottomW, topH);
         drawImageCover(ctx, images[3], rightX + bottomW + gap, startY + topH + gap, bottomW, topH);
@@ -155,10 +170,14 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
 
     setRendering(false);
     setRendered(true);
-  }, [selectedPhotos, text, layout, bgColor, textColor, fontFamily]);
+    hasRendered.current = true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, text, layout, bgColor, textColor, fontFamily]);
 
   useEffect(() => {
-    render();
+    if (!hasRendered.current) {
+      render();
+    }
   }, [render]);
 
   const getBlob = (): Promise<Blob> => {
@@ -206,7 +225,6 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
 
   return (
     <div className="flex flex-col items-center gap-6 w-full">
-      {/* Canvas preview */}
       <div className="w-full max-w-xs mx-auto" style={{ aspectRatio: '9/16' }}>
         <canvas
           ref={canvasRef}
@@ -218,7 +236,7 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
       </div>
 
       {rendering && (
-        <p className="text-sm opacity-40" style={{ color: isDark ? '#A8A29E' : '#78716C' }}>
+        <p className="text-sm opacity-70" style={{ color: isDark ? '#A8A29E' : '#78716C' }}>
           Gerando...
         </p>
       )}
