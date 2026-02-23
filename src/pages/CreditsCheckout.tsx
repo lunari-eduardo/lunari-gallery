@@ -5,73 +5,73 @@ import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  ArrowLeft, 
-  Camera, 
-  Check, 
-  Image, 
-  Users, 
-  Palette, 
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  Image,
+  Users,
+  Palette,
   ShieldCheck,
   Minus,
-  Star,
-} from 'lucide-react';
+  Star } from
+'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const BENEFITS_AVULSO = [
-  { icon: Image, label: 'Galerias ilimitadas' },
-  { icon: Users, label: 'Clientes ilimitados' },
-  { icon: Camera, label: 'Até 2560px de resolução' },
-  { icon: Palette, label: 'Presets de galerias' },
-  { icon: ShieldCheck, label: 'Sem taxa ou comissão' },
-];
+{ icon: Image, label: 'Galerias ilimitadas' },
+{ icon: Users, label: 'Clientes ilimitados' },
+{ icon: Camera, label: 'Até 2560px de resolução' },
+{ icon: Palette, label: 'Presets de galerias' },
+{ icon: ShieldCheck, label: 'Sem taxa ou comissão' }];
+
 
 const COMBO_PLANS = [
-  {
-    name: 'Studio Pro + Select 2k',
-    monthlyPrice: 4490,
-    yearlyPrice: 45259,
-    credits: 2000,
-    benefits: [
-      'Sistema completo de gestão',
-      '2.000 créditos mensais',
-      'Integração automática com Gallery',
-      'Controle de clientes',
-      'Fluxo de trabalho',
-      'Automações de pagamentos',
-    ],
-    buttonLabel: 'Assinar',
-    highlight: false,
-  },
-  {
-    name: 'Studio Pro + Select 2k + Transfer 20GB',
-    monthlyPrice: 6490,
-    yearlyPrice: 66198,
-    credits: 2000,
-    benefits: [
-      'Gestão completa',
-      '2.000 créditos mensais',
-      '20GB de armazenamento profissional',
-      'Entrega profissional no seu estilo',
-    ],
-    buttonLabel: 'Assinar',
-    highlight: true,
-    tag: 'Mais completo',
-  },
-];
+{
+  name: 'Studio Pro + Select 2k',
+  monthlyPrice: 4490,
+  yearlyPrice: 45259,
+  credits: 2000,
+  benefits: [
+  'Sistema completo de gestão',
+  '2.000 créditos mensais',
+  'Integração automática com Gallery',
+  'Controle de clientes',
+  'Fluxo de trabalho',
+  'Automações de pagamentos'],
+
+  buttonLabel: 'Assinar',
+  highlight: false
+},
+{
+  name: 'Studio Pro + Select 2k + Transfer 20GB',
+  monthlyPrice: 6490,
+  yearlyPrice: 66198,
+  credits: 2000,
+  benefits: [
+  'Gestão completa',
+  '2.000 créditos mensais',
+  '20GB de armazenamento profissional',
+  'Entrega profissional no seu estilo'],
+
+  buttonLabel: 'Assinar',
+  highlight: true,
+  tag: 'Mais completo'
+}];
+
 
 const COMPARISON_ROWS = [
-  { label: 'Preço', avulso: 'A partir de R$ 19,90', pro: 'R$ 44,90/mês', full: 'R$ 64,90/mês' },
-  { label: 'Clientes ilimitados', avulso: true, pro: true, full: true },
-  { label: 'Galerias ilimitadas', avulso: true, pro: true, full: true },
-  { label: 'Resolução até 2560px', avulso: true, pro: true, full: true },
-  { label: 'Créditos mensais', avulso: false, pro: '2.000', full: '2.000' },
-  { label: 'Armazenamento', avulso: false, pro: false, full: '20GB' },
-  { label: 'Gestão de clientes', avulso: false, pro: true, full: true },
-  { label: 'Controle financeiro', avulso: false, pro: true, full: true },
-  { label: 'Entrega profissional', avulso: false, pro: false, full: true },
-];
+{ label: 'Preço', avulso: 'A partir de R$ 19,90', pro: 'R$ 44,90/mês', full: 'R$ 64,90/mês' },
+{ label: 'Clientes ilimitados', avulso: true, pro: true, full: true },
+{ label: 'Galerias ilimitadas', avulso: true, pro: true, full: true },
+{ label: 'Resolução até 2560px', avulso: true, pro: true, full: true },
+{ label: 'Créditos mensais', avulso: false, pro: '2.000', full: '2.000' },
+{ label: 'Armazenamento', avulso: false, pro: false, full: '20GB' },
+{ label: 'Gestão de clientes', avulso: false, pro: true, full: true },
+{ label: 'Controle financeiro', avulso: false, pro: true, full: true },
+{ label: 'Entrega profissional', avulso: false, pro: false, full: true }];
+
 
 export default function CreditsCheckout() {
   const navigate = useNavigate();
@@ -79,10 +79,10 @@ export default function CreditsCheckout() {
   const { photoCredits } = usePhotoCredits();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
-  const avulsos = packages?.filter(p => p.sort_order < 10) || [];
+  const avulsos = packages?.filter((p) => p.sort_order < 10) || [];
 
   const formatPrice = (cents: number) =>
-    (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const handleBuy = (pkg: CreditPackage) => {
     navigate('/credits/checkout/pay', {
@@ -90,8 +90,8 @@ export default function CreditsCheckout() {
         packageId: pkg.id,
         packageName: pkg.name,
         credits: pkg.credits,
-        priceCents: pkg.price_cents,
-      },
+        priceCents: pkg.price_cents
+      }
     });
   };
 
@@ -103,7 +103,7 @@ export default function CreditsCheckout() {
   const isHighlighted = (pkg: CreditPackage) => pkg.sort_order === 3;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-50">
       {/* Back button */}
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-6xl py-3 flex items-center gap-3">
@@ -116,7 +116,7 @@ export default function CreditsCheckout() {
 
       {/* ═══ HERO ═══ */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/8 via-primary/3 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/8 via-primary/3 to-transparent bg-gray-50" />
         <div className="relative container max-w-6xl pt-16 pb-40 md:pb-48 text-center space-y-6">
           <Badge variant="secondary" className="text-xs tracking-wider uppercase">
             Créditos
@@ -143,32 +143,32 @@ export default function CreditsCheckout() {
 
       {/* ═══ SELECT AVULSO CARDS ═══ */}
       <section className="container max-w-6xl -mt-28 md:-mt-32 relative z-[1] pb-20">
-        {isLoadingPackages ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-96 rounded-2xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {isLoadingPackages ?
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) =>
+          <Skeleton key={i} className="h-96 rounded-2xl" />
+          )}
+          </div> :
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {avulsos.map((pkg) => {
-              const highlighted = isHighlighted(pkg);
-              return (
-                <div
-                  key={pkg.id}
-                  className={cn(
-                    'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
-                    highlighted
-                      ? 'border-primary shadow-md ring-1 ring-primary/20'
-                      : 'border-border shadow-sm'
-                  )}
-                >
-                  {highlighted && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs gap-1">
+            const highlighted = isHighlighted(pkg);
+            return (
+              <div
+                key={pkg.id}
+                className={cn("relative flex flex-col rounded-2xl border p-8 transition-all hover:shadow-md bg-gray-50",
+
+                highlighted ?
+                'border-primary shadow-md ring-1 ring-primary/20' :
+                'border-border shadow-sm'
+                )}>
+
+                  {highlighted &&
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs gap-1">
                       <Star className="h-3 w-3" />
                       Mais escolhido
                     </Badge>
-                  )}
+                }
 
                   <p className="text-lg font-semibold text-foreground">{pkg.name}</p>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -181,26 +181,26 @@ export default function CreditsCheckout() {
                   <p className="text-xs text-muted-foreground mt-1">pagamento único</p>
 
                   <Button
-                    className="mt-6 px-8"
-                    size="lg"
-                    onClick={() => handleBuy(pkg)}
-                  >
+                  className="mt-6 px-8"
+                  size="lg"
+                  onClick={() => handleBuy(pkg)}>
+
                     Comprar
                   </Button>
 
                   <ul className="mt-6 space-y-2.5 flex-1">
-                    {BENEFITS_AVULSO.map(({ icon: Icon, label }) => (
-                      <li key={label} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                    {BENEFITS_AVULSO.map(({ icon: Icon, label }) =>
+                  <li key={label} className="flex items-center gap-2.5 text-sm text-muted-foreground">
                         <Icon className="h-4 w-4 text-primary/70 shrink-0" />
                         {label}
                       </li>
-                    ))}
+                  )}
                   </ul>
-                </div>
-              );
-            })}
+                </div>);
+
+          })}
           </div>
-        )}
+        }
       </section>
 
       {/* ═══ MICRO-TRIGGER ═══ */}
@@ -228,22 +228,22 @@ export default function CreditsCheckout() {
               onClick={() => setBillingPeriod('monthly')}
               className={cn(
                 'rounded-full px-5 py-2 text-sm font-medium transition-all',
-                billingPeriod === 'monthly'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
+                billingPeriod === 'monthly' ?
+                'bg-card text-foreground shadow-sm' :
+                'text-muted-foreground hover:text-foreground'
+              )}>
+
               Mensal
             </button>
             <button
               onClick={() => setBillingPeriod('yearly')}
               className={cn(
                 'rounded-full px-5 py-2 text-sm font-medium transition-all flex items-center gap-2',
-                billingPeriod === 'yearly'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
+                billingPeriod === 'yearly' ?
+                'bg-card text-foreground shadow-sm' :
+                'text-muted-foreground hover:text-foreground'
+              )}>
+
               Anual
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                 -16%
@@ -260,18 +260,18 @@ export default function CreditsCheckout() {
             return (
               <div
                 key={plan.name}
-                className={cn(
-                  'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
-                  plan.highlight
-                    ? 'border-primary shadow-md ring-1 ring-primary/20'
-                    : 'border-border shadow-sm'
-                )}
-              >
-                {plan.tag && (
-                  <Badge className="absolute -top-3 left-6 text-xs">
+                className={cn("relative flex flex-col rounded-2xl border p-8 transition-all hover:shadow-md bg-gray-50",
+
+                plan.highlight ?
+                'border-primary shadow-md ring-1 ring-primary/20' :
+                'border-border shadow-sm'
+                )}>
+
+                {plan.tag &&
+                <Badge className="absolute -top-3 left-6 text-xs">
                     {plan.tag}
                   </Badge>
-                )}
+                }
 
                 <p className="text-lg font-semibold text-foreground">{plan.name}</p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -279,12 +279,12 @@ export default function CreditsCheckout() {
                 </p>
 
                 <ul className="mt-6 space-y-2.5 flex-1">
-                  {plan.benefits.map((b) => (
-                    <li key={b} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                  {plan.benefits.map((b) =>
+                  <li key={b} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                       <Check className="h-4 w-4 mt-0.5 text-primary/70 shrink-0" />
                       {b}
                     </li>
-                  ))}
+                  )}
                 </ul>
 
                 <p className="text-2xl font-bold text-primary mt-6">
@@ -293,17 +293,17 @@ export default function CreditsCheckout() {
                     /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
                   </span>
                 </p>
-                {billingPeriod === 'yearly' && (
-                  <p className="text-xs text-primary/80 mt-1">
+                {billingPeriod === 'yearly' &&
+                <p className="text-xs text-primary/80 mt-1">
                     Economize 16% em relação ao mensal
                   </p>
-                )}
+                }
 
                 <Button className="mt-6 px-8" size="lg" onClick={handleComboSubscribe}>
                   {plan.buttonLabel}
                 </Button>
-              </div>
-            );
+              </div>);
+
           })}
         </div>
       </section>
@@ -340,29 +340,29 @@ export default function CreditsCheckout() {
               </tr>
             </thead>
             <tbody>
-              {COMPARISON_ROWS.map((row, i) => (
-                <tr key={row.label} className={cn('border-b last:border-0', i % 2 === 0 && 'bg-muted/10')}>
+              {COMPARISON_ROWS.map((row, i) =>
+              <tr key={row.label} className={cn('border-b last:border-0', i % 2 === 0 && 'bg-muted/10')}>
                   <td className="px-6 py-4 font-medium text-foreground">{row.label}</td>
                   {(['avulso', 'pro', 'full'] as const).map((col) => {
-                    const val = row[col];
-                    return (
-                      <td key={col} className="px-6 py-4 text-center">
-                        {val === true ? (
-                          <Check className="h-4 w-4 text-primary mx-auto" />
-                        ) : val === false ? (
-                          <Minus className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-                        ) : (
-                          <span className="text-foreground">{val}</span>
-                        )}
-                      </td>
-                    );
-                  })}
+                  const val = row[col];
+                  return (
+                    <td key={col} className="px-6 py-4 text-center">
+                        {val === true ?
+                      <Check className="h-4 w-4 text-primary mx-auto" /> :
+                      val === false ?
+                      <Minus className="h-4 w-4 text-muted-foreground/40 mx-auto" /> :
+
+                      <span className="text-foreground">{val}</span>
+                      }
+                      </td>);
+
+                })}
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
       </section>
-    </div>
-  );
+    </div>);
+
 }
