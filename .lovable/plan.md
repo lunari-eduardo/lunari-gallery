@@ -1,128 +1,94 @@
 
-# Lembranca Compartilhavel - Gallery Transfer
 
-## Resumo
+# Correcao do Modulo Lembranca Compartilhavel
 
-Criar um modulo de encerramento emocional dentro da galeria de entrega (Transfer) que permite ao cliente selecionar fotos favoritas, adicionar uma frase pessoal, e gerar um conteudo visual 9:16 (stories) pronto para compartilhar -- sem nenhum branding do fotografo.
+## Problemas identificados
 
-## Fluxo do usuario
+### 1. Loop infinito de renderizacao (flickering)
+A variavel `selectedPhotos` e recalculada a cada render (linha 66-68 do MemoryCanvas), criando uma nova referencia de array. Como ela e dependencia do `useCallback`, o `render` e recriado a cada ciclo, disparando o `useEffect` infinitamente.
 
-```text
-Cliente abre galeria Transfer
-  --> Visualiza e baixa fotos normalmente
-  --> Apos scroll, aparece uma secao sutil ao final da galeria:
-      "Crie sua lembranca"
-  --> Clica e entra no fluxo (fullscreen overlay, mobile-first)
+### 2. Erro CORS nas imagens
+O `crossOrigin = 'anonymous'` exige que o servidor retorne `Access-Control-Allow-Origin`. O CDN `media.lunarihub.com` nao retorna esse header para o origin `gallery.lunarihub.com`. Todas as imagens falham, mas o loop continua tentando.
 
-Passo 1: Selecionar fotos (1 a 4)
-  --> Grid compacto das fotos da galeria
-  --> Tap para selecionar/deselecionar
-  --> Contador visual discreto
+### 3. Textos imperceptiveis
+Combinacao de cores ja claras (`#A8A29E`, `#78716C`) com opacidades baixas (`opacity-30`, `opacity-40`, `opacity-50`) torna o texto praticamente invisivel. Fontes `text-xs` e `text-sm` agravam o problema.
 
-Passo 2: Escrever uma frase (opcional)
-  --> Input minimalista com placeholder emocional
-  --> Ex: "Um momento que vou guardar para sempre"
-  --> Limite de ~80 caracteres
+## Solucao
 
-Passo 3: Escolher layout
-  --> 2-3 templates de colagem (previews visuais)
-  --> Layout A: foto unica centralizada com frase sobreposta
-  --> Layout B: 2 fotos lado a lado (ou empilhadas) com frase
-  --> Layout C: colagem de 3-4 fotos em grid assimetrico com frase
+### Arquivo: `src/components/deliver/memory/MemoryCanvas.tsx`
 
-Passo 4: Preview e salvar
-  --> Preview 9:16 renderizado com Canvas API
-  --> Botao "Salvar imagem" (download como PNG)
-  --> Botao "Compartilhar" (Web Share API, fallback para download)
-  --> Sem botao de video na V1 (complexidade alta, futuro)
-```
+**A) Eliminar loop infinito**: Estabilizar dependencias do `useCallback` usando `selectedIds` (array de strings, estavel) em vez de `selectedPhotos` (array de objetos, recriada a cada render). Mover a logica de busca de fotos para dentro do callback.
 
-## Arquitetura de componentes
+**B) Resolver CORS**: Remover `crossOrigin = 'anonymous'` do `loadImage`. Em vez disso, carregar as imagens normalmente (sem CORS) para exibicao no canvas. O canvas ficara "tainted" (nao exportavel via toBlob). Para contornar isso, usar uma abordagem de proxy: carregar a imagem via `fetch()` com mode `no-cors` nao funciona. A solucao correta e:
+- Remover `img.crossOrigin = 'anonymous'`
+- As imagens carregarao normalmente (sem CORS blocking)
+- Para o export (toBlob), usar `fetch` para baixar como blob, criar objectURL, e carregar no canvas com `crossOrigin` a partir do objectURL (mesmo origin = sem CORS)
 
-| Componente | Responsabilidade |
-|---|---|
-| `DeliverMemorySection` | Secao CTA ao final do grid ("Crie sua lembranca") |
-| `MemoryCreator` | Overlay fullscreen com o fluxo de 4 passos |
-| `MemoryPhotoSelector` | Grid de selecao de fotos (tap to select) |
-| `MemoryTextInput` | Campo de frase pessoal com placeholder emocional |
-| `MemoryLayoutPicker` | Previews dos templates de colagem |
-| `MemoryCanvas` | Renderizacao do canvas 9:16 e export para imagem |
+Na pratica, a solucao mais simples: **carregar via fetch -> blob -> objectURL -> Image**. Isso evita CORS porque o objectURL e local.
 
-Todos dentro de `src/components/deliver/memory/`.
+**C) Renderizar apenas uma vez**: Adicionar flag `hasRendered` via useRef para evitar re-renderizacoes desnecessarias. O render so dispara quando o step muda para 'preview'.
 
-## Detalhes tecnicos
+### Arquivo: `src/components/deliver/memory/DeliverMemorySection.tsx`
 
-### Canvas 9:16
+**Aumentar visibilidade dos textos:**
+- "Lembranca": de `text-sm opacity-40` para `text-sm opacity-70`
+- Titulo: manter `text-xl sm:text-2xl` (ja adequado)
+- Descricao: de `text-sm opacity-50` para `text-base opacity-70`
+- Icone Sparkles: de `opacity-30` para `opacity-50`
 
-- Dimensao: 1080x1920 pixels (padrao stories)
-- Fundo: cor solida escura (#1C1917) ou clara (#FAF9F7) baseado no tema da galeria
-- Fotos: carregadas via `Image()` a partir das URLs R2 (preview paths, alta resolucao)
-- Texto: renderizado com `ctx.fillText()` usando a fonte da sessao (sessionFont)
-- Export: `canvas.toBlob('image/png')` para download ou share
+### Arquivo: `src/components/deliver/memory/MemoryCreator.tsx`
 
-### Layouts (3 opcoes)
+**Aumentar visibilidade:**
+- Progress dots: de `opacity: 0.8/0.3` para `opacity: 1/0.4`
+- Step title: de `text-lg` para `text-xl`
 
-**Layout A - "Solo"**: 1 foto centralizada ocupando ~70% da altura, frase na parte inferior com tipografia grande
-**Layout B - "Dupla"**: 2 fotos empilhadas verticalmente (50/50), frase entre elas ou abaixo
-**Layout C - "Colagem"**: Grid assimetrico 2x2 com uma foto maior, frase sobreposta em fundo semitransparente
+### Arquivo: `src/components/deliver/memory/MemoryPhotoSelector.tsx`
 
-### Web Share API
+**Aumentar visibilidade:**
+- Contador: de `text-sm opacity-60` para `text-sm opacity-80`
+
+### Arquivo: `src/components/deliver/memory/MemoryTextInput.tsx`
+
+**Aumentar visibilidade:**
+- Instrucao: de `text-sm opacity-60` para `text-sm opacity-80`
+- Textarea placeholder: de `placeholder:opacity-30` para `placeholder:opacity-50`
+- Contador caracteres: de `text-xs opacity-40` para `text-xs opacity-60`
+
+### Arquivo: `src/components/deliver/memory/MemoryLayoutPicker.tsx`
+
+**Aumentar visibilidade:**
+- Instrucao: de `text-sm opacity-60` para `text-sm opacity-80`
+
+### Arquivo: `src/components/deliver/memory/MemoryCanvas.tsx` (UI)
+
+**Aumentar visibilidade:**
+- "Gerando...": de `text-sm opacity-40` para `text-sm opacity-70`
+
+## Resumo tecnico da correcao do loop
 
 ```text
-navigator.share({
-  files: [new File([blob], 'lembranca.png', { type: 'image/png' })],
-  title: sessionName
-})
+ANTES (quebrado):
+  selectedPhotos = recalculado cada render (nova ref)
+    -> useCallback depende de selectedPhotos
+      -> render() recriado
+        -> useEffect dispara render()
+          -> setRendering(true) / setRendered(true)
+            -> re-render -> selectedPhotos recalculado -> loop infinito
+
+DEPOIS (corrigido):
+  useCallback depende de [selectedIds.join(','), text, layout, ...]
+    -> string estavel, nao muda entre renders
+    -> render() chamado apenas 1x quando step muda para preview
+    -> Imagens carregadas via fetch->blob->objectURL (sem CORS)
 ```
-Fallback: download direto se share nao suportado.
 
-### Integracao com ClientDeliverGallery
+## Arquivos modificados
 
-- `DeliverMemorySection` renderizado apos `DeliverPhotoGrid`
-- Recebe `photos`, `sessionName`, `sessionFont`, `isDark`, `bgColor`
-- Estado `showMemoryCreator` controlado no `ClientDeliverGallery`
-- Nao interfere com download (secao separada, apos todas as fotos)
-
-### CORS e Imagens no Canvas
-
-Para renderizar imagens no canvas sem erro de "tainted canvas":
-- Usar `img.crossOrigin = 'anonymous'` ao carregar imagens
-- O CDN R2 (`media.lunarihub.com`) ja serve com CORS habilitado
-
-### Sem dependencias externas
-
-- Canvas API nativa do browser (sem bibliotecas)
-- Web Share API nativa
-- Fontes ja carregadas pela galeria (Google Fonts no index.html)
-
-## Arquivos a criar/modificar
-
-| Arquivo | Acao |
+| Arquivo | Mudanca |
 |---|---|
-| `src/components/deliver/memory/DeliverMemorySection.tsx` | Criar -- secao CTA ao final do grid |
-| `src/components/deliver/memory/MemoryCreator.tsx` | Criar -- overlay fullscreen com fluxo de 4 passos |
-| `src/components/deliver/memory/MemoryPhotoSelector.tsx` | Criar -- grid de selecao de fotos |
-| `src/components/deliver/memory/MemoryTextInput.tsx` | Criar -- input de frase pessoal |
-| `src/components/deliver/memory/MemoryLayoutPicker.tsx` | Criar -- seletor de layout com previews |
-| `src/components/deliver/memory/MemoryCanvas.tsx` | Criar -- renderizacao canvas + export |
-| `src/pages/ClientDeliverGallery.tsx` | Modificar -- adicionar secao e estado do overlay |
-
-## Estetica e tom
-
-- Cores: herda do tema da galeria (dark/light)
-- Tipografia: fonte da sessao para titulos, system font para UI
-- Animacoes: transicoes suaves entre passos (`transition-all duration-500`)
-- Icones: Lucide (Heart, Sparkles, Share2, Download, ArrowLeft)
-- Espacamento: generoso, respirado, sem densidade
-- Bordas: `rounded-none` para fotos (coerente com o grid da galeria)
-- CTA: texto delicado, nao imperativo ("Se quiser, crie uma lembranca desse momento")
-
-## O que NAO sera incluido
-
-- Video (V1 apenas imagem estatica)
-- Logo/nome do fotografo
-- @Instagram ou qualquer rede social
-- Marca d'agua
-- Musica
-- Tracking/analytics
-- Obrigatoriedade (secao opcional ao final)
+| `src/components/deliver/memory/MemoryCanvas.tsx` | Corrigir loop infinito (estabilizar deps), resolver CORS (fetch->blob->objectURL), aumentar opacidade do "Gerando..." |
+| `src/components/deliver/memory/DeliverMemorySection.tsx` | Aumentar opacidades e tamanhos de fonte |
+| `src/components/deliver/memory/MemoryCreator.tsx` | Aumentar opacidades dos dots e tamanho do titulo |
+| `src/components/deliver/memory/MemoryPhotoSelector.tsx` | Aumentar opacidade do contador |
+| `src/components/deliver/memory/MemoryTextInput.tsx` | Aumentar opacidades da instrucao, placeholder e contador |
+| `src/components/deliver/memory/MemoryLayoutPicker.tsx` | Aumentar opacidade da instrucao |
