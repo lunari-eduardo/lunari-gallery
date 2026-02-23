@@ -55,6 +55,7 @@ export default function DeliverDetail() {
   // Editable fields
   const [sessionName, setSessionName] = useState('');
   const [welcomeMessage, setWelcomeMessage] = useState('');
+  const [welcomeEnabled, setWelcomeEnabled] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [galleryPassword, setGalleryPassword] = useState('');
@@ -68,6 +69,7 @@ export default function DeliverDetail() {
     if (gallery) {
       setSessionName(gallery.nomeSessao || '');
       setWelcomeMessage(gallery.mensagemBoasVindas || '');
+      setWelcomeEnabled(!!gallery.mensagemBoasVindas);
       setInternalNotes((gallery.configuracoes as any)?.notasInternas || '');
       setIsPrivate(gallery.permissao === 'private');
       setGalleryPassword(gallery.galleryPassword || '');
@@ -112,7 +114,7 @@ export default function DeliverDetail() {
     try {
       await updateGallery({ id, data: {
         nomeSessao: sessionName,
-        mensagemBoasVindas: welcomeMessage,
+        mensagemBoasVindas: welcomeEnabled ? (welcomeMessage.trim() || null) : null,
         permissao: isPrivate ? 'private' : 'public',
         configuracoes: {
           ...gallery.configuracoes,
@@ -405,6 +407,29 @@ export default function DeliverDetail() {
                   <Button variant="ghost" size="sm" onClick={() => setExpirationDate(undefined)}>Remover</Button>
                 )}
               </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium">Mensagem de boas-vindas</span>
+                  <p className="text-xs text-muted-foreground">Exibida ao cliente ao abrir a galeria</p>
+                </div>
+                <Switch checked={welcomeEnabled} onCheckedChange={(checked) => {
+                  setWelcomeEnabled(checked);
+                  if (!checked) setWelcomeMessage('');
+                }} />
+              </div>
+              {welcomeEnabled && (
+                <Textarea
+                  value={welcomeMessage}
+                  onChange={e => setWelcomeMessage(e.target.value)}
+                  placeholder="Olá! Suas fotos estão prontas..."
+                  rows={4}
+                />
+              )}
             </div>
 
             <Separator />
