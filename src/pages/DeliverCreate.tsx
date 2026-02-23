@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon, Plus } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,6 +61,7 @@ export default function DeliverCreate() {
 
   // Step 3: Message
   const [welcomeMessage, setWelcomeMessage] = useState('');
+  const [welcomeMessageEnabled, setWelcomeMessageEnabled] = useState(true);
 
   // Initialize defaults from settings
   useEffect(() => {
@@ -76,13 +78,11 @@ export default function DeliverCreate() {
     }
   }, [settings]);
 
-  // Initialize welcome message from global gallery settings
+  // Initialize welcome toggle from global settings (but don't pre-fill text)
   useEffect(() => {
     if (gallerySettings) {
       const globalEnabled = gallerySettings.welcomeMessageEnabled ?? true;
-      if (globalEnabled && gallerySettings.defaultWelcomeMessage) {
-        setWelcomeMessage(gallerySettings.defaultWelcomeMessage);
-      }
+      setWelcomeMessageEnabled(globalEnabled);
     }
   }, [gallerySettings]);
 
@@ -170,7 +170,7 @@ export default function DeliverCreate() {
       await updateGallery({
         id: supabaseGalleryId,
         data: {
-          mensagemBoasVindas: welcomeMessage.trim() || undefined,
+          mensagemBoasVindas: welcomeMessageEnabled ? (welcomeMessage.trim() || undefined) : undefined,
           configuracoes: {
             imageResizeOption: 2560,
             allowDownload: true,
@@ -450,13 +450,28 @@ export default function DeliverCreate() {
                 Esta mensagem será exibida quando o cliente acessar a galeria.
               </p>
             </div>
-            <Textarea
-              value={welcomeMessage}
-              onChange={(e) => setWelcomeMessage(e.target.value)}
-              placeholder="Olá! Suas fotos estão prontas para download. Aproveite!"
-              rows={8}
-              className="min-h-[200px]"
-            />
+
+            <div className="flex items-center justify-between">
+              <Label htmlFor="welcome-toggle" className="text-sm font-medium">Ativar mensagem de boas-vindas</Label>
+              <Switch
+                id="welcome-toggle"
+                checked={welcomeMessageEnabled}
+                onCheckedChange={(checked) => {
+                  setWelcomeMessageEnabled(checked);
+                  if (!checked) setWelcomeMessage('');
+                }}
+              />
+            </div>
+
+            {welcomeMessageEnabled && (
+              <Textarea
+                value={welcomeMessage}
+                onChange={(e) => setWelcomeMessage(e.target.value)}
+                placeholder="Olá! Suas fotos estão prontas para download. Aproveite!"
+                rows={8}
+                className="min-h-[200px]"
+              />
+            )}
 
             {/* Summary */}
             <div className="p-4 rounded-lg bg-muted/50 space-y-3">
