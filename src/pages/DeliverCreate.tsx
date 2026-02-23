@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -155,7 +155,11 @@ export default function DeliverCreate() {
   };
 
   const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
+    if (currentStep === 1) {
+      navigate('/');
+    } else {
+      setCurrentStep((prev) => Math.max(prev - 1, 1));
+    }
   };
 
   const handlePublish = async () => {
@@ -227,64 +231,111 @@ export default function DeliverCreate() {
     }
   };
 
-  // Theme: only light/dark mode (no custom theme colors)
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="space-y-6 animate-fade-in">
+            <p className="text-muted-foreground text-lg">
+              Dados da entrega e detalhes da sessão
+            </p>
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Nova Entrega</h1>
-          <p className="text-muted-foreground text-sm">Envie fotos em alta resolução para download</p>
-        </div>
-      </div>
-
-      {/* Steps */}
-      <div className="flex items-center justify-center gap-2 md:gap-4">
-        {steps.map((step, index) => {
-          const Icon = step.icon;
-          const isActive = currentStep === step.id;
-          const isCompleted = currentStep > step.id;
-          return (
-            <div key={step.id} className="flex items-center gap-2">
-              {index > 0 && (
-                <div className={cn('h-px w-6 md:w-12', isCompleted ? 'bg-primary' : 'bg-border')} />
-              )}
-              <div
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive && 'bg-primary/10 text-primary',
-                  isCompleted && 'text-primary',
-                  !isActive && !isCompleted && 'text-muted-foreground'
-                )}
+            {/* Gallery Permission */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Permissão da Galeria</Label>
+              <RadioGroup
+                value={galleryPermission}
+                onValueChange={(v) => {
+                  setGalleryPermission(v as GalleryPermission);
+                  if (v === 'public') {
+                    setSelectedClient(null);
+                  }
+                }}
+                className="grid grid-cols-2 gap-4"
               >
-                {isCompleted ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Icon className="h-4 w-4" />
-                )}
-                <span className="hidden md:inline">{step.name}</span>
-              </div>
+                <div>
+                  <RadioGroupItem value="public" id="gallery-public" className="peer sr-only" />
+                  <Label
+                    htmlFor="gallery-public"
+                    className={cn(
+                      'flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all',
+                      'hover:border-primary/50 hover:bg-muted/50',
+                      galleryPermission === 'public' ? 'border-primary bg-primary/5' : 'border-border'
+                    )}
+                  >
+                    <Globe className={cn('h-5 w-5', galleryPermission === 'public' ? 'text-primary' : 'text-muted-foreground')} />
+                    <div>
+                      <p className="font-medium">Pública</p>
+                      <p className="text-xs text-muted-foreground">Sem senha</p>
+                    </div>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem value="private" id="gallery-private" className="peer sr-only" />
+                  <Label
+                    htmlFor="gallery-private"
+                    className={cn(
+                      'flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all',
+                      'hover:border-primary/50 hover:bg-muted/50',
+                      galleryPermission === 'private' ? 'border-primary bg-primary/5' : 'border-border'
+                    )}
+                  >
+                    <Lock className={cn('h-5 w-5', galleryPermission === 'private' ? 'text-primary' : 'text-muted-foreground')} />
+                    <div>
+                      <p className="font-medium">Privada</p>
+                      <p className="text-xs text-muted-foreground">Requer senha</p>
+                    </div>
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
-          );
-        })}
-      </div>
 
-      {/* Step Content */}
-      <div className={cn(
-        'mx-auto',
-        currentStep === 2 ? 'max-w-4xl' : 'max-w-2xl'
-      )}>
-        {/* Step 1: Data */}
-        {currentStep === 1 && (
-          <div className="space-y-6">
-            <div className="lunari-card p-6 space-y-5">
-              <h2 className="text-lg font-semibold">Dados da Entrega</h2>
+            {/* Client Section - Only show for private galleries */}
+            {galleryPermission === 'private' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label>Cliente <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                    {isLoadingClients ? (
+                      <div className="h-10 rounded-md border border-input bg-muted animate-pulse" />
+                    ) : (
+                      <ClientSelect
+                        clients={clients}
+                        selectedClient={selectedClient}
+                        onSelect={setSelectedClient}
+                        onCreateNew={() => setIsClientModalOpen(true)}
+                      />
+                    )}
+                  </div>
+                  <div className="pt-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setIsClientModalOpen(true)}
+                      disabled={isLoadingClients}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-              {/* Session Name */}
+                {/* Password */}
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha de acesso</Label>
+                  <Input
+                    id="password"
+                    type="text"
+                    value={galleryPassword}
+                    onChange={(e) => setGalleryPassword(e.target.value)}
+                    placeholder="Defina uma senha"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Session Name + Expiration - 2 columns */}
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="sessionName">Nome da sessão *</Label>
                 <Input
@@ -294,87 +345,6 @@ export default function DeliverCreate() {
                   placeholder="Ex: Ensaio Maria - Família"
                 />
               </div>
-
-              {/* Font Select */}
-              <div className="space-y-2">
-                <Label>Fonte do Título</Label>
-                <FontSelect
-                  value={sessionFont}
-                  onChange={setSessionFont}
-                  previewText={sessionName || 'Ensaio Gestante'}
-                  titleCaseMode={titleCaseMode}
-                  onTitleCaseModeChange={setTitleCaseMode}
-                />
-              </div>
-
-              {/* Client (optional) */}
-              <div className="space-y-2">
-                <Label>Cliente <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                <ClientSelect
-                  clients={clients}
-                  selectedClient={selectedClient}
-                  onSelect={setSelectedClient}
-                  onCreateNew={() => setIsClientModalOpen(true)}
-                />
-              </div>
-
-              {/* Permission */}
-              <div className="space-y-3">
-                <Label>Tipo de acesso</Label>
-                <RadioGroup
-                  value={galleryPermission}
-                  onValueChange={(v) => setGalleryPermission(v as GalleryPermission)}
-                  className="grid grid-cols-2 gap-3"
-                >
-                  <Label
-                    htmlFor="perm-public"
-                    className={cn(
-                      'flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors',
-                      galleryPermission === 'public' ? 'border-primary bg-primary/5' : 'border-border'
-                    )}
-                  >
-                    <RadioGroupItem value="public" id="perm-public" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4" />
-                        <span className="font-medium">Pública</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">Acesso pelo link</p>
-                    </div>
-                  </Label>
-                  <Label
-                    htmlFor="perm-private"
-                    className={cn(
-                      'flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors',
-                      galleryPermission === 'private' ? 'border-primary bg-primary/5' : 'border-border'
-                    )}
-                  >
-                    <RadioGroupItem value="private" id="perm-private" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Lock className="h-4 w-4" />
-                        <span className="font-medium">Privada</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">Requer senha</p>
-                    </div>
-                  </Label>
-                </RadioGroup>
-
-                {galleryPermission === 'private' && (
-                  <div className="space-y-2 pl-1">
-                    <Label htmlFor="password">Senha de acesso</Label>
-                    <Input
-                      id="password"
-                      type="text"
-                      value={galleryPassword}
-                      onChange={(e) => setGalleryPassword(e.target.value)}
-                      placeholder="Defina uma senha"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Expiration */}
               <div className="space-y-2">
                 <Label htmlFor="expiration" className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
@@ -389,97 +359,107 @@ export default function DeliverCreate() {
                   onChange={(e) => setExpirationDays(Number(e.target.value))}
                 />
                 <p className="text-xs text-muted-foreground">
-                  A galeria ficará disponível por {expirationDays} dias após o envio
+                  Disponível por {expirationDays} dias após o envio
                 </p>
               </div>
             </div>
 
-            {/* Theme section - simple light/dark toggle */}
-            <div className="lunari-card p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                {clientMode === 'dark' ? <Moon className="h-4 w-4 text-primary" /> : <Sun className="h-4 w-4 text-primary" />}
-                <h3 className="font-medium text-sm">Aparência</h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <Label className="text-sm">Modo:</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={clientMode === 'light' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setClientMode('light')}
-                    className="gap-1"
-                  >
-                    <Sun className="h-3.5 w-3.5" />
-                    Claro
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={clientMode === 'dark' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setClientMode('dark')}
-                    className="gap-1"
-                  >
-                    <Moon className="h-3.5 w-3.5" />
-                    Escuro
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Photos */}
-        {currentStep === 2 && (
-          <div className="space-y-6">
-            <div className="lunari-card p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Fotos da Entrega</h2>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                As fotos serão armazenadas em alta resolução para download direto pelo cliente.
-              </p>
-              {supabaseGalleryId && (
-                <>
-                  <PhotoUploader
-                    galleryId={supabaseGalleryId}
-                    maxLongEdge={2560}
-                    allowDownload={true}
-                    skipCredits={true}
-                    onUploadComplete={handleUploadComplete}
-                    onUploadingChange={setIsUploading}
-                  />
-                  <DeliverPhotoManager
-                    galleryId={supabaseGalleryId}
-                    refreshKey={photoRefreshKey}
-                    coverPhotoId={coverPhotoId}
-                    onCoverChange={handleCoverChange}
-                    onPhotosChange={setPhotoCount}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Message */}
-        {currentStep === 3 && (
-          <div className="space-y-6">
-            <div className="lunari-card p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Mensagem de Boas-Vindas</h2>
-              <p className="text-sm text-muted-foreground">
-                Esta mensagem será exibida quando o cliente acessar a galeria.
-              </p>
-              <Textarea
-                value={welcomeMessage}
-                onChange={(e) => setWelcomeMessage(e.target.value)}
-                placeholder="Olá! Suas fotos estão prontas para download. Aproveite!"
-                rows={5}
+            {/* Font Select */}
+            <div className="space-y-2">
+              <Label>Fonte do Título</Label>
+              <FontSelect
+                value={sessionFont}
+                onChange={setSessionFont}
+                previewText={sessionName || 'Ensaio Gestante'}
+                titleCaseMode={titleCaseMode}
+                onTitleCaseModeChange={setTitleCaseMode}
               />
             </div>
 
+            {/* Theme section - simple light/dark toggle */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                {clientMode === 'dark' ? <Moon className="h-4 w-4 text-primary" /> : <Sun className="h-4 w-4 text-primary" />}
+                <Label className="text-base font-medium">Aparência</Label>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={clientMode === 'light' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setClientMode('light')}
+                  className="gap-1"
+                >
+                  <Sun className="h-3.5 w-3.5" />
+                  Claro
+                </Button>
+                <Button
+                  type="button"
+                  variant={clientMode === 'dark' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setClientMode('dark')}
+                  className="gap-1"
+                >
+                  <Moon className="h-3.5 w-3.5" />
+                  Escuro
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <p className="text-muted-foreground text-lg">
+                Fotos da Entrega
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              As fotos serão armazenadas em alta resolução para download direto pelo cliente.
+            </p>
+            {supabaseGalleryId && (
+              <>
+                <PhotoUploader
+                  galleryId={supabaseGalleryId}
+                  maxLongEdge={2560}
+                  allowDownload={true}
+                  skipCredits={true}
+                  onUploadComplete={handleUploadComplete}
+                  onUploadingChange={setIsUploading}
+                />
+                <DeliverPhotoManager
+                  galleryId={supabaseGalleryId}
+                  refreshKey={photoRefreshKey}
+                  coverPhotoId={coverPhotoId}
+                  onCoverChange={handleCoverChange}
+                  onPhotosChange={setPhotoCount}
+                />
+              </>
+            )}
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <p className="text-muted-foreground text-lg mb-1">Mensagem de Boas-Vindas</p>
+              <p className="text-sm text-muted-foreground">
+                Esta mensagem será exibida quando o cliente acessar a galeria.
+              </p>
+            </div>
+            <Textarea
+              value={welcomeMessage}
+              onChange={(e) => setWelcomeMessage(e.target.value)}
+              placeholder="Olá! Suas fotos estão prontas para download. Aproveite!"
+              rows={8}
+              className="min-h-[200px]"
+            />
+
             {/* Summary */}
-            <div className="lunari-card p-6 space-y-3">
+            <div className="p-4 rounded-lg bg-muted/50 space-y-3">
               <h3 className="text-base font-semibold">Resumo</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
@@ -505,36 +485,83 @@ export default function DeliverCreate() {
               </div>
             </div>
           </div>
-        )}
+        );
 
-        {/* Navigation Buttons */}
-        <div className="flex items-center justify-between pt-6">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentStep === 1}
-            className="gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto animate-fade-in pb-24">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Nova Entrega</h1>
+          <p className="text-muted-foreground text-sm">
+            Passo {currentStep} de {steps.length}
+          </p>
+        </div>
+      </div>
+
+      {/* Progress Steps */}
+      <div className="flex items-center justify-between mb-8 overflow-x-auto pb-2">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = currentStep === step.id;
+          const isCompleted = currentStep > step.id;
+          return (
+            <div key={step.id} className="flex items-center">
+              <div
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors whitespace-nowrap',
+                  isActive && 'bg-primary text-primary-foreground',
+                  isCompleted && 'bg-primary/20 text-primary',
+                  !isActive && !isCompleted && 'text-muted-foreground'
+                )}
+              >
+                {isCompleted ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                <span className="text-sm font-medium hidden sm:block">{step.name}</span>
+              </div>
+              {index < steps.length - 1 && (
+                <div className={cn('h-px w-4 md:w-12 mx-1 md:mx-2', isCompleted ? 'bg-primary' : 'bg-border')} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Step Content */}
+      <div className="lunari-card p-6 md:p-8">
+        {renderStep()}
+      </div>
+
+      {/* Fixed Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border z-40">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center gap-2">
+          <Button variant="outline" onClick={handleBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {currentStep === 1 ? 'Cancelar' : 'Voltar'}
           </Button>
 
           {currentStep < steps.length ? (
             <Button
               onClick={handleNext}
               disabled={isCreatingGallery || isUploading}
-              className="gap-2"
               variant="terracotta"
             >
               Próximo
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           ) : (
             <Button
               onClick={handlePublish}
               disabled={(photoCount === 0 && uploadedPhotos.length === 0)}
-              className="gap-2"
               variant="terracotta"
+              className="gap-2"
             >
               <Upload className="h-4 w-4" />
               Publicar Entrega

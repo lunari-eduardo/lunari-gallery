@@ -106,36 +106,36 @@ export function FontSelect({
       </Select>
       
       {/* Preview Box with Case Toggle */}
-      
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      <div className="flex items-center gap-3">
+        <div className="flex-1 bg-muted/30 rounded-lg p-4 min-h-[56px] flex items-center">
+          <span
+            style={{ fontFamily: selectedFont.family }}
+            className="text-xl md:text-2xl leading-tight"
+          >
+            {displayText || 'Preview'}
+          </span>
+        </div>
+        {onTitleCaseModeChange && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleToggleCaseMode}
+                  className="shrink-0 h-10 w-10"
+                >
+                  <IconComponent className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{currentModeConfig.label}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
 
     </div>);
 
