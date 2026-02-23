@@ -1,46 +1,35 @@
 
 
-# Ajuste de Cores do Design System
+# Escala Global do Sistema para 90%
 
-## Mudancas
+## O que sera feito
 
-Todas as alteracoes serao feitas em `src/index.css`, nas variaveis CSS do `:root` (modo claro) e `.dark` (modo escuro).
+Adicionar uma regra CSS no `html` para reduzir o tamanho base de fonte para 90%, o que efetivamente escala todo o sistema (ja que Tailwind e rem-based) para o equivalente de zoom 90% do navegador.
 
-### 1. Cor de destaque (accent) -- tom laranja com baixa opacidade
+## Mudanca
 
-Atualmente o accent usa verde (hue 120). Mudar para laranja suave:
+**Arquivo:** `src/index.css`
 
-- `--accent`: de `120 20% 90%` para `25 60% 95%` (laranja muito claro, baixa opacidade)
-- `--accent-foreground`: de `120 25% 30%` para `25 50% 35%`
+Na segunda camada `@layer base`, adicionar ao seletor existente ou criar regra para `html`:
 
-### 2. Fundo do modo claro -- branco puro
+```css
+html {
+  font-size: 90%;
+}
+```
 
-- `--background`: de `30 25% 97%` para `0 0% 100%`
-- `--card`: de `30 20% 99%` para `0 0% 100%`
-- `--popover`: de `30 20% 99%` para `0 0% 100%`
-- `--sidebar-background`: de `30 20% 98%` para `0 0% 99%`
-- Ajustar `--muted` para tom neutro mais frio: `220 10% 95%`
-- Ajustar `--border` e `--input`: de `30 15% 88%` para `220 10% 90%`
+Isso escala automaticamente todos os elementos que usam `rem` (tipografia, padding, margins, gaps, alturas) -- que e praticamente tudo no Tailwind CSS.
 
-### 3. Modo escuro -- cinza neutro em vez de marrom
+## Por que funciona
 
-Substituir todos os tons com hue 25 (marrom) por hue 220 (cinza neutro azulado) ou 0 com saturacao 0%:
-
-- `--background`: de `25 15% 10%` para `0 0% 8%`
-- `--foreground`: de `30 20% 95%` para `0 0% 95%`
-- `--card`: de `25 15% 13%` para `0 0% 11%`
-- `--popover`: de `25 15% 13%` para `0 0% 11%`
-- `--muted`: de `25 12% 20%` para `0 0% 18%`
-- `--muted-foreground`: de `30 15% 60%` para `0 0% 60%`
-- `--border`: de `25 12% 22%` para `0 0% 20%`
-- `--input`: de `25 12% 22%` para `0 0% 20%`
-- `--cream`: de `30 15% 15%` para `0 0% 14%`
-- Sidebar dark tokens: mesma neutralizacao
-- Gradients dark: atualizar hsl refs para novos valores neutros
+- Tailwind usa `rem` como unidade base (1rem = font-size do html)
+- Ao reduzir o font-size do html de 16px (padrao) para 14.4px (90%), todo o layout encolhe proporcionalmente
+- Equivale exatamente ao efeito de zoom 90% do navegador
+- Nao afeta valores em `px` absolutos (poucos no sistema)
 
 ## Arquivo modificado
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/index.css` | Variaveis CSS light e dark atualizadas |
+| `src/index.css` | Adicionar `html { font-size: 90%; }` na camada base |
 
