@@ -17,7 +17,7 @@ export function DeliverWelcomeModal({ open, onClose, message, sessionName, clien
     if (open) setStage('visible');
   }, [open]);
 
-  if (!open && stage === 'visible') return null;
+  if (!open) return null;
 
   const formatted = message
     .replace(/\{cliente\}/gi, clientName || 'Cliente')
