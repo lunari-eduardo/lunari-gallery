@@ -112,6 +112,7 @@ export function SendGalleryModal({
       setIsLinkCopied(true);
       toast.success('Link copiado!');
       setTimeout(() => setIsLinkCopied(false), 2000);
+      await markAsSent();
     }
   };
 
