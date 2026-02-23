@@ -519,31 +519,26 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Send gallery to client - generates public_token and sets password
-  const sendGalleryMutation = useMutation({
+  // Publish gallery - generates token and deadline WITHOUT marking as sent
+  const publishGalleryMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Get current gallery to check for existing token and get settings
       const gallery = getGallery(id);
       if (!gallery) throw new Error('Galeria não encontrada');
 
-      // Generate new token if doesn't exist
       const publicToken = gallery.publicToken || generatePublicToken();
       
-      // Calculate deadline based on prazoSelecaoDias
       const prazoSelecao = new Date();
       prazoSelecao.setDate(prazoSelecao.getDate() + (gallery.prazoSelecaoDias || 7));
 
-      // Deliver galleries: set finalized_at and allowDownload so the Worker
-      // (which checks these fields) allows downloads without a separate deploy
       const isDeliver = gallery.tipo === 'entrega';
 
       const { error } = await supabase
         .from('galerias')
         .update({
-          status: 'enviado',
-          enviado_em: new Date().toISOString(),
+          // Keep status as 'rascunho' - not sent yet
           prazo_selecao: prazoSelecao.toISOString(),
           public_token: publicToken,
+          published_at: new Date().toISOString(),
           ...(isDeliver && {
             finalized_at: new Date().toISOString(),
             configuracoes: {
@@ -556,25 +551,57 @@ export function useSupabaseGalleries() {
 
       if (error) throw error;
 
-      // If gallery is linked to a session, update status in clientes_sessoes
-      // Note: gallery.sessionId is the workflow string 'session_id' column
+      return { publicToken };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['galerias'] });
+    },
+    onError: (error) => {
+      console.error('Error publishing gallery:', error);
+      toast.error('Erro ao publicar galeria');
+    },
+  });
+
+  // Send gallery to client - marks as sent and logs action
+  const sendGalleryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const gallery = getGallery(id);
+      if (!gallery) throw new Error('Galeria não encontrada');
+
+      // If already sent, don't re-send
+      if (gallery.status === 'enviado') {
+        return { publicToken: gallery.publicToken };
+      }
+
+      // Generate token if somehow missing
+      const publicToken = gallery.publicToken || generatePublicToken();
+      
+      const prazoSelecao = gallery.prazoSelecao || new Date(Date.now() + (gallery.prazoSelecaoDias || 7) * 86400000);
+
+      const { error } = await supabase
+        .from('galerias')
+        .update({
+          status: 'enviado',
+          enviado_em: new Date().toISOString(),
+          prazo_selecao: prazoSelecao instanceof Date ? prazoSelecao.toISOString() : prazoSelecao,
+          public_token: publicToken,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Update session status
       if (gallery.sessionId) {
-        const { error: sessionError } = await supabase
+        await supabase
           .from('clientes_sessoes')
           .update({
             status_galeria: 'enviada',
             updated_at: new Date().toISOString(),
           })
           .eq('session_id', gallery.sessionId);
-        
-        if (sessionError) {
-          console.error('Error updating session status:', sessionError);
-        } else {
-          console.log('✅ Session status updated to enviada');
-        }
       }
 
-      // Add action
+      // Log action
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from('galeria_acoes').insert({
@@ -589,7 +616,6 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Galeria enviada!');
     },
     onError: (error) => {
       console.error('Error sending gallery:', error);
@@ -761,6 +787,7 @@ export function useSupabaseGalleries() {
     deleteGallery: deleteGalleryMutation.mutateAsync,
     updatePhotoSelection: updatePhotoSelectionMutation.mutateAsync,
     updatePhotoComment: updatePhotoCommentMutation.mutateAsync,
+    publishGallery: publishGalleryMutation.mutateAsync,
     sendGallery: sendGalleryMutation.mutateAsync,
     confirmSelection: confirmSelectionMutation.mutateAsync,
     reopenSelection: reopenSelectionMutation.mutateAsync,

@@ -176,7 +176,7 @@ export default function GalleryCreate() {
   const {
     createGallery: createSupabaseGallery,
     updateGallery,
-    sendGallery: sendSupabaseGallery
+    publishGallery: publishSupabaseGallery
   } = useSupabaseGalleries();
 
   // Step 4: Settings
@@ -616,8 +616,8 @@ export default function GalleryCreate() {
           // Persist last used font
           updateSettings({ lastSessionFont: sessionFont });
 
-          // Auto-publish gallery so it's ready to be shared
-          await sendSupabaseGallery(supabaseGalleryId);
+          // Publish gallery (generate token) without marking as "sent"
+          await publishSupabaseGallery(supabaseGalleryId);
           toast.success('Galeria criada e publicada!', {
             description: 'Agora você pode compartilhar o link com o cliente.'
           });
