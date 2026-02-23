@@ -3,6 +3,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Libre+Caslon+Text&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Open+Sans&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -27,15 +28,15 @@
     --primary-glow: 18 55% 70%;
 
     /* Soft Green Secondary */
-    --secondary: 34 29% 52%;
-    --secondary-foreground: 24 9.8039% 10%;
+    --secondary: 32 35% 62%;
+    --secondary-foreground: 25 20% 15%;
 
     /* Warm Neutrals */
     --muted: 30 15% 92%;
     --muted-foreground: 25 10% 45%;
 
     --accent: 120 20% 90%;
-    --accent-foreground: 15 74.6479% 27.8431%;
+    --accent-foreground: 33 5.4545% 32.3529%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
