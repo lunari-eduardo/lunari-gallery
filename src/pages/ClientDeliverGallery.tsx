@@ -4,6 +4,8 @@ import { DeliverHeader } from '@/components/deliver/DeliverHeader';
 import { DeliverPhotoGrid, DeliverPhoto } from '@/components/deliver/DeliverPhotoGrid';
 import { DeliverLightbox } from '@/components/deliver/DeliverLightbox';
 import { DeliverWelcomeModal } from '@/components/deliver/DeliverWelcomeModal';
+import { DeliverMemorySection } from '@/components/deliver/memory/DeliverMemorySection';
+import { MemoryCreator } from '@/components/deliver/memory/MemoryCreator';
 import { downloadDeliverPhoto, downloadAllDeliverPhotos } from '@/lib/deliverDownloadUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
 import { TitleCaseMode } from '@/types/gallery';
@@ -68,6 +70,7 @@ export default function ClientDeliverGallery({ data }: Props) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [heroEntered, setHeroEntered] = useState(false);
+  const [showMemoryCreator, setShowMemoryCreator] = useState(false);
 
   const sessionFont = gallery.settings?.sessionFont
     ? getFontFamilyById(gallery.settings.sessionFont)
@@ -175,7 +178,33 @@ export default function ClientDeliverGallery({ data }: Props) {
           onDownload={handleDownloadSingle}
           bgColor={bgColor}
         />
+
+        <DeliverMemorySection
+          isDark={isDark}
+          bgColor={bgColor}
+          sessionFont={sessionFont}
+          onOpen={() => setShowMemoryCreator(true)}
+        />
       </div>
+
+      {/* Memory Creator overlay */}
+      {showMemoryCreator && (
+        <MemoryCreator
+          photos={photos.map(p => ({
+            id: p.id,
+            storageKey: p.storageKey,
+            previewPath: p.previewPath,
+            thumbPath: p.thumbPath,
+            width: p.width,
+            height: p.height,
+          }))}
+          isDark={isDark}
+          bgColor={bgColor}
+          sessionFont={sessionFont}
+          sessionName={gallery.sessionName}
+          onClose={() => setShowMemoryCreator(false)}
+        />
+      )}
 
       {/* Lightbox */}
       {lightboxIndex !== null && (
