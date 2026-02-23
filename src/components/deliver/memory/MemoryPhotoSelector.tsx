@@ -31,7 +31,7 @@ export function MemoryPhotoSelector({ photos, selected, onSelectionChange, maxSe
   return (
     <div className="flex flex-col items-center gap-6 w-full">
       <p
-        className="text-sm tracking-wide opacity-60"
+        className="text-sm tracking-wide opacity-80"
         style={{ color: isDark ? '#A8A29E' : '#78716C' }}
       >
         {selected.length} de {maxSelection} fotos selecionadas

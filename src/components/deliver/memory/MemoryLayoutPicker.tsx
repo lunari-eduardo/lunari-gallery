@@ -67,7 +67,7 @@ export function MemoryLayoutPicker({ selected, onSelect, photoCount, isDark }: P
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <p className="text-sm tracking-wide opacity-60" style={{ color: mutedColor }}>
+      <p className="text-sm tracking-wide opacity-80" style={{ color: mutedColor }}>
         Escolha um layout
       </p>
 

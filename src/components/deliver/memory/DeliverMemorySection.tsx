@@ -16,10 +16,10 @@ export function DeliverMemorySection({ isDark, bgColor, sessionFont, onOpen }: P
       className="flex flex-col items-center justify-center py-24 px-6"
       style={{ backgroundColor: bgColor }}
     >
-      <Sparkles className="w-5 h-5 mb-4 opacity-30" style={{ color: textColor }} />
+      <Sparkles className="w-5 h-5 mb-4 opacity-50" style={{ color: textColor }} />
 
       <p
-        className="text-sm tracking-widest uppercase mb-3 opacity-40"
+        className="text-sm tracking-widest uppercase mb-3 opacity-70"
         style={{ color: mutedColor, fontFamily: sessionFont }}
       >
         Lembrança
@@ -33,7 +33,7 @@ export function DeliverMemorySection({ isDark, bgColor, sessionFont, onOpen }: P
       </h2>
 
       <p
-        className="text-sm text-center mb-8 max-w-sm leading-relaxed opacity-50"
+        className="text-base text-center mb-8 max-w-sm leading-relaxed opacity-70"
         style={{ color: mutedColor }}
       >
         Se quiser, escolha algumas fotos e crie algo bonito para guardar ou compartilhar.
