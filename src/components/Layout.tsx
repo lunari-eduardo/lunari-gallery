@@ -9,7 +9,7 @@ import {
   Users,
   User,
   LogOut,
-  Camera,
+  CreditCard,
   MousePointerClick,
   Send
 } from 'lucide-react';
@@ -177,8 +177,8 @@ export function Layout({ children }: LayoutProps) {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/credits" className="cursor-pointer">
-                    <Camera className="mr-2 h-4 w-4" />
-                    Créditos
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Planos e Créditos
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
