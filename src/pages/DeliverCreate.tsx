@@ -30,7 +30,7 @@ export default function DeliverCreate() {
   const { clients, isLoading: isLoadingClients, createClient } = useGalleryClients();
   const { settings, updateSettings } = useSettings();
   const { settings: gallerySettings } = useGallerySettings();
-  const { createGallery, updateGallery, sendGallery } = useSupabaseGalleries();
+  const { createGallery, updateGallery, publishGallery } = useSupabaseGalleries();
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -189,8 +189,8 @@ export default function DeliverCreate() {
       // Persist last used font
       updateSettings({ lastSessionFont: sessionFont });
 
-      // Send/publish gallery
-      await sendGallery(supabaseGalleryId);
+      // Publish gallery (generate token) without marking as "sent"
+      await publishGallery(supabaseGalleryId);
       toast.success('Galeria de entrega publicada!');
       navigate(`/deliver/${supabaseGalleryId}`);
     } catch (error) {

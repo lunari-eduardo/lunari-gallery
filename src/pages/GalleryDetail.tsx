@@ -359,7 +359,6 @@ export default function GalleryDetail() {
   const getStatusDisplay = (status: string): 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled' => {
     const statusMap: Record<string, 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled'> = {
       'rascunho': 'created',
-      'publicada': 'sent',
       'enviado': 'sent',
       'em_selecao': 'selection_started',
       'selecao_iniciada': 'selection_started',
