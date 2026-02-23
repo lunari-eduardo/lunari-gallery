@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { MemoryPhotoSelector, type MemoryPhoto } from './MemoryPhotoSelector';
 import { MemoryTextInput } from './MemoryTextInput';
-import { MemoryLayoutPicker, type MemoryLayout, type MemoryOutputType } from './MemoryLayoutPicker';
+import { MemoryLayoutPicker, type MemoryOutputType } from './MemoryLayoutPicker';
 import { MemoryCanvas } from './MemoryCanvas';
 import { MemoryVideoPreview } from './MemoryVideoPreview';
 
@@ -21,14 +21,12 @@ type Step = typeof STEPS[number];
 export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionName, onClose }: Props) {
   const [step, setStep] = useState<Step>('fotos');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [text, setText] = useState('');
-  const [layout, setLayout] = useState<MemoryLayout>('solo');
   const [outputType, setOutputType] = useState<MemoryOutputType>('image');
 
   const textColor = isDark ? '#F5F5F4' : '#2D2A26';
   const stepIndex = STEPS.indexOf(step);
-
-  const maxSelection = outputType === 'video' ? 7 : 4;
 
   const canAdvance = () => {
     if (step === 'fotos') return selectedIds.length >= 1;
@@ -36,12 +34,6 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
   };
 
   const next = () => {
-    if (step === 'frase') {
-      // Auto-select layout based on photo count
-      if (selectedIds.length === 1) setLayout('solo');
-      else if (selectedIds.length === 2) setLayout('dupla');
-      else setLayout('colagem');
-    }
     const i = stepIndex + 1;
     if (i < STEPS.length) setStep(STEPS[i]);
   };
@@ -52,19 +44,10 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
     else onClose();
   };
 
-  // Trim selected if switching output type reduces maxSelection
-  const handleOutputTypeChange = (type: MemoryOutputType) => {
-    setOutputType(type);
-    const newMax = type === 'video' ? 7 : 4;
-    if (selectedIds.length > newMax) {
-      setSelectedIds(selectedIds.slice(0, newMax));
-    }
-  };
-
   const stepLabels: Record<Step, string> = {
     fotos: 'Escolha suas fotos',
     frase: 'Sua frase',
-    layout: outputType === 'video' ? 'Formato' : 'Layout',
+    layout: 'Formato',
     preview: 'Sua lembrança',
   };
 
@@ -79,7 +62,6 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
           <ArrowLeft className="w-5 h-5" style={{ color: textColor }} />
         </button>
 
-        {/* Progress dots */}
         <div className="flex gap-1.5">
           {STEPS.map((_, i) => (
             <div
@@ -116,8 +98,10 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
               photos={photos}
               selected={selectedIds}
               onSelectionChange={setSelectedIds}
-              maxSelection={maxSelection}
+              maxSelection={10}
               isDark={isDark}
+              highlightId={highlightId}
+              onHighlightChange={setHighlightId}
             />
           )}
           {step === 'frase' && (
@@ -129,10 +113,8 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
           )}
           {step === 'layout' && (
             <MemoryLayoutPicker
-              selected={layout}
-              onSelect={setLayout}
               outputType={outputType}
-              onOutputTypeChange={handleOutputTypeChange}
+              onOutputTypeChange={setOutputType}
               photoCount={selectedIds.length}
               isDark={isDark}
             />
@@ -141,8 +123,8 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
             <MemoryCanvas
               photos={photos}
               selectedIds={selectedIds}
+              highlightId={highlightId}
               text={text}
-              layout={layout}
               isDark={isDark}
               sessionFont={sessionFont}
               sessionName={sessionName}
@@ -152,6 +134,7 @@ export function MemoryCreator({ photos, isDark, bgColor, sessionFont, sessionNam
             <MemoryVideoPreview
               photos={photos}
               selectedIds={selectedIds}
+              highlightId={highlightId}
               text={text}
               isDark={isDark}
               sessionFont={sessionFont}
