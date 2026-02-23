@@ -5,10 +5,12 @@ import { useCreditPackages } from '@/hooks/useCreditPackages';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Camera, Infinity, ShoppingCart, History, CheckCircle2 } from 'lucide-react';
+import { Infinity, ShoppingCart, CheckCircle2, HardDrive, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import selectLogo from '@/assets/gallery-select-logo.png';
+import transferLogo from '@/assets/gallery-transfer-logo.png';
 
 export default function Credits() {
   const navigate = useNavigate();
@@ -17,132 +19,137 @@ export default function Credits() {
   const { purchases } = useCreditPackages();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Créditos</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Planos e Créditos</h1>
         <p className="text-muted-foreground text-sm">
-          Gerencie seus créditos de foto
+          Gerencie seus créditos e armazenamento
         </p>
       </div>
 
-      {/* Texto de posicionamento */}
-      <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
-        <p className="text-sm text-foreground/80 leading-relaxed">
-          O Gallery Select organiza e valoriza a seleção das fotos.
-          <br />
-          <span className="text-muted-foreground">
-            Mais controle para você, mais clareza para seu cliente.
-          </span>
-        </p>
-      </div>
+      {/* Two-column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-12">
+        {/* Gallery Select block */}
+        <div className="space-y-5">
+          <img src={selectLogo} alt="Gallery Select" className="h-7 object-contain" />
 
-      {/* Saldo Atual - sem Card wrapper */}
-      <div className="rounded-lg border p-4">
-        {isAdmin ? (
-          <div className="text-center py-2">
-            <div className="flex items-center justify-center gap-2 text-3xl font-bold text-primary">
-              <Infinity className="h-8 w-8" />
+          {isAdmin ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-3xl font-bold text-primary">
+                <Infinity className="h-7 w-7" />
+                <span>Ilimitado</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Acesso administrativo</p>
             </div>
-            <p className="text-muted-foreground text-sm mt-1">Créditos ilimitados</p>
-            <p className="text-xs text-muted-foreground">
-              Como administrador, você tem acesso ilimitado
-            </p>
-          </div>
-        ) : (
-          <div className="text-center py-2">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Camera className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Seu Saldo</span>
+          ) : (
+            <div className="space-y-1">
+              <div className="text-3xl font-bold text-primary">
+                {isLoadingCredits ? (
+                  <Skeleton className="h-9 w-24" />
+                ) : (
+                  photoCredits.toLocaleString('pt-BR')
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">créditos disponíveis</p>
+              <p className="text-xs text-muted-foreground/60">
+                Seus créditos não vencem
+              </p>
             </div>
-            <div className="text-4xl font-bold text-primary">
-              {isLoadingCredits ? (
-                <Skeleton className="h-10 w-28 mx-auto" />
-              ) : (
-                photoCredits.toLocaleString('pt-BR')
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">créditos disponíveis</p>
-            <p className="text-xs text-muted-foreground/70 mt-0.5">
-              Seus créditos não vencem e podem ser usados a qualquer momento
-            </p>
-          </div>
-        )}
-        
-        {!isAdmin && (
-          <div className="pt-3 border-t mt-3">
-            <Button 
-              onClick={() => navigate('/credits/checkout')} 
-              className="w-full"
-              size="default"
+          )}
+
+          {!isAdmin && (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => navigate('/credits/checkout')}
+              className="gap-1.5"
             >
-              <ShoppingCart className="h-4 w-4 mr-2" />
+              <ShoppingCart className="h-3.5 w-3.5" />
               Comprar Créditos
             </Button>
-          </div>
-        )}
+          )}
+
+          {/* Purchase history */}
+          {!isAdmin && purchases && purchases.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Últimas compras</p>
+              <div className="space-y-0">
+                {purchases.slice(0, 3).map((purchase, i) => (
+                  <div
+                    key={purchase.id}
+                    className={`flex items-center justify-between py-2.5 ${i < Math.min(purchases.length, 3) - 1 ? 'border-b border-border/50' : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {purchase.status === 'approved' && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                      )}
+                      <span className="text-sm">
+                        {purchase.credits_amount.toLocaleString('pt-BR')} créditos
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <span>
+                        {(purchase.price_cents / 100).toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                      </span>
+                      <span className="text-xs">
+                        {format(new Date(purchase.created_at), "dd MMM", { locale: ptBR })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Gallery Transfer block */}
+        <div className="space-y-5">
+          <img src={transferLogo} alt="Gallery Transfer" className="h-7 object-contain" />
+
+          {isAdmin ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-3xl font-bold text-primary">
+                <Infinity className="h-7 w-7" />
+                <span>Ilimitado</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Acesso administrativo</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <HardDrive className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Armazenamento</span>
+              </div>
+              <p className="text-lg font-semibold text-muted-foreground/70">
+                Sem plano ativo
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Entregue fotos com a sua marca
+              </p>
+            </div>
+          )}
+
+          {!isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => toast.info('Em breve!')}
+              className="gap-1.5"
+            >
+              Contratar
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Histórico de Compras - lista simples */}
-      {!isAdmin && purchases && purchases.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">Histórico de Compras</h2>
-          </div>
-          
-          <div className="space-y-2">
-            {purchases.slice(0, 5).map((purchase) => (
-              <div 
-                key={purchase.id}
-                className="flex items-center justify-between p-3 rounded-lg border bg-card"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-1.5 rounded-full ${
-                    purchase.status === 'approved' 
-                      ? 'bg-primary/10 text-primary' 
-                      : 'bg-muted-foreground/10 text-muted-foreground'
-                  }`}>
-                    {purchase.status === 'approved' ? (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    ) : (
-                      <Camera className="h-3.5 w-3.5" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {purchase.credits_amount.toLocaleString('pt-BR')} créditos
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(purchase.created_at), "dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">
-                    {(purchase.price_cents / 100).toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
-                  </p>
-                  <Badge 
-                    variant={purchase.status === 'approved' ? 'default' : 'secondary'}
-                    className="text-xs"
-                  >
-                    {purchase.status === 'approved' ? 'Pago' : 
-                     purchase.status === 'pending' ? 'Pendente' : 
-                     purchase.status === 'rejected' ? 'Rejeitado' : purchase.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Bloco estratégico de upgrade */}
+      {/* Combo plans */}
       {!isAdmin && (
-        <div className="bg-muted/50 rounded-xl p-5 md:p-6 space-y-4 mt-4">
+        <div className="bg-muted/50 rounded-xl p-5 md:p-6 space-y-4">
           <div>
             <h2 className="text-base font-semibold">Cresça com uma estrutura completa</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
