@@ -2,38 +2,30 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Download, Share2 } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import type { MemoryPhoto } from './MemoryPhotoSelector';
-import type { MemoryLayout } from './MemoryLayoutPicker';
 
 const W = 1080;
 const H = 1920;
 const PAD = 60;
+const GAP = 8;
 
 interface Props {
   photos: MemoryPhoto[];
   selectedIds: string[];
+  highlightId?: string | null;
   text: string;
-  layout: MemoryLayout;
   isDark: boolean;
   sessionFont?: string;
   sessionName?: string;
 }
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
-  // Fetch as blob to avoid CORS tainted canvas
   const resp = await fetch(url);
   const blob = await resp.blob();
   const objectUrl = URL.createObjectURL(blob);
-
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Image load failed'));
-    };
+    img.onload = () => { URL.revokeObjectURL(objectUrl); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
     img.src = objectUrl;
   });
 }
@@ -64,41 +56,133 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessionFont, sessionName }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+// Reorder images so highlight is first (gets the "big" slot)
+function reorderForHighlight(images: HTMLImageElement[], ids: string[], highlightId: string | null): HTMLImageElement[] {
+  if (!highlightId) return images;
+  const idx = ids.indexOf(highlightId);
+  if (idx <= 0) return images;
+  const reordered = [...images];
+  const [item] = reordered.splice(idx, 1);
+  reordered.unshift(item);
+  return reordered;
+}
+
+interface Rect { x: number; y: number; w: number; h: number }
+
+function getLayoutRects(count: number): Rect[] {
+  const aW = W - PAD * 2;
+  const aH = H * 0.65;
+  const sY = PAD;
+
+  switch (count) {
+    case 1:
+      return [{ x: PAD, y: sY, w: aW, h: H * 0.68 }];
+    case 2: {
+      const bigH = aH * 0.6;
+      const smallH = aH - bigH - GAP;
+      return [
+        { x: PAD, y: sY, w: aW, h: bigH },
+        { x: PAD, y: sY + bigH + GAP, w: aW, h: smallH },
+      ];
+    }
+    case 3: {
+      const leftW = aW * 0.6;
+      const rightW = aW - leftW - GAP;
+      const halfH = (aH - GAP) / 2;
+      return [
+        { x: PAD, y: sY, w: leftW, h: aH },
+        { x: PAD + leftW + GAP, y: sY, w: rightW, h: halfH },
+        { x: PAD + leftW + GAP, y: sY + halfH + GAP, w: rightW, h: halfH },
+      ];
+    }
+    case 4: {
+      const topH = aH * 0.6;
+      const botH = aH - topH - GAP;
+      const colW = (aW - GAP * 2) / 3;
+      return [
+        { x: PAD, y: sY, w: aW, h: topH },
+        { x: PAD, y: sY + topH + GAP, w: colW, h: botH },
+        { x: PAD + colW + GAP, y: sY + topH + GAP, w: colW, h: botH },
+        { x: PAD + (colW + GAP) * 2, y: sY + topH + GAP, w: colW, h: botH },
+      ];
+    }
+    case 5:
+    default: {
+      const leftW = aW * 0.6;
+      const rightW = aW - leftW - GAP;
+      const cellH = (aH - GAP) / 2;
+      const cellW = (rightW - GAP) / 2;
+      return [
+        { x: PAD, y: sY, w: leftW, h: aH },
+        { x: PAD + leftW + GAP, y: sY, w: cellW, h: cellH },
+        { x: PAD + leftW + GAP + cellW + GAP, y: sY, w: cellW, h: cellH },
+        { x: PAD + leftW + GAP, y: sY + cellH + GAP, w: cellW, h: cellH },
+        { x: PAD + leftW + GAP + cellW + GAP, y: sY + cellH + GAP, w: cellW, h: cellH },
+      ];
+    }
+  }
+}
+
+function drawTextOnCanvas(ctx: CanvasRenderingContext2D, text: string, fontFamily: string, textColor: string) {
+  if (!text.trim()) return;
+  const fontSize = 42;
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  const lines = wrapText(ctx, text.trim(), W - PAD * 2);
+  const lineHeight = fontSize * 1.5;
+  const textStartY = H - PAD - (lines.length - 1) * lineHeight - 40;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, W / 2, textStartY + i * lineHeight);
+  });
+}
+
+async function renderBlock(
+  images: HTMLImageElement[],
+  ids: string[],
+  highlightId: string | null,
+  text: string,
+  bgColor: string,
+  textColor: string,
+  fontFamily: string,
+): Promise<HTMLCanvasElement> {
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, W, H);
+
+  const ordered = reorderForHighlight(images, ids, highlightId);
+  const rects = getLayoutRects(ordered.length);
+
+  ordered.forEach((img, i) => {
+    if (rects[i]) drawImageCover(ctx, img, rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+  });
+
+  drawTextOnCanvas(ctx, text, fontFamily, textColor);
+  return canvas;
+}
+
+export function MemoryCanvas({ photos, selectedIds, highlightId, text, isDark, sessionFont, sessionName }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const hasRendered = useRef(false);
   const [rendering, setRendering] = useState(false);
-  const [rendered, setRendered] = useState(false);
+  const [canvases, setCanvases] = useState<HTMLCanvasElement[]>([]);
 
   const bgColor = isDark ? '#1C1917' : '#FAF9F7';
   const textColor = isDark ? '#F5F5F4' : '#2D2A26';
   const fontFamily = sessionFont || 'Georgia, serif';
-
-  // Stable key for dependencies
   const selectedKey = selectedIds.join(',');
 
   const render = useCallback(async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    // Resolve photos inside callback to avoid unstable dependency
-    const selectedPhotos = selectedIds
-      .map(id => photos.find(p => p.id === id))
-      .filter(Boolean) as MemoryPhoto[];
-
+    const selectedPhotos = selectedIds.map(id => photos.find(p => p.id === id)).filter(Boolean) as MemoryPhoto[];
     if (selectedPhotos.length === 0) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
     setRendering(true);
 
-    // Background
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, W, H);
-
-    // Load images via fetch->blob->objectURL (no CORS issues)
-    const images: HTMLImageElement[] = [];
+    // Load all images
+    const allImages: HTMLImageElement[] = [];
     for (const photo of selectedPhotos) {
       const paths: PhotoPaths = {
         storageKey: photo.storageKey,
@@ -107,112 +191,79 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
         height: photo.height,
       };
       try {
-        const img = await loadImage(getPhotoUrl(paths, 'preview'));
-        images.push(img);
-      } catch {
-        // skip failed
-      }
+        allImages.push(await loadImage(getPhotoUrl(paths, 'preview')));
+      } catch { /* skip */ }
+    }
+    if (allImages.length === 0) { setRendering(false); return; }
+
+    const results: HTMLCanvasElement[] = [];
+
+    if (allImages.length <= 5) {
+      // Single image
+      results.push(await renderBlock(allImages, selectedIds, highlightId ?? null, text, bgColor, textColor, fontFamily));
+    } else {
+      // Split into 2 blocks
+      const mid = Math.ceil(allImages.length / 2);
+      const block1Imgs = allImages.slice(0, mid);
+      const block1Ids = selectedIds.slice(0, mid);
+      const block2Imgs = allImages.slice(mid);
+      const block2Ids = selectedIds.slice(mid);
+
+      results.push(await renderBlock(block1Imgs, block1Ids, highlightId ?? null, text, bgColor, textColor, fontFamily));
+      results.push(await renderBlock(block2Imgs, block2Ids, highlightId ?? null, '', bgColor, textColor, fontFamily));
     }
 
-    if (images.length === 0) {
-      setRendering(false);
-      return;
-    }
-
-    // Draw layout
-    const gap = 8;
-    if (layout === 'solo' || images.length === 1) {
-      const photoH = H * 0.68;
-      const photoY = PAD;
-      drawImageCover(ctx, images[0], PAD, photoY, W - PAD * 2, photoH);
-    } else if (layout === 'dupla' && images.length >= 2) {
-      const photoH = (H * 0.6 - gap) / 2;
-      const startY = PAD;
-      drawImageCover(ctx, images[0], PAD, startY, W - PAD * 2, photoH);
-      drawImageCover(ctx, images[1], PAD, startY + photoH + gap, W - PAD * 2, photoH);
-    } else if (layout === 'colagem' && images.length >= 2) {
-      const areaW = W - PAD * 2;
-      const areaH = H * 0.65;
-      const startY = PAD;
-      const half = (areaW - gap) / 2;
-      drawImageCover(ctx, images[0], PAD, startY, half, areaH);
-      const rightX = PAD + half + gap;
-      if (images.length === 2) {
-        drawImageCover(ctx, images[1], rightX, startY, half, areaH);
-      } else if (images.length === 3) {
-        const topH = (areaH - gap) / 2;
-        drawImageCover(ctx, images[1], rightX, startY, half, topH);
-        drawImageCover(ctx, images[2], rightX, startY + topH + gap, half, topH);
-      } else {
-        const topH = (areaH - gap) / 2;
-        drawImageCover(ctx, images[1], rightX, startY, half, topH);
-        const bottomW = (half - gap) / 2;
-        drawImageCover(ctx, images[2], rightX, startY + topH + gap, bottomW, topH);
-        drawImageCover(ctx, images[3], rightX + bottomW + gap, startY + topH + gap, bottomW, topH);
-      }
-    }
-
-    // Draw text
-    if (text.trim()) {
-      const fontSize = 42;
-      ctx.font = `${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = textColor;
-      ctx.textAlign = 'center';
-
-      const lines = wrapText(ctx, text.trim(), W - PAD * 2);
-      const lineHeight = fontSize * 1.5;
-      const textStartY = H - PAD - (lines.length - 1) * lineHeight - 40;
-
-      lines.forEach((line, i) => {
-        ctx.fillText(line, W / 2, textStartY + i * lineHeight);
-      });
-    }
-
+    setCanvases(results);
     setRendering(false);
-    setRendered(true);
     hasRendered.current = true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, text, layout, bgColor, textColor, fontFamily]);
+  }, [selectedKey, text, highlightId, bgColor, textColor, fontFamily]);
 
   useEffect(() => {
-    if (!hasRendered.current) {
-      render();
-    }
+    if (!hasRendered.current) render();
   }, [render]);
 
-  const getBlob = (): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return reject();
-      canvas.toBlob((blob) => {
-        if (blob) resolve(blob);
-        else reject();
-      }, 'image/png');
+  // Mount canvases to DOM
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || canvases.length === 0) return;
+    container.innerHTML = '';
+    canvases.forEach((c) => {
+      c.style.width = '100%';
+      c.style.height = 'auto';
+      c.style.borderRadius = '2px';
+      container.appendChild(c);
     });
+  }, [canvases]);
+
+  const getBlobs = async (): Promise<Blob[]> => {
+    return Promise.all(canvases.map(c => new Promise<Blob>((res, rej) => {
+      c.toBlob(b => b ? res(b) : rej(), 'image/png');
+    })));
   };
 
   const handleDownload = async () => {
     try {
-      const blob = await getBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'lembranca.png';
-      a.click();
-      URL.revokeObjectURL(url);
+      const blobs = await getBlobs();
+      blobs.forEach((blob, i) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = blobs.length > 1 ? `lembranca-${i + 1}.png` : 'lembranca.png';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
     } catch { /* ignore */ }
   };
 
   const handleShare = async () => {
     try {
-      const blob = await getBlob();
-      const file = new File([blob], 'lembranca.png', { type: 'image/png' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: sessionName || 'Lembrança',
-        });
+      const blobs = await getBlobs();
+      const files = blobs.map((b, i) =>
+        new File([b], blobs.length > 1 ? `lembranca-${i + 1}.png` : 'lembranca.png', { type: 'image/png' })
+      );
+      if (navigator.canShare && navigator.canShare({ files })) {
+        await navigator.share({ files, title: sessionName || 'Lembrança' });
       } else {
         handleDownload();
       }
@@ -225,15 +276,7 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
 
   return (
     <div className="flex flex-col items-center gap-6 w-full">
-      <div className="w-full max-w-xs mx-auto" style={{ aspectRatio: '9/16' }}>
-        <canvas
-          ref={canvasRef}
-          width={W}
-          height={H}
-          className="w-full h-full"
-          style={{ borderRadius: 2 }}
-        />
-      </div>
+      <div ref={containerRef} className="w-full max-w-xs mx-auto flex flex-col gap-4" style={{ minHeight: canvases.length === 0 ? 200 : undefined }} />
 
       {rendering && (
         <p className="text-sm opacity-70" style={{ color: isDark ? '#A8A29E' : '#78716C' }}>
@@ -241,7 +284,7 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
         </p>
       )}
 
-      {rendered && !rendering && (
+      {canvases.length > 0 && !rendering && (
         <div className="flex gap-3">
           <button
             onClick={handleDownload}
@@ -254,7 +297,6 @@ export function MemoryCanvas({ photos, selectedIds, text, layout, isDark, sessio
             <Download className="w-4 h-4" />
             Salvar
           </button>
-
           {canShare && (
             <button
               onClick={handleShare}
