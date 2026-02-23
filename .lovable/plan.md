@@ -1,85 +1,92 @@
 
-# Redesign da Pagina de Criacao de Entrega (DeliverCreate)
+# Correcoes no Modal de Compartilhamento e Controle de Status
 
-## Resumo
+## Problema 1: Links diferentes no modal
 
-Alinhar o fluxo de criacao de galerias de entrega com o fluxo de criacao de galerias de selecao, seguindo o mesmo layout, ordem de campos e largura. Restaurar preview de fonte nos dois criadores. Corrigir posicao dos botoes de navegacao e tamanho do campo de mensagem.
+O campo "Link da Galeria" mostra o link correto (`gallery.lunarihub.com/g/...`), mas a mensagem usa o link OG da Supabase (`supabase.co/functions/v1/gallery-og?token=...`). A variavel `messageLink` usa `ogLink` como prioridade, quando deveria usar `clientLink`.
 
-## Mudancas
+**Solucao**: Usar `clientLink` em todos os lugares. O link OG e util apenas para previews de WhatsApp, mas a mensagem de texto do usuario deve conter o link limpo de producao. O WhatsApp automaticamente gera preview ao detectar o link.
 
-### 1. Arquivo: `src/pages/DeliverCreate.tsx` -- Reestruturar completamente
+**Arquivo**: `src/components/SendGalleryModal.tsx`
+- Remover a variavel `ogLink` e `messageLink`
+- Usar `clientLink` diretamente no template de mensagem
+- Transformar a secao "Link da Galeria" em um unico botao "Copiar Link" (remover o campo de texto com o link)
 
-**Layout geral (seguir GalleryCreate):**
-- Container: `max-w-5xl mx-auto pb-24` (igual ao GalleryCreate, em vez do `max-w-2xl`/`max-w-4xl` atual)
-- Step content dentro de `lunari-card p-6 md:p-8` (card unico, como GalleryCreate)
-- Botoes de navegacao: **fixos no rodape** com `fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t` (igual GalleryCreate), em vez de inline no fluxo
+## Problema 2: Modal estreito e nao responsivo
 
-**Ordem dos campos no Step 1 (seguir a imagem de referencia do GalleryCreate):**
-1. Permissao da Galeria (Publica/Privada) -- radio cards em 2 colunas, mesmo estilo do GalleryCreate
-2. Cliente (opcional) -- mostrar **apenas quando privada** (como no GalleryCreate)
-3. Nome da Sessao + Prazo de Expiracao -- grid de 2 colunas (`grid gap-4 md:grid-cols-2`)
-4. Fonte do Titulo -- full width, com preview restaurado
-5. Aparencia (Claro/Escuro) -- manter toggle existente
+**Arquivo**: `src/components/SendGalleryModal.tsx`
+- Aumentar largura: de `sm:max-w-lg` para `sm:max-w-2xl`
+- Mobile: usar `max-h-[90vh] overflow-y-auto` no conteudo
+- Botoes de acao: `grid-cols-1 sm:grid-cols-2` para empilhar no mobile
 
-**Campo Cliente quando privada:**
-- Mesmo layout do GalleryCreate: flex com ClientSelect + botao "+" ao lado
-- Label: "Cliente (opcional)" para entrega (nao obrigatorio como em selecao)
+## Problema 3: Galeria marcada como "enviada" logo apos criacao
 
-**Remover campos que nao se aplicam (marcados com X nas imagens):**
-- Pacote (nao existe em entrega)
-- Fotos Incluidas no Pacote (nao existe em entrega)
+Atualmente, o fluxo de criacao chama `sendGallery()` automaticamente no ultimo passo (GalleryCreate.tsx, linha 620). Isso:
+1. Muda status para `enviado`
+2. Registra acao `enviada` no historico
+3. Gera o `public_token`
 
-**Step 3 (Mensagem):**
-- Textarea: aumentar `rows` de 5 para 8 e adicionar `min-h-[200px]`
-- Os botoes ja serao fixos no rodape (resolvendo o problema de posicao)
+Mas o usuario nunca "enviou" ao cliente -- apenas criou a galeria. O status deveria ser `criada` ate que o usuario explicitamente clique em "Compartilhar" e envie o link.
 
-### 2. Arquivo: `src/components/FontSelect.tsx` -- Restaurar preview de fonte
+**Solucao em 2 partes**:
 
-O preview box esta vazio (linhas 108-139 sao linhas em branco). Restaurar:
+### Parte A: Separar "publicar" de "enviar" (`src/hooks/useSupabaseGalleries.ts`)
 
-- Caixa de preview com fundo `bg-muted/50 rounded-lg p-4`
-- Texto de preview renderizado com a fonte selecionada: `style={{ fontFamily: selectedFont.family }}` com `text-xl`
-- Botao de toggle de case mode ao lado do preview (como era antes)
-- Estrutura: flex row com preview text ocupando espaco e botao de case toggle no canto
+Criar uma nova funcao `publishGallery` que:
+- Gera o `public_token` (para o link funcionar)
+- Define o prazo de selecao
+- Muda status para `publicada` (novo status intermediario, ou manter `rascunho` com token)
+- NAO registra acao de `enviada`
 
-### 3. Resumo das mudancas visuais
+Na verdade, a solucao mais simples e: **manter a chamada a `sendGallery` no create, mas mudar o status para um valor que represente "criada/publicada mas nao enviada"**.
 
-| Elemento | Antes | Depois |
-|---|---|---|
-| Container largura | `max-w-2xl` | `max-w-5xl` |
-| Botoes navegacao | Inline, sobem com conteudo | Fixos no rodape da tela |
-| Ordem campos Step 1 | Nome > Fonte > Cliente > Permissao > Expiracao > Aparencia | Permissao > Cliente (se privada) > Nome + Expiracao (2 cols) > Fonte > Aparencia |
-| Cliente visibilidade | Sempre visivel | Apenas quando privada |
-| Preview de fonte | Ausente | Restaurado com texto na fonte selecionada |
-| Textarea mensagem | `rows=5` | `rows=8 min-h-[200px]` |
-| Step content | Cards separados por secao | Card unico (`lunari-card`) envolvendo tudo |
+Como o sistema ja tem o status `rascunho` (pre-criacao) e `enviado` (pos-envio), a melhor abordagem e:
+1. No `GalleryCreate`, ao finalizar, chamar uma nova funcao `publishGallery` que gera o token e define `status = 'publicada'` (pronta para compartilhar, mas nao enviada)
+2. O botao "Compartilhar" no `GalleryDetail` continua abrindo o modal
+3. Dentro do modal, ao clicar em WhatsApp ou Copiar Mensagem, registrar a acao `enviada` e mudar o status para `enviado`
 
-## Detalhes tecnicos
+### Parte B: Implementar `publishGallery` e ajustar fluxo
 
-### FontSelect -- Preview restaurado
+**Arquivo**: `src/hooks/useSupabaseGalleries.ts`
+- Nova mutation `publishGallery`: gera token, status `rascunho` mantido (ou novo status), prazo calculado, SEM acao `enviada`
+- Ajustar `sendGallery`: so muda para `enviado` e registra acao se status atual nao for ja `enviado`
 
-```text
-[Select dropdown]
-[Preview box: "Ensaio Gestante" na fonte selecionada] [Botao Aa toggle]
-```
+**Arquivo**: `src/pages/GalleryCreate.tsx`
+- Trocar `sendSupabaseGallery()` por `publishGallery()` no step final
 
-O preview box tera:
-- Fundo: `bg-muted/30 rounded-lg p-4`
-- Texto com `text-xl md:text-2xl` e `fontFamily` da fonte selecionada
-- Ao lado: botao icon com TooltipProvider mostrando o modo atual (Normal/MAIUSCULAS/Inicio De Palavras)
+**Arquivo**: `src/components/SendGalleryModal.tsx`
+- Ao clicar "WhatsApp" ou "Copiar Mensagem": chamar `onSendGallery()` para registrar o envio real
+- Mostrar status correto
 
-### DeliverCreate -- Navegacao fixa
+**Arquivo**: `src/pages/GalleryDetail.tsx`
+- O `handleSendGallery` ja existe e chama `sendSupabaseGallery` -- passar como callback para o modal
 
-Replicar exatamente o padrao do GalleryCreate:
-```text
-fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border z-40
-  max-w-5xl mx-auto px-4 py-4 flex justify-between
-    [Voltar]                              [Proximo / Publicar Entrega]
-```
+### Parte C: StatusBadge e mapeamento
 
-### Arquivos modificados
+**Arquivo**: `src/pages/GalleryDetail.tsx`
+- Adicionar mapeamento `publicada` -> novo display (ex: `'created'` ou novo tipo `'published'`)
 
-| Arquivo | Acao |
+**Arquivo**: `src/components/StatusBadge.tsx`
+- Verificar se precisa de novo status visual para `publicada`
+
+## Resumo das mudancas
+
+| Arquivo | Mudanca |
 |---|---|
-| `src/pages/DeliverCreate.tsx` | Reestruturar layout, ordem, largura, botoes fixos |
-| `src/components/FontSelect.tsx` | Restaurar preview box com fonte e toggle case |
+| `src/components/SendGalleryModal.tsx` | Usar `clientLink` na mensagem; remover campo de link e usar botao "Copiar Link"; alargar modal; responsividade mobile; chamar `onSendGallery` ao compartilhar |
+| `src/hooks/useSupabaseGalleries.ts` | Nova mutation `publishGallery` (gera token, status rascunho, sem acao enviada); ajustar `sendGallery` para registrar envio real |
+| `src/pages/GalleryCreate.tsx` | Trocar `sendSupabaseGallery` por `publishGallery` no step final |
+| `src/pages/GalleryDetail.tsx` | Passar `handleSendGallery` ao modal; mapear status `publicada` |
+| `src/components/StatusBadge.tsx` | Adicionar status visual para galerias publicadas mas nao enviadas (ex: badge "Criada" em vez de "Enviada") |
+
+## Fluxo resultante
+
+```text
+Criar galeria --> status: rascunho --> upload fotos --> publishGallery() --> status: rascunho (com token gerado)
+                                                                            Badge: "Criada"
+                                                                            Historico: "Galeria criada"
+
+Usuario clica "Compartilhar" --> Abre modal --> Clica WhatsApp/Copiar --> sendGallery() --> status: enviado
+                                                                                           Badge: "Enviada"
+                                                                                           Historico: + "Galeria enviada para o cliente"
+```
