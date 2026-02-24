@@ -32,7 +32,7 @@ export default function Credits() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
         {/* Gallery Select block */}
         <div className="space-y-5 md:pr-12">
-          <img src={selectLogo} alt="Gallery Select" className="h-7 object-contain" />
+          <img src={selectLogo} alt="Gallery Select" className="h-10 object-contain" />
 
           {isAdmin ? (
             <div className="space-y-1">
@@ -110,8 +110,8 @@ export default function Credits() {
         <div className="md:hidden border-t border-border/30 my-2" />
 
         {/* Gallery Transfer block */}
-        <div className="space-y-5 md:border-l md:border-border/30 md:pl-12 pt-4 md:pt-0">
-          <img src={transferLogo} alt="Gallery Transfer" className="h-7 object-contain" />
+        <div className="space-y-5 md:border-l md:border-border md:pl-12 pt-4 md:pt-0">
+          <img src={transferLogo} alt="Gallery Transfer" className="h-10 object-contain" />
 
           {isAdmin ? (
             <div className="space-y-1">
@@ -139,12 +139,12 @@ export default function Credits() {
           {!isAdmin && (
             <Button
               size="sm"
-              variant="outline"
+              variant="default"
               onClick={() => toast.info('Em breve!')}
               className="gap-1.5"
             >
-              Contratar
               <ArrowRight className="h-3.5 w-3.5" />
+              Ver Planos
             </Button>
           )}
         </div>
