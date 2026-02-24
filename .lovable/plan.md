@@ -1,77 +1,47 @@
 
-# Planos e Creditos -- Pagina Unificada
+# Refinamento Visual -- Planos e Creditos (Premium)
 
-## Resumo
+## Problemas identificados
 
-Renomear o menu "Creditos" para "Planos e Creditos" e redesenhar a pagina `/credits` como um hub unificado com dois blocos lado a lado (desktop) ou empilhados (mobile): Gallery Select (creditos) e Gallery Transfer (armazenamento). Design limpo sem cards pesados, bordas sutis, botoes compactos. Planos combo permanecem no final.
+1. **Desktop**: Os dois blocos (Select e Transfer) nao tem separacao visual clara -- parecem flutuar sem estrutura. O historico de compras fica "solto" com valores distantes.
+2. **Mobile**: Sem separador entre Select e Transfer, tudo parece um unico produto empilhado.
+3. **Combo plans**: Cards com bordas pesadas, botoes largos demais para a estetica premium.
 
----
+## Solucao
 
-## 1. Menu -- Renomear item
+**Arquivo: `src/pages/Credits.tsx`** -- ajustes visuais
 
-**Arquivo: `src/components/Layout.tsx`**
-- Linha 181: trocar texto "Creditos" por "Planos e Creditos"
-- Icone pode trocar de `Camera` para `CreditCard` ou manter (decisao estetica -- vou usar `CreditCard` do lucide para diferenciar de "fotos")
+### Desktop (md+)
 
----
+- Adicionar um `Separator` vertical (via CSS `md:border-l border-border/40`) no bloco Transfer, com `md:pl-12` para criar respiro visual claro entre os dois produtos
+- Manter grid `md:grid-cols-2` mas com alinhamento mais controlado
 
-## 2. Redesign da pagina `/credits` (Credits.tsx)
+### Mobile
 
-**Arquivo: `src/pages/Credits.tsx`** -- reescrever
+- Adicionar `Separator` horizontal entre os blocos Select e Transfer (componente `<Separator />` ou `<div className="border-t border-border/30">`)
+- Adicionar `pt-6` no bloco Transfer mobile para espaco apos o separador
 
-### Estrutura da pagina
+### Historico de compras
 
-```text
-Titulo: "Planos e Creditos"
-Subtitulo: "Gerencie seus creditos e armazenamento"
+- Reduzir gap lateral entre valores e data -- usar `gap-2` em vez de `gap-3`
+- Adicionar `tabular-nums` nos valores monetarios para alinhamento numerico
 
-[Grid 2 colunas desktop / 1 coluna mobile]
+### Combo plans (bloco inferior)
 
-  BLOCO ESQUERDO                     BLOCO DIREITO
-  ┌─────────────────────┐            ┌─────────────────────┐
-  │ Logo Gallery Select │            │ Logo Gallery Transfer│
-  │                     │            │                     │
-  │ Saldo: 1.980        │            │ Armazenamento       │
-  │ creditos disponiveis │            │ 0 / 20 GB usados    │
-  │                     │            │                     │
-  │ [Comprar Creditos]  │            │ Plano: Nenhum       │
-  │  (link, nao botao   │            │ [Contratar]         │
-  │   largo)            │            │  (link compacto)    │
-  │                     │            │                     │
-  │ Historico (ultimas  │            │ (futuro: historico  │
-  │  3 compras, inline) │            │  de uso)            │
-  └─────────────────────┘            └─────────────────────┘
+- Colocar os 2 cards lado a lado no desktop: `md:grid-cols-2`
+- Reduzir padding dos cards combo
+- Botoes menores: ja sao `size="sm"` mas reduzir `px` para `px-4`
 
-[Bloco Combos -- full width]
-  Cresca com uma estrutura completa
-  (cards de plano combo, mantidos como estao)
-```
+### Detalhes tecnicos
 
-### Detalhes visuais
+Mudancas concentradas em `Credits.tsx`:
 
-- Sem bordas pesadas: usar `border-b` sutil ou separadores leves entre secoes
-- Blocos sem `rounded-lg border` card wrapper. Usar espacamento e tipografia para separar
-- Logos Gallery Select e Gallery Transfer no topo de cada bloco (imagens ja existem em `src/assets/`)
-- Saldo em texto grande (text-3xl) e cor primary
-- Botao "Comprar Creditos" compacto (`size="sm"`, nao full width), navega para `/credits/checkout`
-- Botao "Contratar armazenamento" compacto, por enquanto `toast.info('Em breve!')`
-- Historico de compras: apenas ultimas 3, sem card wrapper por item, usar lista simples com separadores
-- Admin: mostra "Ilimitado" em ambos os blocos
-
-### Bloco Transfer (lado direito)
-
-Por enquanto, dados estaticos:
-- Armazenamento: "Sem plano ativo" (texto muted)
-- CTA: "Contratar" (botao compacto, toast "Em breve!")
-- Futuramente conectara com dados reais de armazenamento
-
----
-
-## 3. Arquivos modificados
+1. **Grid wrapper**: manter `grid-cols-1 md:grid-cols-2` mas adicionar classe no bloco Transfer: `md:border-l md:border-border/30 md:pl-12`
+2. **Separador mobile**: inserir `<Separator className="md:hidden" />` entre os dois blocos (requer reestruturar o grid para usar flex no mobile ou inserir o separador como terceiro elemento do grid com `col-span-full md:hidden`)
+3. **Combo grid**: mudar de `grid-cols-1` para `grid-cols-1 md:grid-cols-2`
+4. **Botoes combo**: `px-4` em vez de `px-5`
+5. **Historico valores**: `gap-2` e `font-variant-numeric: tabular-nums`
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/Layout.tsx` | Renomear "Creditos" para "Planos e Creditos", trocar icone para CreditCard |
-| `src/pages/Credits.tsx` | Reescrever com layout 2 colunas, logos, blocos Select e Transfer, design limpo |
-
-Nenhum arquivo novo. Nenhuma rota nova. A pagina continua em `/credits`.
+| `src/pages/Credits.tsx` | Separador vertical desktop, separador horizontal mobile, combo cards lado a lado, refinamentos tipograficos |
