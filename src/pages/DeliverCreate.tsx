@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon, Plus, HardDrive, ArrowUpCircle, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,10 @@ import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { Client, GalleryPermission, TitleCaseMode } from '@/types/gallery';
 import { FontSelect } from '@/components/FontSelect';
 import { DeliverPhotoManager } from '@/components/deliver/DeliverPhotoManager';
+import { useTransferStorage } from '@/hooks/useTransferStorage';
+import { formatStorageSize } from '@/lib/transferPlans';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const steps = [
   { id: 1, name: 'Dados', icon: User },
@@ -32,6 +36,7 @@ export default function DeliverCreate() {
   const { settings, updateSettings } = useSettings();
   const { settings: gallerySettings } = useGallerySettings();
   const { createGallery, updateGallery, publishGallery } = useSupabaseGalleries();
+  const { canCreateTransfer, isAdmin, isLoading: isLoadingStorage, storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, planName } = useTransferStorage();
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -85,6 +90,59 @@ export default function DeliverCreate() {
       setWelcomeMessageEnabled(globalEnabled);
     }
   }, [gallerySettings]);
+
+  // If storage check is loading, show skeleton
+  if (isLoadingStorage) {
+    return (
+      <div className="max-w-5xl mx-auto py-16 flex items-center justify-center">
+        <Skeleton className="h-32 w-full max-w-md" />
+      </div>
+    );
+  }
+
+  // Block creation if over limit
+  if (!canCreateTransfer) {
+    return (
+      <div className="max-w-lg mx-auto py-16 space-y-6 text-center animate-fade-in">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
+          <HardDrive className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold">
+            {hasTransferPlan ? 'Armazenamento esgotado' : 'Sem plano Transfer ativo'}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {hasTransferPlan
+              ? 'Você atingiu o limite do seu plano. Faça upgrade ou exclua galerias para liberar espaço.'
+              : 'Você precisa de um plano Transfer para criar galerias de entrega.'}
+          </p>
+        </div>
+
+        {hasTransferPlan && (
+          <div className="space-y-2 max-w-xs mx-auto">
+            <Progress value={storageUsedPercent} className="h-2.5" />
+            <p className="text-xs text-muted-foreground">
+              {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
+              {planName && <span className="ml-1">· {planName}</span>}
+            </p>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+          <Button onClick={() => navigate('/credits/checkout')} className="gap-2">
+            <ArrowUpCircle className="h-4 w-4" />
+            {hasTransferPlan ? 'Fazer Upgrade' : 'Ver Planos'}
+          </Button>
+          {hasTransferPlan && (
+            <Button variant="outline" onClick={() => navigate('/galleries/deliver')} className="gap-2">
+              <Trash2 className="h-4 w-4" />
+              Gerenciar Galerias
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const handleClientCreate = async (data: ClientFormData) => {
     const newClient = await createClient(data);

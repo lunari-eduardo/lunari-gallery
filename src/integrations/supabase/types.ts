@@ -2989,6 +2989,10 @@ export type Database = {
           is_active: boolean
         }[]
       }
+      get_transfer_storage_bytes: {
+        Args: { _user_id: string }
+        Returns: number
+      }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
