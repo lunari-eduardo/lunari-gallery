@@ -100,6 +100,8 @@ export interface Galeria {
   tipo: 'selecao' | 'entrega';
   // First photo key for thumbnail
   firstPhotoKey: string | null;
+  // Cover photo key for deliver galleries
+  coverPhotoKey: string | null;
   // Relations
   photos?: GaleriaPhoto[];
 }
@@ -136,6 +138,17 @@ export interface CreateGaleriaData {
 
 // Transform database row to Galeria
 function transformGaleria(row: any): Galeria {
+  const configuracoes = (row.configuracoes as GaleriaConfiguracoes) || {};
+  const coverPhotoId = configuracoes.coverPhotoId;
+  const photos = row.galeria_fotos || [];
+  
+  // Find cover photo key by matching coverPhotoId against fetched photos
+  let coverPhotoKey: string | null = null;
+  if (coverPhotoId && photos.length > 0) {
+    const coverPhoto = photos.find((p: any) => p.id === coverPhotoId);
+    coverPhotoKey = coverPhoto?.storage_key || null;
+  }
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -156,7 +169,7 @@ function transformGaleria(row: any): Galeria {
     nomeSessao: row.nome_sessao,
     nomePacote: row.nome_pacote,
     mensagemBoasVindas: row.mensagem_boas_vindas,
-    configuracoes: (row.configuracoes as GaleriaConfiguracoes) || {},
+    configuracoes,
     totalFotos: row.total_fotos || 0,
     fotosSelecionadas: row.fotos_selecionadas || 0,
     valorExtras: row.valor_extras || 0,
@@ -172,7 +185,8 @@ function transformGaleria(row: any): Galeria {
     galleryPassword: row.gallery_password || null,
     regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
-    firstPhotoKey: row.galeria_fotos?.[0]?.storage_key || null,
+    firstPhotoKey: photos[0]?.storage_key || null,
+    coverPhotoKey,
   };
 }
 
@@ -251,7 +265,7 @@ export function useSupabaseGalleries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('galerias')
-        .select('*, galeria_fotos(storage_key)')
+        .select('*, galeria_fotos(id, storage_key)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;

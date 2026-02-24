@@ -74,7 +74,7 @@ function mapSupabaseStatus(status: string): GalleryStatus {
 }
 
 // Transform Supabase gallery to local format for display
-function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao' | 'entrega'; totalFotos: number; firstPhotoKey: string | null } {
+function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao' | 'entrega'; totalFotos: number; firstPhotoKey: string | null; coverPhotoKey: string | null } {
   let status = mapSupabaseStatus(galeria.status);
   
   const hasDeadline = galeria.prazoSelecao !== null;
@@ -124,6 +124,7 @@ function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao'
     tipo: galeria.tipo,
     totalFotos: galeria.totalFotos,
     firstPhotoKey: galeria.firstPhotoKey,
+    coverPhotoKey: galeria.coverPhotoKey,
   };
 }
 

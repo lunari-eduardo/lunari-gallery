@@ -2,6 +2,7 @@ import { Image, User, Clock, MoreHorizontal, Pencil, Share2, Trash2 } from 'luci
 import { Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { getDisplayUrl } from '@/lib/photoUrl';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface DeliverGalleryCardProps {
-  gallery: Gallery;
+  gallery: Gallery & { coverPhotoKey?: string | null; firstPhotoKey?: string | null };
   totalPhotos: number;
   onClick?: () => void;
   onEdit?: () => void;
@@ -28,6 +29,10 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onSh
   const isExpired = gallery.status === 'expired';
   const status = getDeliverStatus(gallery);
 
+  // Use cover photo key if available, otherwise first photo key
+  const thumbnailKey = (gallery as any).coverPhotoKey || (gallery as any).firstPhotoKey;
+  const thumbnailUrl = thumbnailKey ? getDisplayUrl(thumbnailKey) : null;
+
   return (
     <div
       className={cn(
@@ -38,9 +43,9 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onSh
     >
       {/* Photo Preview */}
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        {gallery.photos.length > 0 ? (
+        {thumbnailUrl ? (
           <img
-            src={gallery.photos[0].thumbnailUrl}
+            src={thumbnailUrl}
             alt=""
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
