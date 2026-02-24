@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
+import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AsaasCheckoutModal } from '@/components/credits/AsaasCheckoutModal';
 
 /* ═══════════════════════════════════════════
    STATIC DATA
@@ -107,8 +109,18 @@ export default function CreditsCheckout() {
   const navigate = useNavigate();
   const { packages, isLoadingPackages } = useCreditPackages();
   const { photoCredits } = usePhotoCredits();
+  const { subscription } = useAsaasSubscription();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [activeTab, setActiveTab] = useState<'select' | 'transfer'>('select');
+
+  // Asaas checkout modal state
+  const [checkoutModal, setCheckoutModal] = useState<{
+    open: boolean;
+    planType: string;
+    planName: string;
+    billingCycle: 'MONTHLY' | 'YEARLY';
+    priceCents: number;
+  }>({ open: false, planType: '', planName: '', billingCycle: 'MONTHLY', priceCents: 0 });
 
   const avulsos = packages?.filter(p => p.sort_order < 10) || [];
 
@@ -126,9 +138,23 @@ export default function CreditsCheckout() {
     });
   };
 
-  const handleComingSoon = () => toast.info('Em breve!');
+  const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
+    setCheckoutModal({
+      open: true,
+      planType,
+      planName,
+      billingCycle: billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY',
+      priceCents,
+    });
+  };
 
   const isHighlighted = (pkg: CreditPackage) => pkg.sort_order === 3;
+
+  // Derive active plan label for Transfer pill
+  const activePlanLabel = subscription
+    ? TRANSFER_PLANS.find(p => `transfer_${p.storage.toLowerCase()}` === subscription.plan_type)?.name ||
+      subscription.plan_type
+    : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -203,9 +229,13 @@ export default function CreditsCheckout() {
             ) : (
               <>
                 <span className="text-sm text-muted-foreground">Plano ativo</span>
-                <span className="text-2xl font-bold text-foreground">Sem plano ativo</span>
+                <span className="text-2xl font-bold text-foreground">
+                  {activePlanLabel ? `Transfer ${activePlanLabel}` : 'Sem plano ativo'}
+                </span>
                 <span className="text-xs text-muted-foreground">
-                  Escolha um plano para começar a entregar suas fotos.
+                  {activePlanLabel
+                    ? 'Seu plano está ativo e funcionando.'
+                    : 'Escolha um plano para começar a entregar suas fotos.'}
                 </span>
               </>
             )}
@@ -337,7 +367,14 @@ export default function CreditsCheckout() {
                         Economize 16% em relação ao mensal
                       </p>
                     )}
-                    <Button className="mt-6 px-8" size="lg" onClick={handleComingSoon}>
+                    <Button className="mt-6 px-8" size="lg" onClick={() => {
+                      const priceCents = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+                      handleSubscribe(
+                        plan.highlight ? 'combo_completo' : 'combo_studio_pro',
+                        plan.name,
+                        priceCents
+                      );
+                    }}>
                       {plan.buttonLabel}
                     </Button>
                   </div>
@@ -348,10 +385,10 @@ export default function CreditsCheckout() {
 
           {/* INSTITUTIONAL BUTTONS */}
           <div className="flex justify-center gap-4 pb-20">
-            <Button variant="outline" className="px-6" onClick={handleComingSoon}>
+            <Button variant="outline" className="px-6" onClick={() => toast.info('Em breve!')}>
               Conheça o Select
             </Button>
-            <Button variant="outline" className="px-6" onClick={handleComingSoon}>
+            <Button variant="outline" className="px-6" onClick={() => toast.info('Em breve!')}>
               Conheça o Transfer
             </Button>
           </div>
@@ -465,7 +502,13 @@ export default function CreditsCheckout() {
                       </p>
                     )}
 
-                    <Button className="mt-6 px-8" size="lg" onClick={handleComingSoon}>
+                    <Button className="mt-6 px-8" size="lg" onClick={() => {
+                      handleSubscribe(
+                        `transfer_${plan.storage.toLowerCase()}`,
+                        `Transfer ${plan.name}`,
+                        price
+                      );
+                    }}>
                       Assinar
                     </Button>
 
@@ -510,7 +553,10 @@ export default function CreditsCheckout() {
                     </p>
                   )}
                 </div>
-                <Button size="lg" className="px-8 shrink-0" onClick={handleComingSoon}>
+                <Button size="lg" className="px-8 shrink-0" onClick={() => {
+                  const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
+                  handleSubscribe('combo_completo', TRANSFER_COMBO.name, comboPrice);
+                }}>
                   Conhecer plano completo
                 </Button>
               </div>
@@ -518,6 +564,16 @@ export default function CreditsCheckout() {
           </section>
         </>
       )}
+
+      {/* Asaas Checkout Modal */}
+      <AsaasCheckoutModal
+        open={checkoutModal.open}
+        onOpenChange={(open) => setCheckoutModal(prev => ({ ...prev, open }))}
+        planType={checkoutModal.planType}
+        planName={checkoutModal.planName}
+        billingCycle={checkoutModal.billingCycle}
+        priceCents={checkoutModal.priceCents}
+      />
     </div>
   );
 }
