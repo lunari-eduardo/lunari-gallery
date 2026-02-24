@@ -1888,6 +1888,7 @@ export type Database = {
         Row: {
           account_status: Database["public"]["Enums"]["account_status"]
           account_type: Database["public"]["Enums"]["account_type"]
+          asaas_customer_id: string | null
           created_at: string
           credits_consumed_total: number | null
           credits_purchased_total: number | null
@@ -1905,6 +1906,7 @@ export type Database = {
         Insert: {
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
+          asaas_customer_id?: string | null
           created_at?: string
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
@@ -1922,6 +1924,7 @@ export type Database = {
         Update: {
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
+          asaas_customer_id?: string | null
           created_at?: string
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
@@ -2378,6 +2381,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscriptions_asaas: {
+        Row: {
+          asaas_customer_id: string | null
+          asaas_subscription_id: string | null
+          billing_cycle: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          next_due_date: string | null
+          plan_type: string
+          status: string
+          updated_at: string
+          user_id: string
+          value_cents: number
+        }
+        Insert: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_cycle?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          next_due_date?: string | null
+          plan_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          value_cents?: number
+        }
+        Update: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_cycle?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          next_due_date?: string | null
+          plan_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          value_cents?: number
+        }
+        Relationships: []
       }
       system_cache: {
         Row: {

@@ -50,3 +50,15 @@ verify_jwt = false
 
 [functions.gallery-og]
 verify_jwt = false
+
+[functions.asaas-create-customer]
+verify_jwt = false
+
+[functions.asaas-create-subscription]
+verify_jwt = false
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.asaas-cancel-subscription]
+verify_jwt = false
