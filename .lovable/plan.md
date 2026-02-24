@@ -1,105 +1,163 @@
 
-# Pagina de Planos Unificada -- Select + Transfer com Toggle
+# Integracao Asaas -- Assinaturas e Parcelamentos
 
-## Resumo
+## Contexto
 
-Transformar a pagina `CreditsCheckout` em uma pagina unificada de planos com um **toggle no topo** que alterna entre "Gallery Select" e "Gallery Transfer". A aba Transfer exibe 4 cards de armazenamento (5GB, 20GB, 50GB, 100GB) com toggle mensal/anual e um bloco combo no final. Sem configurar checkout real (API Asaas futura).
+O sistema atual usa **Mercado Pago** para cobrar creditos Gallery Select via PIX. Para os planos de assinatura (Transfer, combos) e parcelamentos no cartao, vamos integrar a **API Asaas**. O Mercado Pago continua sendo o provedor exclusivo para pagamentos PIX de creditos avulsos.
+
+## Escopo
+
+| Funcionalidade | Provedor |
+|---|---|
+| Creditos Select (PIX) | Mercado Pago (ja funciona) |
+| Assinaturas Transfer (cartao/PIX) | Asaas |
+| Combos mensais/anuais (cartao/PIX) | Asaas |
+| Parcelamento no cartao | Asaas |
 
 ---
 
-## Estrutura da pagina
+## Fase 1 -- Secret e Infraestrutura
+
+### 1.1 Adicionar secret `ASAAS_API_KEY`
+
+Sera necessario adicionar a API Key do Asaas como secret no Supabase. O usuario precisara:
+1. Criar conta no Asaas (https://www.asaas.com)
+2. Ir em Configuracoes > Integracao > Gerar API Key
+3. Usar ambiente **Sandbox** para testes (`$aact_...`) e depois trocar para producao
+
+### 1.2 Tabela `subscriptions_asaas`
+
+Nova tabela para rastrear assinaturas criadas via Asaas:
 
 ```text
-HEADER (Voltar)
-
-HERO (muda conforme tab ativa)
-  [Gallery Select]  [Gallery Transfer]   <-- toggle no topo
-
---- Se Select ativo ---
-  Cards avulsos (4 colunas) -- existente
-  Micro-trigger
-  Combos Select -- existente
-  Tabela comparativa -- existente
-
---- Se Transfer ativo ---
-  Toggle Mensal / Anual (com badge -20%)
-  
-  4 Cards de planos (grid 4 colunas desktop / 1 mobile):
-    5GB    | 20GB (destaque) | 50GB    | 100GB
-    R$12,90| R$24,90         | R$34,90 | R$59,90
-    
-  Bloco Combo Transfer (full width):
-    Studio Pro + Select 2k + Transfer 20GB
-    R$ 64,90/mês | R$ 661,98/ano
-    [Conhecer plano completo]
+subscriptions_asaas
+  id              UUID PK
+  user_id         UUID (FK profiles)
+  asaas_customer_id   TEXT
+  asaas_subscription_id TEXT
+  plan_type       TEXT ('transfer_5gb', 'transfer_20gb', etc.)
+  billing_cycle   TEXT ('MONTHLY', 'YEARLY')
+  status          TEXT ('ACTIVE', 'INACTIVE', 'OVERDUE', 'CANCELLED')
+  value_cents     INTEGER
+  next_due_date   DATE
+  created_at      TIMESTAMPTZ
+  updated_at      TIMESTAMPTZ
+  metadata        JSONB
 ```
+
+RLS: usuarios so veem suas proprias assinaturas.
 
 ---
 
-## Detalhes tecnicos
+## Fase 2 -- Edge Functions
 
-### Arquivo: `src/pages/CreditsCheckout.tsx`
+### 2.1 `asaas-create-customer`
 
-**1. Novo state para tab ativa**
-```typescript
-const [activeTab, setActiveTab] = useState<'select' | 'transfer'>('select');
-```
+Cria ou reutiliza um customer no Asaas a partir do perfil do fotografo.
 
-**2. Dados estaticos dos planos Transfer**
-```typescript
-const TRANSFER_PLANS = [
-  { name: '5GB', monthlyPrice: 1290, yearlyPrice: 12384, storage: '5GB', highlight: false },
-  { name: '20GB', monthlyPrice: 2490, yearlyPrice: 23904, storage: '20GB', highlight: true, tag: 'Mais escolhido' },
-  { name: '50GB', monthlyPrice: 3490, yearlyPrice: 33504, storage: '50GB', highlight: false },
-  { name: '100GB', monthlyPrice: 5990, yearlyPrice: 57504, storage: '100GB', highlight: false },
-];
+- Input: `{ name, cpfCnpj, email }`
+- Chama `POST /v3/customers` na API Asaas
+- Salva `asaas_customer_id` no `photographer_accounts` (nova coluna)
+- Retorna o customer ID
 
-const BENEFITS_TRANSFER = [
-  { icon: Users, label: 'Galerias atreladas ao cliente' },
-  { icon: Camera, label: 'Entrega profissional' },
-  { icon: ShieldCheck, label: 'Acesso rapido e estavel' },
-  { icon: Image, label: 'Expansao conforme necessidade' },
-  { icon: Check, label: 'Download do arquivo original' },
-];
-```
+### 2.2 `asaas-create-subscription`
 
-**3. Hero dinamico**
-- Badge muda: "Creditos" vs "Armazenamento"
-- Titulo muda: Select fala de selecao, Transfer fala de entrega profissional
-- Subtitulo muda conforme contexto
-- Pill de saldo: Select mostra creditos, Transfer mostra "Sem plano ativo" (placeholder)
+Cria uma assinatura recorrente no Asaas.
 
-**4. Toggle Select/Transfer no hero**
-- Pill toggle (estilo identico ao mensal/anual) posicionado abaixo do titulo
-- Duas opcoes: "Gallery Select" e "Gallery Transfer"
+- Input: `{ planType, billingCycle, billingType }`
+- Valida o plano e preco
+- Chama `POST /v3/subscriptions` com:
+  - `customer`: ID do customer Asaas
+  - `billingType`: `CREDIT_CARD` ou `PIX` ou `UNDEFINED` (gera link)
+  - `cycle`: `MONTHLY` ou `YEARLY`
+  - `value`: valor em reais
+  - `nextDueDate`: proximo dia util
+  - `description`: nome do plano
+- Se `billingType === 'CREDIT_CARD'`: aceita `creditCard` + `creditCardHolderInfo` tokenizados
+- Salva em `subscriptions_asaas`
+- Retorna `invoiceUrl` (link de pagamento Asaas) para casos sem cartao tokenizado
 
-**5. Conteudo condicional**
-- `activeTab === 'select'`: renderiza tudo que ja existe (cards avulsos, combos, tabela)
-- `activeTab === 'transfer'`: renderiza toggle mensal/anual + cards Transfer + bloco combo
+### 2.3 `asaas-webhook`
 
-**6. Cards Transfer**
-- Mesmo padrao visual exato dos cards Select: `rounded-2xl border bg-card p-8`, mesma sombra, mesma hierarquia
-- Grid: `grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6`
-- 20GB com destaque: `border-primary shadow-md ring-1 ring-primary/20` + badge "Mais escolhido"
-- Toggle mensal/anual controla qual preco aparece
-- No modo mensal: "R$ 24,90 /mes" + linha "Ou R$ 239,04 por ano (20% off)"
-- No modo anual: "R$ 239,04 /ano" + linha "Equivale a R$ 19,92/mes"
-- Botao: "Assinar" (toast "Em breve!" por enquanto)
+Recebe notificacoes do Asaas para atualizar status.
 
-**7. Bloco combo Transfer**
-- Titulo: "Integre com gestao e selecao"
-- Subtitulo: "Combine armazenamento com gestao completa e selecao profissional."
-- Card unico com destaque sutil (`border-primary/50 bg-primary/5`)
-- Nome: "Studio Pro + Select 2k + Transfer 20GB"
-- Preco: segue o toggle mensal/anual (R$ 64,90/mes ou R$ 661,98/ano)
-- Botao: "Conhecer plano completo" (toast "Em breve!")
+- Eventos tratados:
+  - `PAYMENT_CONFIRMED` / `PAYMENT_RECEIVED`: marca pagamento como pago
+  - `PAYMENT_OVERDUE`: marca como atrasado
+  - `SUBSCRIPTION_DELETED` / `SUBSCRIPTION_INACTIVATED`: cancela assinatura
+- Atualiza `subscriptions_asaas.status`
+- Loga em `webhook_logs` (tabela existente)
+
+### 2.4 `asaas-cancel-subscription`
+
+Cancela assinatura existente.
+
+- Chama `DELETE /v3/subscriptions/{id}`
+- Atualiza status local
 
 ---
 
-## Arquivo modificado
+## Fase 3 -- Frontend
 
-| Arquivo | Mudanca |
+### 3.1 Hook `useAsaasSubscription`
+
+Novo hook em `src/hooks/useAsaasSubscription.ts`:
+
+- Query para buscar assinatura ativa do usuario em `subscriptions_asaas`
+- Mutation `createSubscription` que chama a Edge Function
+- Mutation `cancelSubscription`
+- Retorna `{ subscription, isLoading, subscribe, cancel }`
+
+### 3.2 Checkout flow na pagina de planos
+
+Arquivo: `src/pages/CreditsCheckout.tsx`
+
+- Botao "Assinar" nos cards Transfer e Combos abre um modal/pagina de checkout
+- Fluxo:
+  1. Coleta nome, CPF/CNPJ e email (se nao cadastrado)
+  2. Escolha: PIX ou Cartao
+  3. **PIX**: gera cobranca via Asaas, exibe QR code (reutiliza `PixPaymentDisplay`)
+  4. **Cartao**: redireciona para `invoiceUrl` do Asaas (checkout hospedado) -- mais seguro, sem PCI compliance
+- Apos pagamento confirmado (webhook ou polling), atualiza o status do plano
+
+### 3.3 Indicador de plano ativo
+
+- Na pill de "Plano ativo" da aba Transfer, mostrar o plano atual em vez de "Sem plano ativo"
+- Na pagina `/credits`, bloco Transfer mostra badge do plano ativo
+
+---
+
+## Fase 4 -- Configuracao do webhook
+
+O webhook Asaas precisa de uma URL publica. Sera:
+
+```
+https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/asaas-webhook
+```
+
+O usuario configura essa URL no painel Asaas em:
+Configuracoes > Integracao > Webhooks > Adicionar
+
+---
+
+## Arquivos criados/modificados
+
+| Arquivo | Acao |
 |---|---|
-| `src/pages/CreditsCheckout.tsx` | Adicionar toggle Select/Transfer, dados e renderizacao dos planos Transfer, bloco combo Transfer |
+| `supabase/functions/asaas-create-customer/index.ts` | Novo |
+| `supabase/functions/asaas-create-subscription/index.ts` | Novo |
+| `supabase/functions/asaas-webhook/index.ts` | Novo |
+| `supabase/functions/asaas-cancel-subscription/index.ts` | Novo |
+| `supabase/config.toml` | Adicionar 4 novas functions com `verify_jwt = false` |
+| `src/hooks/useAsaasSubscription.ts` | Novo |
+| `src/pages/CreditsCheckout.tsx` | Conectar botoes "Assinar" ao fluxo real |
+| Migration SQL | Criar tabela `subscriptions_asaas` + coluna `asaas_customer_id` em `photographer_accounts` |
 
-Nenhum arquivo novo. Nenhuma rota nova. Checkout nao sera configurado (aguardando API Asaas).
+## Prerequisito
+
+Antes de implementar, sera necessario que voce:
+1. Crie uma conta no Asaas (https://www.asaas.com)
+2. Gere sua API Key (Sandbox para testes)
+3. Forneca a chave para armazenarmos como secret seguro no Supabase
+
+Deseja que eu solicite a API Key agora para comecarmos a implementacao?
