@@ -1,106 +1,111 @@
 
-# Checkout Unificado em Pagina Dedicada
 
-## Objetivo
+# Cartao de Credito via Asaas para Select + Parcelamento Anual + Badge de Renovacao
 
-Substituir o modal de checkout Asaas e unificar com a pagina de pagamento Select (`/credits/checkout/pay`) em uma unica pagina de checkout que adapta os metodos de pagamento conforme o produto:
+## Resumo
 
-- **Select (creditos avulsos)**: mostra apenas PIX (Mercado Pago)
-- **Transfer/Combos (assinaturas)**: mostra apenas Cartao de Credito (Asaas, checkout transparente)
+Tres mudancas principais:
 
-## Design
+1. **Select com cartao de credito**: Pagamentos com cartao no Select passam a ser via Asaas (nao Mercado Pago). PIX continua via Mercado Pago.
+2. **Parcelamento ate 12x para planos anuais**: Planos anuais (Transfer/Combos) usam cobranca avulsa Asaas (`/v3/payments`) com `installmentCount`, em vez de subscription recorrente.
+3. **Badge de renovacao manual**: Planos anuais (com ou sem parcelamento) mostram aviso de que a renovacao e manual apos 1 ano, ja que cobranqa avulsa nao renova automaticamente.
 
-Layout inspirado na ultima imagem de referencia: duas colunas em desktop (formulario a esquerda, resumo do pedido a direita), coluna unica em mobile. Bordas com `rounded-lg` (menos arredondadas que os `rounded-2xl` atuais). Visual limpo e leve.
+## Logica de Provedores (atualizada)
 
-```text
-+------------------------------------------+---------------------------+
-|  Finalizar Compra                        |  Resumo do Pedido         |
-|  Pagamento via Cartao de Credito         |                           |
-|                                          |  Transfer 20GB            |
-|  [Formulario de dados pessoais]          |  Assinatura mensal        |
-|  Nome completo                           |                           |
-|  CPF ou CNPJ                             |  Subtotal     R$ 24,90    |
-|  E-mail (disabled)                       |                           |
-|  Telefone                                |  Total        R$ 24,90    |
-|  CEP  |  N endereco                      |                           |
-|                                          |  [Assinar R$ 24,90]       |
-|  -- Metodo de Pagamento --               |                           |
-|  [Cartao] (unica opcao p/ assinatura)    +---------------------------+
-|  Numero do cartao                        |
-|  Nome no cartao                          |
-|  Mes  |  Ano  |  CVV                     |
-|                                          |
-|  Pagamento seguro via Asaas              |
-+------------------------------------------+
-
-Para Select (PIX):
-+------------------------------------------+---------------------------+
-|  Finalizar Compra                        |  Resumo do Pedido         |
-|  Pagamento via PIX                       |                           |
-|                                          |  Select 5k                |
-|  E-mail para recibo                      |  5.000 creditos           |
-|  [input email]                           |                           |
-|                                          |  Total        R$ 39,90   |
-|  [icone PIX]                             |                           |
-|  Pague instantaneamente com PIX          |  [Gerar PIX de R$ 39,90] |
-|                                          |                           |
-|  Pagamento seguro via Mercado Pago       +---------------------------+
-+------------------------------------------+
-```
+| Produto | PIX | Cartao de Credito |
+|---|---|---|
+| Select (creditos avulsos) | Mercado Pago | **Asaas** (a vista, 1x) |
+| Transfer/Combos mensal | -- | Asaas (subscription recorrente, 1x) |
+| Transfer/Combos anual | -- | Asaas (cobranca avulsa, 1-12x sem juros) |
 
 ## Mudancas Tecnicas
 
-### 1. Refatorar `src/pages/CreditsPayment.tsx`
+### 1. Nova Edge Function `asaas-create-payment`
 
-Transformar em pagina de checkout unificada. Recebe via `location.state` um objeto que indica o tipo de produto:
+Responsavel por cobranqas avulsas via Asaas (nao recorrentes):
+- **Select com cartao**: `installmentCount: 1`, sem recorrencia
+- **Planos anuais com parcelamento**: `installmentCount: 1-12`
 
+Fluxo:
+1. Recebe `productType` (`select` ou `subscription_yearly`), dados do cartao + titular
+2. Cria customer se necessario (reutiliza `asaas_customer_id`)
+3. Chama `POST /v3/payments` do Asaas com `billingType: CREDIT_CARD`
+4. Para Select: chama RPC `purchase_credits` para adicionar creditos se pagamento aprovado
+5. Para planos anuais: salva em `subscriptions_asaas` com status e data de expiracao (1 ano)
+
+Payload da API:
 ```text
-// Para Select (creditos avulsos):
+POST /v3/payments
 {
-  type: 'select',
-  packageId: string,
-  packageName: string,
-  credits: number,
-  priceCents: number,
-}
-
-// Para Transfer/Combos (assinaturas):
-{
-  type: 'subscription',
-  planType: string,
-  planName: string,
-  billingCycle: 'MONTHLY' | 'YEARLY',
-  priceCents: number,
+  customer: "cus_XXXXX",
+  billingType: "CREDIT_CARD",
+  value: 239.04,
+  dueDate: "2026-02-25",
+  description: "Transfer 20GB - Anual",
+  externalReference: "user_id",
+  installmentCount: 12,
+  installmentValue: 19.92,
+  creditCard: { ... },
+  creditCardHolderInfo: { ... },
+  remoteIp: "..."
 }
 ```
 
-A pagina renderiza condicionalmente:
-- Se `type === 'select'`: formulario PIX (email + botao gerar PIX) -- logica atual do CreditsPayment
-- Se `type === 'subscription'`: formulario de cartao em 2 steps (dados pessoais -> dados do cartao) -- logica atual do AsaasCheckoutModal
+### 2. Atualizar `asaas-create-subscription` Edge Function
 
-Layout em 2 colunas (lg+): formulario a esquerda, resumo do pedido a direita. Mobile: coluna unica com resumo no topo.
+Manter apenas para planos **mensais** (subscription recorrente com auto-renovacao). Sem mudancas estruturais, apenas garantir que so aceita `billingCycle: MONTHLY`.
 
-### 2. Atualizar `src/pages/CreditsCheckout.tsx`
+### 3. Refatorar `SelectForm` em `CreditsPayment.tsx`
 
-- Remover `AsaasCheckoutModal` e seu state
-- Alterar `handleSubscribe` para navegar para `/credits/checkout/pay` passando o state de subscription
-- `handleBuy` ja navega para `/credits/checkout/pay` (manter, apenas adicionar `type: 'select'`)
+Adicionar toggle PIX / Cartao de Credito:
 
-### 3. Remover `src/components/credits/AsaasCheckoutModal.tsx`
+```text
+[PIX]  [Cartao de Credito]
 
-Nao sera mais necessario -- toda a logica de checkout Asaas migra para a pagina unificada.
+Se PIX: fluxo atual (email + gerar QR)
+Se Cartao: formulario de dados pessoais + cartao (mesmo layout do SubscriptionForm)
+           Ao submeter: chama asaas-create-payment com productType: 'select'
+```
 
-### 4. Estilo
+### 4. Refatorar `SubscriptionForm` em `CreditsPayment.tsx`
 
-- Usar `rounded-lg` em vez de `rounded-2xl` nos cards e inputs
-- Bordas finas (`border`) sem sombras pesadas
-- Fundo `bg-muted/30` na pagina, cards `bg-card`
-- Botao principal com estilo primario padrao do sistema
+- Se `billingCycle === 'YEARLY'`: exibir seletor de parcelas (1x a 12x) e chamar `asaas-create-payment` (cobranca avulsa)
+- Se `billingCycle === 'MONTHLY'`: manter fluxo atual via `asaas-create-subscription` (subscription recorrente, 1x)
 
-## Arquivos Modificados
+### 5. Atualizar `OrderSummary`
+
+- Mostrar parcelas quando selecionadas: "12x de R$ 19,92 sem juros"
+- Para planos anuais: exibir badge/aviso "Renovacao manual apos 12 meses"
+
+### 6. Atualizar `useAsaasSubscription` hook
+
+- Adicionar funcao `createPayment` para cobranqas avulsas (nova edge function)
+- Adicionar `installmentCount` e `productType` aos tipos
+
+### 7. Badge de renovacao no `CreditsCheckout.tsx`
+
+Nos cards de planos anuais (Transfer e Combos), adicionar texto informativo:
+```text
+"Renovacao manual apos 12 meses"
+```
+
+---
+
+## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| `src/pages/CreditsPayment.tsx` | Reescrever como checkout unificado (PIX + Cartao) |
-| `src/pages/CreditsCheckout.tsx` | Remover modal, navegar para pagina de pagamento |
-| `src/components/credits/AsaasCheckoutModal.tsx` | Remover |
+| `supabase/functions/asaas-create-payment/index.ts` | **Novo** - cobranca avulsa Asaas (Select cartao + anuais parcelados) |
+| `src/pages/CreditsPayment.tsx` | Toggle PIX/Cartao no Select, seletor parcelas no anual, badge renovacao |
+| `src/hooks/useAsaasSubscription.ts` | Adicionar `createPayment` para cobrancas avulsas |
+| `src/pages/CreditsCheckout.tsx` | Badge "Renovacao manual" nos cards anuais |
+
+## Regras de Negocio
+
+| Produto | Metodo | Parcelas | Renovacao |
+|---|---|---|---|
+| Select | PIX (MP) | 1x | N/A |
+| Select | Cartao (Asaas) | 1x a vista | N/A |
+| Transfer/Combo mensal | Cartao (Asaas) | 1x | Automatica |
+| Transfer/Combo anual | Cartao (Asaas) | 1-12x sem juros | Manual (badge) |
+
