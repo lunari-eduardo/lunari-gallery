@@ -71,11 +71,11 @@ export default function Credits() {
           )}
 
           {/* Purchase history */}
-          {!isAdmin && purchases && purchases.length > 0 && (
+          {!isAdmin && purchases && purchases.filter(p => p.status === 'approved').length > 0 && (
             <div className="space-y-2 pt-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Últimas compras</p>
               <div className="space-y-0">
-                {purchases.slice(0, 3).map((purchase, i) => (
+                {purchases.filter(p => p.status === 'approved').slice(0, 3).map((purchase, i) => (
                   <div
                     key={purchase.id}
                     className={`flex items-center justify-between py-2.5 ${i < Math.min(purchases.length, 3) - 1 ? 'border-b border-border/50' : ''}`}
