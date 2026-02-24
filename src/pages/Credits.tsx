@@ -2,9 +2,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useCreditPackages } from '@/hooks/useCreditPackages';
+import { useTransferStorage } from '@/hooks/useTransferStorage';
+import { formatStorageSize } from '@/lib/transferPlans';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { Infinity, ShoppingCart, CheckCircle2, HardDrive, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -17,6 +20,7 @@ export default function Credits() {
   const { isAdmin } = useAuthContext();
   const { photoCredits, isLoading: isLoadingCredits } = usePhotoCredits();
   const { purchases } = useCreditPackages();
+  const { storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, planName, isLoading: isLoadingTransfer } = useTransferStorage();
 
   return (
     <div className="space-y-10">
@@ -120,6 +124,21 @@ export default function Credits() {
                 <span>Ilimitado</span>
               </div>
               <p className="text-xs text-muted-foreground">Acesso administrativo</p>
+            </div>
+          ) : isLoadingTransfer ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+          ) : hasTransferPlan ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{planName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
+                </p>
+              </div>
+              <Progress value={storageUsedPercent} className="h-2" />
             </div>
           ) : (
             <div className="space-y-1">

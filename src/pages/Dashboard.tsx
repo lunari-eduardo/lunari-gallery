@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2 } from 'lucide-react';
+import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -30,9 +30,23 @@ import {
 import { clearGalleryStorage } from '@/lib/storage';
 import { isPast } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { useTransferStorage } from '@/hooks/useTransferStorage';
+import { formatStorageSize } from '@/lib/transferPlans';
 
 import gallerySelectLogo from '@/assets/gallery-select-logo.png';
 import galleryTransferLogo from '@/assets/gallery-transfer-logo.png';
+
+function TransferStorageIndicator() {
+  const { hasTransferPlan, storageUsedBytes, storageLimitBytes, planName, isAdmin, isLoading } = useTransferStorage();
+  if (isLoading || isAdmin || !hasTransferPlan) return null;
+  return (
+    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+      <HardDrive className="h-3.5 w-3.5" />
+      {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
+      {planName && <span>· {planName}</span>}
+    </p>
+  );
+}
 
 const selectStatusFilters: { value: GalleryStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Todas' },
@@ -370,6 +384,7 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">
             {deliverStats.total} transfers · {deliverStats.published} publicadas · {deliverStats.expired} expiradas
           </p>
+          <TransferStorageIndicator />
 
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
