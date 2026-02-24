@@ -45,6 +45,31 @@ interface CreateSubscriptionParams {
   remoteIp: string;
 }
 
+interface CreatePaymentParams {
+  productType: 'select' | 'subscription_yearly';
+  planType?: string;
+  packageId?: string;
+  credits?: number;
+  priceCents?: number;
+  installmentCount?: number;
+  creditCard: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+  };
+  creditCardHolderInfo: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    postalCode: string;
+    addressNumber: string;
+    phone: string;
+  };
+  remoteIp: string;
+}
+
 export function useAsaasSubscription() {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
@@ -100,6 +125,27 @@ export function useAsaasSubscription() {
     },
   });
 
+  const createPaymentMutation = useMutation({
+    mutationFn: async (params: CreatePaymentParams) => {
+      const { data, error } = await supabase.functions.invoke('asaas-create-payment', {
+        body: params,
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      return data as {
+        paymentId: string;
+        status: string;
+        productType: string;
+        localId?: string;
+        credits?: number;
+        installmentCount?: number;
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
+    },
+  });
+
   const cancelSubscriptionMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
       const { data, error } = await supabase.functions.invoke('asaas-cancel-subscription', {
@@ -125,6 +171,8 @@ export function useAsaasSubscription() {
     isCreatingCustomer: createCustomerMutation.isPending,
     createSubscription: createSubscriptionMutation.mutateAsync,
     isCreatingSubscription: createSubscriptionMutation.isPending,
+    createPayment: createPaymentMutation.mutateAsync,
+    isCreatingPayment: createPaymentMutation.isPending,
     cancelSubscription: cancelSubscriptionMutation.mutateAsync,
     isCancelling: cancelSubscriptionMutation.isPending,
   };

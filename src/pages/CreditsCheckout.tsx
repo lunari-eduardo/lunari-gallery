@@ -17,6 +17,7 @@ import {
   Minus,
   Star,
   HardDrive,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -372,6 +373,12 @@ export default function CreditsCheckout() {
                     }}>
                       {plan.buttonLabel}
                     </Button>
+                    {billingPeriod === 'yearly' && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
+                        <Info className="h-3 w-3 shrink-0 text-primary" />
+                        Renovação manual após 12 meses
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -507,6 +514,13 @@ export default function CreditsCheckout() {
                       Assinar
                     </Button>
 
+                    {billingPeriod === 'yearly' && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
+                        <Info className="h-3 w-3 shrink-0 text-primary" />
+                        Renovação manual após 12 meses
+                      </p>
+                    )}
+
                     <ul className="mt-6 space-y-2.5 flex-1">
                       {BENEFITS_TRANSFER.map(({ icon: Icon, label }) => (
                         <li key={label} className="flex items-center gap-2.5 text-sm text-muted-foreground">
@@ -548,12 +562,20 @@ export default function CreditsCheckout() {
                     </p>
                   )}
                 </div>
-                <Button size="lg" className="px-8 shrink-0" onClick={() => {
-                  const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
-                  handleSubscribe('combo_completo', TRANSFER_COMBO.name, comboPrice);
-                }}>
-                  Conhecer plano completo
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button size="lg" className="px-8 shrink-0" onClick={() => {
+                    const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
+                    handleSubscribe('combo_completo', TRANSFER_COMBO.name, comboPrice);
+                  }}>
+                    Conhecer plano completo
+                  </Button>
+                  {billingPeriod === 'yearly' && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Info className="h-3 w-3 shrink-0 text-primary" />
+                      Renovação manual após 12 meses
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </section>
