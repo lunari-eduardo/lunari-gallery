@@ -78,6 +78,7 @@ export function AsaasCheckoutModal({
       });
 
       if (result.invoiceUrl) {
+        window.open(result.invoiceUrl, '_blank');
         setInvoiceUrl(result.invoiceUrl);
         setStep('redirect');
       } else {
