@@ -27,7 +27,22 @@ interface CreateCustomerParams {
 interface CreateSubscriptionParams {
   planType: string;
   billingCycle: 'MONTHLY' | 'YEARLY';
-  billingType?: 'CREDIT_CARD' | 'PIX' | 'UNDEFINED';
+  creditCard: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+  };
+  creditCardHolderInfo: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    postalCode: string;
+    addressNumber: string;
+    phone: string;
+  };
+  remoteIp: string;
 }
 
 export function useAsaasSubscription() {
@@ -76,7 +91,6 @@ export function useAsaasSubscription() {
       if (data?.error) throw new Error(data.error);
       return data as {
         subscriptionId: string;
-        invoiceUrl: string | null;
         status: string;
         localId: string;
       };

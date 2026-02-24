@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
-    const { planType, billingCycle, billingType } = await req.json();
+    const { planType, billingCycle, creditCard, creditCardHolderInfo, remoteIp } = await req.json();
 
     // Validate plan
     const plan = PLANS[planType];
@@ -72,6 +72,21 @@ Deno.serve(async (req) => {
     if (!["MONTHLY", "YEARLY"].includes(billingCycle)) {
       return new Response(
         JSON.stringify({ error: "Invalid billing cycle" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate credit card data
+    if (!creditCard?.number || !creditCard?.holderName || !creditCard?.expiryMonth || !creditCard?.expiryYear || !creditCard?.ccv) {
+      return new Response(
+        JSON.stringify({ error: "Dados do cartão incompletos" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!creditCardHolderInfo?.name || !creditCardHolderInfo?.cpfCnpj || !creditCardHolderInfo?.postalCode || !creditCardHolderInfo?.phone) {
+      return new Response(
+        JSON.stringify({ error: "Dados do titular incompletos" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -122,16 +137,38 @@ Deno.serve(async (req) => {
     const valueCents = billingCycle === "YEARLY" ? plan.yearlyPrice : plan.monthlyPrice;
     const valueReais = valueCents / 100;
 
-    // Create subscription in Asaas
+    // Create subscription with credit card (transparent checkout)
     const subscriptionPayload: Record<string, unknown> = {
       customer: account.asaas_customer_id,
-      billingType: billingType || "UNDEFINED",
+      billingType: "CREDIT_CARD",
       cycle: billingCycle,
       value: valueReais,
       nextDueDate: getNextBusinessDay(),
       description: `${plan.name} - ${billingCycle === "YEARLY" ? "Anual" : "Mensal"}`,
       externalReference: userId,
+      creditCard: {
+        holderName: creditCard.holderName,
+        number: creditCard.number.replace(/\s/g, ""),
+        expiryMonth: creditCard.expiryMonth,
+        expiryYear: creditCard.expiryYear,
+        ccv: creditCard.ccv,
+      },
+      creditCardHolderInfo: {
+        name: creditCardHolderInfo.name,
+        email: creditCardHolderInfo.email || user.email,
+        cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
+        postalCode: creditCardHolderInfo.postalCode.replace(/\D/g, ""),
+        addressNumber: creditCardHolderInfo.addressNumber || "S/N",
+        phone: creditCardHolderInfo.phone.replace(/\D/g, ""),
+      },
     };
+
+    // Add remoteIp if provided (required by Asaas for transparent checkout)
+    if (remoteIp) {
+      subscriptionPayload.remoteIp = remoteIp;
+    }
+
+    console.log("Creating subscription with transparent checkout for plan:", planType);
 
     const asaasResponse = await fetch(`${ASAAS_BASE_URL}/v3/subscriptions`, {
       method: "POST",
@@ -147,27 +184,15 @@ Deno.serve(async (req) => {
     if (!asaasResponse.ok) {
       console.error("Asaas subscription error:", asaasData);
       const errorMsg =
-        asaasData.errors?.[0]?.description || "Failed to create subscription";
+        asaasData.errors?.[0]?.description || "Falha ao processar pagamento com cartão";
       return new Response(JSON.stringify({ error: errorMsg }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch the first payment to get invoiceUrl
-    let invoiceUrl = null;
-    try {
-      const paymentsResponse = await fetch(
-        `${ASAAS_BASE_URL}/v3/subscriptions/${asaasData.id}/payments?limit=1`,
-        { headers: { access_token: ASAAS_API_KEY } }
-      );
-      const paymentsData = await paymentsResponse.json();
-      if (paymentsData.data && paymentsData.data.length > 0) {
-        invoiceUrl = paymentsData.data[0].invoiceUrl;
-      }
-    } catch (e) {
-      console.error("Error fetching payment invoiceUrl:", e);
-    }
+    // Extract creditCardToken for future renewals (never store raw card data)
+    const creditCardToken = asaasData.creditCard?.creditCardToken || null;
 
     // Save subscription locally
     const { data: subscription, error: insertError } = await adminClient
@@ -178,10 +203,14 @@ Deno.serve(async (req) => {
         asaas_subscription_id: asaasData.id,
         plan_type: planType,
         billing_cycle: billingCycle,
-        status: "PENDING",
+        status: asaasData.status || "ACTIVE",
         value_cents: valueCents,
         next_due_date: asaasData.nextDueDate,
-        metadata: { asaas_response: asaasData },
+        metadata: {
+          creditCardToken,
+          creditCardBrand: asaasData.creditCard?.creditCardBrand || null,
+          creditCardNumber: asaasData.creditCard?.creditCardNumber || null,
+        },
       })
       .select()
       .single();
@@ -190,10 +219,11 @@ Deno.serve(async (req) => {
       console.error("Insert error:", insertError);
     }
 
+    console.log("Subscription created successfully:", asaasData.id, "status:", asaasData.status);
+
     return new Response(
       JSON.stringify({
         subscriptionId: asaasData.id,
-        invoiceUrl,
         status: asaasData.status,
         localId: subscription?.id,
       }),
