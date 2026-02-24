@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { AsaasCheckoutModal } from '@/components/credits/AsaasCheckoutModal';
+
 
 /* ═══════════════════════════════════════════
    STATIC DATA
@@ -113,14 +113,6 @@ export default function CreditsCheckout() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [activeTab, setActiveTab] = useState<'select' | 'transfer'>('select');
 
-  // Asaas checkout modal state
-  const [checkoutModal, setCheckoutModal] = useState<{
-    open: boolean;
-    planType: string;
-    planName: string;
-    billingCycle: 'MONTHLY' | 'YEARLY';
-    priceCents: number;
-  }>({ open: false, planType: '', planName: '', billingCycle: 'MONTHLY', priceCents: 0 });
 
   const avulsos = packages?.filter(p => p.sort_order < 10) || [];
 
@@ -130,6 +122,7 @@ export default function CreditsCheckout() {
   const handleBuy = (pkg: CreditPackage) => {
     navigate('/credits/checkout/pay', {
       state: {
+        type: 'select',
         packageId: pkg.id,
         packageName: pkg.name,
         credits: pkg.credits,
@@ -139,12 +132,14 @@ export default function CreditsCheckout() {
   };
 
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
-    setCheckoutModal({
-      open: true,
-      planType,
-      planName,
-      billingCycle: billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY',
-      priceCents,
+    navigate('/credits/checkout/pay', {
+      state: {
+        type: 'subscription',
+        planType,
+        planName,
+        billingCycle: billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY',
+        priceCents,
+      },
     });
   };
 
@@ -565,15 +560,6 @@ export default function CreditsCheckout() {
         </>
       )}
 
-      {/* Asaas Checkout Modal */}
-      <AsaasCheckoutModal
-        open={checkoutModal.open}
-        onOpenChange={(open) => setCheckoutModal(prev => ({ ...prev, open }))}
-        planType={checkoutModal.planType}
-        planName={checkoutModal.planName}
-        billingCycle={checkoutModal.billingCycle}
-        priceCents={checkoutModal.priceCents}
-      />
     </div>
   );
 }
