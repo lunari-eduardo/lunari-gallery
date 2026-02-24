@@ -29,9 +29,9 @@ export default function Credits() {
       </div>
 
       {/* Two-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
         {/* Gallery Select block */}
-        <div className="space-y-5">
+        <div className="space-y-5 md:pr-12">
           <img src={selectLogo} alt="Gallery Select" className="h-7 object-contain" />
 
           {isAdmin ? (
@@ -88,7 +88,7 @@ export default function Credits() {
                         {purchase.credits_amount.toLocaleString('pt-BR')} créditos
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       <span>
                         {(purchase.price_cents / 100).toLocaleString('pt-BR', {
                           style: 'currency',
@@ -106,8 +106,11 @@ export default function Credits() {
           )}
         </div>
 
+        {/* Mobile separator */}
+        <div className="md:hidden border-t border-border/30 my-2" />
+
         {/* Gallery Transfer block */}
-        <div className="space-y-5">
+        <div className="space-y-5 md:border-l md:border-border/30 md:pl-12 pt-4 md:pt-0">
           <img src={transferLogo} alt="Gallery Transfer" className="h-7 object-contain" />
 
           {isAdmin ? (
@@ -157,9 +160,9 @@ export default function Credits() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Card 1 - Studio */}
-            <div className="rounded-lg border bg-card p-5 space-y-3">
+            <div className="rounded-lg border bg-card p-4 space-y-3">
               <p className="text-sm font-semibold">Studio Pro + Gallery Select 2k</p>
               <p className="text-xs text-muted-foreground">
                 Gestão completa com Lunari Studio + 2.000 créditos mensais incluídos
@@ -175,13 +178,13 @@ export default function Credits() {
               <p className="text-xl font-bold text-primary">
                 R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
               </p>
-              <Button size="sm" className="px-5" onClick={() => toast.info('Em breve!')}>
+              <Button size="sm" className="px-4" onClick={() => toast.info('Em breve!')}>
                 Quero integrar
               </Button>
             </div>
 
             {/* Card 2 - Completo */}
-            <div className="relative rounded-lg border bg-card p-5 space-y-3">
+            <div className="relative rounded-lg border bg-card p-4 space-y-3">
               <Badge className="absolute -top-2.5 left-4 text-xs">Mais completo</Badge>
               <p className="text-sm font-semibold">Studio Pro + Select 2k + Transfer 20GB</p>
               <ul className="space-y-1">
@@ -195,7 +198,7 @@ export default function Credits() {
               <p className="text-xl font-bold text-primary">
                 R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
               </p>
-              <Button size="sm" className="px-5" onClick={() => toast.info('Em breve!')}>
+              <Button size="sm" className="px-4" onClick={() => toast.info('Em breve!')}>
                 Estruturar meu negócio
               </Button>
             </div>
