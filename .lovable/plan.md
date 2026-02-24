@@ -1,133 +1,106 @@
 
-# Checkout Transparente Asaas para Assinaturas (somente cartao de credito)
+# Checkout Unificado em Pagina Dedicada
 
-## Problema Atual
+## Objetivo
 
-O fluxo atual redireciona o usuario para o checkout externo do Asaas (`invoiceUrl`). O requisito e que **todo o pagamento aconteca dentro da plataforma** (checkout transparente), e que **assinaturas aceitem apenas cartao de credito** (sem PIX).
+Substituir o modal de checkout Asaas e unificar com a pagina de pagamento Select (`/credits/checkout/pay`) em uma unica pagina de checkout que adapta os metodos de pagamento conforme o produto:
 
-## Logica de Provedores
+- **Select (creditos avulsos)**: mostra apenas PIX (Mercado Pago)
+- **Transfer/Combos (assinaturas)**: mostra apenas Cartao de Credito (Asaas, checkout transparente)
 
-| Produto | Provedor | Metodo de pagamento |
-|---|---|---|
-| Creditos Select (avulso) | Mercado Pago | PIX |
-| Assinaturas Transfer/Combos | Asaas | Cartao de credito (transparente) |
+## Design
 
-## O que precisa mudar
-
-### 1. Nova Edge Function: `asaas-pay-subscription`
-
-Em vez de depender do `invoiceUrl`, criaremos uma Edge Function que recebe os dados do cartao e realiza o pagamento diretamente via API Asaas.
-
-**Fluxo:**
-1. Frontend coleta dados do cartao (numero, nome, validade, CVV) + dados do titular (CPF, CEP, endereco)
-2. Edge Function cria a assinatura com `billingType: "CREDIT_CARD"` e envia os objetos `creditCard` + `creditCardHolderInfo` junto ao payload
-3. Se a transacao for autorizada, o Asaas retorna `HTTP 200` e a assinatura ja fica ativa
-4. O `creditCardToken` retornado e salvo para renovacoes futuras automaticas
-
-**Payload da API Asaas:**
+Layout inspirado na ultima imagem de referencia: duas colunas em desktop (formulario a esquerda, resumo do pedido a direita), coluna unica em mobile. Bordas com `rounded-lg` (menos arredondadas que os `rounded-2xl` atuais). Visual limpo e leve.
 
 ```text
-POST /v3/subscriptions
++------------------------------------------+---------------------------+
+|  Finalizar Compra                        |  Resumo do Pedido         |
+|  Pagamento via Cartao de Credito         |                           |
+|                                          |  Transfer 20GB            |
+|  [Formulario de dados pessoais]          |  Assinatura mensal        |
+|  Nome completo                           |                           |
+|  CPF ou CNPJ                             |  Subtotal     R$ 24,90    |
+|  E-mail (disabled)                       |                           |
+|  Telefone                                |  Total        R$ 24,90    |
+|  CEP  |  N endereco                      |                           |
+|                                          |  [Assinar R$ 24,90]       |
+|  -- Metodo de Pagamento --               |                           |
+|  [Cartao] (unica opcao p/ assinatura)    +---------------------------+
+|  Numero do cartao                        |
+|  Nome no cartao                          |
+|  Mes  |  Ano  |  CVV                     |
+|                                          |
+|  Pagamento seguro via Asaas              |
++------------------------------------------+
+
+Para Select (PIX):
++------------------------------------------+---------------------------+
+|  Finalizar Compra                        |  Resumo do Pedido         |
+|  Pagamento via PIX                       |                           |
+|                                          |  Select 5k                |
+|  E-mail para recibo                      |  5.000 creditos           |
+|  [input email]                           |                           |
+|                                          |  Total        R$ 39,90   |
+|  [icone PIX]                             |                           |
+|  Pague instantaneamente com PIX          |  [Gerar PIX de R$ 39,90] |
+|                                          |                           |
+|  Pagamento seguro via Mercado Pago       +---------------------------+
++------------------------------------------+
+```
+
+## Mudancas Tecnicas
+
+### 1. Refatorar `src/pages/CreditsPayment.tsx`
+
+Transformar em pagina de checkout unificada. Recebe via `location.state` um objeto que indica o tipo de produto:
+
+```text
+// Para Select (creditos avulsos):
 {
-  customer: "cus_XXXXX",
-  billingType: "CREDIT_CARD",
-  cycle: "MONTHLY" | "YEARLY",
-  value: 24.90,
-  nextDueDate: "2026-02-25",
-  creditCard: {
-    holderName: "NOME NO CARTAO",
-    number: "5162306219378829",
-    expiryMonth: "05",
-    expiryYear: "2028",
-    ccv: "318"
-  },
-  creditCardHolderInfo: {
-    name: "Nome Completo",
-    email: "email@email.com",
-    cpfCnpj: "24971563792",
-    postalCode: "89223005",
-    addressNumber: "277",
-    phone: "47998781877"
-  },
-  remoteIp: "IP do cliente"
+  type: 'select',
+  packageId: string,
+  packageName: string,
+  credits: number,
+  priceCents: number,
+}
+
+// Para Transfer/Combos (assinaturas):
+{
+  type: 'subscription',
+  planType: string,
+  planName: string,
+  billingCycle: 'MONTHLY' | 'YEARLY',
+  priceCents: number,
 }
 ```
 
-### 2. Refatorar `AsaasCheckoutModal.tsx`
+A pagina renderiza condicionalmente:
+- Se `type === 'select'`: formulario PIX (email + botao gerar PIX) -- logica atual do CreditsPayment
+- Se `type === 'subscription'`: formulario de cartao em 2 steps (dados pessoais -> dados do cartao) -- logica atual do AsaasCheckoutModal
 
-Substituir o modal atual (que coleta apenas nome/CPF e redireciona) por um checkout transparente completo com formulario de cartao:
+Layout em 2 colunas (lg+): formulario a esquerda, resumo do pedido a direita. Mobile: coluna unica com resumo no topo.
 
-**Campos do formulario:**
-- Nome completo
-- CPF/CNPJ
-- Numero do cartao
-- Nome no cartao
-- Validade (mes/ano)
-- CVV
-- CEP
-- Numero do endereco
-- Telefone
+### 2. Atualizar `src/pages/CreditsCheckout.tsx`
 
-**Fluxo visual:**
-1. Step 1: Dados pessoais (nome, CPF, email, CEP, endereco, telefone)
-2. Step 2: Dados do cartao (numero, nome, validade, CVV)
-3. Processar pagamento (spinner)
-4. Sucesso ou erro exibido inline no modal
+- Remover `AsaasCheckoutModal` e seu state
+- Alterar `handleSubscribe` para navegar para `/credits/checkout/pay` passando o state de subscription
+- `handleBuy` ja navega para `/credits/checkout/pay` (manter, apenas adicionar `type: 'select'`)
 
-**Sem opcao de PIX** -- o botao sera "Assinar com Cartao" diretamente.
+### 3. Remover `src/components/credits/AsaasCheckoutModal.tsx`
 
-### 3. Atualizar `asaas-create-subscription` Edge Function
+Nao sera mais necessario -- toda a logica de checkout Asaas migra para a pagina unificada.
 
-Modificar para aceitar os dados do cartao diretamente no payload e enviar para a API Asaas com `billingType: "CREDIT_CARD"`:
+### 4. Estilo
 
-- Recebe `creditCard`, `creditCardHolderInfo` e `remoteIp` do frontend
-- Envia tudo junto na criacao da assinatura
-- Salva `creditCardToken` retornado no `metadata` da `subscriptions_asaas` para renovacoes
-- Remove a busca de `invoiceUrl` (nao necessaria no checkout transparente)
-
-### 4. Atualizar Hook `useAsaasSubscription`
-
-Adicionar tipagem para os novos campos de cartao no `CreateSubscriptionParams`:
-
-```text
-interface CreateSubscriptionParams {
-  planType: string;
-  billingCycle: 'MONTHLY' | 'YEARLY';
-  creditCard: {
-    holderName: string;
-    number: string;
-    expiryMonth: string;
-    expiryYear: string;
-    ccv: string;
-  };
-  creditCardHolderInfo: {
-    name: string;
-    email: string;
-    cpfCnpj: string;
-    postalCode: string;
-    addressNumber: string;
-    phone: string;
-  };
-  remoteIp: string;
-}
-```
-
-## Seguranca
-
-- Os dados do cartao trafegam via HTTPS (Supabase Edge Functions) e nunca sao armazenados no banco -- apenas o `creditCardToken` retornado pelo Asaas
-- O Asaas e PCI DSS compliant e processa os dados de forma segura
-- O `remoteIp` do cliente e capturado no frontend e enviado junto (requisito da API)
+- Usar `rounded-lg` em vez de `rounded-2xl` nos cards e inputs
+- Bordas finas (`border`) sem sombras pesadas
+- Fundo `bg-muted/30` na pagina, cards `bg-card`
+- Botao principal com estilo primario padrao do sistema
 
 ## Arquivos Modificados
 
 | Arquivo | Acao |
 |---|---|
-| `supabase/functions/asaas-create-subscription/index.ts` | Refatorar para aceitar dados do cartao e enviar checkout transparente |
-| `src/hooks/useAsaasSubscription.ts` | Atualizar tipagem com campos de cartao |
-| `src/components/credits/AsaasCheckoutModal.tsx` | Reescrever com formulario de cartao completo (checkout transparente) |
-
-## Requisitos para funcionar
-
-1. **ASAAS_API_KEY** ja configurada (feito)
-2. **Webhook** configurado no painel Asaas apontando para a URL do Edge Function (necessario para receber confirmacoes de renovacao)
-3. **Tokenizacao** habilitada na conta Asaas (em Sandbox ja vem habilitada; em producao, solicitar ao gerente de contas)
+| `src/pages/CreditsPayment.tsx` | Reescrever como checkout unificado (PIX + Cartao) |
+| `src/pages/CreditsCheckout.tsx` | Remover modal, navegar para pagina de pagamento |
+| `src/components/credits/AsaasCheckoutModal.tsx` | Remover |
