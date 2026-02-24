@@ -6,9 +6,11 @@ import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Loader2, Lock, Smartphone, CreditCard } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Loader2, Lock, Smartphone, CreditCard, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { PixPaymentDisplay } from '@/components/credits/PixPaymentDisplay';
+import { cn } from '@/lib/utils';
 
 /* ─── State types ─── */
 
@@ -77,7 +79,7 @@ export default function CreditsPayment() {
             <div>
               <h1 className="text-xl font-bold tracking-tight">Finalizar Compra</h1>
               <p className="text-sm text-muted-foreground">
-                {pkg.type === 'select' ? 'Pagamento via PIX' : 'Pagamento via Cartão de Crédito'}
+                {pkg.type === 'select' ? 'Escolha a forma de pagamento' : 'Pagamento via Cartão de Crédito'}
               </p>
             </div>
 
@@ -126,15 +128,69 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
           <span className="text-primary">{formattedPrice}</span>
         </div>
       </div>
+
+      {/* Annual renewal badge */}
+      {pkg.type === 'subscription' && pkg.billingCycle === 'YEARLY' && (
+        <div className="border-t pt-4">
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>Renovação manual após 12 meses. Você será notificado antes do vencimento.</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════
-   SELECT (PIX) FORM
+   SELECT FORM (PIX + Card toggle)
    ═══════════════════════════════════════════ */
 
 function SelectForm({ pkg, formattedPrice }: { pkg: SelectPayment; formattedPrice: string }) {
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card'>('pix');
+
+  return (
+    <div className="space-y-5">
+      {/* Payment method toggle */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setPaymentMethod('pix')}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium transition-all',
+            paymentMethod === 'pix'
+              ? 'border-primary bg-primary/5 text-primary'
+              : 'border-border text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Smartphone className="h-4 w-4" />
+          PIX
+        </button>
+        <button
+          onClick={() => setPaymentMethod('card')}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium transition-all',
+            paymentMethod === 'card'
+              ? 'border-primary bg-primary/5 text-primary'
+              : 'border-border text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <CreditCard className="h-4 w-4" />
+          Cartão de Crédito
+        </button>
+      </div>
+
+      {paymentMethod === 'pix' ? (
+        <SelectPixForm pkg={pkg} formattedPrice={formattedPrice} />
+      ) : (
+        <SelectCardForm pkg={pkg} formattedPrice={formattedPrice} />
+      )}
+    </div>
+  );
+}
+
+/* ─── Select: PIX flow ─── */
+
+function SelectPixForm({ pkg, formattedPrice }: { pkg: SelectPayment; formattedPrice: string }) {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const { createPayment, checkPayment, isCreatingPayment } = useCreditPackages();
@@ -247,17 +303,235 @@ function SelectForm({ pkg, formattedPrice }: { pkg: SelectPayment; formattedPric
   );
 }
 
+/* ─── Select: Card flow (Asaas) ─── */
+
+function SelectCardForm({ pkg, formattedPrice }: { pkg: SelectPayment; formattedPrice: string }) {
+  const navigate = useNavigate();
+  const { user } = useAuthContext();
+  const { createCustomer, isCreatingCustomer, createPayment, isCreatingPayment } = useAsaasSubscription();
+
+  return (
+    <CardCheckoutForm
+      onSubmit={async (cardData) => {
+        // Create customer first
+        await createCustomer({
+          name: cardData.name,
+          cpfCnpj: cardData.cpfCnpj,
+          email: user?.email,
+        });
+
+        let remoteIp = '';
+        try {
+          const ipRes = await fetch('https://api.ipify.org?format=json');
+          const ipData = await ipRes.json();
+          remoteIp = ipData.ip || '';
+        } catch { remoteIp = ''; }
+
+        const result = await createPayment({
+          productType: 'select',
+          packageId: pkg.packageId,
+          credits: pkg.credits,
+          priceCents: pkg.priceCents,
+          creditCard: {
+            holderName: cardData.cardHolderName.toUpperCase(),
+            number: cardData.cardNumber.replace(/\s/g, ''),
+            expiryMonth: cardData.expiryMonth.padStart(2, '0'),
+            expiryYear: cardData.expiryYear,
+            ccv: cardData.ccv,
+          },
+          creditCardHolderInfo: {
+            name: cardData.name,
+            email: user?.email || '',
+            cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
+            postalCode: cardData.postalCode.replace(/\D/g, ''),
+            addressNumber: cardData.addressNumber || 'S/N',
+            phone: cardData.phone.replace(/\D/g, ''),
+          },
+          remoteIp,
+        });
+
+        if (result.status === 'CONFIRMED' || result.status === 'RECEIVED') {
+          toast.success('Pagamento confirmado! Créditos adicionados.');
+          setTimeout(() => navigate('/credits'), 2000);
+          return { success: true };
+        } else {
+          throw new Error('Pagamento não foi aprovado. Verifique os dados do cartão.');
+        }
+      }}
+      submitLabel={`Pagar ${formattedPrice}`}
+      isProcessing={isCreatingCustomer || isCreatingPayment}
+      providerLabel="Pagamento seguro via Asaas (PCI DSS)"
+    />
+  );
+}
+
 /* ═══════════════════════════════════════════
-   SUBSCRIPTION (CARD) FORM
+   SUBSCRIPTION FORM
    ═══════════════════════════════════════════ */
 
 function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; formattedPrice: string }) {
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  const { createCustomer, isCreatingCustomer, createSubscription, isCreatingSubscription } = useAsaasSubscription();
+  const {
+    createCustomer, isCreatingCustomer,
+    createSubscription, isCreatingSubscription,
+    createPayment, isCreatingPayment,
+  } = useAsaasSubscription();
 
+  const isYearly = pkg.billingCycle === 'YEARLY';
+  const [installments, setInstallments] = useState(1);
+
+  const installmentOptions = isYearly
+    ? Array.from({ length: 12 }, (_, i) => {
+        const n = i + 1;
+        const value = (pkg.priceCents / 100 / n);
+        return {
+          value: n,
+          label: `${n}x de ${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} sem juros`,
+        };
+      })
+    : [];
+
+  return (
+    <div className="space-y-5">
+      {/* Installment selector for yearly */}
+      {isYearly && installmentOptions.length > 0 && (
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          <Label className="text-sm font-medium">Parcelas</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={installments}
+            onChange={(e) => setInstallments(Number(e.target.value))}
+          >
+            {installmentOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <CardCheckoutForm
+        onSubmit={async (cardData) => {
+          // Create customer first
+          await createCustomer({
+            name: cardData.name,
+            cpfCnpj: cardData.cpfCnpj,
+            email: user?.email,
+          });
+
+          let remoteIp = '';
+          try {
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+            remoteIp = ipData.ip || '';
+          } catch { remoteIp = ''; }
+
+          if (isYearly) {
+            // Yearly: one-time payment with installments
+            const result = await createPayment({
+              productType: 'subscription_yearly',
+              planType: pkg.planType,
+              installmentCount: installments,
+              creditCard: {
+                holderName: cardData.cardHolderName.toUpperCase(),
+                number: cardData.cardNumber.replace(/\s/g, ''),
+                expiryMonth: cardData.expiryMonth.padStart(2, '0'),
+                expiryYear: cardData.expiryYear,
+                ccv: cardData.ccv,
+              },
+              creditCardHolderInfo: {
+                name: cardData.name,
+                email: user?.email || '',
+                cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
+                postalCode: cardData.postalCode.replace(/\D/g, ''),
+                addressNumber: cardData.addressNumber || 'S/N',
+                phone: cardData.phone.replace(/\D/g, ''),
+              },
+              remoteIp,
+            });
+
+            if (result.status === 'ACTIVE' || result.paymentId) {
+              toast.success('Plano ativado com sucesso!');
+              setTimeout(() => navigate('/credits'), 3000);
+              return { success: true };
+            } else {
+              throw new Error('Pagamento não foi aprovado. Verifique os dados do cartão.');
+            }
+          } else {
+            // Monthly: recurring subscription
+            const result = await createSubscription({
+              planType: pkg.planType,
+              billingCycle: 'MONTHLY',
+              creditCard: {
+                holderName: cardData.cardHolderName.toUpperCase(),
+                number: cardData.cardNumber.replace(/\s/g, ''),
+                expiryMonth: cardData.expiryMonth.padStart(2, '0'),
+                expiryYear: cardData.expiryYear,
+                ccv: cardData.ccv,
+              },
+              creditCardHolderInfo: {
+                name: cardData.name,
+                email: user?.email || '',
+                cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
+                postalCode: cardData.postalCode.replace(/\D/g, ''),
+                addressNumber: cardData.addressNumber || 'S/N',
+                phone: cardData.phone.replace(/\D/g, ''),
+              },
+              remoteIp,
+            });
+
+            if (result.status === 'ACTIVE' || result.subscriptionId) {
+              toast.success('Assinatura ativada com sucesso!');
+              setTimeout(() => navigate('/credits'), 3000);
+              return { success: true };
+            } else {
+              throw new Error('Pagamento não foi aprovado. Verifique os dados do cartão.');
+            }
+          }
+        }}
+        submitLabel={
+          isYearly && installments > 1
+            ? `Assinar ${installments}x de ${((pkg.priceCents / 100) / installments).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+            : `Assinar ${formattedPrice}`
+        }
+        isProcessing={isCreatingCustomer || isCreatingSubscription || isCreatingPayment}
+        providerLabel="Pagamento seguro via Asaas (PCI DSS)"
+      />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SHARED CARD CHECKOUT FORM
+   ═══════════════════════════════════════════ */
+
+interface CardData {
+  name: string;
+  cpfCnpj: string;
+  phone: string;
+  postalCode: string;
+  addressNumber: string;
+  cardNumber: string;
+  cardHolderName: string;
+  expiryMonth: string;
+  expiryYear: string;
+  ccv: string;
+}
+
+interface CardCheckoutFormProps {
+  onSubmit: (data: CardData) => Promise<{ success: boolean }>;
+  submitLabel: string;
+  isProcessing: boolean;
+  providerLabel: string;
+}
+
+function CardCheckoutForm({ onSubmit, submitLabel, isProcessing, providerLabel }: CardCheckoutFormProps) {
+  const { user } = useAuthContext();
   const [step, setStep] = useState<'personal' | 'card' | 'processing' | 'success' | 'error'>('personal');
   const [errorMessage, setErrorMessage] = useState('');
+  const navigate = useNavigate();
 
   // Personal data
   const [name, setName] = useState('');
@@ -272,8 +546,6 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
   const [expiryMonth, setExpiryMonth] = useState('');
   const [expiryYear, setExpiryYear] = useState('');
   const [ccv, setCcv] = useState('');
-
-  const isProcessing = isCreatingCustomer || isCreatingSubscription;
 
   const formatCardNumber = (value: string) => {
     const clean = value.replace(/\D/g, '').slice(0, 16);
@@ -305,53 +577,23 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
 
   const handleSubmit = async () => {
     if (!validateCardData()) return;
-
     setStep('processing');
     setErrorMessage('');
 
     try {
-      await createCustomer({
+      await onSubmit({
         name: name.trim(),
-        cpfCnpj: cpfCnpj.replace(/\D/g, ''),
-        email: user?.email,
+        cpfCnpj,
+        phone,
+        postalCode,
+        addressNumber,
+        cardNumber,
+        cardHolderName,
+        expiryMonth,
+        expiryYear,
+        ccv,
       });
-
-      let remoteIp = '';
-      try {
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipRes.json();
-        remoteIp = ipData.ip || '';
-      } catch { remoteIp = ''; }
-
-      const result = await createSubscription({
-        planType: pkg.planType,
-        billingCycle: pkg.billingCycle,
-        creditCard: {
-          holderName: cardHolderName.trim().toUpperCase(),
-          number: cardNumber.replace(/\s/g, ''),
-          expiryMonth: expiryMonth.padStart(2, '0'),
-          expiryYear,
-          ccv,
-        },
-        creditCardHolderInfo: {
-          name: name.trim(),
-          email: user?.email || '',
-          cpfCnpj: cpfCnpj.replace(/\D/g, ''),
-          postalCode: postalCode.replace(/\D/g, ''),
-          addressNumber: addressNumber || 'S/N',
-          phone: phone.replace(/\D/g, ''),
-        },
-        remoteIp,
-      });
-
-      if (result.status === 'ACTIVE' || result.subscriptionId) {
-        setStep('success');
-        toast.success('Assinatura ativada com sucesso!');
-        setTimeout(() => navigate('/credits'), 3000);
-      } else {
-        setStep('error');
-        setErrorMessage('Pagamento não foi aprovado. Verifique os dados do cartão.');
-      }
+      setStep('success');
     } catch (error) {
       console.error('Checkout error:', error);
       setStep('error');
@@ -373,10 +615,7 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
     return (
       <div className="rounded-lg border p-8 text-center bg-card space-y-3">
         <div className="text-4xl">🎉</div>
-        <h3 className="text-lg font-semibold text-primary">Assinatura Ativada!</h3>
-        <p className="text-sm text-muted-foreground">
-          Seu plano <strong>{pkg.planName}</strong> está ativo.
-        </p>
+        <h3 className="text-lg font-semibold text-primary">Pagamento Confirmado!</h3>
         <p className="text-xs text-muted-foreground">Redirecionando...</p>
       </div>
     );
@@ -447,14 +686,14 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
             {isProcessing ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processando...</>
             ) : (
-              `Assinar ${formattedPrice}`
+              submitLabel
             )}
           </Button>
         </div>
 
         <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
           <Lock className="h-3 w-3" />
-          Pagamento seguro via Asaas (PCI DSS)
+          {providerLabel}
         </p>
       </div>
     );
