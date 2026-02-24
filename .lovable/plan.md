@@ -1,163 +1,112 @@
 
-# Integracao Asaas -- Assinaturas e Parcelamentos
+# Correcao do Fluxo de Checkout Asaas
 
-## Contexto
+## Problema Principal
 
-O sistema atual usa **Mercado Pago** para cobrar creditos Gallery Select via PIX. Para os planos de assinatura (Transfer, combos) e parcelamentos no cartao, vamos integrar a **API Asaas**. O Mercado Pago continua sendo o provedor exclusivo para pagamentos PIX de creditos avulsos.
+A API do Asaas **nao retorna `invoiceUrl` na resposta de criacao de assinatura**. O `invoiceUrl` existe apenas no objeto de **pagamento** (payment) gerado pela assinatura. Por isso `asaasData.invoiceUrl` e sempre `undefined`, e o modal exibe o toast "Assinatura criada!" sem redirecionar.
 
-## Escopo
+## Problema Secundario
 
-| Funcionalidade | Provedor |
-|---|---|
-| Creditos Select (PIX) | Mercado Pago (ja funciona) |
-| Assinaturas Transfer (cartao/PIX) | Asaas |
-| Combos mensais/anuais (cartao/PIX) | Asaas |
-| Parcelamento no cartao | Asaas |
+Todas as 3 Edge Functions autenticadas usam `supabase.auth.getClaims()`, que **nao existe** na API do Supabase JS. O metodo correto e `supabase.auth.getUser()`. Isso provavelmente funciona no sandbox por coincidencia mas vai falhar em producao.
 
 ---
 
-## Fase 1 -- Secret e Infraestrutura
+## Correcoes Necessarias
 
-### 1.1 Adicionar secret `ASAAS_API_KEY`
+### 1. Edge Function `asaas-create-subscription/index.ts`
 
-Sera necessario adicionar a API Key do Asaas como secret no Supabase. O usuario precisara:
-1. Criar conta no Asaas (https://www.asaas.com)
-2. Ir em Configuracoes > Integracao > Gerar API Key
-3. Usar ambiente **Sandbox** para testes (`$aact_...`) e depois trocar para producao
-
-### 1.2 Tabela `subscriptions_asaas`
-
-Nova tabela para rastrear assinaturas criadas via Asaas:
+Apos criar a assinatura, buscar o primeiro pagamento gerado para obter o `invoiceUrl`:
 
 ```text
-subscriptions_asaas
-  id              UUID PK
-  user_id         UUID (FK profiles)
-  asaas_customer_id   TEXT
-  asaas_subscription_id TEXT
-  plan_type       TEXT ('transfer_5gb', 'transfer_20gb', etc.)
-  billing_cycle   TEXT ('MONTHLY', 'YEARLY')
-  status          TEXT ('ACTIVE', 'INACTIVE', 'OVERDUE', 'CANCELLED')
-  value_cents     INTEGER
-  next_due_date   DATE
-  created_at      TIMESTAMPTZ
-  updated_at      TIMESTAMPTZ
-  metadata        JSONB
+1. Criar assinatura via POST /v3/subscriptions
+2. Buscar pagamentos da assinatura via GET /v3/subscriptions/{id}/payments
+3. Pegar invoiceUrl do primeiro pagamento retornado
+4. Retornar invoiceUrl na resposta
 ```
 
-RLS: usuarios so veem suas proprias assinaturas.
+Tambem corrigir autenticacao: trocar `getClaims()` por `getUser()`.
+
+### 2. Edge Function `asaas-create-customer/index.ts`
+
+Corrigir autenticacao: trocar `getClaims()` por `getUser()`.
+
+### 3. Edge Function `asaas-cancel-subscription/index.ts`
+
+Corrigir autenticacao: trocar `getClaims()` por `getUser()`.
+
+### 4. Frontend `AsaasCheckoutModal.tsx`
+
+Ajustar o fluxo para redirecionar automaticamente quando `invoiceUrl` existir (abrir direto em nova aba), sem exigir um segundo clique. O step "redirect" serve como fallback caso o popup seja bloqueado.
 
 ---
 
-## Fase 2 -- Edge Functions
+## Detalhes Tecnicos
 
-### 2.1 `asaas-create-customer`
+### Correcao de Auth (todas as 3 Edge Functions)
 
-Cria ou reutiliza um customer no Asaas a partir do perfil do fotografo.
-
-- Input: `{ name, cpfCnpj, email }`
-- Chama `POST /v3/customers` na API Asaas
-- Salva `asaas_customer_id` no `photographer_accounts` (nova coluna)
-- Retorna o customer ID
-
-### 2.2 `asaas-create-subscription`
-
-Cria uma assinatura recorrente no Asaas.
-
-- Input: `{ planType, billingCycle, billingType }`
-- Valida o plano e preco
-- Chama `POST /v3/subscriptions` com:
-  - `customer`: ID do customer Asaas
-  - `billingType`: `CREDIT_CARD` ou `PIX` ou `UNDEFINED` (gera link)
-  - `cycle`: `MONTHLY` ou `YEARLY`
-  - `value`: valor em reais
-  - `nextDueDate`: proximo dia util
-  - `description`: nome do plano
-- Se `billingType === 'CREDIT_CARD'`: aceita `creditCard` + `creditCardHolderInfo` tokenizados
-- Salva em `subscriptions_asaas`
-- Retorna `invoiceUrl` (link de pagamento Asaas) para casos sem cartao tokenizado
-
-### 2.3 `asaas-webhook`
-
-Recebe notificacoes do Asaas para atualizar status.
-
-- Eventos tratados:
-  - `PAYMENT_CONFIRMED` / `PAYMENT_RECEIVED`: marca pagamento como pago
-  - `PAYMENT_OVERDUE`: marca como atrasado
-  - `SUBSCRIPTION_DELETED` / `SUBSCRIPTION_INACTIVATED`: cancela assinatura
-- Atualiza `subscriptions_asaas.status`
-- Loga em `webhook_logs` (tabela existente)
-
-### 2.4 `asaas-cancel-subscription`
-
-Cancela assinatura existente.
-
-- Chama `DELETE /v3/subscriptions/{id}`
-- Atualiza status local
-
----
-
-## Fase 3 -- Frontend
-
-### 3.1 Hook `useAsaasSubscription`
-
-Novo hook em `src/hooks/useAsaasSubscription.ts`:
-
-- Query para buscar assinatura ativa do usuario em `subscriptions_asaas`
-- Mutation `createSubscription` que chama a Edge Function
-- Mutation `cancelSubscription`
-- Retorna `{ subscription, isLoading, subscribe, cancel }`
-
-### 3.2 Checkout flow na pagina de planos
-
-Arquivo: `src/pages/CreditsCheckout.tsx`
-
-- Botao "Assinar" nos cards Transfer e Combos abre um modal/pagina de checkout
-- Fluxo:
-  1. Coleta nome, CPF/CNPJ e email (se nao cadastrado)
-  2. Escolha: PIX ou Cartao
-  3. **PIX**: gera cobranca via Asaas, exibe QR code (reutiliza `PixPaymentDisplay`)
-  4. **Cartao**: redireciona para `invoiceUrl` do Asaas (checkout hospedado) -- mais seguro, sem PCI compliance
-- Apos pagamento confirmado (webhook ou polling), atualiza o status do plano
-
-### 3.3 Indicador de plano ativo
-
-- Na pill de "Plano ativo" da aba Transfer, mostrar o plano atual em vez de "Sem plano ativo"
-- Na pagina `/credits`, bloco Transfer mostra badge do plano ativo
-
----
-
-## Fase 4 -- Configuracao do webhook
-
-O webhook Asaas precisa de uma URL publica. Sera:
-
-```
-https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/asaas-webhook
+Substituir:
+```typescript
+const { data: claims, error: claimsError } = await supabase.auth.getClaims(
+  authHeader.replace("Bearer ", "")
+);
+if (claimsError || !claims?.claims) { ... }
+const userId = claims.claims.sub as string;
 ```
 
-O usuario configura essa URL no painel Asaas em:
-Configuracoes > Integracao > Webhooks > Adicionar
+Por:
+```typescript
+const { data: { user }, error: userError } = await supabase.auth.getUser();
+if (userError || !user) { ... }
+const userId = user.id;
+```
+
+### Correcao do invoiceUrl (asaas-create-subscription)
+
+Apos `const asaasData = await asaasResponse.json()`, adicionar:
+
+```typescript
+// Buscar o primeiro pagamento gerado para obter invoiceUrl
+let invoiceUrl = null;
+try {
+  const paymentsResponse = await fetch(
+    `${ASAAS_BASE_URL}/v3/subscriptions/${asaasData.id}/payments?limit=1`,
+    {
+      headers: { access_token: ASAAS_API_KEY },
+    }
+  );
+  const paymentsData = await paymentsResponse.json();
+  if (paymentsData.data && paymentsData.data.length > 0) {
+    invoiceUrl = paymentsData.data[0].invoiceUrl;
+  }
+} catch (e) {
+  console.error("Error fetching payment invoiceUrl:", e);
+}
+```
+
+E retornar `invoiceUrl` em vez de `asaasData.invoiceUrl`.
+
+### Correcao do Frontend (AsaasCheckoutModal)
+
+Quando `invoiceUrl` existir, abrir automaticamente:
+
+```typescript
+if (result.invoiceUrl) {
+  window.open(result.invoiceUrl, '_blank');
+  setInvoiceUrl(result.invoiceUrl);
+  setStep('redirect');
+} else {
+  toast.success('Assinatura criada! Aguardando confirmação de pagamento.');
+  onOpenChange(false);
+}
+```
 
 ---
 
-## Arquivos criados/modificados
+## Arquivos Modificados
 
-| Arquivo | Acao |
+| Arquivo | Mudanca |
 |---|---|
-| `supabase/functions/asaas-create-customer/index.ts` | Novo |
-| `supabase/functions/asaas-create-subscription/index.ts` | Novo |
-| `supabase/functions/asaas-webhook/index.ts` | Novo |
-| `supabase/functions/asaas-cancel-subscription/index.ts` | Novo |
-| `supabase/config.toml` | Adicionar 4 novas functions com `verify_jwt = false` |
-| `src/hooks/useAsaasSubscription.ts` | Novo |
-| `src/pages/CreditsCheckout.tsx` | Conectar botoes "Assinar" ao fluxo real |
-| Migration SQL | Criar tabela `subscriptions_asaas` + coluna `asaas_customer_id` em `photographer_accounts` |
-
-## Prerequisito
-
-Antes de implementar, sera necessario que voce:
-1. Crie uma conta no Asaas (https://www.asaas.com)
-2. Gere sua API Key (Sandbox para testes)
-3. Forneca a chave para armazenarmos como secret seguro no Supabase
-
-Deseja que eu solicite a API Key agora para comecarmos a implementacao?
+| `supabase/functions/asaas-create-subscription/index.ts` | Buscar invoiceUrl do payment + corrigir auth |
+| `supabase/functions/asaas-create-customer/index.ts` | Corrigir auth (getClaims -> getUser) |
+| `supabase/functions/asaas-cancel-subscription/index.ts` | Corrigir auth (getClaims -> getUser) |
+| `src/components/credits/AsaasCheckoutModal.tsx` | Auto-redirect com window.open |
