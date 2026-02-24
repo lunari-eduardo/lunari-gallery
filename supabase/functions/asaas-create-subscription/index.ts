@@ -49,17 +49,15 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: claims, error: claimsError } = await supabase.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsError || !claims?.claims) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = claims.claims.sub as string;
+    const userId = user.id;
     const { planType, billingCycle, billingType } = await req.json();
 
     // Validate plan
@@ -156,6 +154,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch the first payment to get invoiceUrl
+    let invoiceUrl = null;
+    try {
+      const paymentsResponse = await fetch(
+        `${ASAAS_BASE_URL}/v3/subscriptions/${asaasData.id}/payments?limit=1`,
+        { headers: { access_token: ASAAS_API_KEY } }
+      );
+      const paymentsData = await paymentsResponse.json();
+      if (paymentsData.data && paymentsData.data.length > 0) {
+        invoiceUrl = paymentsData.data[0].invoiceUrl;
+      }
+    } catch (e) {
+      console.error("Error fetching payment invoiceUrl:", e);
+    }
+
     // Save subscription locally
     const { data: subscription, error: insertError } = await adminClient
       .from("subscriptions_asaas")
@@ -180,7 +193,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         subscriptionId: asaasData.id,
-        invoiceUrl: asaasData.invoiceUrl || null,
+        invoiceUrl,
         status: asaasData.status,
         localId: subscription?.id,
       }),
