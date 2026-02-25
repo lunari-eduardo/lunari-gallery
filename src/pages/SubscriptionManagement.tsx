@@ -80,6 +80,9 @@ export default function SubscriptionManagement() {
                 <p className="text-xl font-bold text-foreground capitalize">
                   {subscription.plan_type?.replace(/_/g, ' ') || 'Transfer'}
                 </p>
+                <p className="text-sm text-muted-foreground">
+                  {subscription.billing_cycle === 'YEARLY' ? 'Plano anual (20% off)' : 'Plano mensal'}
+                </p>
               </div>
               <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
             </div>
@@ -116,7 +119,7 @@ export default function SubscriptionManagement() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate('/credits/checkout?tab=transfer')}
+                onClick={() => navigate(`/credits/checkout?tab=transfer&upgrade=true&current_plan=${subscription.plan_type}&billing_cycle=${subscription.billing_cycle}&next_due_date=${subscription.next_due_date || ''}&subscription_id=${subscription.id}`)}
                 className="gap-1.5"
               >
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -154,6 +157,9 @@ export default function SubscriptionManagement() {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Alterações de plano são ajustadas proporcionalmente ao período atual.
+            </p>
           </div>
         </div>
       )}
