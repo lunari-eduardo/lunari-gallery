@@ -14,10 +14,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight, ArrowDown, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getPlanDisplayName } from '@/lib/transferPlans';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   ACTIVE: { label: 'Ativa', variant: 'default' },
@@ -28,7 +29,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 
 export default function SubscriptionManagement() {
   const navigate = useNavigate();
-  const { subscription, isLoading, cancelSubscription, isCancelling } = useAsaasSubscription();
+  const { subscription, isLoading, cancelSubscription, isCancelling, cancelDowngrade, isCancellingDowngrade } = useAsaasSubscription();
 
   const handleCancel = async () => {
     if (!subscription?.asaas_subscription_id) return;
@@ -110,6 +111,45 @@ export default function SubscriptionManagement() {
               />
             </div>
           </div>
+
+          {/* Pending downgrade notice */}
+          {subscription.pending_downgrade_plan && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-3">
+              <div className="flex items-start gap-3">
+                <ArrowDown className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1 flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Downgrade agendado para o próximo ciclo
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Seu plano será alterado para{' '}
+                    <span className="font-semibold text-foreground">
+                      {getPlanDisplayName(subscription.pending_downgrade_plan)}
+                    </span>{' '}
+                    na próxima renovação.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 gap-1.5 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10"
+                  disabled={isCancellingDowngrade}
+                  onClick={async () => {
+                    try {
+                      await cancelDowngrade(subscription.id);
+                    } catch {}
+                  }}
+                >
+                  {isCancellingDowngrade ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <X className="h-3.5 w-3.5" />
+                  )}
+                  Cancelar downgrade
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="rounded-xl border bg-card p-6 space-y-4">
