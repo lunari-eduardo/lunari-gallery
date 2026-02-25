@@ -37,7 +37,7 @@ export function PhotoCard({
   return (
     <div 
       className={cn(
-        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300 aspect-square',
+        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300 w-full h-full',
         disabled && 'opacity-60 cursor-not-allowed'
       )}
       onClick={handleContainerClick}

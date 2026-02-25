@@ -36,8 +36,8 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: 
           const url = getPhotoUrl(paths, 'preview');
 
           return (
-            <MasonryItem key={photo.id}>
-              <div className="group relative cursor-pointer overflow-hidden aspect-square">
+            <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
+              <div className="group relative cursor-pointer overflow-hidden w-full h-full">
                 <img
                   src={url}
                   alt={photo.originalFilename}

@@ -593,7 +593,7 @@ export default function GalleryDetail() {
           {transformedPhotos.length > 0 ? (
             <MasonryGrid>
               {transformedPhotos.map((photo, index) => (
-                <MasonryItem key={photo.id}>
+                <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                   <PhotoCard
                     photo={photo}
                     isSelected={photo.isSelected}
