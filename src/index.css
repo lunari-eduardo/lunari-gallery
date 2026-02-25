@@ -212,37 +212,29 @@
   }
 
   .masonry-grid {
-    column-count: 2;
-    column-gap: 0.75rem;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
   }
 
   @media (min-width: 640px) {
-    .masonry-grid {
-      column-count: 3;
-    }
+    .masonry-grid { grid-template-columns: repeat(3, 1fr); }
   }
 
   @media (min-width: 1024px) {
-    .masonry-grid {
-      column-count: 3;
-    }
+    .masonry-grid { grid-template-columns: repeat(3, 1fr); }
   }
 
   @media (min-width: 1280px) {
-    .masonry-grid {
-      column-count: 3;
-    }
+    .masonry-grid { grid-template-columns: repeat(3, 1fr); }
   }
 
   @media (min-width: 1536px) {
-    .masonry-grid {
-      column-count: 4;
-    }
+    .masonry-grid { grid-template-columns: repeat(4, 1fr); }
   }
 
   .masonry-item {
-    break-inside: avoid;
-    margin-bottom: 0.75rem;
+    /* grid item - no special rules needed */
   }
 
   .status-badge {
