@@ -37,10 +37,9 @@ export function PhotoCard({
   return (
     <div 
       className={cn(
-        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300',
+        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300 aspect-square',
         disabled && 'opacity-60 cursor-not-allowed'
       )}
-      style={{ aspectRatio: `${photo.width}/${photo.height}` }}
       onClick={handleContainerClick}
     >
       {/* Image with error handling - watermark is burned into pixels during upload */}
