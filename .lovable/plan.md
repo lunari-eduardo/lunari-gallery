@@ -1,71 +1,60 @@
 
 
-# Equilibrio Visual e Navegacao Direta na Pagina de Creditos
+# Correcao de Navegacao + Pagina de Gerenciamento de Assinatura
 
-## Problema
+## Problemas Identificados
 
-A pagina `/credits` tem desequilibrio visual entre Select (forte) e Transfer (fraco). A pagina `/credits/checkout` tem hero muito alta, toggle desnecessario entre produtos e falta micro-labels de contexto.
+1. **Botao "Voltar" no checkout/pay**: Navega para `/credits/checkout` sem o parametro `?tab=transfer`, caindo no Select (default). Precisa preservar o contexto do produto.
+2. **Botao "Voltar" no checkout**: Navega para `/credits` em vez de voltar para `/credits/checkout?tab=transfer` quando vindo do Transfer.
+3. **Falta pagina de gerenciamento de assinatura**: Nao existe forma de ver historico de transacoes de assinatura, cancelar ou fazer downgrade.
 
 ## Mudancas
 
-### 1. Credits.tsx - Equilibrar peso visual Select vs Transfer
+### 1. Corrigir navegacao "Voltar" no `CreditsPayment.tsx`
 
-**Gallery Select - adicionar micro-label:**
-- Abaixo do logo: texto pequeno "Creditos pre-pagos para galerias de selecao"
+O `location.state` ja contem `type: 'subscription'` ou `type: 'select'`. Usar isso para construir a URL de retorno:
 
-**Gallery Transfer - aumentar presenca visual (sem plano ativo):**
-- Remover icone HardDrive + label "Armazenamento" (redundante com o logo)
-- Texto principal: "Ative um plano e entregue galerias que geram valor."
-- Micro-label abaixo do logo: "Plano mensal de armazenamento"
-- Botao maior (mesmo `size` do "Comprar Creditos"), texto: "Ver planos de armazenamento"
+- Se `type === 'select'`: voltar para `/credits/checkout?tab=select`
+- Se `type === 'subscription'`: voltar para `/credits/checkout?tab=transfer`
 
-**Gallery Transfer - com plano ativo:**
-- Manter barra de progresso e dados atuais (ja tem bom peso)
-- Adicionar micro-label "Plano mensal de armazenamento"
+Linha 66 atual: `navigate('/credits/checkout')` → `navigate('/credits/checkout?tab=' + (pkg?.type === 'subscription' ? 'transfer' : 'select'))`
 
-**Secao Combos - melhorar transicao:**
-- Antes do titulo "Cresca com uma estrutura completa", adicionar frase de transicao:
-  "Quer ter o sistema de gestao mais completo integrado as suas galerias?"
+### 2. Adicionar botao "Gerenciar assinatura" no `Credits.tsx`
 
-**Botoes de navegacao:**
-- "Comprar Creditos" navega para `/credits/checkout?tab=select`
-- "Ver planos de armazenamento" navega para `/credits/checkout?tab=transfer`
-
-### 2. CreditsCheckout.tsx - Remover toggle, reduzir hero, fixar contexto
-
-**Remover toggle Gallery Select / Gallery Transfer:**
-- A pagina abre diretamente no modo correto baseado em `?tab=select` ou `?tab=transfer` (lido via `useSearchParams`)
-- Sem possibilidade de trocar entre produtos na mesma pagina
-- O `activeTab` e derivado da URL, sem `useState`
-
-**Reduzir hero drasticamente:**
-- Remover pill de "Creditos disponiveis" / "Plano ativo" (informacao ja esta em `/credits`)
-- Reduzir padding: `pt-10 pb-24` em vez de `pt-16 pb-40`
-- Manter apenas: badge contextual + titulo + subtitulo (3 linhas)
-- Cards sobem mais, ficam mais proximo do topo
-
-**Resultado visual da hero:**
+No bloco do Gallery Transfer, quando `hasTransferPlan === true`, adicionar abaixo do botao principal:
 
 ```text
-  [CREDITOS]
-  Organize e profissionalize o processo de selecao de fotos
-  Creditos flexiveis, sem validade e sem mensalidade.
-
-  --- cards logo abaixo ---
+[Ver planos de armazenamento]
+Gerenciar assinatura    ← texto-link na cor primary
 ```
 
-### 3. Arquivos modificados
+Navega para `/credits/subscription`.
 
-| Arquivo | Mudanca |
+### 3. Nova pagina `SubscriptionManagement.tsx`
+
+Pagina dedicada ao gerenciamento da assinatura ativa:
+
+**Conteudo:**
+- Header com botao voltar para `/credits`
+- Card com dados da assinatura ativa (plano, status, valor, proxima cobranca)
+- Historico de pagamentos da assinatura (via `subscriptions_asaas` + metadata)
+- Botao "Cancelar assinatura" com dialog de confirmacao (usa `cancelSubscription` do hook existente)
+- Link "Fazer upgrade/downgrade" que redireciona para `/credits/checkout?tab=transfer`
+
+**Dados necessarios:**
+- `useAsaasSubscription()` ja retorna `subscription` com status, valor, datas
+- Cancelamento ja implementado no hook (`cancelSubscriptionMutation`)
+
+### 4. Registrar rota no `App.tsx`
+
+Nova rota: `/credits/subscription` → `SubscriptionManagement`
+
+## Arquivos
+
+| Arquivo | Acao |
 |---|---|
-| `src/pages/Credits.tsx` | Micro-labels, equilibrio Transfer, frase de transicao nos combos, botoes com navegacao correta |
-| `src/pages/CreditsCheckout.tsx` | Remover toggle, ler tab da URL, reduzir hero, remover pill de saldo |
-
-### 4. Detalhes tecnicos
-
-- `CreditsCheckout` usara `useSearchParams` para ler `tab` da URL
-- Fallback: se `tab` nao fornecido, default para `'select'`
-- `activeTab` passa de `useState` para `const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select'`
-- Botao "Comprar Creditos" em Credits.tsx: `navigate('/credits/checkout?tab=select')`
-- Botao "Ver planos de armazenamento" em Credits.tsx: `navigate('/credits/checkout?tab=transfer')`
+| `src/pages/CreditsPayment.tsx` | Corrigir URL do botao "Voltar" (linha 66) |
+| `src/pages/Credits.tsx` | Adicionar link "Gerenciar assinatura" no bloco Transfer |
+| `src/pages/SubscriptionManagement.tsx` | **Novo** - pagina de gerenciamento |
+| `src/App.tsx` | Registrar rota `/credits/subscription` |
 
