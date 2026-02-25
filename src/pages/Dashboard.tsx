@@ -228,11 +228,17 @@ export default function Dashboard() {
   };
 
   const deleteTarget = allGalleries.find(g => g.id === deleteGalleryId);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteConfirm = async () => {
     if (!deleteGalleryId) return;
-    await deleteGallery(deleteGalleryId);
-    setDeleteGalleryId(null);
+    setIsDeleting(true);
+    try {
+      await deleteGallery(deleteGalleryId);
+      setDeleteGalleryId(null);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const subtitle = activeTab === 'select'
@@ -482,16 +488,26 @@ export default function Dashboard() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 handleDeleteConfirm();
               }}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </>
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
