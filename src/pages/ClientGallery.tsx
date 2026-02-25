@@ -1137,11 +1137,11 @@ export default function ClientGallery() {
                 {confirmedSelectedPhotos.map((photo, index) => (
                   <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                     <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(index)}>
-                      <div className="overflow-hidden rounded-lg w-full h-full">
+                      <div className="overflow-hidden rounded-lg w-full">
                         <img 
                           src={photo.thumbnailUrl} 
                           alt={photo.filename}
-                          className="w-full h-full object-cover"
+                          className="w-full h-auto block"
                           loading="lazy"
                         />
                       </div>

@@ -37,7 +37,7 @@ export function PhotoCard({
   return (
     <div 
       className={cn(
-        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300 w-full h-full',
+        'group relative overflow-hidden bg-muted cursor-pointer transition-all duration-300 w-full',
         disabled && 'opacity-60 cursor-not-allowed'
       )}
       onClick={handleContainerClick}
@@ -53,7 +53,7 @@ export function PhotoCard({
           src={photo.previewUrl}
           alt={photo.filename}
           className={cn(
-            'w-full h-full object-cover transition-all duration-500',
+            'w-full h-auto block transition-all duration-500',
             !isLoaded && 'opacity-0',
             isLoaded && 'opacity-100'
           )}
