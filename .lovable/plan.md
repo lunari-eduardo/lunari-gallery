@@ -1,40 +1,75 @@
 
 
-# Correcao de Espacos Vazios no Grid de Fotos
+# Correcao: Fotos com Proporcao Original no Grid (Masonry via Grid Spans)
 
 ## Problema
 
-O CSS Grid atual tem colunas de largura igual, mas cada foto define sua propria `aspectRatio` baseada em `width/height`. Quando uma foto horizontal (ex: 1600x1000) fica ao lado de uma vertical (ex: 1000x1500), a horizontal ocupa menos altura, criando espacos vazios visiveis entre as linhas do grid.
+A correcao anterior forcou `aspect-square` em todas as fotos, cortando horizontais e verticais para quadrados. O usuario quer que cada foto mantenha sua proporcao original (horizontal fica horizontal, vertical fica vertical) mas sem deixar espacos vazios entre elas.
 
-## Solucao
+## Solucao: CSS Grid com Row Spans Dinamicos
 
-Forcar todas as celulas do grid a terem a mesma proporcao (quadrado `1/1`) e usar `object-fit: cover` para preencher a celula, cortando as bordas excedentes. Isso elimina 100% dos espacos vazios e cria um grid denso e uniforme, como mostrado na segunda imagem de referencia.
+Usar `grid-auto-rows` com um valor base pequeno (ex: 10px) e calcular `grid-row: span N` para cada foto baseado na sua proporcao real. Isso mantem a ordenacao horizontal (esquerda para direita) enquanto permite alturas diferentes sem espacos.
+
+```text
+Exemplo com 4 colunas:
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+│  Foto 1  │ │  Foto 2  │ │          │ │  Foto 4  │
+│ (horiz.) │ │ (horiz.) │ │  Foto 3  │ │ (horiz.) │
+└──────────┘ └──────────┘ │ (vert.)  │ └──────────┘
+┌──────────┐ ┌──────────┐ │          │ ┌──────────┐
+│          │ │  Foto 6  │ └──────────┘ │          │
+│  Foto 5  │ │ (horiz.) │ ┌──────────┐ │  Foto 8  │
+│ (vert.)  │ └──────────┘ │  Foto 7  │ │ (vert.)  │
+│          │ ┌──────────┐ │ (horiz.) │ │          │
+└──────────┘ │  ...     │ └──────────┘ └──────────┘
+```
+
+Cada foto ocupa spans proporcionais a sua altura relativa. O grid preenche os espacos automaticamente.
 
 ## Mudancas
 
-### 1. `src/components/PhotoCard.tsx`
+### 1. `src/index.css` — Grid com auto-rows
 
-- Remover `style={{ aspectRatio: \`${photo.width}/${photo.height}\` }}` do container
-- Adicionar classe `aspect-square` ao container
-- A imagem ja usa `object-cover`, entao o crop acontece automaticamente
+Trocar o grid atual por `grid-auto-rows: 10px` para permitir alturas granulares:
 
-### 2. `src/components/deliver/DeliverPhotoGrid.tsx`
+```css
+.masonry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 10px;
+  gap: 6px;
+}
+```
 
-- Adicionar `aspect-square` e `overflow-hidden` ao container de cada foto
-- Adicionar `object-cover h-full` na tag `<img>` para preencher a celula uniformemente
+Breakpoints responsivos mantidos (3 colunas em sm/md/lg, 4 em 2xl).
 
-### 3. `src/components/deliver/memory/MemoryPhotoSelector.tsx`
+### 2. `src/components/MasonryGrid.tsx` — MasonryItem com span dinamico
 
-- Ja usa `aspect-square` e `object-cover` — nenhuma mudanca necessaria
+Adicionar props `photoWidth` e `photoHeight` ao `MasonryItem`. Calcular `gridRowEnd: span N` onde N e baseado na proporcao da foto. Fotos verticais recebem mais spans, horizontais menos.
 
-## Resultado
+Calculo: `spans = Math.round(baseSpan / aspectRatio) + 1` onde baseSpan ~= 25 (para colunas de ~250px de base).
 
-Todas as fotos ocupam celulas quadradas uniformes. Fotos horizontais e verticais se encaixam lado a lado sem espacos. A ordem horizontal (1, 2, 3, 4...) e preservada.
+### 3. `src/components/PhotoCard.tsx` — Remover aspect-square
+
+Remover `aspect-square` do container. Usar `w-full h-full object-cover` para a imagem preencher o espaco determinado pelo span do pai.
+
+### 4. `src/components/deliver/DeliverPhotoGrid.tsx` — Remover aspect-square
+
+Mesmo ajuste: remover `aspect-square`, usar `w-full h-full object-cover`. Passar `photoWidth/photoHeight` ao MasonryItem.
+
+### 5. Paginas que usam MasonryItem com PhotoCard
+
+`ClientGallery.tsx`, `GalleryDetail.tsx`, `GalleryPreview.tsx` — passar `photoWidth={photo.width}` e `photoHeight={photo.height}` ao MasonryItem.
 
 ## Arquivos
 
-| Arquivo | Mudanca |
+| Arquivo | Acao |
 |---|---|
-| `src/components/PhotoCard.tsx` | Trocar aspectRatio dinamico por `aspect-square` |
-| `src/components/deliver/DeliverPhotoGrid.tsx` | Adicionar `aspect-square` + `object-cover` uniforme |
+| `src/index.css` | `grid-auto-rows: 10px` nas classes masonry |
+| `src/components/MasonryGrid.tsx` | MasonryItem aceita width/height, calcula row span |
+| `src/components/PhotoCard.tsx` | Remover `aspect-square`, usar `h-full` |
+| `src/components/deliver/DeliverPhotoGrid.tsx` | Remover `aspect-square`, passar dimensoes |
+| `src/pages/ClientGallery.tsx` | Passar width/height ao MasonryItem |
+| `src/pages/GalleryDetail.tsx` | Passar width/height ao MasonryItem |
+| `src/pages/GalleryPreview.tsx` | Passar width/height ao MasonryItem |
 
