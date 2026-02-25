@@ -1,75 +1,83 @@
 
 
-# Correcao: Fotos com Proporcao Original no Grid (Masonry via Grid Spans)
+# Masonry Real com CSS Columns
 
 ## Problema
 
-A correcao anterior forcou `aspect-square` em todas as fotos, cortando horizontais e verticais para quadrados. O usuario quer que cada foto mantenha sua proporcao original (horizontal fica horizontal, vertical fica vertical) mas sem deixar espacos vazios entre elas.
+O layout atual usa CSS Grid com `grid-auto-rows: 10px` e row spans calculados. Isso causa distorcao porque as imagens usam `object-cover` com `h-full` dentro de containers de altura fixa (spans), cortando e esticando as fotos. Nao e um masonry real.
 
-## Solucao: CSS Grid com Row Spans Dinamicos
+## Solucao
 
-Usar `grid-auto-rows` com um valor base pequeno (ex: 10px) e calcular `grid-row: span N` para cada foto baseado na sua proporcao real. Isso mantem a ordenacao horizontal (esquerda para direita) enquanto permite alturas diferentes sem espacos.
+Substituir completamente por CSS `column-count`. E a abordagem mais simples e nativa para masonry real:
 
-```text
-Exemplo com 4 colunas:
-┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-│  Foto 1  │ │  Foto 2  │ │          │ │  Foto 4  │
-│ (horiz.) │ │ (horiz.) │ │  Foto 3  │ │ (horiz.) │
-└──────────┘ └──────────┘ │ (vert.)  │ └──────────┘
-┌──────────┐ ┌──────────┐ │          │ ┌──────────┐
-│          │ │  Foto 6  │ └──────────┘ │          │
-│  Foto 5  │ │ (horiz.) │ ┌──────────┐ │  Foto 8  │
-│ (vert.)  │ └──────────┘ │  Foto 7  │ │ (vert.)  │
-│          │ ┌──────────┐ │ (horiz.) │ │          │
-└──────────┘ │  ...     │ └──────────┘ └──────────┘
-```
+- Cada imagem usa `width: 100%` e `height: auto` — proporcao original preservada
+- `column-count` distribui as fotos em colunas verticais automaticamente
+- `break-inside: avoid` impede que uma foto seja dividida entre colunas
+- Zero distorcao, zero corte, zero espacos vazios
 
-Cada foto ocupa spans proporcionais a sua altura relativa. O grid preenche os espacos automaticamente.
+A ordenacao visual sera por coluna (cima para baixo, coluna por coluna), nao por linha. Isso e o comportamento padrao e esperado de um masonry real — e exatamente o que plataformas de fotografia profissional usam.
 
 ## Mudancas
 
-### 1. `src/index.css` — Grid com auto-rows
+### 1. `src/index.css` — CSS Columns
 
-Trocar o grid atual por `grid-auto-rows: 10px` para permitir alturas granulares:
+Substituir o grid por column-count:
 
 ```css
 .masonry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-auto-rows: 10px;
-  gap: 6px;
+  column-count: 2;
+  column-gap: 6px;
+}
+
+@media (min-width: 640px) {
+  .masonry-grid { column-count: 3; }
+}
+
+@media (min-width: 1280px) {
+  .masonry-grid { column-count: 4; }
+}
+
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 6px;
 }
 ```
 
-Breakpoints responsivos mantidos (3 colunas em sm/md/lg, 4 em 2xl).
+Remover `display: grid`, `grid-template-columns`, `grid-auto-rows`, `gap`.
 
-### 2. `src/components/MasonryGrid.tsx` — MasonryItem com span dinamico
+### 2. `src/components/MasonryGrid.tsx` — Simplificar MasonryItem
 
-Adicionar props `photoWidth` e `photoHeight` ao `MasonryItem`. Calcular `gridRowEnd: span N` onde N e baseado na proporcao da foto. Fotos verticais recebem mais spans, horizontais menos.
+Remover toda a logica de row span (`BASE_SPAN`, `GAP_COMPENSATION`, `useMemo`, `gridRowEnd`). O `MasonryItem` passa a ser apenas um wrapper com `break-inside: avoid` (via classe CSS). Manter as props `photoWidth`/`photoHeight` para nao quebrar chamadas existentes, mas nao usa-las.
 
-Calculo: `spans = Math.round(baseSpan / aspectRatio) + 1` onde baseSpan ~= 25 (para colunas de ~250px de base).
+### 3. `src/components/PhotoCard.tsx` — Imagem com proporcao natural
 
-### 3. `src/components/PhotoCard.tsx` — Remover aspect-square
+Trocar `w-full h-full object-cover` por `w-full h-auto block` na tag `<img>`. Remover `h-full` do container. A imagem renderiza na sua proporcao original.
 
-Remover `aspect-square` do container. Usar `w-full h-full object-cover` para a imagem preencher o espaco determinado pelo span do pai.
+### 4. `src/components/deliver/DeliverPhotoGrid.tsx` — Mesma correcao
 
-### 4. `src/components/deliver/DeliverPhotoGrid.tsx` — Remover aspect-square
+Trocar `w-full h-full object-cover` por `w-full h-auto block` na `<img>`. Remover `h-full` do container.
 
-Mesmo ajuste: remover `aspect-square`, usar `w-full h-full object-cover`. Passar `photoWidth/photoHeight` ao MasonryItem.
+### 5. `src/pages/ClientGallery.tsx` — Corrigir grid de fotos confirmadas
 
-### 5. Paginas que usam MasonryItem com PhotoCard
+Na secao de fotos confirmadas (linha ~1140), trocar `w-full h-full` por classes compatíveis e a `<img>` para `w-full h-auto`.
 
-`ClientGallery.tsx`, `GalleryDetail.tsx`, `GalleryPreview.tsx` — passar `photoWidth={photo.width}` e `photoHeight={photo.height}` ao MasonryItem.
+### 6. `src/components/FinalizedPreviewScreen.tsx` — Ja usa `h-auto`
+
+Nenhuma mudanca necessaria — ja usa `w-full h-auto object-cover`.
+
+## Performance
+
+- `loading="lazy"` ja presente nas galerias Deliver; adicionar no PhotoCard
+- Skeleton/placeholder ja implementado no PhotoCard (pulse animation)
+- Fade-in ja implementado no PhotoCard (opacity transition on load)
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| `src/index.css` | `grid-auto-rows: 10px` nas classes masonry |
-| `src/components/MasonryGrid.tsx` | MasonryItem aceita width/height, calcula row span |
-| `src/components/PhotoCard.tsx` | Remover `aspect-square`, usar `h-full` |
-| `src/components/deliver/DeliverPhotoGrid.tsx` | Remover `aspect-square`, passar dimensoes |
-| `src/pages/ClientGallery.tsx` | Passar width/height ao MasonryItem |
-| `src/pages/GalleryDetail.tsx` | Passar width/height ao MasonryItem |
-| `src/pages/GalleryPreview.tsx` | Passar width/height ao MasonryItem |
+| `src/index.css` | Trocar grid por column-count |
+| `src/components/MasonryGrid.tsx` | Remover logica de row span |
+| `src/components/PhotoCard.tsx` | `h-auto` na imagem, remover `h-full` |
+| `src/components/deliver/DeliverPhotoGrid.tsx` | `h-auto` na imagem, remover `h-full` |
+| `src/pages/ClientGallery.tsx` | Corrigir container de fotos confirmadas |
 
