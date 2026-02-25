@@ -16,6 +16,14 @@ export interface AsaasSubscription {
   created_at: string;
   updated_at: string;
   metadata: Record<string, unknown> | null;
+  pending_downgrade_plan: string | null;
+  pending_downgrade_cycle: string | null;
+}
+
+interface DowngradeSubscriptionParams {
+  subscriptionId: string;
+  newPlanType: string;
+  newBillingCycle?: string;
 }
 
 interface CreateCustomerParams {
@@ -209,6 +217,42 @@ export function useAsaasSubscription() {
     },
   });
 
+  const downgradeSubscriptionMutation = useMutation({
+    mutationFn: async (params: DowngradeSubscriptionParams) => {
+      const { data, error } = await supabase.functions.invoke('asaas-downgrade-subscription', {
+        body: params,
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      return data as { success: boolean; scheduledPlan: string; message: string };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
+      toast.success(data.message || 'Downgrade agendado com sucesso.');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao agendar downgrade.');
+    },
+  });
+
+  const cancelDowngradeMutation = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      // Clear pending downgrade fields directly
+      const { error } = await supabase
+        .from('subscriptions_asaas' as any)
+        .update({ pending_downgrade_plan: null, pending_downgrade_cycle: null } as any)
+        .eq('id', subscriptionId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
+      toast.success('Downgrade cancelado.');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao cancelar downgrade.');
+    },
+  });
+
   return {
     subscription,
     isLoading,
@@ -222,5 +266,9 @@ export function useAsaasSubscription() {
     isUpgrading: upgradeSubscriptionMutation.isPending,
     cancelSubscription: cancelSubscriptionMutation.mutateAsync,
     isCancelling: cancelSubscriptionMutation.isPending,
+    downgradeSubscription: downgradeSubscriptionMutation.mutateAsync,
+    isDowngrading: downgradeSubscriptionMutation.isPending,
+    cancelDowngrade: cancelDowngradeMutation.mutateAsync,
+    isCancellingDowngrade: cancelDowngradeMutation.isPending,
   };
 }

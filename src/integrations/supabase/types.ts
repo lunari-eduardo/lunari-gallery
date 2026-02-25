@@ -1889,15 +1889,18 @@ export type Database = {
       }
       photographer_accounts: {
         Row: {
+          account_over_limit: boolean | null
           account_status: Database["public"]["Enums"]["account_status"]
           account_type: Database["public"]["Enums"]["account_type"]
           asaas_customer_id: string | null
           created_at: string
           credits_consumed_total: number | null
           credits_purchased_total: number | null
+          deletion_scheduled_at: string | null
           galleries_published_total: number
           gallery_credits: number
           id: string
+          over_limit_since: string | null
           photo_credits: number
           updated_at: string
           user_id: string
@@ -1907,15 +1910,18 @@ export type Database = {
           watermark_scale: number | null
         }
         Insert: {
+          account_over_limit?: boolean | null
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
           asaas_customer_id?: string | null
           created_at?: string
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
+          deletion_scheduled_at?: string | null
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
+          over_limit_since?: string | null
           photo_credits?: number
           updated_at?: string
           user_id: string
@@ -1925,15 +1931,18 @@ export type Database = {
           watermark_scale?: number | null
         }
         Update: {
+          account_over_limit?: boolean | null
           account_status?: Database["public"]["Enums"]["account_status"]
           account_type?: Database["public"]["Enums"]["account_type"]
           asaas_customer_id?: string | null
           created_at?: string
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
+          deletion_scheduled_at?: string | null
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
+          over_limit_since?: string | null
           photo_credits?: number
           updated_at?: string
           user_id?: string
@@ -2394,6 +2403,8 @@ export type Database = {
           id: string
           metadata: Json | null
           next_due_date: string | null
+          pending_downgrade_cycle: string | null
+          pending_downgrade_plan: string | null
           plan_type: string
           status: string
           updated_at: string
@@ -2408,6 +2419,8 @@ export type Database = {
           id?: string
           metadata?: Json | null
           next_due_date?: string | null
+          pending_downgrade_cycle?: string | null
+          pending_downgrade_plan?: string | null
           plan_type: string
           status?: string
           updated_at?: string
@@ -2422,6 +2435,8 @@ export type Database = {
           id?: string
           metadata?: Json | null
           next_due_date?: string | null
+          pending_downgrade_cycle?: string | null
+          pending_downgrade_plan?: string | null
           plan_type?: string
           status?: string
           updated_at?: string

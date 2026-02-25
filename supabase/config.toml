@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.asaas-upgrade-subscription]
 verify_jwt = false
+
+[functions.asaas-downgrade-subscription]
+verify_jwt = false

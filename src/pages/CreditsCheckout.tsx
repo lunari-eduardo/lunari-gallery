@@ -2,9 +2,19 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
+import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   ArrowLeft, 
   Camera, 
@@ -18,10 +28,13 @@ import {
   HardDrive,
   Info,
   ArrowUp,
+  ArrowDown,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { TRANSFER_PLAN_PRICES, getPlanDisplayName } from '@/lib/transferPlans';
+import { TRANSFER_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize } from '@/lib/transferPlans';
 import { differenceInDays } from 'date-fns';
 
 
@@ -111,6 +124,8 @@ const TRANSFER_COMBO = {
 export default function CreditsCheckout() {
   const navigate = useNavigate();
   const { packages, isLoadingPackages } = useCreditPackages();
+  const { downgradeSubscription, isDowngrading } = useAsaasSubscription();
+  const { storageUsedBytes } = useTransferStorage();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
@@ -184,6 +199,33 @@ export default function CreditsCheckout() {
   };
 
   const isHighlighted = (pkg: CreditPackage) => pkg.sort_order === 3;
+
+  // Downgrade state
+  const [downgradeDialog, setDowngradeDialog] = useState<{
+    planType: string;
+    planName: string;
+    billingCycle: string;
+  } | null>(null);
+  const [downgradeConfirmed, setDowngradeConfirmed] = useState(false);
+
+  const handleDowngrade = async () => {
+    if (!downgradeDialog || !currentSubscriptionId) return;
+    try {
+      await downgradeSubscription({
+        subscriptionId: currentSubscriptionId,
+        newPlanType: downgradeDialog.planType,
+        newBillingCycle: downgradeDialog.billingCycle,
+      });
+      setDowngradeDialog(null);
+      setDowngradeConfirmed(false);
+      navigate('/credits/subscription');
+    } catch {
+      // toast handled by hook
+    }
+  };
+
+  const newDowngradeLimitBytes = downgradeDialog ? getStorageLimitBytes(downgradeDialog.planType) : 0;
+  const isOverLimitOnDowngrade = downgradeDialog ? storageUsedBytes > newDowngradeLimitBytes : false;
 
   return (
     <div className="min-h-screen bg-background">
@@ -490,7 +532,7 @@ export default function CreditsCheckout() {
                       isCurrentPlan
                         ? 'border-primary/50 bg-primary/5 opacity-80'
                         : isDowngrade
-                          ? 'opacity-50 pointer-events-none'
+                          ? 'border-border shadow-sm'
                           : plan.highlight
                             ? 'border-primary shadow-md ring-1 ring-primary/20'
                             : 'border-border shadow-sm'
@@ -543,8 +585,25 @@ export default function CreditsCheckout() {
                       <Button className="mt-6 px-8" size="lg" disabled>
                         Plano atual
                       </Button>
+                    ) : isDowngrade ? (
+                      <Button
+                        variant="outline"
+                        className="mt-6 px-8 gap-1.5"
+                        size="lg"
+                        onClick={() => {
+                          setDowngradeConfirmed(false);
+                          setDowngradeDialog({
+                            planType: planKey,
+                            planName: `Transfer ${plan.name}`,
+                            billingCycle: effectiveBilling,
+                          });
+                        }}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                        Agendar downgrade
+                      </Button>
                     ) : (
-                      <Button className="mt-6 px-8" size="lg" disabled={!!isDowngrade} onClick={() => {
+                      <Button className="mt-6 px-8" size="lg" onClick={() => {
                         handleSubscribe(
                           planKey,
                           `Transfer ${plan.name}`,
@@ -622,6 +681,88 @@ export default function CreditsCheckout() {
           </section>
         </>
       )}
+
+      {/* Downgrade confirmation dialog */}
+      <Dialog open={!!downgradeDialog} onOpenChange={(open) => {
+        if (!open) {
+          setDowngradeDialog(null);
+          setDowngradeConfirmed(false);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Agendar downgrade
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2">
+              <p>
+                Seu plano será alterado para{' '}
+                <span className="font-semibold text-foreground">
+                  {downgradeDialog ? getPlanDisplayName(downgradeDialog.planType) : ''}
+                </span>{' '}
+                no próximo ciclo de cobrança.
+              </p>
+              {isOverLimitOnDowngrade && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                  <p className="text-sm font-medium text-destructive">
+                    Seu novo plano permite {formatStorageSize(newDowngradeLimitBytes)}.
+                  </p>
+                  <p className="text-sm text-destructive/90">
+                    Você possui {formatStorageSize(storageUsedBytes)} armazenados.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    As galerias excedentes serão expiradas. Se não forem excluídas manualmente,
+                    serão removidas permanentemente em 30 dias.
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isOverLimitOnDowngrade && (
+            <div className="flex items-start gap-3 py-2">
+              <Checkbox
+                id="downgrade-confirm"
+                checked={downgradeConfirmed}
+                onCheckedChange={(checked) => setDowngradeConfirmed(checked === true)}
+              />
+              <label
+                htmlFor="downgrade-confirm"
+                className="text-sm text-muted-foreground cursor-pointer leading-relaxed"
+              >
+                Entendo que galerias acima do limite poderão ser excluídas após 30 dias.
+              </label>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDowngradeDialog(null);
+                setDowngradeConfirmed(false);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isDowngrading || (isOverLimitOnDowngrade && !downgradeConfirmed)}
+              onClick={handleDowngrade}
+            >
+              {isDowngrading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Agendando...
+                </>
+              ) : (
+                'Confirmar downgrade'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
