@@ -211,23 +211,7 @@
     }
   }
 
-  .masonry-grid {
-    column-count: 2;
-    column-gap: 6px;
-  }
-
-  @media (min-width: 640px) {
-    .masonry-grid { column-count: 3; }
-  }
-
-  @media (min-width: 1280px) {
-    .masonry-grid { column-count: 4; }
-  }
-
-  .masonry-item {
-    break-inside: avoid;
-    margin-bottom: 6px;
-  }
+  /* masonry styles handled by JS in MasonryGrid.tsx */
 
   .status-badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium;
