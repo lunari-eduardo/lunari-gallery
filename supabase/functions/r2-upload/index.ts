@@ -195,6 +195,8 @@ Deno.serve(async (req) => {
     const originalPath = formData.get("originalPath") as string | null;
     const uploadKey = formData.get("uploadKey") as string | null;
     const skipCredits = formData.get("skipCredits") === "true";
+    const originalFileSizeRaw = formData.get("originalFileSize") as string | null;
+    const originalFileSize = originalFileSizeRaw ? parseInt(originalFileSizeRaw, 10) : null;
 
     if (!file || !galleryId) {
       return new Response(JSON.stringify({ error: "Arquivo e galleryId são obrigatórios" }), {
@@ -325,6 +327,7 @@ Deno.serve(async (req) => {
         preview_path: storagePath,
         original_path: originalPath || null,
         file_size: fileData.byteLength,
+        original_file_size: originalFileSize,
         mime_type: file.type || "image/jpeg",
         width,
         height,

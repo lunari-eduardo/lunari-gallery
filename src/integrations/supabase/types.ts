@@ -1231,6 +1231,7 @@ export type Database = {
           is_selected: boolean | null
           mime_type: string | null
           order_index: number | null
+          original_file_size: number | null
           original_filename: string
           original_path: string | null
           preview_path: string | null
@@ -1256,6 +1257,7 @@ export type Database = {
           is_selected?: boolean | null
           mime_type?: string | null
           order_index?: number | null
+          original_file_size?: number | null
           original_filename: string
           original_path?: string | null
           preview_path?: string | null
@@ -1281,6 +1283,7 @@ export type Database = {
           is_selected?: boolean | null
           mime_type?: string | null
           order_index?: number | null
+          original_file_size?: number | null
           original_filename?: string
           original_path?: string | null
           preview_path?: string | null
