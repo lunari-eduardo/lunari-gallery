@@ -158,15 +158,25 @@ export default function Credits() {
           )}
 
           {!isAdmin && (
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => navigate('/credits/checkout?tab=transfer')}
-              className="gap-1.5"
-            >
-              <ArrowRight className="h-3.5 w-3.5" />
-              Ver planos de armazenamento
-            </Button>
+            <div className="space-y-1">
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => navigate('/credits/checkout?tab=transfer')}
+                className="gap-1.5"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+                Ver planos de armazenamento
+              </Button>
+              {hasTransferPlan && (
+                <button
+                  onClick={() => navigate('/credits/subscription')}
+                  className="block text-xs text-primary hover:underline"
+                >
+                  Gerenciar assinatura
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

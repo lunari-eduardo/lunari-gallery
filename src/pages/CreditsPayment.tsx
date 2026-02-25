@@ -46,7 +46,7 @@ export default function CreditsPayment() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">Nenhum pacote selecionado.</p>
-          <Button variant="outline" onClick={() => navigate('/credits/checkout')}>
+          <Button variant="outline" onClick={() => navigate('/credits/checkout?tab=select')}>
             Voltar para pacotes
           </Button>
         </div>
@@ -63,7 +63,7 @@ export default function CreditsPayment() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
         <div className="container max-w-5xl py-3 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/credits/checkout')} className="gap-1.5">
+          <Button variant="ghost" size="sm" onClick={() => navigate(`/credits/checkout?tab=${pkg?.type === 'subscription' ? 'transfer' : 'select'}`)} className="gap-1.5">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>

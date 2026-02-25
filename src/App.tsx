@@ -19,6 +19,7 @@ import ClientGallery from "./pages/ClientGallery";
 import Settings from "./pages/Settings";
 import Account from "./pages/Account";
 import Credits from "./pages/Credits";
+import SubscriptionManagement from "./pages/SubscriptionManagement";
 import CreditsCheckout from "./pages/CreditsCheckout";
 import CreditsPayment from "./pages/CreditsPayment";
 import Admin from "./pages/Admin";
@@ -136,6 +137,11 @@ const App = () => (
               <Route path="/credits" element={
                 <ProtectedRoute>
                   <Layout><Credits /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/credits/subscription" element={
+                <ProtectedRoute>
+                  <Layout><SubscriptionManagement /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/credits/checkout" element={
