@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { Infinity, ShoppingCart, CheckCircle2, HardDrive, ArrowRight } from 'lucide-react';
+import { Infinity, ShoppingCart, CheckCircle2, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -36,7 +36,10 @@ export default function Credits() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
         {/* Gallery Select block */}
         <div className="space-y-5 md:pr-12">
-          <img src={selectLogo} alt="Gallery Select" className="h-10 object-contain" />
+          <div className="space-y-1">
+            <img src={selectLogo} alt="Gallery Select" className="h-10 object-contain" />
+            <p className="text-xs text-muted-foreground/70">Créditos pré-pagos para galerias de seleção</p>
+          </div>
 
           {isAdmin ? (
             <div className="space-y-1">
@@ -66,7 +69,7 @@ export default function Credits() {
             <Button
               size="sm"
               variant="default"
-              onClick={() => navigate('/credits/checkout')}
+              onClick={() => navigate('/credits/checkout?tab=select')}
               className="gap-1.5"
             >
               <ShoppingCart className="h-3.5 w-3.5" />
@@ -115,7 +118,10 @@ export default function Credits() {
 
         {/* Gallery Transfer block */}
         <div className="space-y-5 md:border-l md:border-border md:pl-12 pt-4 md:pt-0">
-          <img src={transferLogo} alt="Gallery Transfer" className="h-10 object-contain" />
+          <div className="space-y-1">
+            <img src={transferLogo} alt="Gallery Transfer" className="h-10 object-contain" />
+            <p className="text-xs text-muted-foreground/70">Plano mensal de armazenamento</p>
+          </div>
 
           {isAdmin ? (
             <div className="space-y-1">
@@ -141,16 +147,12 @@ export default function Credits() {
               <Progress value={storageUsedPercent} className="h-2" />
             </div>
           ) : (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <HardDrive className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Armazenamento</span>
-              </div>
-              <p className="text-lg font-semibold text-muted-foreground/70">
-                Sem plano ativo
+            <div className="space-y-2">
+              <p className="text-lg font-semibold text-foreground">
+                Ative um plano e entregue galerias que geram valor.
               </p>
               <p className="text-xs text-muted-foreground/60">
-                Entregue fotos com a sua marca
+                Armazenamento seguro com entrega profissional no seu estilo.
               </p>
             </div>
           )}
@@ -159,11 +161,11 @@ export default function Credits() {
             <Button
               size="sm"
               variant="default"
-              onClick={() => toast.info('Em breve!')}
+              onClick={() => navigate('/credits/checkout?tab=transfer')}
               className="gap-1.5"
             >
               <ArrowRight className="h-3.5 w-3.5" />
-              Ver Planos
+              Ver planos de armazenamento
             </Button>
           )}
         </div>
@@ -173,6 +175,9 @@ export default function Credits() {
       {!isAdmin && (
         <div className="bg-muted/50 rounded-xl p-5 md:p-6 space-y-4">
           <div>
+            <p className="text-xs text-muted-foreground/70 italic mb-1">
+              Quer ter o sistema de gestão mais completo integrado às suas galerias?
+            </p>
             <h2 className="text-base font-semibold">Cresça com uma estrutura completa</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               Para quem quer integrar gestão, seleção e armazenamento em um único fluxo profissional.
