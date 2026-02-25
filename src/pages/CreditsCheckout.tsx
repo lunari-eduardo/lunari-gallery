@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
+import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,9 +17,12 @@ import {
   Star,
   HardDrive,
   Info,
+  ArrowUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { TRANSFER_PLAN_PRICES, getPlanDisplayName } from '@/lib/transferPlans';
+import { differenceInDays } from 'date-fns';
 
 
 /* ═══════════════════════════════════════════
@@ -111,6 +115,20 @@ export default function CreditsCheckout() {
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
 
+  // Upgrade mode
+  const isUpgradeMode = searchParams.get('upgrade') === 'true';
+  const currentPlanType = searchParams.get('current_plan') || '';
+  const currentBillingCycle = searchParams.get('billing_cycle') || 'MONTHLY';
+  const nextDueDate = searchParams.get('next_due_date') || '';
+  const currentSubscriptionId = searchParams.get('subscription_id') || '';
+
+  const currentPlanPrices = TRANSFER_PLAN_PRICES[currentPlanType];
+  const currentPriceCents = currentPlanPrices
+    ? (currentBillingCycle === 'YEARLY' ? currentPlanPrices.yearly : currentPlanPrices.monthly)
+    : 0;
+
+  const daysRemaining = nextDueDate ? Math.max(0, differenceInDays(new Date(nextDueDate), new Date())) : 0;
+  const totalCycleDays = currentBillingCycle === 'YEARLY' ? 365 : 30;
 
   const avulsos = packages?.filter(p => p.sort_order < 10) || [];
 
@@ -130,15 +148,39 @@ export default function CreditsCheckout() {
   };
 
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
-    navigate('/credits/checkout/pay', {
-      state: {
-        type: 'subscription',
-        planType,
-        planName,
-        billingCycle: billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY',
-        priceCents,
-      },
-    });
+    if (isUpgradeMode && currentSubscriptionId) {
+      // Calculate prorata
+      const newPlanPrices = TRANSFER_PLAN_PRICES[planType];
+      const newPriceCentsForCycle = currentBillingCycle === 'YEARLY'
+        ? (newPlanPrices?.yearly || priceCents)
+        : (newPlanPrices?.monthly || priceCents);
+      const difference = newPriceCentsForCycle - currentPriceCents;
+      const prorataValueCents = Math.max(0, Math.round(difference * (daysRemaining / totalCycleDays)));
+
+      navigate('/credits/checkout/pay', {
+        state: {
+          type: 'subscription',
+          planType,
+          planName,
+          billingCycle: currentBillingCycle as 'MONTHLY' | 'YEARLY',
+          priceCents: newPriceCentsForCycle,
+          isUpgrade: true,
+          prorataValueCents,
+          currentSubscriptionId,
+          currentPlanName: getPlanDisplayName(currentPlanType) || currentPlanType,
+        },
+      });
+    } else {
+      navigate('/credits/checkout/pay', {
+        state: {
+          type: 'subscription',
+          planType,
+          planName,
+          billingCycle: billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY',
+          priceCents,
+        },
+      });
+    }
   };
 
   const isHighlighted = (pkg: CreditPackage) => pkg.sort_order === 3;
@@ -383,10 +425,33 @@ export default function CreditsCheckout() {
          ═══════════════════════════════════ */}
       {activeTab === 'transfer' && (
         <>
+          {/* Upgrade banner */}
+          {isUpgradeMode && currentPlanType && (
+            <section className="container max-w-6xl -mt-12 md:-mt-16 relative z-[2] pb-4">
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 flex items-start gap-3">
+                <ArrowUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Seu plano atual: <span className="text-primary">{getPlanDisplayName(currentPlanType)}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Você pagará apenas a diferença proporcional ao período restante ({daysRemaining} dias restantes).
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Billing toggle */}
-          <section className="container max-w-6xl -mt-12 md:-mt-16 relative z-[1] pb-8">
+          <section className={cn("container max-w-6xl relative z-[1] pb-8", !isUpgradeMode && "-mt-12 md:-mt-16")}>
             <div className="flex justify-center">
-              <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} discount="-20%" />
+              {isUpgradeMode ? (
+                <p className="text-sm text-muted-foreground">
+                  Ciclo atual: <span className="font-medium text-foreground">{currentBillingCycle === 'YEARLY' ? 'Anual' : 'Mensal'}</span>
+                </p>
+              ) : (
+                <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} discount="-20%" />
+              )}
             </div>
           </section>
 
@@ -394,23 +459,49 @@ export default function CreditsCheckout() {
           <section className="container max-w-6xl pb-20 relative z-[1]">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {TRANSFER_PLANS.map((plan) => {
-                const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-                const altPrice = billingPeriod === 'monthly' ? plan.yearlyPrice : plan.monthlyPrice;
-                const monthlyEquiv = billingPeriod === 'yearly'
+                const effectiveBilling = isUpgradeMode ? currentBillingCycle : (billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY');
+                const price = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
+                const altPrice = effectiveBilling === 'YEARLY' ? plan.monthlyPrice : plan.yearlyPrice;
+                const monthlyEquiv = effectiveBilling === 'YEARLY'
                   ? formatPrice(Math.round(plan.yearlyPrice / 12))
                   : null;
+
+                const planKey = `transfer_${plan.storage.toLowerCase()}`;
+                const isCurrentPlan = isUpgradeMode && planKey === currentPlanType;
+                const isDowngrade = isUpgradeMode && currentPlanPrices && (
+                  effectiveBilling === 'YEARLY'
+                    ? plan.yearlyPrice <= currentPriceCents
+                    : plan.monthlyPrice <= currentPriceCents
+                );
+
+                // Prorata calculation
+                let prorataValue: number | null = null;
+                if (isUpgradeMode && !isCurrentPlan && !isDowngrade) {
+                  const newPrice = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
+                  const diff = newPrice - currentPriceCents;
+                  prorataValue = Math.max(0, Math.round(diff * (daysRemaining / totalCycleDays)));
+                }
 
                 return (
                   <div
                     key={plan.name}
                     className={cn(
                       'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
-                      plan.highlight
-                        ? 'border-primary shadow-md ring-1 ring-primary/20'
-                        : 'border-border shadow-sm'
+                      isCurrentPlan
+                        ? 'border-primary/50 bg-primary/5 opacity-80'
+                        : isDowngrade
+                          ? 'opacity-50 pointer-events-none'
+                          : plan.highlight
+                            ? 'border-primary shadow-md ring-1 ring-primary/20'
+                            : 'border-border shadow-sm'
                     )}
                   >
-                    {plan.tag && (
+                    {isCurrentPlan && (
+                      <Badge variant="secondary" className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs">
+                        Plano atual
+                      </Badge>
+                    )}
+                    {!isCurrentPlan && !isDowngrade && plan.tag && (
                       <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs gap-1">
                         <Star className="h-3 w-3" />
                         {plan.tag}
@@ -426,31 +517,45 @@ export default function CreditsCheckout() {
                     <p className="text-3xl font-bold text-primary mt-5">
                       {formatPrice(price)}
                       <span className="text-sm font-normal text-muted-foreground">
-                        /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                        /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
                       </span>
                     </p>
 
-                    {billingPeriod === 'monthly' ? (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Ou {formatPrice(altPrice)} por ano (20% off)
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Equivale a {monthlyEquiv}/mês
+                    {!isUpgradeMode && (
+                      billingPeriod === 'monthly' ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Ou {formatPrice(altPrice)} por ano (20% off)
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Equivale a {monthlyEquiv}/mês
+                        </p>
+                      )
+                    )}
+
+                    {prorataValue !== null && (
+                      <p className="text-sm font-medium text-primary mt-2">
+                        Pagar agora: {formatPrice(prorataValue)} <span className="text-xs font-normal text-muted-foreground">(proporcional)</span>
                       </p>
                     )}
 
-                    <Button className="mt-6 px-8" size="lg" onClick={() => {
-                      handleSubscribe(
-                        `transfer_${plan.storage.toLowerCase()}`,
-                        `Transfer ${plan.name}`,
-                        price
-                      );
-                    }}>
-                      Assinar
-                    </Button>
+                    {isCurrentPlan ? (
+                      <Button className="mt-6 px-8" size="lg" disabled>
+                        Plano atual
+                      </Button>
+                    ) : (
+                      <Button className="mt-6 px-8" size="lg" disabled={!!isDowngrade} onClick={() => {
+                        handleSubscribe(
+                          planKey,
+                          `Transfer ${plan.name}`,
+                          price
+                        );
+                      }}>
+                        {isUpgradeMode ? 'Fazer upgrade' : 'Assinar'}
+                      </Button>
+                    )}
 
-                    {billingPeriod === 'yearly' && (
+                    {!isUpgradeMode && billingPeriod === 'yearly' && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
                         <Info className="h-3 w-3 shrink-0 text-primary" />
                         Renovação manual após 12 meses

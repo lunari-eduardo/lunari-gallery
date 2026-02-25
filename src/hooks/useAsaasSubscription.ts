@@ -70,6 +70,28 @@ interface CreatePaymentParams {
   remoteIp: string;
 }
 
+interface UpgradeSubscriptionParams {
+  currentSubscriptionId: string;
+  newPlanType: string;
+  billingCycle: 'MONTHLY' | 'YEARLY';
+  creditCard: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+  };
+  creditCardHolderInfo: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    postalCode: string;
+    addressNumber: string;
+    phone: string;
+  };
+  remoteIp: string;
+}
+
 export function useAsaasSubscription() {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
@@ -146,6 +168,29 @@ export function useAsaasSubscription() {
     },
   });
 
+  const upgradeSubscriptionMutation = useMutation({
+    mutationFn: async (params: UpgradeSubscriptionParams) => {
+      const { data, error } = await supabase.functions.invoke('asaas-upgrade-subscription', {
+        body: params,
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      return data as {
+        newSubscriptionId: string;
+        status: string;
+        prorataPaymentId?: string;
+        prorataValueCents: number;
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
+      toast.success('Upgrade realizado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao realizar upgrade.');
+    },
+  });
+
   const cancelSubscriptionMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
       const { data, error } = await supabase.functions.invoke('asaas-cancel-subscription', {
@@ -173,6 +218,8 @@ export function useAsaasSubscription() {
     isCreatingSubscription: createSubscriptionMutation.isPending,
     createPayment: createPaymentMutation.mutateAsync,
     isCreatingPayment: createPaymentMutation.isPending,
+    upgradeSubscription: upgradeSubscriptionMutation.mutateAsync,
+    isUpgrading: upgradeSubscriptionMutation.isPending,
     cancelSubscription: cancelSubscriptionMutation.mutateAsync,
     isCancelling: cancelSubscriptionMutation.isPending,
   };

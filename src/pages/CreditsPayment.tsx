@@ -28,6 +28,10 @@ interface SubscriptionPayment {
   planName: string;
   billingCycle: 'MONTHLY' | 'YEARLY';
   priceCents: number;
+  isUpgrade?: boolean;
+  prorataValueCents?: number;
+  currentSubscriptionId?: string;
+  currentPlanName?: string;
 }
 
 type PaymentState = SelectPayment | SubscriptionPayment;
@@ -105,6 +109,11 @@ export default function CreditsPayment() {
    ═══════════════════════════════════════════ */
 
 function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPrice: string }) {
+  const isUpgrade = pkg.type === 'subscription' && pkg.isUpgrade;
+  const prorataFormatted = isUpgrade && pkg.prorataValueCents != null
+    ? (pkg.prorataValueCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : null;
+
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4 lg:sticky lg:top-20">
       <h2 className="font-semibold text-foreground">Resumo do Pedido</h2>
@@ -115,22 +124,46 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
         <p className="text-sm text-muted-foreground">
           {pkg.type === 'select'
             ? `${pkg.credits.toLocaleString('pt-BR')} créditos`
-            : `Assinatura ${pkg.billingCycle === 'MONTHLY' ? 'mensal' : 'anual'}`}
+            : isUpgrade
+              ? `Upgrade de ${pkg.currentPlanName || 'plano atual'}`
+              : `Assinatura ${pkg.billingCycle === 'MONTHLY' ? 'mensal' : 'anual'}`}
         </p>
       </div>
       <div className="border-t pt-4 space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span className="text-foreground">{formattedPrice}</span>
-        </div>
-        <div className="flex justify-between font-semibold text-base">
-          <span className="text-foreground">Total</span>
-          <span className="text-primary">{formattedPrice}</span>
-        </div>
+        {isUpgrade && prorataFormatted ? (
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Valor do novo plano</span>
+              <span className="text-foreground">{formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Diferença proporcional</span>
+              <span className="text-foreground">{prorataFormatted}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-base">
+              <span className="text-foreground">Pagar agora</span>
+              <span className="text-primary">{prorataFormatted}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              A partir do próximo ciclo, o valor será {formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="text-foreground">{formattedPrice}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-base">
+              <span className="text-foreground">Total</span>
+              <span className="text-primary">{formattedPrice}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Annual renewal badge */}
-      {pkg.type === 'subscription' && pkg.billingCycle === 'YEARLY' && (
+      {pkg.type === 'subscription' && pkg.billingCycle === 'YEARLY' && !isUpgrade && (
         <div className="border-t pt-4">
           <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
@@ -376,12 +409,14 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
     createCustomer, isCreatingCustomer,
     createSubscription, isCreatingSubscription,
     createPayment, isCreatingPayment,
+    upgradeSubscription, isUpgrading,
   } = useAsaasSubscription();
 
   const isYearly = pkg.billingCycle === 'YEARLY';
+  const isUpgrade = !!pkg.isUpgrade;
   const [installments, setInstallments] = useState(1);
 
-  const installmentOptions = isYearly
+  const installmentOptions = isYearly && !isUpgrade
     ? Array.from({ length: 12 }, (_, i) => {
         const n = i + 1;
         const value = (pkg.priceCents / 100 / n);
@@ -394,8 +429,8 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
 
   return (
     <div className="space-y-5">
-      {/* Installment selector for yearly */}
-      {isYearly && installmentOptions.length > 0 && (
+      {/* Installment selector for yearly (non-upgrade) */}
+      {isYearly && !isUpgrade && installmentOptions.length > 0 && (
         <div className="rounded-lg border bg-card p-4 space-y-3">
           <Label className="text-sm font-medium">Parcelas</Label>
           <select
@@ -428,7 +463,38 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
             remoteIp = ipData.ip || '';
           } catch { remoteIp = ''; }
 
-          if (isYearly) {
+          if (isUpgrade && pkg.currentSubscriptionId) {
+            // Upgrade flow
+            const result = await upgradeSubscription({
+              currentSubscriptionId: pkg.currentSubscriptionId,
+              newPlanType: pkg.planType,
+              billingCycle: pkg.billingCycle,
+              creditCard: {
+                holderName: cardData.cardHolderName.toUpperCase(),
+                number: cardData.cardNumber.replace(/\s/g, ''),
+                expiryMonth: cardData.expiryMonth.padStart(2, '0'),
+                expiryYear: cardData.expiryYear,
+                ccv: cardData.ccv,
+              },
+              creditCardHolderInfo: {
+                name: cardData.name,
+                email: user?.email || '',
+                cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
+                postalCode: cardData.postalCode.replace(/\D/g, ''),
+                addressNumber: cardData.addressNumber || 'S/N',
+                phone: cardData.phone.replace(/\D/g, ''),
+              },
+              remoteIp,
+            });
+
+            if (result.status === 'ACTIVE' || result.newSubscriptionId) {
+              toast.success('Upgrade realizado com sucesso!');
+              setTimeout(() => navigate('/credits'), 3000);
+              return { success: true };
+            } else {
+              throw new Error('Upgrade não foi aprovado. Verifique os dados do cartão.');
+            }
+          } else if (isYearly) {
             // Yearly: one-time payment with installments
             const result = await createPayment({
               productType: 'subscription_yearly',
@@ -492,11 +558,13 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
           }
         }}
         submitLabel={
-          isYearly && installments > 1
-            ? `Assinar ${installments}x de ${((pkg.priceCents / 100) / installments).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-            : `Assinar ${formattedPrice}`
+          isUpgrade
+            ? `Fazer upgrade ${pkg.prorataValueCents != null ? (pkg.prorataValueCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : formattedPrice}`
+            : isYearly && installments > 1
+              ? `Assinar ${installments}x de ${((pkg.priceCents / 100) / installments).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+              : `Assinar ${formattedPrice}`
         }
-        isProcessing={isCreatingCustomer || isCreatingSubscription || isCreatingPayment}
+        isProcessing={isCreatingCustomer || isCreatingSubscription || isCreatingPayment || isUpgrading}
         providerLabel="Pagamento seguro via Asaas (PCI DSS)"
       />
     </div>

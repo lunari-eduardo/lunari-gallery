@@ -13,6 +13,14 @@ export const TRANSFER_STORAGE_LIMITS: Record<string, number> = {
   combo_studio_pro: 0,
 };
 
+/** Plan prices in cents for prorata calculation. */
+export const TRANSFER_PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
+  transfer_5gb: { monthly: 1290, yearly: 12384 },
+  transfer_20gb: { monthly: 2490, yearly: 23904 },
+  transfer_50gb: { monthly: 3490, yearly: 33504 },
+  transfer_100gb: { monthly: 5990, yearly: 57504 },
+};
+
 const PLAN_DISPLAY_NAMES: Record<string, string> = {
   transfer_5gb: 'Transfer 5 GB',
   transfer_20gb: 'Transfer 20 GB',
