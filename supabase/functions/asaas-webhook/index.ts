@@ -6,6 +6,173 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const GB = 1024 * 1024 * 1024;
+const STORAGE_LIMITS: Record<string, number> = {
+  transfer_5gb: 5 * GB,
+  transfer_20gb: 20 * GB,
+  transfer_50gb: 50 * GB,
+  transfer_100gb: 100 * GB,
+  combo_completo: 20 * GB,
+};
+
+const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
+  transfer_5gb: { monthly: 1290, yearly: 12384 },
+  transfer_20gb: { monthly: 2490, yearly: 23904 },
+  transfer_50gb: { monthly: 3490, yearly: 33504 },
+  transfer_100gb: { monthly: 5990, yearly: 57504 },
+};
+
+const ASAAS_BASE_URL = Deno.env.get("ASAAS_ENV") === "production"
+  ? "https://api.asaas.com"
+  : "https://api-sandbox.asaas.com";
+
+async function applyDowngrade(adminClient: any, subscription: any) {
+  const newPlanType = subscription.pending_downgrade_plan;
+  const newCycle = subscription.pending_downgrade_cycle || subscription.billing_cycle;
+
+  if (!newPlanType) return;
+
+  console.log(`Applying scheduled downgrade: ${subscription.plan_type} → ${newPlanType}`);
+
+  const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+  if (!ASAAS_API_KEY) {
+    console.error("ASAAS_API_KEY not configured, cannot apply downgrade");
+    return;
+  }
+
+  const userId = subscription.user_id;
+
+  // 1. Cancel old subscription in Asaas
+  if (subscription.asaas_subscription_id) {
+    const cancelRes = await fetch(
+      `${ASAAS_BASE_URL}/v3/subscriptions/${subscription.asaas_subscription_id}`,
+      { method: "DELETE", headers: { access_token: ASAAS_API_KEY } }
+    );
+    if (!cancelRes.ok) {
+      console.error("Failed to cancel old subscription in Asaas:", await cancelRes.text());
+    }
+  }
+
+  // 2. Mark old subscription as CANCELLED and clear pending
+  await adminClient
+    .from("subscriptions_asaas")
+    .update({
+      status: "CANCELLED",
+      pending_downgrade_plan: null,
+      pending_downgrade_cycle: null,
+    })
+    .eq("id", subscription.id);
+
+  // 3. Get customer ID
+  const { data: account } = await adminClient
+    .from("photographer_accounts")
+    .select("asaas_customer_id")
+    .eq("user_id", userId)
+    .single();
+
+  if (!account?.asaas_customer_id) {
+    console.error("No customer ID found for user:", userId);
+    return;
+  }
+
+  // 4. Create new subscription in Asaas with downgraded plan
+  const newPrices = PLAN_PRICES[newPlanType];
+  if (!newPrices) {
+    console.error("Unknown plan type for pricing:", newPlanType);
+    return;
+  }
+  const newValueCents = newCycle === "YEARLY" ? newPrices.yearly : newPrices.monthly;
+  const newValueReais = newValueCents / 100;
+
+  // Use creditCardToken from old subscription metadata for auto-renewal
+  const creditCardToken = subscription.metadata?.creditCardToken;
+
+  const nextDueDate = new Date();
+  nextDueDate.setDate(nextDueDate.getDate() + (newCycle === "YEARLY" ? 365 : 30));
+  const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
+
+  const newSubPayload: Record<string, unknown> = {
+    customer: account.asaas_customer_id,
+    billingType: "CREDIT_CARD",
+    cycle: newCycle,
+    value: newValueReais,
+    nextDueDate: nextDueDateStr,
+    description: `Transfer ${newPlanType.replace("transfer_", "").toUpperCase()} - ${newCycle === "YEARLY" ? "Anual" : "Mensal"}`,
+    externalReference: userId,
+  };
+
+  if (creditCardToken) {
+    newSubPayload.creditCardToken = creditCardToken;
+  }
+
+  const newSubRes = await fetch(`${ASAAS_BASE_URL}/v3/subscriptions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", access_token: ASAAS_API_KEY },
+    body: JSON.stringify(newSubPayload),
+  });
+
+  const newSubData = await newSubRes.json();
+  if (!newSubRes.ok) {
+    console.error("Failed to create downgraded subscription:", newSubData);
+    return;
+  }
+
+  // 5. Insert new subscription in DB
+  await adminClient.from("subscriptions_asaas").insert({
+    user_id: userId,
+    asaas_customer_id: account.asaas_customer_id,
+    asaas_subscription_id: newSubData.id,
+    plan_type: newPlanType,
+    billing_cycle: newCycle,
+    status: newSubData.status || "ACTIVE",
+    value_cents: newValueCents,
+    next_due_date: newSubData.nextDueDate || nextDueDateStr,
+    metadata: {
+      creditCardToken: newSubData.creditCard?.creditCardToken || creditCardToken,
+      downgraded_from: subscription.plan_type,
+    },
+  });
+
+  // 6. Check if storage exceeds new limit → activate over-limit mode
+  const newLimit = STORAGE_LIMITS[newPlanType] || 0;
+
+  const { data: storageData } = await adminClient.rpc("get_transfer_storage_bytes", {
+    _user_id: userId,
+  });
+  const storageUsed = (storageData as number) || 0;
+
+  if (storageUsed > newLimit) {
+    console.log(`OVER LIMIT: ${storageUsed} bytes used, limit is ${newLimit} bytes. Activating over-limit mode.`);
+
+    const deletionDate = new Date();
+    deletionDate.setDate(deletionDate.getDate() + 30);
+
+    // Set account over-limit flags
+    await adminClient
+      .from("photographer_accounts")
+      .update({
+        account_over_limit: true,
+        over_limit_since: new Date().toISOString(),
+        deletion_scheduled_at: deletionDate.toISOString(),
+      })
+      .eq("user_id", userId);
+
+    // Expire all active Transfer galleries
+    await adminClient
+      .from("galerias")
+      .update({ status: "expired_due_to_plan" })
+      .eq("user_id", userId)
+      .eq("tipo", "entrega")
+      .in("status", ["enviado", "rascunho"]);
+
+    console.log(`All Transfer galleries expired. Deletion scheduled for ${deletionDate.toISOString()}`);
+  } else {
+    console.log(`Storage OK: ${storageUsed} bytes used, limit is ${newLimit} bytes.`);
+  }
+
+  console.log(`Downgrade complete: new subscription ${newSubData.id}, plan ${newPlanType}`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -44,6 +211,17 @@ Deno.serve(async (req) => {
           .eq("asaas_subscription_id", payment.subscription);
 
         console.log("Subscription activated:", payment.subscription);
+
+        // Check for pending downgrade
+        const { data: sub } = await adminClient
+          .from("subscriptions_asaas")
+          .select("*")
+          .eq("asaas_subscription_id", payment.subscription)
+          .single();
+
+        if (sub?.pending_downgrade_plan) {
+          await applyDowngrade(adminClient, sub);
+        }
       }
     }
 
@@ -60,7 +238,6 @@ Deno.serve(async (req) => {
 
     if (event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
       if (payment?.subscription) {
-        // Check if there are other confirmed payments
         console.log("Payment refunded/deleted for subscription:", payment.subscription);
       }
     }
@@ -87,6 +264,17 @@ Deno.serve(async (req) => {
           .eq("asaas_subscription_id", subId);
 
         console.log("Subscription renewed:", subId);
+
+        // Check for pending downgrade on renewal
+        const { data: sub } = await adminClient
+          .from("subscriptions_asaas")
+          .select("*")
+          .eq("asaas_subscription_id", subId)
+          .single();
+
+        if (sub?.pending_downgrade_plan) {
+          await applyDowngrade(adminClient, sub);
+        }
       }
     }
 
