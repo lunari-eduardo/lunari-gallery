@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
-import { usePhotoCredits } from '@/hooks/usePhotoCredits';
-import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -109,10 +107,9 @@ const TRANSFER_COMBO = {
 export default function CreditsCheckout() {
   const navigate = useNavigate();
   const { packages, isLoadingPackages } = useCreditPackages();
-  const { photoCredits } = usePhotoCredits();
-  const { subscription } = useAsaasSubscription();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  const [activeTab, setActiveTab] = useState<'select' | 'transfer'>('select');
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
 
 
   const avulsos = packages?.filter(p => p.sort_order < 10) || [];
@@ -146,12 +143,6 @@ export default function CreditsCheckout() {
 
   const isHighlighted = (pkg: CreditPackage) => pkg.sort_order === 3;
 
-  // Derive active plan label for Transfer pill
-  const activePlanLabel = subscription
-    ? TRANSFER_PLANS.find(p => `transfer_${p.storage.toLowerCase()}` === subscription.plan_type)?.name ||
-      subscription.plan_type
-    : null;
-
   return (
     <div className="min-h-screen bg-background">
       {/* Back button */}
@@ -167,7 +158,7 @@ export default function CreditsCheckout() {
       {/* ═══ HERO ═══ */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/8 via-primary/3 to-transparent" />
-        <div className="relative container max-w-6xl pt-16 pb-40 md:pb-48 text-center space-y-6">
+        <div className="relative container max-w-6xl pt-10 pb-24 md:pb-28 text-center space-y-4">
           <Badge variant="secondary" className="text-xs tracking-wider uppercase">
             {activeTab === 'select' ? 'Créditos' : 'Armazenamento'}
           </Badge>
@@ -181,61 +172,6 @@ export default function CreditsCheckout() {
               ? 'Créditos flexíveis, sem validade e sem mensalidade.'
               : 'Armazenamento seguro com entrega profissional no seu estilo.'}
           </p>
-
-          {/* Product toggle */}
-          <div className="flex justify-center">
-            <div className="inline-flex items-center rounded-full border bg-muted/50 p-1 gap-0.5">
-              <button
-                onClick={() => setActiveTab('select')}
-                className={cn(
-                  'rounded-full px-5 py-2 text-sm font-medium transition-all',
-                  activeTab === 'select'
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Gallery Select
-              </button>
-              <button
-                onClick={() => setActiveTab('transfer')}
-                className={cn(
-                  'rounded-full px-5 py-2 text-sm font-medium transition-all',
-                  activeTab === 'transfer'
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Gallery Transfer
-              </button>
-            </div>
-          </div>
-
-          {/* Balance pill */}
-          <div className="inline-flex flex-col items-center gap-1.5 rounded-2xl border bg-card/80 backdrop-blur-sm px-8 py-4 shadow-sm">
-            {activeTab === 'select' ? (
-              <>
-                <span className="text-sm text-muted-foreground">Créditos disponíveis</span>
-                <span className="text-2xl font-bold text-foreground">
-                  {photoCredits.toLocaleString('pt-BR')}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Seus créditos não expiram e podem ser usados a qualquer momento.
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-sm text-muted-foreground">Plano ativo</span>
-                <span className="text-2xl font-bold text-foreground">
-                  {activePlanLabel ? `Transfer ${activePlanLabel}` : 'Sem plano ativo'}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {activePlanLabel
-                    ? 'Seu plano está ativo e funcionando.'
-                    : 'Escolha um plano para começar a entregar suas fotos.'}
-                </span>
-              </>
-            )}
-          </div>
         </div>
       </section>
 
@@ -245,7 +181,7 @@ export default function CreditsCheckout() {
       {activeTab === 'select' && (
         <>
           {/* SELECT AVULSO CARDS */}
-          <section className="container max-w-6xl -mt-28 md:-mt-32 relative z-[1] pb-20">
+          <section className="container max-w-6xl -mt-12 md:-mt-16 relative z-[1] pb-20">
             {isLoadingPackages ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[...Array(4)].map((_, i) => (
@@ -448,7 +384,7 @@ export default function CreditsCheckout() {
       {activeTab === 'transfer' && (
         <>
           {/* Billing toggle */}
-          <section className="container max-w-6xl -mt-28 md:-mt-32 relative z-[1] pb-8">
+          <section className="container max-w-6xl -mt-12 md:-mt-16 relative z-[1] pb-8">
             <div className="flex justify-center">
               <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} discount="-20%" />
             </div>
