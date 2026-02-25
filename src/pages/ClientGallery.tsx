@@ -1135,9 +1135,9 @@ export default function ClientGallery() {
               </h3>
               <MasonryGrid>
                 {confirmedSelectedPhotos.map((photo, index) => (
-                  <MasonryItem key={photo.id}>
+                  <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                     <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(index)}>
-                      <div className="aspect-square overflow-hidden rounded-lg">
+                      <div className="overflow-hidden rounded-lg w-full h-full">
                         <img 
                           src={photo.thumbnailUrl} 
                           alt={photo.filename}
@@ -1433,7 +1433,7 @@ export default function ClientGallery() {
           ).map((photo) => {
             const originalIndex = localPhotos.findIndex(p => p.id === photo.id);
             return (
-              <MasonryItem key={photo.id}>
+              <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                 <PhotoCard
                   photo={photo}
                   isSelected={photo.isSelected}
