@@ -1,155 +1,71 @@
 
 
-# Controle de Armazenamento para Gallery Transfer
+# Equilibrio Visual e Navegacao Direta na Pagina de Creditos
 
-## Objetivo
+## Problema
 
-Implementar monitoramento de armazenamento utilizado por galerias Transfer, impondo limites baseados no plano ativo do usuario (5GB, 20GB, 50GB, 100GB). Bloquear criacao de novas galerias quando o limite for atingido e sugerir upgrade ou exclusao.
+A pagina `/credits` tem desequilibrio visual entre Select (forte) e Transfer (fraco). A pagina `/credits/checkout` tem hero muito alta, toggle desnecessario entre produtos e falta micro-labels de contexto.
 
-## Arquitetura
+## Mudancas
 
-### Fonte de dados para armazenamento
+### 1. Credits.tsx - Equilibrar peso visual Select vs Transfer
 
-O `file_size` ja e registrado em cada foto na tabela `galeria_fotos`. Para calcular o armazenamento total de Transfer, basta somar os `file_size` de todas as fotos de galerias do tipo `'entrega'` do usuario. Isso sera feito via uma funcao SQL no banco (RPC), garantindo precisao e evitando logica complexa no frontend.
+**Gallery Select - adicionar micro-label:**
+- Abaixo do logo: texto pequeno "Creditos pre-pagos para galerias de selecao"
 
-### Mapeamento de limites por plano
+**Gallery Transfer - aumentar presenca visual (sem plano ativo):**
+- Remover icone HardDrive + label "Armazenamento" (redundante com o logo)
+- Texto principal: "Ative um plano e entregue galerias que geram valor."
+- Micro-label abaixo do logo: "Plano mensal de armazenamento"
+- Botao maior (mesmo `size` do "Comprar Creditos"), texto: "Ver planos de armazenamento"
 
-Os limites de armazenamento serao derivados do `plan_type` na tabela `subscriptions_asaas`:
+**Gallery Transfer - com plano ativo:**
+- Manter barra de progresso e dados atuais (ja tem bom peso)
+- Adicionar micro-label "Plano mensal de armazenamento"
 
-```text
-plan_type              | Limite
------------------------|--------
-transfer_5gb           | 5 GB
-transfer_20gb          | 20 GB
-transfer_50gb          | 50 GB
-transfer_100gb         | 100 GB
-combo_completo         | 20 GB (inclui Transfer 20GB)
-combo_studio_pro       | 0 GB (nao inclui Transfer)
-admin                  | Ilimitado
-sem plano ativo        | 0 GB
-```
+**Secao Combos - melhorar transicao:**
+- Antes do titulo "Cresca com uma estrutura completa", adicionar frase de transicao:
+  "Quer ter o sistema de gestao mais completo integrado as suas galerias?"
 
-Este mapeamento ficara centralizado em um unico arquivo de configuracao (`src/lib/transferPlans.ts`) para facilitar alteracoes futuras.
+**Botoes de navegacao:**
+- "Comprar Creditos" navega para `/credits/checkout?tab=select`
+- "Ver planos de armazenamento" navega para `/credits/checkout?tab=transfer`
 
-### Diagrama de fluxo
+### 2. CreditsCheckout.tsx - Remover toggle, reduzir hero, fixar contexto
 
-```text
-Usuario clica "Nova Galeria Transfer"
-        |
-        v
-  [Hook useTransferStorage]
-  Busca: plano ativo + bytes usados (RPC)
-        |
-        v
-  storageUsed >= storageLimit?
-    SIM --> Bloqueia criacao
-            Mostra alert com opcoes:
-            - "Fazer upgrade" -> /credits/checkout (tab transfer)
-            - "Excluir galerias" -> /dashboard (tab transfer)
-    NAO --> Permite criacao normal
-```
+**Remover toggle Gallery Select / Gallery Transfer:**
+- A pagina abre diretamente no modo correto baseado em `?tab=select` ou `?tab=transfer` (lido via `useSearchParams`)
+- Sem possibilidade de trocar entre produtos na mesma pagina
+- O `activeTab` e derivado da URL, sem `useState`
 
-## Mudancas Tecnicas
+**Reduzir hero drasticamente:**
+- Remover pill de "Creditos disponiveis" / "Plano ativo" (informacao ja esta em `/credits`)
+- Reduzir padding: `pt-10 pb-24` em vez de `pt-16 pb-40`
+- Manter apenas: badge contextual + titulo + subtitulo (3 linhas)
+- Cards sobem mais, ficam mais proximo do topo
 
-### 1. Migration SQL
-
-Nova funcao RPC `get_transfer_storage_bytes` que retorna o total de bytes usados em galerias Transfer do usuario:
-
-```sql
-CREATE OR REPLACE FUNCTION public.get_transfer_storage_bytes(_user_id UUID)
-RETURNS BIGINT
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-  SELECT COALESCE(SUM(gf.file_size), 0)::BIGINT
-  FROM public.galeria_fotos gf
-  INNER JOIN public.galerias g ON g.id = gf.galeria_id
-  WHERE g.user_id = _user_id
-    AND g.tipo = 'entrega'
-    AND g.status NOT IN ('excluida');
-$$;
-```
-
-### 2. Novo arquivo `src/lib/transferPlans.ts`
-
-Centralizacao de toda a logica de limites:
+**Resultado visual da hero:**
 
 ```text
-- TRANSFER_STORAGE_LIMITS: mapa plan_type -> bytes
-- getStorageLimitBytes(planType): retorna limite em bytes
-- formatStorageSize(bytes): formata para exibicao (ex: "12.4 GB de 20 GB")
-- isComboWithTransfer(planType): verifica se combo inclui Transfer
+  [CREDITOS]
+  Organize e profissionalize o processo de selecao de fotos
+  Creditos flexiveis, sem validade e sem mensalidade.
+
+  --- cards logo abaixo ---
 ```
 
-### 3. Novo hook `src/hooks/useTransferStorage.ts`
+### 3. Arquivos modificados
 
-Hook que combina:
-- Plano ativo do usuario (via `subscriptions_asaas`)
-- Armazenamento usado (via RPC `get_transfer_storage_bytes`)
-- Limite calculado (via `transferPlans.ts`)
-
-Retorna:
-```text
-{
-  storageUsedBytes: number
-  storageLimitBytes: number
-  storageUsedPercent: number
-  hasTransferPlan: boolean
-  planName: string | null
-  canCreateTransfer: boolean  // limit > used
-  isAdmin: boolean
-  isLoading: boolean
-}
-```
-
-### 4. Modificar `src/pages/DeliverCreate.tsx`
-
-No inicio do componente, chamar `useTransferStorage()`. Se `canCreateTransfer === false`:
-- Renderizar tela de bloqueio em vez do formulario
-- Exibir barra de progresso mostrando uso atual vs limite
-- Botao "Fazer upgrade" -> navega para `/credits/checkout` com tab Transfer
-- Botao "Gerenciar galerias" -> navega para dashboard aba Transfer
-- Admins nunca sao bloqueados
-
-### 5. Atualizar `src/pages/Credits.tsx`
-
-No bloco do Gallery Transfer, substituir "Sem plano ativo" por informacoes reais:
-- Se tem plano: barra de progresso com uso/limite + nome do plano
-- Se nao tem plano: manter visual atual
-
-### 6. Atualizar `src/pages/Dashboard.tsx`
-
-Adicionar indicador de armazenamento na aba Transfer do dashboard:
-- Texto discreto mostrando "X GB de Y GB usados" 
-
-## Arquivos
-
-| Arquivo | Acao |
+| Arquivo | Mudanca |
 |---|---|
-| `supabase/migrations/XXXX_transfer_storage.sql` | **Nova** - RPC `get_transfer_storage_bytes` |
-| `src/lib/transferPlans.ts` | **Novo** - mapeamento de limites e helpers |
-| `src/hooks/useTransferStorage.ts` | **Novo** - hook de armazenamento |
-| `src/pages/DeliverCreate.tsx` | Gate de verificacao antes de permitir criacao |
-| `src/pages/Credits.tsx` | Exibir uso de armazenamento real no bloco Transfer |
-| `src/pages/Dashboard.tsx` | Indicador de armazenamento na aba Transfer |
+| `src/pages/Credits.tsx` | Micro-labels, equilibrio Transfer, frase de transicao nos combos, botoes com navegacao correta |
+| `src/pages/CreditsCheckout.tsx` | Remover toggle, ler tab da URL, reduzir hero, remover pill de saldo |
 
-## Regras de Negocio
+### 4. Detalhes tecnicos
 
-| Cenario | Comportamento |
-|---|---|
-| Sem plano Transfer | Bloqueado (0 GB) |
-| Plano 5GB, usando 4.8GB | Permitido |
-| Plano 5GB, usando 5.1GB | Bloqueado + sugerir upgrade |
-| Combo completo (inclui 20GB) | 20 GB de limite |
-| Combo Studio Pro (sem Transfer) | Bloqueado (0 GB) |
-| Admin | Sempre permitido, sem limite |
-| Upgrade de 5GB para 20GB | Efeito imediato (novo limite lido do plano ativo) |
-| Downgrade | Nao bloqueia galerias existentes, mas impede novas se acima do limite |
+- `CreditsCheckout` usara `useSearchParams` para ler `tab` da URL
+- Fallback: se `tab` nao fornecido, default para `'select'`
+- `activeTab` passa de `useState` para `const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select'`
+- Botao "Comprar Creditos" em Credits.tsx: `navigate('/credits/checkout?tab=select')`
+- Botao "Ver planos de armazenamento" em Credits.tsx: `navigate('/credits/checkout?tab=transfer')`
 
-## Flexibilidade para mudancas futuras
-
-- Adicionar novo plano: basta incluir uma entrada no mapa `TRANSFER_STORAGE_LIMITS`
-- Alterar limite de combo: basta alterar o valor no mapa
-- Adicionar novo tipo de combo: adicionar ao mapa + `isComboWithTransfer`
-- Migrar para coluna dedicada no banco: substituir a logica do mapa por leitura direta
