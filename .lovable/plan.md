@@ -1,83 +1,74 @@
 
 
-# Masonry Real com CSS Columns
+# Masonry com Ordem Horizontal via JS (Shortest Column Algorithm)
 
 ## Problema
 
-O layout atual usa CSS Grid com `grid-auto-rows: 10px` e row spans calculados. Isso causa distorcao porque as imagens usam `object-cover` com `h-full` dentro de containers de altura fixa (spans), cortando e esticando as fotos. Nao e um masonry real.
+CSS `column-count` preenche de cima para baixo em cada coluna, resultando em ordem vertical (1,2,3 na coluna 1, depois 4,5,6 na coluna 2). O usuario precisa de ordem horizontal (1,2,3,4 na primeira "linha visual", depois 5,6,7,8).
 
 ## Solucao
 
-Substituir completamente por CSS `column-count`. E a abordagem mais simples e nativa para masonry real:
+Implementar masonry via JavaScript no componente `MasonryGrid`. O algoritmo:
 
-- Cada imagem usa `width: 100%` e `height: auto` — proporcao original preservada
-- `column-count` distribui as fotos em colunas verticais automaticamente
-- `break-inside: avoid` impede que uma foto seja dividida entre colunas
-- Zero distorcao, zero corte, zero espacos vazios
+1. Receber as fotos como children com metadata de `photoWidth`/`photoHeight`
+2. Para cada child, calcular o aspect ratio
+3. Inserir na coluna com menor altura acumulada
+4. Renderizar como colunas flexbox lado a lado
 
-A ordenacao visual sera por coluna (cima para baixo, coluna por coluna), nao por linha. Isso e o comportamento padrao e esperado de um masonry real — e exatamente o que plataformas de fotografia profissional usam.
+Isso preserva a ordem horizontal natural porque a foto 1 vai para coluna 1 (menor), foto 2 para coluna 2 (menor), foto 3 para coluna 3, foto 4 para coluna 4, e na sequencia a foto 5 vai para a coluna que tiver menor altura — criando leitura natural da esquerda para direita.
 
 ## Mudancas
 
-### 1. `src/index.css` — CSS Columns
+### 1. `src/components/MasonryGrid.tsx` — Reescrever com logica JS
 
-Substituir o grid por column-count:
+- `MasonryGrid` recebe `items` (array de objetos com `id`, `width`, `height`, `content`) em vez de `children`
+- Usa `useState` + `useEffect` para calcular numero de colunas baseado em window width (2/3/4)
+- Distribui items nas colunas pelo algoritmo de menor altura acumulada
+- Renderiza como `div` flex com colunas independentes
+- Cada coluna e um `div` vertical com gap
 
-```css
-.masonry-grid {
-  column-count: 2;
-  column-gap: 6px;
-}
+Alternativa mais simples (sem breaking change): manter `children` como `ReactElement[]`, extrair `photoWidth`/`photoHeight` das props de cada child (`MasonryItem`), e distribuir os children nas colunas. Isso evita mudar todos os consumidores.
 
-@media (min-width: 640px) {
-  .masonry-grid { column-count: 3; }
-}
+### 2. `src/index.css` — Remover column-count
 
-@media (min-width: 1280px) {
-  .masonry-grid { column-count: 4; }
-}
+Remover `column-count`, `column-gap`, `break-inside: avoid` das classes `.masonry-grid` e `.masonry-item`. Substituir por estilos flexbox simples (ou inline no componente).
 
-.masonry-item {
-  break-inside: avoid;
-  margin-bottom: 6px;
-}
+### 3. Demais arquivos — Nenhuma mudanca
+
+`PhotoCard.tsx`, `DeliverPhotoGrid.tsx`, `ClientGallery.tsx`, `GalleryDetail.tsx`, `GalleryPreview.tsx`, `FinalizedPreviewScreen.tsx` continuam passando `photoWidth`/`photoHeight` ao `MasonryItem` — nenhuma alteracao necessaria.
+
+## Detalhes Tecnicos
+
+```text
+Algoritmo de distribuicao:
+
+Fotos: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+Colunas: 4
+
+Passo 1: Colunas vazias [0, 0, 0, 0]
+  Foto 1 → Col 0 (menor)  → [h1, 0, 0, 0]
+  Foto 2 → Col 1 (menor)  → [h1, h2, 0, 0]
+  Foto 3 → Col 2 (menor)  → [h1, h2, h3, 0]
+  Foto 4 → Col 3 (menor)  → [h1, h2, h3, h4]
+
+Passo 2: Proxima foto vai para coluna mais curta
+  Foto 5 → Col com menor altura acumulada
+  ...
+
+Resultado visual: ordem horizontal preservada
 ```
 
-Remover `display: grid`, `grid-template-columns`, `grid-auto-rows`, `gap`.
+Responsividade via `ResizeObserver` ou `matchMedia`:
+- `< 640px` → 2 colunas
+- `640px - 1279px` → 3 colunas  
+- `>= 1280px` → 4 colunas
 
-### 2. `src/components/MasonryGrid.tsx` — Simplificar MasonryItem
-
-Remover toda a logica de row span (`BASE_SPAN`, `GAP_COMPENSATION`, `useMemo`, `gridRowEnd`). O `MasonryItem` passa a ser apenas um wrapper com `break-inside: avoid` (via classe CSS). Manter as props `photoWidth`/`photoHeight` para nao quebrar chamadas existentes, mas nao usa-las.
-
-### 3. `src/components/PhotoCard.tsx` — Imagem com proporcao natural
-
-Trocar `w-full h-full object-cover` por `w-full h-auto block` na tag `<img>`. Remover `h-full` do container. A imagem renderiza na sua proporcao original.
-
-### 4. `src/components/deliver/DeliverPhotoGrid.tsx` — Mesma correcao
-
-Trocar `w-full h-full object-cover` por `w-full h-auto block` na `<img>`. Remover `h-full` do container.
-
-### 5. `src/pages/ClientGallery.tsx` — Corrigir grid de fotos confirmadas
-
-Na secao de fotos confirmadas (linha ~1140), trocar `w-full h-full` por classes compatíveis e a `<img>` para `w-full h-auto`.
-
-### 6. `src/components/FinalizedPreviewScreen.tsx` — Ja usa `h-auto`
-
-Nenhuma mudanca necessaria — ja usa `w-full h-auto object-cover`.
-
-## Performance
-
-- `loading="lazy"` ja presente nas galerias Deliver; adicionar no PhotoCard
-- Skeleton/placeholder ja implementado no PhotoCard (pulse animation)
-- Fade-in ja implementado no PhotoCard (opacity transition on load)
+Quando o numero de colunas muda, redistribui todas as fotos.
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| `src/index.css` | Trocar grid por column-count |
-| `src/components/MasonryGrid.tsx` | Remover logica de row span |
-| `src/components/PhotoCard.tsx` | `h-auto` na imagem, remover `h-full` |
-| `src/components/deliver/DeliverPhotoGrid.tsx` | `h-auto` na imagem, remover `h-full` |
-| `src/pages/ClientGallery.tsx` | Corrigir container de fotos confirmadas |
+| `src/components/MasonryGrid.tsx` | Reescrever com algoritmo JS de menor coluna |
+| `src/index.css` | Remover column-count, usar flex para colunas |
 
