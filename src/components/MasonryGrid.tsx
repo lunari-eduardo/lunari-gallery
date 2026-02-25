@@ -1,4 +1,4 @@
-import { ReactNode, useMemo } from 'react';
+import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 interface MasonryGridProps {
@@ -23,21 +23,9 @@ interface MasonryItemProps {
   photoHeight?: number;
 }
 
-const BASE_SPAN = 25;
-const GAP_COMPENSATION = 1;
-
-export function MasonryItem({ children, className, photoWidth, photoHeight }: MasonryItemProps) {
-  const rowSpan = useMemo(() => {
-    if (!photoWidth || !photoHeight) return BASE_SPAN + GAP_COMPENSATION;
-    const aspectRatio = photoWidth / photoHeight;
-    return Math.round(BASE_SPAN / aspectRatio) + GAP_COMPENSATION;
-  }, [photoWidth, photoHeight]);
-
+export function MasonryItem({ children, className }: MasonryItemProps) {
   return (
-    <div
-      className={cn('masonry-item overflow-hidden', className)}
-      style={{ gridRowEnd: `span ${rowSpan}` }}
-    >
+    <div className={cn('masonry-item overflow-hidden', className)}>
       {children}
     </div>
   );

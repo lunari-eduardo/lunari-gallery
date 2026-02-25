@@ -37,12 +37,12 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: 
 
           return (
             <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
-              <div className="group relative cursor-pointer overflow-hidden w-full h-full">
+              <div className="group relative cursor-pointer overflow-hidden w-full">
                 <img
                   src={url}
                   alt={photo.originalFilename}
                   loading="lazy"
-                  className="w-full h-full object-cover block transition-transform duration-700 group-hover:scale-[1.01]"
+                  className="w-full h-auto block transition-transform duration-700 group-hover:scale-[1.01]"
                   onClick={() => onPhotoClick(index)}
                 />
                 {/* Subtle gradient overlay on hover */}
