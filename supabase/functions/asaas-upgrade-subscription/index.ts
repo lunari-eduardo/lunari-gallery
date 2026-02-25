@@ -288,6 +288,37 @@ Deno.serve(async (req) => {
 
     console.log("Upgrade complete:", newSubData.id);
 
+    // 8. Clear over-limit mode if active (upgrade resolves it)
+    await adminClient
+      .from("photographer_accounts")
+      .update({
+        account_over_limit: false,
+        over_limit_since: null,
+        deletion_scheduled_at: null,
+      })
+      .eq("user_id", userId);
+
+    // 9. Reactivate galleries expired due to plan limit (that fit in new limit)
+    const newStorageLimit = {
+      transfer_5gb: 5 * 1024 * 1024 * 1024,
+      transfer_20gb: 20 * 1024 * 1024 * 1024,
+      transfer_50gb: 50 * 1024 * 1024 * 1024,
+      transfer_100gb: 100 * 1024 * 1024 * 1024,
+      combo_completo: 20 * 1024 * 1024 * 1024,
+    }[newPlanType] || 0;
+
+    if (newStorageLimit > 0) {
+      // Reactivate all expired_due_to_plan galleries since user upgraded
+      await adminClient
+        .from("galerias")
+        .update({ status: "enviado" })
+        .eq("user_id", userId)
+        .eq("tipo", "entrega")
+        .eq("status", "expired_due_to_plan");
+
+      console.log("Reactivated expired_due_to_plan galleries for user:", userId);
+    }
+
     return new Response(
       JSON.stringify({
         newSubscriptionId: newSubData.id,

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive } from 'lucide-react';
+import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -37,14 +37,29 @@ import gallerySelectLogo from '@/assets/gallery-select-logo.png';
 import galleryTransferLogo from '@/assets/gallery-transfer-logo.png';
 
 function TransferStorageIndicator() {
-  const { hasTransferPlan, storageUsedBytes, storageLimitBytes, planName, isAdmin, isLoading } = useTransferStorage();
+  const { hasTransferPlan, storageUsedBytes, storageLimitBytes, planName, isAdmin, isLoading, isOverLimit, daysUntilDeletion } = useTransferStorage();
   if (isLoading || isAdmin || !hasTransferPlan) return null;
   return (
-    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-      <HardDrive className="h-3.5 w-3.5" />
-      {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
-      {planName && <span>· {planName}</span>}
-    </p>
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+        <HardDrive className="h-3.5 w-3.5" />
+        {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
+        {planName && <span>· {planName}</span>}
+      </p>
+      {isOverLimit && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2.5">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-destructive">Excedente de armazenamento</p>
+            {daysUntilDeletion !== null && (
+              <p className="text-xs text-destructive/80">
+                Exclusão automática em {daysUntilDeletion} {daysUntilDeletion === 1 ? 'dia' : 'dias'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -81,6 +96,7 @@ function mapSupabaseStatus(status: string): GalleryStatus {
       return 'selection_completed';
     case 'expirado':
     case 'expirada':
+    case 'expired_due_to_plan':
       return 'expired';
     default:
       return 'created';
