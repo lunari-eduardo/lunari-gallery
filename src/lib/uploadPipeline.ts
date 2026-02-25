@@ -366,6 +366,7 @@ export class UploadPipeline {
     formData.append('width', compressed.width.toString());
     formData.append('height', compressed.height.toString());
     formData.append('uploadKey', uploadKey);
+    formData.append('originalFileSize', item.file.size.toString());
 
     if (this.opts.skipCredits) {
       formData.append('skipCredits', 'true');

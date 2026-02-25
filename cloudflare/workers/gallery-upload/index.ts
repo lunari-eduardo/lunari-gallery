@@ -103,6 +103,8 @@ async function handleUpload(
     const originalFilename = formData.get('originalFilename') as string;
     const width = parseInt(formData.get('width') as string) || 0;
     const height = parseInt(formData.get('height') as string) || 0;
+    const originalFileSizeRaw = formData.get('originalFileSize') as string | null;
+    const originalFileSize = originalFileSizeRaw ? parseInt(originalFileSizeRaw, 10) : null;
 
     if (!file || !galleryId) {
       return new Response(
@@ -143,6 +145,7 @@ async function handleUpload(
       preview_path: previewPath,
       thumb_path: thumbPath,
       file_size: fileBuffer.byteLength,
+      original_file_size: originalFileSize,
       mime_type: file.type || 'image/jpeg',
       width,
       height,
