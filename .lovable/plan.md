@@ -1,126 +1,75 @@
 
 
-# Gerenciamento de Planos Transfer — Ajustes de UX e Regra de Upgrade Prorata
+# Correção: Armazenamento Transfer contabilizando preview em vez de original
 
-## Escopo
+## Diagnóstico
 
-Duas frentes: (1) ajustes visuais na tela de gerenciamento de assinatura e (2) implementacao do fluxo de upgrade com cobranca proporcional.
+A função RPC `get_transfer_storage_bytes` soma `galeria_fotos.file_size`. Porém, o campo `file_size` armazena o tamanho do **preview comprimido** (enviado via `POST /upload`), não do arquivo original de alta resolução (enviado via `POST /upload-original`).
 
-## Mudancas
+O Worker `/upload-original` **não cria registro no banco** — apenas salva no R2 e retorna o `storageKey`. O Worker `/upload` é quem insere o registro em `galeria_fotos`, usando `fileBuffer.byteLength` do preview comprimido (~200KB-500KB por foto em vez de ~1MB-3MB do original).
 
-### 1. `src/pages/SubscriptionManagement.tsx` — Ajustes de UX
+Por isso 140MB reais aparecem como 29MB: está somando apenas os previews.
 
-**1.1 Exibir tipo de ciclo abaixo do nome do plano:**
-Abaixo do nome do plano (ex: "Transfer 5gb"), adicionar texto:
-- Se `billing_cycle === 'MONTHLY'` → "Plano mensal"
-- Se `billing_cycle === 'YEARLY'` → "Plano anual (20% off)"
+## Solução
 
-**1.2 Microtexto abaixo dos botoes de acao:**
-Adicionar `<p>` com texto: "Alteracoes de plano sao ajustadas proporcionalmente ao periodo atual." abaixo do grupo de botoes.
+Adicionar coluna `original_file_size` à tabela `galeria_fotos` e populá-la durante o upload. Atualizar a RPC para usar esse valor nas galerias Transfer.
 
-**1.3 Logica de navegacao para upgrade:**
-O botao "Upgrade / Downgrade" passa a navegar para `/credits/checkout?tab=transfer&upgrade=true` incluindo dados da assinatura atual via query params ou state (plan_type, value_cents, billing_cycle, next_due_date, created_at).
+## Mudanças
 
-### 2. `src/pages/CreditsCheckout.tsx` — Banner de upgrade e calculo prorata
+### 1. Nova migration SQL
 
-**2.1 Detectar modo upgrade:**
-Ler `searchParams.get('upgrade')` e, se presente, buscar a assinatura ativa via `useAsaasSubscription`.
+```sql
+-- Adicionar coluna para tamanho do original
+ALTER TABLE public.galeria_fotos 
+  ADD COLUMN IF NOT EXISTS original_file_size BIGINT;
 
-**2.2 Banner no topo da secao Transfer:**
-Quando em modo upgrade, exibir bloco informativo:
-```
-Seu plano atual: Transfer X GB
-Voce pagara apenas a diferenca proporcional ao periodo restante.
-```
-
-**2.3 Calculo prorata nos cards:**
-Para cada plano Transfer, calcular e exibir o valor proporcional:
-- `difference = newPriceCents - currentPriceCents`
-- `daysRemaining` = diferenca em dias entre `next_due_date` e hoje
-- `totalCycleDays` = 30 (mensal) ou 365 (anual)
-- `prorataValue = difference * (daysRemaining / totalCycleDays)`
-- Exibir valor prorata abaixo do preco normal: "Pagar agora: R$ X,XX (proporcional)"
-- Desabilitar planos inferiores ou iguais ao atual (ou permitir downgrade com logica separada conforme decisao futura)
-
-**2.4 Botao de acao muda para "Fazer upgrade":**
-Em modo upgrade, o botao do card muda de "Assinar" para "Fazer upgrade" e navega para a pagina de pagamento com state adicional: `isUpgrade: true`, `prorataValueCents`, `currentSubscriptionId`.
-
-### 3. `src/pages/CreditsPayment.tsx` — Processar upgrade
-
-**3.1 Novo tipo de state:**
-Adicionar variante `UpgradePayment` com campos `isUpgrade`, `prorataValueCents`, `currentSubscriptionId`, alem dos campos de `SubscriptionPayment`.
-
-**3.2 Order Summary ajustado:**
-Quando `isUpgrade`, mostrar:
-- Plano anterior → Plano novo
-- Valor proporcional a cobrar
-- Texto explicativo
-
-**3.3 Cobranca:**
-Cobrar `prorataValueCents` (nao o valor cheio). Apos pagamento confirmado, o backend deve cancelar a assinatura antiga e criar a nova.
-
-### 4. Nova Edge Function `supabase/functions/asaas-upgrade-subscription/index.ts`
-
-Responsabilidades:
-1. Receber: `currentSubscriptionId`, `newPlanType`, `billingCycle`, `creditCard`, `creditCardHolderInfo`, `remoteIp`
-2. Buscar assinatura atual no banco
-3. Calcular prorata:
-   - `difference = newPlanPrice - currentPlanPrice`
-   - `daysRemaining = daysBetween(today, next_due_date)`
-   - `totalCycleDays = billing_cycle === 'MONTHLY' ? 30 : 365`
-   - `prorataValue = difference * (daysRemaining / totalCycleDays)`
-4. Cobrar `prorataValue` como pagamento avulso no Asaas (`/v3/payments`)
-5. Se pagamento confirmado:
-   - Cancelar assinatura antiga no Asaas (`DELETE /v3/subscriptions/{id}`)
-   - Marcar assinatura antiga como CANCELLED no banco
-   - Criar nova assinatura no Asaas com cartao
-   - Inserir nova assinatura no banco com status ACTIVE
-6. Retornar resultado
-
-### 5. `src/hooks/useAsaasSubscription.ts` — Adicionar mutation de upgrade
-
-Adicionar `upgradeSubscription` mutation que chama a nova edge function `asaas-upgrade-subscription`.
-
-### 6. `src/lib/transferPlans.ts` — Adicionar precos por plano
-
-Adicionar mapa `TRANSFER_PLAN_PRICES` com precos mensais e anuais em centavos para cada plan_type, permitindo calculo de prorata no frontend:
-
-```typescript
-export const TRANSFER_PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
-  transfer_5gb: { monthly: 1290, yearly: 12384 },
-  transfer_20gb: { monthly: 2490, yearly: 23904 },
-  transfer_50gb: { monthly: 3490, yearly: 33504 },
-  transfer_100gb: { monthly: 5990, yearly: 57504 },
-};
+-- Atualizar RPC para usar original_file_size em galerias Transfer
+CREATE OR REPLACE FUNCTION public.get_transfer_storage_bytes(_user_id UUID)
+RETURNS BIGINT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT COALESCE(SUM(
+    CASE 
+      WHEN gf.original_file_size IS NOT NULL THEN gf.original_file_size
+      ELSE gf.file_size
+    END
+  ), 0)::BIGINT
+  FROM public.galeria_fotos gf
+  INNER JOIN public.galerias g ON g.id = gf.galeria_id
+  WHERE g.user_id = _user_id
+    AND g.tipo = 'entrega'
+    AND g.status NOT IN ('excluida');
+$$;
 ```
 
-## Detalhes Tecnicos — Calculo Prorata
+A RPC usa `original_file_size` quando disponível, com fallback para `file_size` (compatibilidade com fotos já existentes).
 
-```text
-Exemplo:
-  Plano atual: Transfer 5GB mensal (R$ 12,90/mes)
-  Novo plano: Transfer 20GB mensal (R$ 24,90/mes)
-  Dia da assinatura: 25/fev
-  Proxima cobranca: 25/mar
-  Hoje: 25/fev (0 dias usados, 28 dias restantes)
+### 2. `cloudflare/workers/gallery-upload/index.ts` — Gravar `original_file_size` no DB
 
-  difference = 2490 - 1290 = 1200 centavos
-  daysRemaining = 28
-  totalCycleDays = 30
-  prorataValue = 1200 * (28/30) = 1120 centavos = R$ 11,20
+No handler `handleUpload`, quando receber o campo `originalFileSize` no FormData (enviado pelo pipeline), incluí-lo no registro do banco:
+- Ler `originalFileSize` do FormData
+- Adicionar `original_file_size: parseInt(originalFileSize)` ao `photoRecord`
 
-  Cobrar R$ 11,20 agora.
-  Nova assinatura: R$ 24,90/mes a partir do proximo ciclo.
-```
+No handler `handleUploadOriginal`, retornar `fileSize` na resposta (já faz isso).
+
+### 3. `src/lib/uploadPipeline.ts` — Enviar tamanho do original no upload do preview
+
+No método `uploadPreview`, adicionar ao FormData o tamanho original do arquivo:
+- `formData.append('originalFileSize', item.file.size.toString())`
+
+Isso usa `item.file.size` que é o `File` original selecionado pelo usuário, antes da compressão.
+
+### 4. Backfill de dados existentes (opcional, via SQL manual)
+
+Para galerias Transfer já existentes, os originais estão no R2 mas sem `original_file_size` no banco. A RPC fará fallback para `file_size` nesses casos. Para corrigir dados históricos, seria necessário um script que consulte os tamanhos dos objetos no R2 — isso pode ser feito manualmente depois.
 
 ## Arquivos
 
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---|---|
-| `src/pages/SubscriptionManagement.tsx` | Ciclo do plano, microtexto, navegacao upgrade |
-| `src/pages/CreditsCheckout.tsx` | Banner upgrade, calculo prorata, botao "Fazer upgrade" |
-| `src/pages/CreditsPayment.tsx` | State de upgrade, order summary, cobranca prorata |
-| `src/hooks/useAsaasSubscription.ts` | Mutation upgradeSubscription |
-| `src/lib/transferPlans.ts` | Mapa de precos por plano |
-| `supabase/functions/asaas-upgrade-subscription/index.ts` | Nova edge function para upgrade prorata |
+| Nova migration SQL | Adicionar coluna `original_file_size` e atualizar RPC |
+| `cloudflare/workers/gallery-upload/index.ts` | Ler e gravar `originalFileSize` no registro |
+| `src/lib/uploadPipeline.ts` | Enviar `item.file.size` como `originalFileSize` no FormData |
 
