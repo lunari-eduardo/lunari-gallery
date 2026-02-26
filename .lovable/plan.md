@@ -1,204 +1,97 @@
 
 
-# Downgrade de Planos Transfer — Sistema Completo com Modo Excedente
+# Correções: Upgrade sem Desconto, Cancelamento 404 e UX Pós-Cancelamento
 
-## Escopo
+## Problemas Identificados
 
-Implementar o fluxo completo de downgrade de planos Transfer, incluindo: agendamento para o proximo ciclo, modo excedente com expiracao automatica de galerias, reativacao inteligente, aviso com checkbox obrigatorio, contador regressivo de exclusao, e job automatico de limpeza apos 30 dias.
+### 1. Upgrade sem desconto proporcional ao acessar diretamente
+A página `CreditsCheckout.tsx` só calcula prorata quando `isUpgradeMode = true`, que depende do parâmetro URL `upgrade=true`. Ao acessar `/credits/checkout?tab=transfer` diretamente (sem o botão "Upgrade"), os parâmetros `current_plan`, `billing_cycle`, `next_due_date` e `subscription_id` não estão na URL, então o sistema não sabe que existe plano ativo.
 
-## Visao Geral da Arquitetura
+**Solução**: Usar o hook `useAsaasSubscription` diretamente no `CreditsCheckout` para detectar automaticamente se existe assinatura ativa, sem depender de parâmetros de URL. Se `subscription` existir, entrar automaticamente em modo upgrade com os dados reais.
 
-```text
-┌──────────────────────────────────────────────────────┐
-│                  FLUXO DE DOWNGRADE                   │
-│                                                      │
-│  1. Usuario solicita downgrade no checkout           │
-│     ↓                                                │
-│  2. Aviso com checkbox se storage > novo limite      │
-│     ↓                                                │
-│  3. Agendar downgrade (salva no banco)               │
-│     ↓                                                │
-│  4. No dia da renovacao (webhook asaas):             │
-│     - Aplica novo plano                              │
-│     - Se storage > limite → MODO EXCEDENTE           │
-│       - Expira todas galerias Transfer               │
-│       - Define deletion_scheduled_at = now + 30d     │
-│     ↓                                                │
-│  5. Durante 30 dias: usuario pode excluir/reativar   │
-│     ↓                                                │
-│  6. Apos 30 dias: CRON job exclui galerias           │
-└──────────────────────────────────────────────────────┘
-```
+### 2. Cancelamento retorna 404
+O erro mostra que o POST para `asaas-cancel-subscription` retorna 404 — a Edge Function não está deployed. Precisa ser redeployed.
 
-## Mudancas
+Adicionalmente, há um bug de parâmetro: `SubscriptionManagement.tsx` chama `cancelSubscription(subscription.asaas_subscription_id)` mas a Edge Function busca por `eq("id", subscriptionId)` (campo local do banco). Deveria receber o `subscription.id` (ID local) em vez do `asaas_subscription_id`.
 
-### 1. Nova migration SQL — Infraestrutura de downgrade e modo excedente
+### 3. UX pós-cancelamento ausente
+- Após cancelar, o código navega para `/credits` imediatamente, sem feedback.
+- A query do hook filtra apenas `ACTIVE, PENDING, OVERDUE`, então assinaturas `CANCELLED` desaparecem da UI.
+- Falta: mostrar que o plano foi cancelado mas está vigente até `next_due_date`, com opção de desfazer o cancelamento.
+- Falta: quando não há plano ativo nem período vigente, mostrar mensagem motivacional + histórico.
 
-**Tabela `subscriptions_asaas`** — Novos campos:
-- `pending_downgrade_plan` TEXT — plano agendado para downgrade (null = sem downgrade pendente)
-- `pending_downgrade_cycle` TEXT — ciclo do downgrade (MONTHLY/YEARLY)
+## Mudanças
 
-**Tabela `photographer_accounts`** — Novos campos:
-- `account_over_limit` BOOLEAN DEFAULT false
-- `over_limit_since` TIMESTAMPTZ
-- `deletion_scheduled_at` TIMESTAMPTZ
+### 1. `src/pages/CreditsCheckout.tsx` — Auto-detectar assinatura ativa
 
-**Tabela `galerias`** — Novo status:
-- Atualizar constraint `galerias_status_check` para incluir `expired_due_to_plan`
+Em vez de depender de `searchParams` para saber o plano atual, importar `useAsaasSubscription` e usar `subscription` diretamente:
+- Se `subscription` existir E `activeTab === 'transfer'`, ativar modo upgrade automaticamente
+- Manter os parâmetros de URL como fallback (para manter compatibilidade com o botão existente)
+- Calcular `currentPlanType`, `currentBillingCycle`, `nextDueDate`, `currentSubscriptionId` a partir de `subscription` quando disponível
 
-### 2. `src/pages/CreditsCheckout.tsx` — Suportar downgrade
+### 2. `src/hooks/useAsaasSubscription.ts` — Query inclui CANCELLED recente
 
-Atualmente planos inferiores ficam com `opacity-50 pointer-events-none`. Mudar para:
+Alterar a query para incluir assinaturas `CANCELLED` que ainda estão no período vigente (`next_due_date > now()`). Adicionar lógica de prioridade: `ACTIVE` primeiro, depois `CANCELLED` com período vigente.
 
-**2.1** Planos inferiores ficam clicaveis (remover `pointer-events-none`)
-**2.2** Botao muda para "Agendar downgrade"
-**2.3** Ao clicar, se `storageUsedBytes > novoLimiteBytes`:
-  - Abrir dialog com aviso obrigatorio:
-    ```
-    Seu novo plano permite X GB.
-    Voce possui Y GB armazenados.
-    As galerias excedentes serao expiradas.
-    Se nao forem excluidas manualmente, serao removidas permanentemente em 30 dias.
-    ```
-  - Checkbox obrigatorio: "Entendo que galerias acima do limite poderao ser excluidas apos 30 dias."
-  - Botao "Confirmar downgrade" desabilitado ate marcar checkbox
-**2.4** Se `storageUsedBytes <= novoLimiteBytes`: fluxo direto sem aviso especial
-**2.5** Chamar nova edge function `asaas-downgrade-subscription` em vez de navegar para pagamento (downgrade nao tem cobranca)
+Corrigir: a query deve buscar status `CANCELLED` também, e retornar a mais relevante.
 
-Precisa importar `useTransferStorage` para obter `storageUsedBytes`.
+### 3. `src/pages/SubscriptionManagement.tsx` — Corrigir chamada de cancelamento e UX
 
-### 3. Nova Edge Function `supabase/functions/asaas-downgrade-subscription/index.ts`
+**Bug**: Mudar `cancelSubscription(subscription.asaas_subscription_id)` para `cancelSubscription(subscription.id)`.
 
-Responsabilidades:
-1. Receber: `currentSubscriptionId`, `newPlanType`, `newBillingCycle`
-2. Validar que novo plano e inferior ao atual
-3. Salvar `pending_downgrade_plan` e `pending_downgrade_cycle` na assinatura atual
-4. Retornar confirmacao de agendamento
-5. **NAO** cancela nem cria nova assinatura agora — isso acontece na renovacao
+**UX pós-cancelamento**: 
+- Não navegar para `/credits` após cancelar — permanecer na página
+- Quando `status === 'CANCELLED'` e `next_due_date` está no futuro: mostrar card com "Assinatura cancelada — acesso vigente até [data]" + botão "Desfazer cancelamento"
+- Quando `status === 'CANCELLED'` e `next_due_date` já passou (ou sem assinatura): mostrar mensagem "Ative um plano e faça entregas que geram valor à sua fotografia" + botão para ver planos
+- Esconder botões de "Cancelar assinatura" e "Upgrade/Downgrade" quando já está cancelada
 
-### 4. `supabase/functions/asaas-webhook/index.ts` — Aplicar downgrade na renovacao
+### 4. `supabase/functions/asaas-cancel-subscription/index.ts` — Manter período vigente
 
-No evento `PAYMENT_CONFIRMED` ou `SUBSCRIPTION_RENEWED`:
-1. Verificar se a assinatura tem `pending_downgrade_plan`
-2. Se sim:
-   a. Cancelar assinatura atual no Asaas
-   b. Criar nova assinatura no Asaas com plano inferior
-   c. Marcar assinatura antiga como CANCELLED
-   d. Inserir nova assinatura no banco
-   e. Limpar `pending_downgrade_plan`
-   f. Verificar se `storage_total > novo_limite`:
-      - Se SIM: marcar `account_over_limit = true`, `over_limit_since = now()`, `deletion_scheduled_at = now + 30d`
-      - Atualizar todas galerias Transfer ativas → `status = 'expired_due_to_plan'`
-      - Definir `prazo_selecao` como `deletion_scheduled_at` para controle
+Ao cancelar, em vez de apenas marcar `status: CANCELLED`, preservar `next_due_date` para que o sistema saiba até quando o acesso é válido. A edge function já faz isso (apenas muda status), mas precisa ser redeployed.
 
-### 5. `src/pages/SubscriptionManagement.tsx` — Exibir downgrade pendente
+### 5. Nova funcionalidade: Desfazer cancelamento
 
-Se `subscription.pending_downgrade_plan` estiver preenchido:
-- Exibir badge: "Downgrade agendado para proximo ciclo"
-- Exibir: "Seu plano sera alterado para [nome] no proximo ciclo de cobranca."
-- Botao "Cancelar downgrade" que limpa o campo no banco
-
-### 6. `src/hooks/useTransferStorage.ts` — Adicionar dados de excedente
-
-Buscar tambem de `photographer_accounts`:
-- `account_over_limit`
-- `over_limit_since`
-- `deletion_scheduled_at`
-
-Retornar: `isOverLimit`, `deletionScheduledAt`, `daysUntilDeletion`
-
-### 7. `src/pages/Dashboard.tsx` — Badge de excedente e contador regressivo
-
-Quando `isOverLimit === true`:
-- Exibir badge fixo acima da lista de galerias:
-  ```
-  ⚠ Excedente de armazenamento
-  Exclusao automatica em XX dias
-  ```
-- Contador regressivo baseado em `deletion_scheduled_at`
-
-### 8. `src/hooks/useSupabaseGalleries.ts` — Suportar novo status
-
-Incluir `expired_due_to_plan` no mapeamento de status para exibicao no Dashboard. Galerias com esse status aparecem na aba Transfer com badge "Expirada (limite excedido)".
-
-### 9. Reativacao inteligente — `DeliverDetail.tsx` ou componente de galeria
-
-Para galerias com `status = 'expired_due_to_plan'`:
-- Exibir botao "Reativar galeria"
-- Antes de reativar, calcular: `storageActive + gallerySize <= storageLimit`
-- Se verdadeiro: alterar status para `enviado`, atualizar storage
-- Se falso: mostrar mensagem "Reativar esta galeria ultrapassara o limite do seu plano."
-
-### 10. Upgrade cancela modo excedente
-
-No hook `useAsaasSubscription` (ja existente) e na edge function `asaas-upgrade-subscription`:
-- Apos upgrade com sucesso, limpar: `account_over_limit = false`, `deletion_scheduled_at = null`, `over_limit_since = null`
-- Reativar galerias `expired_due_to_plan` que cabem no novo limite
-
-### 11. CRON Job — Exclusao automatica apos 30 dias
-
-Nova edge function `transfer-cleanup-expired` executada via `pg_cron` diariamente:
-1. Selecionar contas com `deletion_scheduled_at <= now()` e `account_over_limit = true`
-2. Para cada conta:
-   a. Selecionar galerias com `status = 'expired_due_to_plan'`, ordenar por `created_at ASC` (mais antigas primeiro)
-   b. Para cada galeria que excede o limite:
-      - Chamar logica de exclusao (mesma da `delete-photos`)
-      - Remover galeria do banco
-   c. Atualizar `account_over_limit = false`, limpar `deletion_scheduled_at`
-
-### 12. `supabase/config.toml` — Registrar novas funcoes
-
-Adicionar:
-```toml
-[functions.asaas-downgrade-subscription]
-verify_jwt = false
-
-[functions.transfer-cleanup-expired]
-verify_jwt = false
-```
+Adicionar mutation `reactivateSubscription` no hook que:
+- Chama a API Asaas para reativar a assinatura (se suportado) ou apenas atualiza o status local para `ACTIVE`
+- Atualiza o banco de `CANCELLED` para `ACTIVE`
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| Nova migration SQL | Campos de downgrade, excedente, novo status |
-| `src/pages/CreditsCheckout.tsx` | Downgrade clicavel, dialog com checkbox, chamar edge function |
-| `supabase/functions/asaas-downgrade-subscription/index.ts` | Nova — agendar downgrade |
-| `supabase/functions/asaas-webhook/index.ts` | Aplicar downgrade na renovacao, modo excedente |
-| `supabase/functions/asaas-upgrade-subscription/index.ts` | Limpar modo excedente no upgrade |
-| `supabase/functions/transfer-cleanup-expired/index.ts` | Nova — CRON de exclusao apos 30 dias |
-| `src/pages/SubscriptionManagement.tsx` | Exibir/cancelar downgrade pendente |
-| `src/hooks/useTransferStorage.ts` | Retornar dados de excedente |
-| `src/hooks/useAsaasSubscription.ts` | Nova mutation downgradeSubscription |
-| `src/pages/Dashboard.tsx` | Badge de excedente com contador |
-| `src/hooks/useSupabaseGalleries.ts` | Suportar status expired_due_to_plan |
-| `supabase/config.toml` | Registrar novas funcoes |
+| `src/pages/CreditsCheckout.tsx` | Auto-detectar assinatura ativa via hook, sem depender de URL params |
+| `src/hooks/useAsaasSubscription.ts` | Incluir CANCELLED com período vigente na query; adicionar mutation de reativação |
+| `src/pages/SubscriptionManagement.tsx` | Corrigir param do cancel; UX para cancelada vigente; estado sem plano |
+| `supabase/functions/asaas-cancel-subscription/index.ts` | Redeploy (sem mudanças de código) |
 
 ## Detalhes Tecnicos
 
-**Calculo de excedente:**
+**Auto-detecção de assinatura no Checkout:**
 ```text
-storage_total = SUM(original_file_size) de todas galerias Transfer
-storage_limit = limite do novo plano
-is_over = storage_total > storage_limit
+// Prioridade: subscription do hook > URL params
+const sub = subscription; // do useAsaasSubscription()
+const hasActiveSub = !!sub && activeTab === 'transfer';
 
-Se is_over:
-  account_over_limit = true
-  deletion_scheduled_at = now() + 30 dias
-  Todas galerias Transfer ativas → expired_due_to_plan
+const effectiveUpgradeMode = hasActiveSub || isUpgradeMode;
+const effectiveCurrentPlan = sub?.plan_type || currentPlanType;
+const effectiveBillingCycle = sub?.billing_cycle || currentBillingCycle;
+const effectiveNextDueDate = sub?.next_due_date || nextDueDate;
+const effectiveSubscriptionId = sub?.id || currentSubscriptionId;
 ```
 
-**Reativacao:**
+**Query expandida no hook:**
 ```text
-storage_active = SUM(original_file_size) de galerias com status != expired_due_to_plan
-gallery_size = SUM(original_file_size) da galeria a reativar
-pode_reativar = (storage_active + gallery_size) <= storage_limit
+// Buscar ACTIVE/PENDING/OVERDUE primeiro, senão CANCELLED com período vigente
+.in('status', ['ACTIVE', 'PENDING', 'OVERDUE', 'CANCELLED'])
+// Ordenar: ACTIVE primeiro, CANCELLED por último
+// Filtrar CANCELLED sem período vigente no código
 ```
 
-**Prioridade de implementacao sugerida (pode ser dividido em etapas):**
-1. Migration + Edge function de agendamento + UX no checkout (itens 1-3)
-2. Webhook de aplicacao + SubscriptionManagement (itens 4-5)
-3. Modo excedente no frontend + reativacao (itens 6-9)
-4. Upgrade cancela excedente (item 10)
-5. CRON job de limpeza (item 11)
+**Estados da página de gerenciamento:**
+```text
+1. Loading → Skeleton
+2. subscription.status = ACTIVE → Card completo com ações
+3. subscription.status = CANCELLED + next_due_date > now() → Card com aviso amarelo "Cancelada, vigente até X" + botão desfazer
+4. subscription.status = CANCELLED + next_due_date <= now() (ou !subscription) → Mensagem motivacional + histórico
+```
 
