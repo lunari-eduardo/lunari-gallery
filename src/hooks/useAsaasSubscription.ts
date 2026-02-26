@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { PLAN_FAMILIES, PLAN_INCLUDES } from '@/lib/transferPlans';
 
 export interface AsaasSubscription {
   id: string;
@@ -100,29 +101,44 @@ interface UpgradeSubscriptionParams {
   remoteIp: string;
 }
 
+/* ─── helpers ─── */
+
+function getSubFamily(planType: string): string {
+  return PLAN_FAMILIES[planType] ?? 'unknown';
+}
+
+function subHasTransfer(planType: string): boolean {
+  return PLAN_INCLUDES[planType]?.transfer ?? false;
+}
+
+function subHasStudio(planType: string): boolean {
+  return PLAN_INCLUDES[planType]?.studio ?? false;
+}
+
 export function useAsaasSubscription() {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
 
-  const { data: subscription, isLoading } = useQuery({
+  // Fetch ALL active/relevant subscriptions (user can have Studio + Transfer simultaneously)
+  const { data: allSubscriptions = [], isLoading } = useQuery({
     queryKey: ['asaas-subscription', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      // Fetch ACTIVE/PENDING/OVERDUE first
+    queryFn: async (): Promise<AsaasSubscription[]> => {
+      if (!user?.id) return [];
+
+      // Fetch ACTIVE/PENDING/OVERDUE
       const { data: activeSubs, error: activeError } = await supabase
         .from('subscriptions_asaas' as any)
         .select('*')
         .eq('user_id', user.id)
         .in('status', ['ACTIVE', 'PENDING', 'OVERDUE'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (activeError) {
-        console.error('Error fetching subscription:', activeError);
-        return null;
+        console.error('Error fetching subscriptions:', activeError);
+        return [];
       }
-      if (activeSubs) return activeSubs as unknown as AsaasSubscription;
+
+      const results = (activeSubs as unknown as AsaasSubscription[]) || [];
 
       // Fallback: CANCELLED with future next_due_date (still in active period)
       const { data: cancelledSubs, error: cancelledError } = await supabase
@@ -131,18 +147,35 @@ export function useAsaasSubscription() {
         .eq('user_id', user.id)
         .eq('status', 'CANCELLED')
         .gte('next_due_date', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
-      if (cancelledError) {
-        console.error('Error fetching cancelled subscription:', cancelledError);
-        return null;
+      if (!cancelledError && cancelledSubs) {
+        const cancelledTyped = cancelledSubs as unknown as AsaasSubscription[];
+        // Only add cancelled subs whose plan_type isn't already covered by an active sub
+        const activePlanTypes = new Set(results.map(s => s.plan_type));
+        for (const cs of cancelledTyped) {
+          if (!activePlanTypes.has(cs.plan_type)) {
+            results.push(cs);
+          }
+        }
       }
-      return (cancelledSubs as unknown as AsaasSubscription) || null;
+
+      return results;
     },
     enabled: !!user?.id,
   });
+
+  // Backwards-compatible: first subscription found
+  const subscription = allSubscriptions.length > 0 ? allSubscriptions[0] : null;
+
+  // Helpers by family/capability
+  const getByFamily = (family: string): AsaasSubscription | undefined =>
+    allSubscriptions.find(s => getSubFamily(s.plan_type) === family);
+
+  const transferSub = allSubscriptions.find(s => subHasTransfer(s.plan_type)) ?? undefined;
+  const studioSub = allSubscriptions.find(s => subHasStudio(s.plan_type)) ?? undefined;
+
+  // ─── Mutations ───
 
   const createCustomerMutation = useMutation({
     mutationFn: async (params: CreateCustomerParams) => {
@@ -162,11 +195,7 @@ export function useAsaasSubscription() {
       });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
-      return data as {
-        subscriptionId: string;
-        status: string;
-        localId: string;
-      };
+      return data as { subscriptionId: string; status: string; localId: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
@@ -255,7 +284,6 @@ export function useAsaasSubscription() {
 
   const cancelDowngradeMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
-      // Clear pending downgrade fields directly
       const { error } = await supabase
         .from('subscriptions_asaas' as any)
         .update({ pending_downgrade_plan: null, pending_downgrade_cycle: null } as any)
@@ -273,7 +301,6 @@ export function useAsaasSubscription() {
 
   const reactivateSubscriptionMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
-      // Reactivate: update local status back to ACTIVE and call Asaas API
       const { data, error } = await supabase.functions.invoke('asaas-cancel-subscription', {
         body: { subscriptionId, action: 'reactivate' },
       });
@@ -291,8 +318,14 @@ export function useAsaasSubscription() {
   });
 
   return {
-    subscription,
+    // Multiple subscriptions support
+    subscriptions: allSubscriptions,
+    subscription, // backwards compat
+    transferSub,
+    studioSub,
+    getByFamily,
     isLoading,
+    // Mutations
     createCustomer: createCustomerMutation.mutateAsync,
     isCreatingCustomer: createCustomerMutation.isPending,
     createSubscription: createSubscriptionMutation.mutateAsync,

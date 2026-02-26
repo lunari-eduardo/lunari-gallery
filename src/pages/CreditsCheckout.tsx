@@ -124,7 +124,7 @@ const TRANSFER_COMBO = {
 export default function CreditsCheckout() {
   const navigate = useNavigate();
   const { packages, isLoadingPackages } = useCreditPackages();
-  const { subscription: activeSub, downgradeSubscription, isDowngrading } = useAsaasSubscription();
+  const { subscription: activeSub, subscriptions: allSubs, transferSub, studioSub, downgradeSubscription, isDowngrading } = useAsaasSubscription();
   const { storageUsedBytes } = useTransferStorage();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [searchParams] = useSearchParams();
@@ -395,7 +395,7 @@ export default function CreditsCheckout() {
                     <Button className="mt-6 px-8" size="lg" onClick={() => {
                       const priceCents = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
                       handleSubscribe(
-                        plan.highlight ? 'combo_completo' : 'combo_studio_pro',
+                        plan.highlight ? 'combo_completo' : 'combo_pro_select2k',
                         plan.name,
                         priceCents
                       );
