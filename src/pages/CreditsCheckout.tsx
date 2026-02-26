@@ -126,13 +126,13 @@ export default function CreditsCheckout() {
   const { packages, isLoadingPackages } = useCreditPackages();
   const { subscription: activeSub, subscriptions: allSubs, transferSub, studioSub, downgradeSubscription, isDowngrading } = useAsaasSubscription();
   const { storageUsedBytes } = useTransferStorage();
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(() => {
     const urlCycle = searchParams.get('billing_cycle');
     if (urlCycle === 'YEARLY') return 'yearly';
     return 'monthly';
   });
-  const [searchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
 
   // Upgrade mode: auto-detect from hook OR from URL params
   const urlUpgradeMode = searchParams.get('upgrade') === 'true';
