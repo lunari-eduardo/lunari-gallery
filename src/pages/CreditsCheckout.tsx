@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { TRANSFER_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize } from '@/lib/transferPlans';
+import { ALL_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize } from '@/lib/transferPlans';
 import { differenceInDays } from 'date-fns';
 
 
@@ -146,7 +146,7 @@ export default function CreditsCheckout() {
   const nextDueDate = activeSub?.next_due_date || urlNextDueDate;
   const currentSubscriptionId = activeSub?.id || urlSubscriptionId;
 
-  const currentPlanPrices = TRANSFER_PLAN_PRICES[currentPlanType];
+  const currentPlanPrices = ALL_PLAN_PRICES[currentPlanType];
   const currentPriceCents = currentPlanPrices
     ? (currentBillingCycle === 'YEARLY' ? currentPlanPrices.yearly : currentPlanPrices.monthly)
     : 0;
@@ -174,7 +174,7 @@ export default function CreditsCheckout() {
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
     if (isUpgradeMode && currentSubscriptionId) {
       // Calculate prorata
-      const newPlanPrices = TRANSFER_PLAN_PRICES[planType];
+      const newPlanPrices = ALL_PLAN_PRICES[planType];
       const newPriceCentsForCycle = currentBillingCycle === 'YEARLY'
         ? (newPlanPrices?.yearly || priceCents)
         : (newPlanPrices?.monthly || priceCents);

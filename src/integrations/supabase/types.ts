@@ -1897,6 +1897,7 @@ export type Database = {
           credits_consumed_total: number | null
           credits_purchased_total: number | null
           deletion_scheduled_at: string | null
+          free_transfer_bytes: number
           galleries_published_total: number
           gallery_credits: number
           id: string
@@ -1918,6 +1919,7 @@ export type Database = {
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
           deletion_scheduled_at?: string | null
+          free_transfer_bytes?: number
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
@@ -1939,6 +1941,7 @@ export type Database = {
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
           deletion_scheduled_at?: string | null
+          free_transfer_bytes?: number
           galleries_published_total?: number
           gallery_credits?: number
           id?: string
@@ -2405,6 +2408,7 @@ export type Database = {
           next_due_date: string | null
           pending_downgrade_cycle: string | null
           pending_downgrade_plan: string | null
+          plan_id: string | null
           plan_type: string
           status: string
           updated_at: string
@@ -2421,6 +2425,7 @@ export type Database = {
           next_due_date?: string | null
           pending_downgrade_cycle?: string | null
           pending_downgrade_plan?: string | null
+          plan_id?: string | null
           plan_type: string
           status?: string
           updated_at?: string
@@ -2437,13 +2442,22 @@ export type Database = {
           next_due_date?: string | null
           pending_downgrade_cycle?: string | null
           pending_downgrade_plan?: string | null
+          plan_id?: string | null
           plan_type?: string
           status?: string
           updated_at?: string
           user_id?: string
           value_cents?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_asaas_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "unified_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_cache: {
         Row: {
@@ -2705,6 +2719,66 @@ export type Database = {
           type?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      unified_plans: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          features: Json | null
+          id: string
+          includes_select: boolean | null
+          includes_studio: boolean | null
+          includes_transfer: boolean | null
+          is_active: boolean | null
+          monthly_price_cents: number
+          name: string
+          product_family: string
+          select_credits_monthly: number | null
+          sort_order: number | null
+          transfer_storage_bytes: number | null
+          updated_at: string | null
+          yearly_price_cents: number
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          features?: Json | null
+          id?: string
+          includes_select?: boolean | null
+          includes_studio?: boolean | null
+          includes_transfer?: boolean | null
+          is_active?: boolean | null
+          monthly_price_cents?: number
+          name: string
+          product_family: string
+          select_credits_monthly?: number | null
+          sort_order?: number | null
+          transfer_storage_bytes?: number | null
+          updated_at?: string | null
+          yearly_price_cents?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          features?: Json | null
+          id?: string
+          includes_select?: boolean | null
+          includes_studio?: boolean | null
+          includes_transfer?: boolean | null
+          is_active?: boolean | null
+          monthly_price_cents?: number
+          name?: string
+          product_family?: string
+          select_credits_monthly?: number | null
+          sort_order?: number | null
+          transfer_storage_bytes?: number | null
+          updated_at?: string | null
+          yearly_price_cents?: number
         }
         Relationships: []
       }
