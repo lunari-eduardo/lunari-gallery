@@ -11,15 +11,12 @@ const ASAAS_BASE_URL = Deno.env.get("ASAAS_ENV") === "production"
   : "https://api-sandbox.asaas.com";
 
 const PLANS: Record<string, { monthlyPrice: number; yearlyPrice: number; name: string }> = {
-  // Studio
   studio_starter: { monthlyPrice: 1490, yearlyPrice: 15198, name: "Lunari Starter" },
   studio_pro: { monthlyPrice: 3590, yearlyPrice: 36618, name: "Lunari Pro" },
-  // Transfer
   transfer_5gb: { monthlyPrice: 1290, yearlyPrice: 12384, name: "Transfer 5GB" },
   transfer_20gb: { monthlyPrice: 2490, yearlyPrice: 23904, name: "Transfer 20GB" },
   transfer_50gb: { monthlyPrice: 3490, yearlyPrice: 33504, name: "Transfer 50GB" },
   transfer_100gb: { monthlyPrice: 5990, yearlyPrice: 57504, name: "Transfer 100GB" },
-  // Combos
   combo_pro_select2k: { monthlyPrice: 4490, yearlyPrice: 45259, name: "Studio Pro + Select 2k" },
   combo_completo: { monthlyPrice: 6490, yearlyPrice: 66198, name: "Combo Completo" },
 };
@@ -67,17 +64,25 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
+    const body = await req.json();
     const {
-      currentSubscriptionId,
+      currentSubscriptionId, // single (backwards compat)
+      subscriptionIdsToCancel, // array (cross-product)
       newPlanType,
       billingCycle,
       creditCard,
       creditCardHolderInfo,
       remoteIp,
-    } = await req.json();
+    } = body;
 
-    // Validate
-    if (!currentSubscriptionId || !newPlanType || !billingCycle) {
+    // Build list of subscription IDs to cancel
+    const idsToCancel: string[] = subscriptionIdsToCancel
+      ? subscriptionIdsToCancel
+      : currentSubscriptionId
+        ? [currentSubscriptionId]
+        : [];
+
+    if (idsToCancel.length === 0 || !newPlanType || !billingCycle) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -105,44 +110,71 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Fetch current subscription
-    const { data: currentSub } = await adminClient
-      .from("subscriptions_asaas")
-      .select("*")
-      .eq("id", currentSubscriptionId)
-      .eq("user_id", userId)
-      .single();
+    // 1. Fetch all subscriptions to cancel and calculate combined prorata
+    let totalProrataValueCents = 0;
+    let latestNextDueDate: string | null = null;
+    const cancelledNames: string[] = [];
 
-    if (!currentSub) {
-      return new Response(
-        JSON.stringify({ error: "Subscription not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    for (const subId of idsToCancel) {
+      const { data: currentSub } = await adminClient
+        .from("subscriptions_asaas")
+        .select("*")
+        .eq("id", subId)
+        .eq("user_id", userId)
+        .single();
+
+      if (!currentSub) {
+        console.warn(`Subscription ${subId} not found, skipping`);
+        continue;
+      }
+
+      const currentPlan = PLANS[currentSub.plan_type];
+      const currentPriceCents = currentSub.billing_cycle === "YEARLY"
+        ? (currentPlan?.yearlyPrice || currentSub.value_cents)
+        : (currentPlan?.monthlyPrice || currentSub.value_cents);
+
+      const today = new Date();
+      const nextDue = currentSub.next_due_date ? new Date(currentSub.next_due_date) : today;
+      const daysRemaining = daysBetween(today, nextDue);
+      const totalCycleDays = currentSub.billing_cycle === "YEARLY" ? 365 : 30;
+
+      // Prorata = unused portion of current plan
+      const unusedValueCents = Math.max(0, Math.round(currentPriceCents * (daysRemaining / totalCycleDays)));
+      totalProrataValueCents += unusedValueCents;
+
+      // Track latest next_due_date for the new subscription
+      if (!latestNextDueDate || (currentSub.next_due_date && currentSub.next_due_date > latestNextDueDate)) {
+        latestNextDueDate = currentSub.next_due_date;
+      }
+
+      cancelledNames.push(currentPlan?.name || currentSub.plan_type);
+
+      // Cancel in Asaas
+      if (currentSub.asaas_subscription_id) {
+        const cancelRes = await fetch(
+          `${ASAAS_BASE_URL}/v3/subscriptions/${currentSub.asaas_subscription_id}`,
+          { method: "DELETE", headers: { access_token: ASAAS_API_KEY } }
+        );
+        if (!cancelRes.ok) {
+          console.error(`Failed to cancel subscription ${currentSub.asaas_subscription_id} in Asaas:`, await cancelRes.text());
+        }
+      }
+
+      // Mark as CANCELLED in DB
+      await adminClient
+        .from("subscriptions_asaas")
+        .update({ status: "CANCELLED" })
+        .eq("id", subId);
+
+      console.log(`Cancelled subscription ${subId} (${currentSub.plan_type}), unused value: ${unusedValueCents} cents`);
     }
 
-    // 2. Calculate prorata
-    const currentPlan = PLANS[currentSub.plan_type];
-    const currentPriceCents = currentSub.billing_cycle === "YEARLY"
-      ? (currentPlan?.yearlyPrice || currentSub.value_cents)
-      : (currentPlan?.monthlyPrice || currentSub.value_cents);
+    // 2. Calculate net charge: new plan price - combined prorata credit
     const newPriceCents = billingCycle === "YEARLY" ? newPlan.yearlyPrice : newPlan.monthlyPrice;
+    const netChargeCents = Math.max(0, newPriceCents - totalProrataValueCents);
+    const netChargeReais = netChargeCents / 100;
 
-    const difference = newPriceCents - currentPriceCents;
-    if (difference <= 0) {
-      return new Response(
-        JSON.stringify({ error: "New plan must be more expensive for upgrade" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const today = new Date();
-    const nextDue = currentSub.next_due_date ? new Date(currentSub.next_due_date) : today;
-    const daysRemaining = daysBetween(today, nextDue);
-    const totalCycleDays = currentSub.billing_cycle === "YEARLY" ? 365 : 30;
-    const prorataValueCents = Math.max(0, Math.round(difference * (daysRemaining / totalCycleDays)));
-    const prorataValueReais = prorataValueCents / 100;
-
-    console.log(`Upgrade: ${currentSub.plan_type} → ${newPlanType}, prorata: ${prorataValueCents} cents (${daysRemaining}/${totalCycleDays} days)`);
+    console.log(`Cross-product upgrade: [${cancelledNames.join(', ')}] → ${newPlanType}, prorata credit: ${totalProrataValueCents} cents, net charge: ${netChargeCents} cents`);
 
     // Get customer ID
     const { data: account } = await adminClient
@@ -158,15 +190,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Charge prorata as one-time payment (if > 0)
+    // 3. Charge net amount as one-time payment (if > 0)
     let prorataPaymentId: string | null = null;
-    if (prorataValueCents > 0) {
+    if (netChargeCents > 0) {
       const paymentPayload: Record<string, unknown> = {
         customer: account.asaas_customer_id,
         billingType: "CREDIT_CARD",
-        value: prorataValueReais,
+        value: netChargeReais,
         dueDate: getNextBusinessDay(),
-        description: `Upgrade: ${currentPlan?.name || currentSub.plan_type} → ${newPlan.name} (proporcional)`,
+        description: `Upgrade: ${cancelledNames.join(' + ')} → ${newPlan.name} (proporcional)`,
         externalReference: userId,
         creditCard: {
           holderName: creditCard.holderName,
@@ -206,31 +238,14 @@ Deno.serve(async (req) => {
       console.log("Prorata payment created:", payData.id, "status:", payData.status);
     }
 
-    // 4. Cancel old subscription in Asaas
-    if (currentSub.asaas_subscription_id) {
-      const cancelRes = await fetch(
-        `${ASAAS_BASE_URL}/v3/subscriptions/${currentSub.asaas_subscription_id}`,
-        { method: "DELETE", headers: { access_token: ASAAS_API_KEY } }
-      );
-      if (!cancelRes.ok) {
-        console.error("Failed to cancel old subscription in Asaas:", await cancelRes.text());
-      }
-    }
-
-    // 5. Mark old subscription as CANCELLED
-    await adminClient
-      .from("subscriptions_asaas")
-      .update({ status: "CANCELLED" })
-      .eq("id", currentSubscriptionId);
-
-    // 6. Create new subscription in Asaas
+    // 4. Create new subscription in Asaas
     const newValueReais = newPriceCents / 100;
     const newSubPayload: Record<string, unknown> = {
       customer: account.asaas_customer_id,
       billingType: "CREDIT_CARD",
       cycle: billingCycle,
       value: newValueReais,
-      nextDueDate: currentSub.next_due_date || getNextBusinessDay(),
+      nextDueDate: latestNextDueDate || getNextBusinessDay(),
       description: `${newPlan.name} - ${billingCycle === "YEARLY" ? "Anual" : "Mensal"}`,
       externalReference: userId,
       creditCard: {
@@ -269,7 +284,7 @@ Deno.serve(async (req) => {
 
     const creditCardToken = newSubData.creditCard?.creditCardToken || null;
 
-    // 7. Insert new subscription in DB
+    // 5. Insert new subscription in DB
     const { data: newSub } = await adminClient
       .from("subscriptions_asaas")
       .insert({
@@ -285,9 +300,10 @@ Deno.serve(async (req) => {
           creditCardToken,
           creditCardBrand: newSubData.creditCard?.creditCardBrand || null,
           creditCardNumber: newSubData.creditCard?.creditCardNumber || null,
-          upgraded_from: currentSub.plan_type,
+          upgraded_from: cancelledNames,
           prorata_payment_id: prorataPaymentId,
-          prorata_value_cents: prorataValueCents,
+          prorata_credit_cents: totalProrataValueCents,
+          net_charge_cents: netChargeCents,
         },
       })
       .select()
@@ -295,7 +311,7 @@ Deno.serve(async (req) => {
 
     console.log("Upgrade complete:", newSubData.id);
 
-    // 8. Clear over-limit mode if active (upgrade resolves it)
+    // 6. Clear over-limit mode
     await adminClient
       .from("photographer_accounts")
       .update({
@@ -305,17 +321,16 @@ Deno.serve(async (req) => {
       })
       .eq("user_id", userId);
 
-    // 9. Reactivate galleries expired due to plan limit (that fit in new limit)
-    const newStorageLimit = {
+    // 7. Reactivate expired galleries
+    const newStorageLimit: Record<string, number> = {
       transfer_5gb: 5 * 1024 * 1024 * 1024,
       transfer_20gb: 20 * 1024 * 1024 * 1024,
       transfer_50gb: 50 * 1024 * 1024 * 1024,
       transfer_100gb: 100 * 1024 * 1024 * 1024,
       combo_completo: 20 * 1024 * 1024 * 1024,
-    }[newPlanType] || 0;
+    };
 
-    if (newStorageLimit > 0) {
-      // Reactivate all expired_due_to_plan galleries since user upgraded
+    if ((newStorageLimit[newPlanType] || 0) > 0) {
       await adminClient
         .from("galerias")
         .update({ status: "enviado" })
@@ -331,7 +346,8 @@ Deno.serve(async (req) => {
         newSubscriptionId: newSubData.id,
         status: newSubData.status || "ACTIVE",
         prorataPaymentId,
-        prorataValueCents,
+        prorataValueCents: totalProrataValueCents,
+        netChargeCents,
         localId: newSub?.id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
