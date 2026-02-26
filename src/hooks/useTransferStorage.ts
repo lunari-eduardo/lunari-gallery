@@ -12,7 +12,8 @@ export function useTransferStorage() {
     queryKey: ['transfer-subscription', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      const { data, error } = await supabase
+      // Try ACTIVE/PENDING/OVERDUE first
+      const { data: activeSub, error: activeError } = await supabase
         .from('subscriptions_asaas' as any)
         .select('plan_type, status')
         .eq('user_id', user.id)
@@ -20,11 +21,27 @@ export function useTransferStorage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (error) {
-        console.error('Error fetching transfer subscription:', error);
+      if (activeError) {
+        console.error('Error fetching transfer subscription:', activeError);
         return null;
       }
-      return data as unknown as { plan_type: string; status: string } | null;
+      if (activeSub) return activeSub as unknown as { plan_type: string; status: string };
+
+      // Fallback: CANCELLED with future next_due_date (still in active period)
+      const { data: cancelledSub, error: cancelledError } = await supabase
+        .from('subscriptions_asaas' as any)
+        .select('plan_type, status')
+        .eq('user_id', user.id)
+        .eq('status', 'CANCELLED')
+        .gte('next_due_date', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelledError) {
+        console.error('Error fetching cancelled subscription:', cancelledError);
+        return null;
+      }
+      return (cancelledSub as unknown as { plan_type: string; status: string }) || null;
     },
     enabled: !!user?.id,
   });
