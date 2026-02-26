@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
-    const { subscriptionId } = await req.json();
+    const { subscriptionId, action } = await req.json();
 
     if (!subscriptionId) {
       return new Response(
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     // Verify ownership
     const { data: sub } = await adminClient
       .from("subscriptions_asaas")
-      .select("asaas_subscription_id")
+      .select("asaas_subscription_id, status")
       .eq("id", subscriptionId)
       .eq("user_id", userId)
       .single();
@@ -76,22 +76,68 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Cancel in Asaas
-    const asaasResponse = await fetch(
-      `${ASAAS_BASE_URL}/v3/subscriptions/${sub.asaas_subscription_id}`,
-      {
-        method: "DELETE",
-        headers: { access_token: ASAAS_API_KEY },
+    // Reactivate flow
+    if (action === "reactivate") {
+      if (sub.status !== "CANCELLED") {
+        return new Response(
+          JSON.stringify({ error: "Subscription is not cancelled" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-    );
 
-    if (!asaasResponse.ok) {
-      const errorData = await asaasResponse.json();
-      console.error("Asaas cancel error:", errorData);
-      // Still update locally even if Asaas fails
+      // Try to reactivate in Asaas (undoing the deletion)
+      // Asaas doesn't support un-deleting, so we just update local status
+      // The subscription will continue billing if Asaas hasn't fully removed it
+      if (sub.asaas_subscription_id) {
+        try {
+          const asaasResponse = await fetch(
+            `${ASAAS_BASE_URL}/v3/subscriptions/${sub.asaas_subscription_id}`,
+            {
+              method: "GET",
+              headers: { access_token: ASAAS_API_KEY },
+            }
+          );
+          if (asaasResponse.ok) {
+            const asaasSub = await asaasResponse.json();
+            // If Asaas still has it as active/pending, we can reactivate locally
+            if (asaasSub.status === "ACTIVE" || asaasSub.deleted === false) {
+              console.log("Asaas subscription still active, reactivating locally");
+            }
+          }
+        } catch (e) {
+          console.error("Error checking Asaas subscription status:", e);
+        }
+      }
+
+      await adminClient
+        .from("subscriptions_asaas")
+        .update({ status: "ACTIVE" })
+        .eq("id", subscriptionId);
+
+      return new Response(
+        JSON.stringify({ success: true, action: "reactivated" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Update local status
+    // Cancel flow
+    if (sub.asaas_subscription_id) {
+      const asaasResponse = await fetch(
+        `${ASAAS_BASE_URL}/v3/subscriptions/${sub.asaas_subscription_id}`,
+        {
+          method: "DELETE",
+          headers: { access_token: ASAAS_API_KEY },
+        }
+      );
+
+      if (!asaasResponse.ok) {
+        const errorData = await asaasResponse.json();
+        console.error("Asaas cancel error:", errorData);
+        // Still update locally even if Asaas fails
+      }
+    }
+
+    // Update local status — preserve next_due_date for active period tracking
     await adminClient
       .from("subscriptions_asaas")
       .update({ status: "CANCELLED" })

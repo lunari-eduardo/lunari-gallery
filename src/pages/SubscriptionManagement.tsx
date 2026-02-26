@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight, ArrowDown, X } from 'lucide-react';
+import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight, ArrowDown, X, RotateCcw, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,15 +29,37 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 
 export default function SubscriptionManagement() {
   const navigate = useNavigate();
-  const { subscription, isLoading, cancelSubscription, isCancelling, cancelDowngrade, isCancellingDowngrade } = useAsaasSubscription();
+  const {
+    subscription,
+    isLoading,
+    cancelSubscription,
+    isCancelling,
+    cancelDowngrade,
+    isCancellingDowngrade,
+    reactivateSubscription,
+    isReactivating,
+  } = useAsaasSubscription();
+
+  const isCancelled = subscription?.status === 'CANCELLED';
+  const nextDueDate = subscription?.next_due_date ? new Date(subscription.next_due_date) : null;
+  const isStillActive = isCancelled && nextDueDate && nextDueDate > new Date();
 
   const handleCancel = async () => {
-    if (!subscription?.asaas_subscription_id) return;
+    if (!subscription?.id) return;
     try {
-      await cancelSubscription(subscription.asaas_subscription_id);
-      navigate('/credits');
+      await cancelSubscription(subscription.id);
+      // Stay on page — don't navigate
     } catch {
       // toast already handled by hook
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!subscription?.id) return;
+    try {
+      await reactivateSubscription(subscription.id);
+    } catch {
+      // toast handled by hook
     }
   };
 
@@ -64,8 +86,17 @@ export default function SubscriptionManagement() {
           <Skeleton className="h-32 rounded-xl" />
         </div>
       ) : !subscription ? (
-        <div className="rounded-xl border bg-card p-8 text-center space-y-4">
-          <p className="text-muted-foreground">Nenhuma assinatura ativa encontrada.</p>
+        /* No subscription at all */
+        <div className="rounded-xl border bg-card p-10 text-center space-y-6">
+          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <Sparkles className="h-6 w-6 text-primary" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-lg font-semibold text-foreground">Nenhum plano ativo</p>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Ative um plano e faça entregas que geram valor à sua fotografia.
+            </p>
+          </div>
           <Button onClick={() => navigate('/credits/checkout?tab=transfer')} className="gap-1.5">
             <ArrowRight className="h-4 w-4" />
             Ver planos de armazenamento
@@ -73,13 +104,48 @@ export default function SubscriptionManagement() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Cancelled but still active notice */}
+          {isStillActive && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1 flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Assinatura cancelada
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Seu plano permanece ativo até{' '}
+                    <span className="font-semibold text-foreground">
+                      {format(nextDueDate!, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </span>
+                    . Após essa data, você perderá o acesso ao armazenamento.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={isReactivating}
+                onClick={handleReactivate}
+              >
+                {isReactivating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5" />
+                )}
+                Desfazer cancelamento
+              </Button>
+            </div>
+          )}
+
           {/* Plan details card */}
           <div className="rounded-xl border bg-card p-6 space-y-5">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Plano atual</p>
                 <p className="text-xl font-bold text-foreground capitalize">
-                  {subscription.plan_type?.replace(/_/g, ' ') || 'Transfer'}
+                  {getPlanDisplayName(subscription.plan_type) || subscription.plan_type?.replace(/_/g, ' ') || 'Transfer'}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {subscription.billing_cycle === 'YEARLY' ? 'Plano anual (20% off)' : 'Plano mensal'}
@@ -97,7 +163,7 @@ export default function SubscriptionManagement() {
               />
               <DetailItem
                 icon={CalendarDays}
-                label="Próxima cobrança"
+                label={isCancelled ? 'Acesso até' : 'Próxima cobrança'}
                 value={
                   subscription.next_due_date
                     ? format(new Date(subscription.next_due_date), "dd 'de' MMMM, yyyy", { locale: ptBR })
@@ -113,7 +179,7 @@ export default function SubscriptionManagement() {
           </div>
 
           {/* Pending downgrade notice */}
-          {subscription.pending_downgrade_plan && (
+          {!isCancelled && subscription.pending_downgrade_plan && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-3">
               <div className="flex items-start gap-3">
                 <ArrowDown className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -151,56 +217,58 @@ export default function SubscriptionManagement() {
             </div>
           )}
 
-          {/* Actions */}
-          <div className="rounded-xl border bg-card p-6 space-y-4">
-            <p className="text-sm font-medium text-foreground">Ações</p>
+          {/* Actions — only show when not cancelled */}
+          {!isCancelled && (
+            <div className="rounded-xl border bg-card p-6 space-y-4">
+              <p className="text-sm font-medium text-foreground">Ações</p>
 
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/credits/checkout?tab=transfer&upgrade=true&current_plan=${subscription.plan_type}&billing_cycle=${subscription.billing_cycle}&next_due_date=${subscription.next_due_date || ''}&subscription_id=${subscription.id}`)}
-                className="gap-1.5"
-              >
-                <ArrowRight className="h-3.5 w-3.5" />
-                Upgrade / Downgrade
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/credits/checkout?tab=transfer`)}
+                  className="gap-1.5"
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  Upgrade / Downgrade
+                </Button>
 
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Cancelar assinatura
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Cancelar assinatura</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Tem certeza que deseja cancelar sua assinatura? Você perderá o acesso ao armazenamento no final do período vigente.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Manter assinatura</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleCancel}
-                      disabled={isCancelling}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      {isCancelling ? (
-                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cancelando...</>
-                      ) : (
-                        'Confirmar cancelamento'
-                      )}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Cancelar assinatura
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar assinatura</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja cancelar sua assinatura? Você manterá o acesso até o final do período vigente.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Manter assinatura</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleCancel}
+                        disabled={isCancelling}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {isCancelling ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cancelando...</>
+                        ) : (
+                          'Confirmar cancelamento'
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Alterações de plano são ajustadas proporcionalmente ao período atual.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Alterações de plano são ajustadas proporcionalmente ao período atual.
-            </p>
-          </div>
+          )}
         </div>
       )}
     </div>
