@@ -108,7 +108,8 @@ export function useAsaasSubscription() {
     queryKey: ['asaas-subscription', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      const { data, error } = await supabase
+      // Fetch ACTIVE/PENDING/OVERDUE first
+      const { data: activeSubs, error: activeError } = await supabase
         .from('subscriptions_asaas' as any)
         .select('*')
         .eq('user_id', user.id)
@@ -117,11 +118,28 @@ export function useAsaasSubscription() {
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching subscription:', error);
+      if (activeError) {
+        console.error('Error fetching subscription:', activeError);
         return null;
       }
-      return data as unknown as AsaasSubscription | null;
+      if (activeSubs) return activeSubs as unknown as AsaasSubscription;
+
+      // Fallback: CANCELLED with future next_due_date (still in active period)
+      const { data: cancelledSubs, error: cancelledError } = await supabase
+        .from('subscriptions_asaas' as any)
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'CANCELLED')
+        .gte('next_due_date', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelledError) {
+        console.error('Error fetching cancelled subscription:', cancelledError);
+        return null;
+      }
+      return (cancelledSubs as unknown as AsaasSubscription) || null;
     },
     enabled: !!user?.id,
   });
@@ -253,6 +271,25 @@ export function useAsaasSubscription() {
     },
   });
 
+  const reactivateSubscriptionMutation = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      // Reactivate: update local status back to ACTIVE and call Asaas API
+      const { data, error } = await supabase.functions.invoke('asaas-cancel-subscription', {
+        body: { subscriptionId, action: 'reactivate' },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
+      toast.success('Assinatura reativada com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao reativar assinatura.');
+    },
+  });
+
   return {
     subscription,
     isLoading,
@@ -270,5 +307,7 @@ export function useAsaasSubscription() {
     isDowngrading: downgradeSubscriptionMutation.isPending,
     cancelDowngrade: cancelDowngradeMutation.mutateAsync,
     isCancellingDowngrade: cancelDowngradeMutation.isPending,
+    reactivateSubscription: reactivateSubscriptionMutation.mutateAsync,
+    isReactivating: reactivateSubscriptionMutation.isPending,
   };
 }

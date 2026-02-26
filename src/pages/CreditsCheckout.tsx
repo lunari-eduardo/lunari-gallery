@@ -124,18 +124,27 @@ const TRANSFER_COMBO = {
 export default function CreditsCheckout() {
   const navigate = useNavigate();
   const { packages, isLoadingPackages } = useCreditPackages();
-  const { downgradeSubscription, isDowngrading } = useAsaasSubscription();
+  const { subscription: activeSub, downgradeSubscription, isDowngrading } = useAsaasSubscription();
   const { storageUsedBytes } = useTransferStorage();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
 
-  // Upgrade mode
-  const isUpgradeMode = searchParams.get('upgrade') === 'true';
-  const currentPlanType = searchParams.get('current_plan') || '';
-  const currentBillingCycle = searchParams.get('billing_cycle') || 'MONTHLY';
-  const nextDueDate = searchParams.get('next_due_date') || '';
-  const currentSubscriptionId = searchParams.get('subscription_id') || '';
+  // Upgrade mode: auto-detect from hook OR from URL params
+  const urlUpgradeMode = searchParams.get('upgrade') === 'true';
+  const urlCurrentPlan = searchParams.get('current_plan') || '';
+  const urlBillingCycle = searchParams.get('billing_cycle') || 'MONTHLY';
+  const urlNextDueDate = searchParams.get('next_due_date') || '';
+  const urlSubscriptionId = searchParams.get('subscription_id') || '';
+
+  // Auto-detect: if there's an active subscription (ACTIVE status) and we're on transfer tab
+  const hasActiveTransferSub = !!activeSub && activeSub.status === 'ACTIVE' && activeTab === 'transfer';
+  const isUpgradeMode = urlUpgradeMode || hasActiveTransferSub;
+
+  const currentPlanType = activeSub?.plan_type || urlCurrentPlan;
+  const currentBillingCycle = activeSub?.billing_cycle || urlBillingCycle;
+  const nextDueDate = activeSub?.next_due_date || urlNextDueDate;
+  const currentSubscriptionId = activeSub?.id || urlSubscriptionId;
 
   const currentPlanPrices = TRANSFER_PLAN_PRICES[currentPlanType];
   const currentPriceCents = currentPlanPrices
