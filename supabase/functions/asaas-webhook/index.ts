@@ -16,10 +16,17 @@ const STORAGE_LIMITS: Record<string, number> = {
 };
 
 const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
+  // Studio
+  studio_starter: { monthly: 1490, yearly: 15198 },
+  studio_pro: { monthly: 3590, yearly: 36618 },
+  // Transfer
   transfer_5gb: { monthly: 1290, yearly: 12384 },
   transfer_20gb: { monthly: 2490, yearly: 23904 },
   transfer_50gb: { monthly: 3490, yearly: 33504 },
   transfer_100gb: { monthly: 5990, yearly: 57504 },
+  // Combos
+  combo_pro_select2k: { monthly: 4490, yearly: 45259 },
+  combo_completo: { monthly: 6490, yearly: 66198 },
 };
 
 const ASAAS_BASE_URL = Deno.env.get("ASAAS_ENV") === "production"

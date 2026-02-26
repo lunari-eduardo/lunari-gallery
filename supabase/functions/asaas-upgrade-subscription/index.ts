@@ -11,10 +11,17 @@ const ASAAS_BASE_URL = Deno.env.get("ASAAS_ENV") === "production"
   : "https://api-sandbox.asaas.com";
 
 const PLANS: Record<string, { monthlyPrice: number; yearlyPrice: number; name: string }> = {
+  // Studio
+  studio_starter: { monthlyPrice: 1490, yearlyPrice: 15198, name: "Lunari Starter" },
+  studio_pro: { monthlyPrice: 3590, yearlyPrice: 36618, name: "Lunari Pro" },
+  // Transfer
   transfer_5gb: { monthlyPrice: 1290, yearlyPrice: 12384, name: "Transfer 5GB" },
   transfer_20gb: { monthlyPrice: 2490, yearlyPrice: 23904, name: "Transfer 20GB" },
   transfer_50gb: { monthlyPrice: 3490, yearlyPrice: 33504, name: "Transfer 50GB" },
   transfer_100gb: { monthlyPrice: 5990, yearlyPrice: 57504, name: "Transfer 100GB" },
+  // Combos
+  combo_pro_select2k: { monthlyPrice: 4490, yearlyPrice: 45259, name: "Studio Pro + Select 2k" },
+  combo_completo: { monthlyPrice: 6490, yearlyPrice: 66198, name: "Combo Completo" },
 };
 
 function daysBetween(a: Date, b: Date): number {
