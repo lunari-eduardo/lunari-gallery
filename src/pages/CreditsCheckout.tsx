@@ -126,7 +126,11 @@ export default function CreditsCheckout() {
   const { packages, isLoadingPackages } = useCreditPackages();
   const { subscription: activeSub, subscriptions: allSubs, transferSub, studioSub, downgradeSubscription, isDowngrading } = useAsaasSubscription();
   const { storageUsedBytes } = useTransferStorage();
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(() => {
+    const urlCycle = searchParams.get('billing_cycle');
+    if (urlCycle === 'YEARLY') return 'yearly';
+    return 'monthly';
+  });
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
 
@@ -172,21 +176,24 @@ export default function CreditsCheckout() {
   };
 
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
+    // In upgrade mode, the user can change billing cycle via the toggle
+    const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+
     if (isUpgradeMode && currentSubscriptionId) {
-      // Calculate prorata
+      // Calculate prorata: credit = currentPrice * (daysRemaining / currentCycleDays)
       const newPlanPrices = ALL_PLAN_PRICES[planType];
-      const newPriceCentsForCycle = currentBillingCycle === 'YEARLY'
+      const newPriceCentsForCycle = selectedCycle === 'YEARLY'
         ? (newPlanPrices?.yearly || priceCents)
         : (newPlanPrices?.monthly || priceCents);
-      const difference = newPriceCentsForCycle - currentPriceCents;
-      const prorataValueCents = Math.max(0, Math.round(difference * (daysRemaining / totalCycleDays)));
+      const creditCents = Math.round(currentPriceCents * (daysRemaining / totalCycleDays));
+      const prorataValueCents = Math.max(0, newPriceCentsForCycle - creditCents);
 
       navigate('/credits/checkout/pay', {
         state: {
           type: 'subscription',
           planType,
           planName,
-          billingCycle: currentBillingCycle as 'MONTHLY' | 'YEARLY',
+          billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
           priceCents: newPriceCentsForCycle,
           isUpgrade: true,
           prorataValueCents,
@@ -200,7 +207,7 @@ export default function CreditsCheckout() {
           type: 'subscription',
           planType,
           planName,
-          billingCycle: billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY',
+          billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
           priceCents,
         },
       });
@@ -496,13 +503,7 @@ export default function CreditsCheckout() {
           {/* Billing toggle */}
           <section className={cn("container max-w-6xl relative z-[1] pb-8", !isUpgradeMode && "-mt-12 md:-mt-16")}>
             <div className="flex justify-center">
-              {isUpgradeMode ? (
-                <p className="text-sm text-muted-foreground">
-                  Ciclo atual: <span className="font-medium text-foreground">{currentBillingCycle === 'YEARLY' ? 'Anual' : 'Mensal'}</span>
-                </p>
-              ) : (
-                <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} discount="-20%" />
-              )}
+              <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} discount="-20%" />
             </div>
           </section>
 
@@ -510,7 +511,7 @@ export default function CreditsCheckout() {
           <section className="container max-w-6xl pb-20 relative z-[1]">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {TRANSFER_PLANS.map((plan) => {
-                const effectiveBilling = isUpgradeMode ? currentBillingCycle : (billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY');
+                const effectiveBilling = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
                 const price = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
                 const altPrice = effectiveBilling === 'YEARLY' ? plan.monthlyPrice : plan.yearlyPrice;
                 const monthlyEquiv = effectiveBilling === 'YEARLY'
@@ -525,12 +526,12 @@ export default function CreditsCheckout() {
                     : plan.monthlyPrice <= currentPriceCents
                 );
 
-                // Prorata calculation
+                // Prorata calculation: credit = currentPrice * (daysRemaining / cycleDays), net = newPrice - credit
                 let prorataValue: number | null = null;
                 if (isUpgradeMode && !isCurrentPlan && !isDowngrade) {
                   const newPrice = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
-                  const diff = newPrice - currentPriceCents;
-                  prorataValue = Math.max(0, Math.round(diff * (daysRemaining / totalCycleDays)));
+                  const creditCents = Math.round(currentPriceCents * (daysRemaining / totalCycleDays));
+                  prorataValue = Math.max(0, newPrice - creditCents);
                 }
 
                 return (
@@ -572,7 +573,7 @@ export default function CreditsCheckout() {
                       </span>
                     </p>
 
-                    {!isUpgradeMode && (
+                    {(
                       billingPeriod === 'monthly' ? (
                         <p className="text-xs text-muted-foreground mt-1">
                           Ou {formatPrice(altPrice)} por ano (20% off)
@@ -582,6 +583,12 @@ export default function CreditsCheckout() {
                           Equivale a {monthlyEquiv}/mês
                         </p>
                       )
+                    )}
+
+                    {isUpgradeMode && prorataValue !== null && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Crédito do plano atual: {formatPrice(Math.round(currentPriceCents * (daysRemaining / totalCycleDays)))}
+                      </p>
                     )}
 
                     {prorataValue !== null && (
@@ -623,7 +630,7 @@ export default function CreditsCheckout() {
                       </Button>
                     )}
 
-                    {!isUpgradeMode && billingPeriod === 'yearly' && (
+                    {billingPeriod === 'yearly' && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
                         <Info className="h-3 w-3 shrink-0 text-primary" />
                         Renovação manual após 12 meses

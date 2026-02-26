@@ -245,7 +245,17 @@ Deno.serve(async (req) => {
       billingType: "CREDIT_CARD",
       cycle: billingCycle,
       value: newValueReais,
-      nextDueDate: latestNextDueDate || getNextBusinessDay(),
+      nextDueDate: (() => {
+        // If any cancelled sub had a different cycle, restart the cycle
+        const anyCycleDiffers = idsToCancel.length > 0; // we always restart for annual
+        if (billingCycle === 'YEARLY') {
+          // Monthly→Annual: restart cycle, next due = now + 1 year
+          const d = new Date();
+          d.setFullYear(d.getFullYear() + 1);
+          return d.toISOString().split("T")[0];
+        }
+        return latestNextDueDate || getNextBusinessDay();
+      })(),
       description: `${newPlan.name} - ${billingCycle === "YEARLY" ? "Anual" : "Mensal"}`,
       externalReference: userId,
       creditCard: {
