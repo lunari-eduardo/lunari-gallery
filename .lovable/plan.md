@@ -1,42 +1,39 @@
 
 
-# Fix: Prorata Calculation + Annual Option in Upgrades
+# Fix: "Cannot access 'm' before initialization" crash
 
-## Problems
+## Root Cause
 
-1. **Frontend prorata formula is wrong**: Currently calculates `(newPrice - currentPrice) * daysRemaining / cycleDays`. Backend correctly calculates `newPrice - (currentPrice * daysRemaining / cycleDays)`. These give different results.
-   - Example: current=R$12,90, new=R$24,90, 28 days left
-   - Frontend (wrong): (2490-1290) × 28/30 = R$11,20
-   - Backend (correct): 2490 - (1290 × 28/30) = 2490 - 1204 = R$12,86
-   - The frontend shows misleading "Pagar agora" values
+In `src/pages/CreditsCheckout.tsx` lines 129-134, `searchParams` is referenced inside the `useState` initializer (line 130) **before** it's declared (line 134):
 
-2. **No annual option in upgrade mode**: Billing toggle is hidden when upgrading, locking user to current cycle. Need to allow monthly→annual upgrades with cycle restart logic.
-
-## Fix Details
-
-### `src/pages/CreditsCheckout.tsx`
-
-**Prorata display fix** — change the calculation to match backend:
-```
-credit = currentPrice * (daysRemaining / currentCycleDays)
-netCharge = newPrice - credit
+```typescript
+// Line 129-133: uses searchParams
+const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(() => {
+    const urlCycle = searchParams.get('billing_cycle'); // ← used here
+    ...
+});
+// Line 134: declared here
+const [searchParams] = useSearchParams(); // ← too late
 ```
 
-**Annual option in upgrade mode** — show billing toggle even in upgrade mode:
-- Monthly→Monthly: `net = newMonthlyPrice - (currentMonthly × daysRemaining/30)`, keeps same cycle
-- Monthly→Annual: `net = annualPrice - (currentMonthly × daysRemaining/30)`, restarts cycle
-- Annual→Annual: `net = newAnnualPrice - (currentAnnual × daysRemaining/365)`, keeps same cycle
+Since `CreditsCheckout` is eagerly imported in `App.tsx`, this crashes the entire application — including the Credits page.
 
-Pass `billingCycle` (the NEW cycle) to the checkout pay page, along with credit info.
+## Fix
 
-### `supabase/functions/asaas-upgrade-subscription/index.ts`
+Move `const [searchParams] = useSearchParams()` **before** the `useState` that references it — swap lines 129-134 so `searchParams` is declared first.
 
-The edge function already calculates correctly (`credit = currentPrice × daysRemaining/cycleDays`, then `net = newPrice - credit`). Only change needed: when new billing cycle differs from old (monthly→annual), set `nextDueDate` to a new date (now + 1 year) instead of reusing the old subscription's `nextDueDate`.
+### File: `src/pages/CreditsCheckout.tsx`
 
-## Files
+Reorder to:
+```typescript
+const [searchParams] = useSearchParams();
+const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
+const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(() => {
+    const urlCycle = searchParams.get('billing_cycle');
+    if (urlCycle === 'YEARLY') return 'yearly';
+    return 'monthly';
+});
+```
 
-| File | Change |
-|---|---|
-| `src/pages/CreditsCheckout.tsx` | Fix prorata formula; show billing toggle in upgrade mode; pass correct billingCycle |
-| `supabase/functions/asaas-upgrade-subscription/index.ts` | Handle cycle change: set new nextDueDate when billingCycle differs |
+One file, one change.
 
