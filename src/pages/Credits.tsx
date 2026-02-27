@@ -144,6 +144,9 @@ export default function Credits() {
                   {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
                 </p>
               </div>
+              {storageUsedPercent >= 100 && (
+                <Badge variant="destructive" className="text-xs">Armazenamento cheio</Badge>
+              )}
               <Progress value={storageUsedPercent} className="h-2" />
             </div>
           ) : hasFreeStorageOnly ? (
@@ -154,6 +157,9 @@ export default function Credits() {
                   {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
                 </p>
               </div>
+              {storageUsedPercent >= 100 && (
+                <Badge variant="destructive" className="text-xs">Armazenamento cheio</Badge>
+              )}
               <Progress value={storageUsedPercent} className="h-2" />
               <p className="text-xs text-muted-foreground/60">Incluído no cadastro</p>
             </div>
