@@ -2296,6 +2296,8 @@ export type Database = {
           nicho: string | null
           nome: string | null
           site_redes_sociais: string[] | null
+          studio_trial_ends_at: string | null
+          studio_trial_started_at: string | null
           telefone: string | null
           telefones: string[] | null
           updated_at: string
@@ -2318,6 +2320,8 @@ export type Database = {
           nicho?: string | null
           nome?: string | null
           site_redes_sociais?: string[] | null
+          studio_trial_ends_at?: string | null
+          studio_trial_started_at?: string | null
           telefone?: string | null
           telefones?: string[] | null
           updated_at?: string
@@ -2340,6 +2344,8 @@ export type Database = {
           nicho?: string | null
           nome?: string | null
           site_redes_sociais?: string[] | null
+          studio_trial_ends_at?: string | null
+          studio_trial_started_at?: string | null
           telefone?: string | null
           telefones?: string[] | null
           updated_at?: string
@@ -3111,6 +3117,7 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      start_studio_trial: { Args: never; Returns: Json }
     }
     Enums: {
       account_status: "active" | "suspended" | "canceled"

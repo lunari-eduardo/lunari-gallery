@@ -20,7 +20,7 @@ export default function Credits() {
   const { isAdmin } = useAuthContext();
   const { photoCredits, isLoading: isLoadingCredits } = usePhotoCredits();
   const { purchases } = useCreditPackages();
-  const { storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, planName, isLoading: isLoadingTransfer } = useTransferStorage();
+  const { storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, hasFreeStorageOnly, planName, isLoading: isLoadingTransfer } = useTransferStorage();
 
   return (
     <div className="space-y-10">
@@ -145,6 +145,17 @@ export default function Credits() {
                 </p>
               </div>
               <Progress value={storageUsedPercent} className="h-2" />
+            </div>
+          ) : hasFreeStorageOnly ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Armazenamento gratuito</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
+                </p>
+              </div>
+              <Progress value={storageUsedPercent} className="h-2" />
+              <p className="text-xs text-muted-foreground/60">Incluído no cadastro</p>
             </div>
           ) : (
             <div className="space-y-2">
