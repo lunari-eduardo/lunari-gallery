@@ -1,39 +1,33 @@
 
 
-# Fix: "Cannot access 'm' before initialization" crash
+# Fix: Show free storage on Credits page + data location answer
 
-## Root Cause
+## Problem
+Credits.tsx only checks `hasTransferPlan` (paid plans). When user has only free 0.5GB, it shows "Ative um plano..." marketing text instead of showing the free storage bar. The hook already exposes `hasFreeStorageOnly` and `freeTransferBytes` but Credits.tsx doesn't use them.
 
-In `src/pages/CreditsCheckout.tsx` lines 129-134, `searchParams` is referenced inside the `useState` initializer (line 130) **before** it's declared (line 134):
+## Fix: `src/pages/Credits.tsx`
 
-```typescript
-// Line 129-133: uses searchParams
-const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(() => {
-    const urlCycle = searchParams.get('billing_cycle'); // ← used here
-    ...
-});
-// Line 134: declared here
-const [searchParams] = useSearchParams(); // ← too late
+1. Destructure `hasFreeStorageOnly` and `freeTransferBytes` from `useTransferStorage()`
+2. Add a new condition branch between `hasTransferPlan` and the fallback marketing text:
+
+```
+hasTransferPlan → show plan name + storage bar (existing)
+hasFreeStorageOnly → show "Armazenamento gratuito" + 0.5GB bar + used/limit
+else → show "Ative um plano..." marketing (existing)
 ```
 
-Since `CreditsCheckout` is eagerly imported in `App.tsx`, this crashes the entire application — including the Credits page.
+The free storage block will show:
+- Label: "Armazenamento gratuito"
+- Usage: "X MB de 512 MB usados"
+- Progress bar
+- Small note: "Incluído no cadastro"
 
-## Fix
+## Data location answer
 
-Move `const [searchParams] = useSearchParams()` **before** the `useState` that references it — swap lines 129-134 so `searchParams` is declared first.
+Credits and storage limits are stored in `photographer_accounts`:
+- `photo_credits` — Select credit balance
+- `free_transfer_bytes` — free storage (0.5GB default)
+- `credits_purchased_total` / `credits_consumed_total` — aggregates
 
-### File: `src/pages/CreditsCheckout.tsx`
-
-Reorder to:
-```typescript
-const [searchParams] = useSearchParams();
-const activeTab = searchParams.get('tab') === 'transfer' ? 'transfer' : 'select';
-const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(() => {
-    const urlCycle = searchParams.get('billing_cycle');
-    if (urlCycle === 'YEARLY') return 'yearly';
-    return 'monthly';
-});
-```
-
-One file, one change.
+The `profiles` table only stores identity data (email, name). Mixing billing data into `profiles` is not recommended — `photographer_accounts` is the correct place and already has a 1:1 relationship with `user_id`. Both projects query the same table.
 
