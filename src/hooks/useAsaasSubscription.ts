@@ -4,6 +4,34 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { PLAN_FAMILIES, PLAN_INCLUDES } from '@/lib/transferPlans';
 
+/**
+ * Parse the real error message from Supabase FunctionsHttpError.
+ * supabase.functions.invoke() returns a generic "Edge Function returned a non-2xx status code"
+ * but the actual JSON body from the edge function is available via error.context.
+ */
+async function parseEdgeFunctionError(error: unknown): Promise<string> {
+  if (!error || typeof error !== 'object') {
+    return error instanceof Error ? error.message : 'Erro desconhecido';
+  }
+
+  const err = error as any;
+
+  // FunctionsHttpError: the response body is in error.context (a Response object)
+  if (err.context && typeof err.context === 'object' && typeof err.context.json === 'function') {
+    try {
+      const body = await err.context.json();
+      if (body?.error) return body.error;
+      if (body?.message) return body.message;
+    } catch {
+      // fall through
+    }
+  }
+
+  // Fallback
+  if (err.message && !err.message.includes('non-2xx')) return err.message;
+  return 'Erro ao processar requisição. Tente novamente.';
+}
+
 export interface AsaasSubscription {
   id: string;
   user_id: string;
@@ -182,7 +210,10 @@ export function useAsaasSubscription() {
       const { data, error } = await supabase.functions.invoke('asaas-create-customer', {
         body: params,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = await parseEdgeFunctionError(error);
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       return data as { customerId: string };
     },
@@ -193,7 +224,10 @@ export function useAsaasSubscription() {
       const { data, error } = await supabase.functions.invoke('asaas-create-subscription', {
         body: params,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = await parseEdgeFunctionError(error);
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       return data as { subscriptionId: string; status: string; localId: string };
     },
@@ -207,7 +241,10 @@ export function useAsaasSubscription() {
       const { data, error } = await supabase.functions.invoke('asaas-create-payment', {
         body: params,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = await parseEdgeFunctionError(error);
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       return data as {
         paymentId: string;
@@ -228,7 +265,10 @@ export function useAsaasSubscription() {
       const { data, error } = await supabase.functions.invoke('asaas-upgrade-subscription', {
         body: params,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = await parseEdgeFunctionError(error);
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       return data as {
         newSubscriptionId: string;
