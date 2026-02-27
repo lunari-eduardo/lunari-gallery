@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw, Coins, AlertTriangle, StopCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ export function PhotoUploader({
   onUploadingChange,
   className,
 }: PhotoUploaderProps) {
+  const navigate = useNavigate();
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -248,7 +250,7 @@ export function PhotoUploader({
               : `Você tem apenas ${photoCredits} créditos restantes.`
             }
           </span>
-          <Button variant="outline" size="sm" className="ml-auto shrink-0" disabled>
+          <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={() => navigate('/credits')}>
             <Coins className="h-3 w-3 mr-1" />
             Comprar
           </Button>
