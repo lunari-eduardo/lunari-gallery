@@ -257,13 +257,17 @@ export function PhotoUploader({
 
       {/* Drop Zone */}
       <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => !skipCredits && !isAdmin && photoCredits === 0 ? null : fileInputRef.current?.click()}
+        onDrop={isStorageFull && skipCredits ? undefined : handleDrop}
+        onDragOver={isStorageFull && skipCredits ? undefined : handleDragOver}
+        onDragLeave={isStorageFull && skipCredits ? undefined : handleDragLeave}
+        onClick={() => {
+          if (isStorageFull && skipCredits) return;
+          if (!skipCredits && !isAdmin && photoCredits === 0) return;
+          fileInputRef.current?.click();
+        }}
         className={cn(
           'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
-          !skipCredits && !isAdmin && photoCredits === 0
+          (isStorageFull && skipCredits) || (!skipCredits && !isAdmin && photoCredits === 0)
             ? 'border-muted-foreground/10 bg-muted/50 cursor-not-allowed opacity-60'
             : 'cursor-pointer',
           isDragging
@@ -272,10 +276,21 @@ export function PhotoUploader({
         )}
       >
         <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-        <p className="text-lg font-medium">Arraste fotos aqui</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto
-        </p>
+        {isStorageFull && skipCredits ? (
+          <>
+            <p className="text-lg font-medium text-muted-foreground">Armazenamento cheio</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Faça upgrade ou exclua galerias antigas para liberar espaço.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-lg font-medium">Arraste fotos aqui</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto
+            </p>
+          </>
+        )}
         {!skipCredits && !isAdmin && (
           <p className="text-xs text-muted-foreground mt-2 flex items-center justify-center gap-1">
             <Coins className="h-3 w-3" />
