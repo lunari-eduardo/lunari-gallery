@@ -1,59 +1,60 @@
 
+Objetivo: eliminar o 400 no checkout cartão (Select) com diagnóstico determinístico, correção robusta e checklist de paridade com o projeto Gestão.
 
-# Plan: Buy Credits button + View/Delete uploaded photos with credit refund
+1) Diagnóstico já confirmado (baseado nos logs)
+- O fluxo atual está: `asaas-create-customer (200)` → `asaas-create-payment (400)`.
+- O erro visível no front é genérico porque `supabase.functions.invoke()` está propagando só `"Edge Function returned a non-2xx status code"`.
+- O usuário já tem `photographer_accounts.asaas_customer_id` salvo, então o create-customer pode estar apenas retornando ID existente.
+- No projeto atual, o caso com erro é `productType: "select"`; no Gestão, o fluxo “funcionando” é majoritariamente `subscription_yearly` (não é o mesmo ramo).
 
-## 1. Fix "Comprar" button in PhotoUploader credit warning (line 251)
+2) Plano de correção (implementação)
+- Front (`src/hooks/useAsaasSubscription.ts`)
+  - Criar parser de erro para `FunctionsHttpError`, lendo o body JSON (`error.context`) e retornando `data.error` real da edge function.
+  - Aplicar parser em `createCustomer`, `createPayment`, `createSubscription`, `upgrade`.
+- Front (`src/pages/CreditsPayment.tsx`)
+  - Manter UI atual, mas exibir mensagem real de erro do backend (não só mensagem genérica).
+  - Adicionar validação matemática de CPF/CNPJ (não só length), bloqueando envio inválido antes da edge.
+- Edge (`supabase/functions/asaas-create-payment/index.ts`)
+  - Adicionar logs estruturados em etapas: entrada validada, presença de customer, payload sanitizado (sem dados sensíveis), resposta Asaas.
+  - Incluir `requestId` na resposta de erro para rastreio.
+  - Auto-healing para migração de ambiente: se Asaas retornar erro compatível com “customer inexistente/invalid customer”, limpar `asaas_customer_id`, recriar cliente com `creditCardHolderInfo`, e tentar pagamento 1x novamente.
+- Edge (`supabase/functions/asaas-create-customer/index.ts`)
+  - Quando já existir `asaas_customer_id`, validar opcionalmente em sandbox (ou no mínimo permitir `forceRecreate` quando checkout detectar mismatch).
+- Observabilidade
+  - Garantir que todos os `400` retornem `{ error, code?, requestId }` para depuração rápida.
+  - Manter `console.error` com payload de erro Asaas sanitizado.
 
-Currently the button is `disabled`. Change it to navigate to `/credits` using `useNavigate` from react-router-dom.
+3) O que analisar no projeto Gestão (checklist objetivo)
+- Confirmar se o “funciona” foi em `subscription_yearly`; se sim, não compara 1:1 com Select.
+- Comparar secrets:
+  - `ASAAS_ENV` igual (`sandbox`) nos dois projetos.
+  - Chave API pertencente ao mesmo ambiente.
+- Verificar se os `asaas_customer_id` do Gestão foram criados já no sandbox (sem legado de produção).
+- Comparar tratamento de erro no hook:
+  - Se lá já mostra erro real de edge, portar para cá.
+- Comparar logs de edge:
+  - Presença de logs detalhados de resposta Asaas no Gestão; replicar padrão.
 
-**File:** `src/components/PhotoUploader.tsx`
-- Import `useNavigate` from react-router-dom
-- Add `const navigate = useNavigate()` 
-- Replace `disabled` on the Comprar button with `onClick={() => navigate('/credits')}`
+4) Critério de aceite da correção
+- Ao falhar pagamento, UI mostra motivo real (ex.: CPF inválido, cartão recusado, customer inválido), nunca mensagem genérica.
+- Em caso de customer legado inválido, fluxo se autorrepara sem intervenção manual (recria customer e reprocessa 1 tentativa).
+- Checkout Select (cartão) conclui com sucesso com dados válidos em sandbox.
+- Logs permitem identificar causa em <2 minutos (por `requestId` + mensagem Asaas).
 
-## 2. Add "Ver fotos" button + photo grid with delete in GalleryCreate step 4
+5) Sequência de validação após implementar
+- Teste A: CPF/CNPJ inválido → bloqueio no front com mensagem clara.
+- Teste B: CPF válido + cartão de teste sandbox válido → pagamento aprovado.
+- Teste C: Forçar customer inválido em banco → fluxo recria customer e segue.
+- Teste D: Erro intencional no Asaas → front exibe erro retornado da edge.
+- Teste E (paridade): repetir no Gestão para confirmar mesmo padrão de erro/observabilidade.
 
-Currently `uploadedCount > 0` shows a static card with "X fotos enviadas" and no actions. Replace this with:
-
-**File:** `src/pages/GalleryCreate.tsx`
-
-- Add state `showUploadedPhotos` (boolean, default false)
-- Add `isDeletingPhoto` state
-- Import `deletePhoto` from `useSupabaseGalleries`
-- In the "fotos enviadas" card (line ~1416-1430), add a "Ver fotos" button
-- When clicked, toggle a collapsible grid showing all `uploadedPhotos` as thumbnails
-- Each photo has a delete button (X icon on hover)
-- On delete:
-  1. Call `deletePhoto({ galleryId: supabaseGalleryId, photoId })` to remove from R2 + DB
-  2. Call `supabase.rpc('admin_grant_credits', ...)` — actually, we need a simpler approach. Since `consume_photo_credits` decremented the balance, we need to **refund 1 credit** back. We'll use `admin_grant_credits` RPC which already exists, but it requires admin role. Instead, we should update `photographer_accounts.photo_credits` directly or create a new approach.
-
-**Credit refund approach:** The `r2-upload` edge function already handles credit consumption via `consume_photo_credits` RPC. For refund on delete, we'll call the existing `delete-photos` edge function (which already handles R2 + DB cleanup). For credit refund, we need to add a param `refundCredits: true` to the delete-photos call so it can refund. However, modifying the edge function is complex.
-
-**Simpler approach:** Since the `delete-photos` edge function already runs server-side with service role, we can modify it to accept a `refundCredits` flag and call a new RPC or directly increment `photo_credits`. But since we can't easily deploy edge functions here, we'll handle it client-side by calling the existing delete + a separate RPC call.
-
-Looking at available RPCs: `admin_grant_credits` requires admin role. We need a user-callable refund mechanism. The simplest is to directly update `photographer_accounts` — but RLS only allows own-user access. Let me check:
-
-Actually, `photographer_accounts` has `auth.uid() = user_id` policy for ALL. So users can update their own record. We can increment `photo_credits` by 1 after successful delete. This is what we'll do.
-
-**Revised delete flow in GalleryCreate:**
-1. Call `deletePhoto({ galleryId, photoId })` — removes from R2 + DB
-2. If `!skipCredits`: increment `photographer_accounts.photo_credits` by 1 via direct update + decrement `credits_consumed_total` by 1
-3. Update local state: remove photo from `uploadedPhotos`, decrement `uploadedCount`
-4. Refetch credits via `refetchCredits()`
-5. Toast: "Foto excluída e crédito devolvido"
-
-## Summary of changes
-
-### `src/components/PhotoUploader.tsx`
-- Import `useNavigate`
-- Make "Comprar" button functional with `onClick={() => navigate('/credits')}`
-
-### `src/pages/GalleryCreate.tsx`
-- Add `showUploadedPhotos` state
-- Import `deletePhoto` and `isDeletingPhoto` from `useSupabaseGalleries`  
-- Import `usePhotoCredits` for `refetch`
-- Add `handleDeleteUploadedPhoto` function that deletes photo, refunds credit, updates local state
-- Replace static "fotos enviadas" card with expandable version containing "Ver fotos" button
-- Add collapsible photo grid with delete capability on each photo
-- Use photo URL from `storageKey` via `getPhotoUrl` helper
-
+Seção técnica (resumo)
+- Arquivos-alvo:
+  - `src/hooks/useAsaasSubscription.ts`
+  - `src/pages/CreditsPayment.tsx`
+  - `supabase/functions/asaas-create-payment/index.ts`
+  - `supabase/functions/asaas-create-customer/index.ts`
+- Hipótese principal de causa:
+  - erro real do Asaas mascarado no front + possível `asaas_customer_id` legado de ambiente diferente após padronização para sandbox.
+- Evidência forte:
+  - analytics mostra `create-customer 200` seguido de `create-payment 400` no mesmo fluxo.
