@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon, Eye, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +31,9 @@ import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay, buildRegrasFromDiscountPackages } from '@/lib/pricingUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { usePhotoCredits } from '@/hooks/usePhotoCredits';
+import { getDisplayUrl } from '@/lib/photoUrl';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemePreviewCard } from '@/components/ThemePreviewCard';
 import { FontSelect, getFontFamilyById } from '@/components/FontSelect';
@@ -163,6 +166,8 @@ export default function GalleryCreate() {
   const [supabaseGalleryId, setSupabaseGalleryId] = useState<string | null>(null);
   const [isCreatingGallery, setIsCreatingGallery] = useState(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
+  const [showUploadedPhotos, setShowUploadedPhotos] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
 
   // Frozen pricing rules from Gestão session (for PRO+Gallery users)
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
@@ -176,8 +181,47 @@ export default function GalleryCreate() {
   const {
     createGallery: createSupabaseGallery,
     updateGallery,
-    publishGallery: publishSupabaseGallery
+    publishGallery: publishSupabaseGallery,
+    deletePhoto,
   } = useSupabaseGalleries();
+
+  const { refetch: refetchCredits } = usePhotoCredits();
+
+  const handleDeleteUploadedPhoto = async (photoId: string) => {
+    if (!supabaseGalleryId || deletingPhotoId) return;
+    setDeletingPhotoId(photoId);
+    try {
+      await deletePhoto({ galleryId: supabaseGalleryId, photoId });
+
+      // Refund 1 credit
+      if (user) {
+        const { data: acc } = await supabase
+          .from('photographer_accounts')
+          .select('photo_credits, credits_consumed_total')
+          .eq('user_id', user.id)
+          .single();
+        if (acc) {
+          await supabase
+            .from('photographer_accounts')
+            .update({
+              photo_credits: (acc.photo_credits || 0) + 1,
+              credits_consumed_total: Math.max(0, (acc.credits_consumed_total || 0) - 1),
+            })
+            .eq('user_id', user.id);
+        }
+        refetchCredits();
+      }
+
+      setUploadedPhotos(prev => prev.filter(p => p.id !== photoId));
+      setUploadedCount(prev => Math.max(0, prev - 1));
+      toast.success('Foto excluída e crédito devolvido');
+    } catch (err) {
+      console.error('Error deleting photo:', err);
+      toast.error('Erro ao excluir foto');
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  };
 
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
@@ -1413,21 +1457,56 @@ export default function GalleryCreate() {
                 </p>
               </div>}
 
-            {uploadedCount > 0 && <div className="lunari-card p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Image className="h-5 w-5 text-primary" />
+            {uploadedCount > 0 && (
+              <Collapsible open={showUploadedPhotos} onOpenChange={setShowUploadedPhotos}>
+                <div className="lunari-card p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Image className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{uploadedCount} fotos enviadas</p>
+                        <p className="text-sm text-muted-foreground">
+                          Fotos salvas com sucesso
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{uploadedCount} fotos enviadas</p>
-                      <p className="text-sm text-muted-foreground">
-                        Fotos salvas com sucesso
-                      </p>
-                    </div>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Eye className="h-4 w-4 mr-1" />
+                        {showUploadedPhotos ? 'Ocultar' : 'Ver fotos'}
+                      </Button>
+                    </CollapsibleTrigger>
                   </div>
                 </div>
-              </div>}
+                <CollapsibleContent>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 mt-3">
+                    {uploadedPhotos.map((photo) => (
+                      <div key={photo.id} className="relative group aspect-square rounded-lg overflow-hidden bg-muted">
+                        <img
+                          src={getDisplayUrl(photo.storageKey)}
+                          alt={photo.originalFilename}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        <button
+                          onClick={() => handleDeleteUploadedPhoto(photo.id)}
+                          disabled={deletingPhotoId === photo.id}
+                          className="absolute top-1 right-1 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive disabled:opacity-50"
+                        >
+                          {deletingPhotoId === photo.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <X className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
             
           </div>;
