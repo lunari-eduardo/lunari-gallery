@@ -377,7 +377,7 @@ function SelectCardForm({ pkg, formattedPrice }: { pkg: SelectPayment; formatted
             email: user?.email || '',
             cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
             postalCode: cardData.postalCode.replace(/\D/g, ''),
-            addressNumber: cardData.addressNumber || 'S/N',
+            addressNumber: 'S/N',
             phone: cardData.phone.replace(/\D/g, ''),
           },
           remoteIp,
@@ -481,7 +481,7 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
                 email: user?.email || '',
                 cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
                 postalCode: cardData.postalCode.replace(/\D/g, ''),
-                addressNumber: cardData.addressNumber || 'S/N',
+                addressNumber: 'S/N',
                 phone: cardData.phone.replace(/\D/g, ''),
               },
               remoteIp,
@@ -512,7 +512,7 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
                 email: user?.email || '',
                 cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
                 postalCode: cardData.postalCode.replace(/\D/g, ''),
-                addressNumber: cardData.addressNumber || 'S/N',
+                addressNumber: 'S/N',
                 phone: cardData.phone.replace(/\D/g, ''),
               },
               remoteIp,
@@ -542,7 +542,7 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
                 email: user?.email || '',
                 cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
                 postalCode: cardData.postalCode.replace(/\D/g, ''),
-                addressNumber: cardData.addressNumber || 'S/N',
+                addressNumber: 'S/N',
                 phone: cardData.phone.replace(/\D/g, ''),
               },
               remoteIp,
@@ -580,7 +580,6 @@ interface CardData {
   cpfCnpj: string;
   phone: string;
   postalCode: string;
-  addressNumber: string;
   cardNumber: string;
   cardHolderName: string;
   expiryMonth: string;
@@ -606,7 +605,6 @@ function CardCheckoutForm({ onSubmit, submitLabel, isProcessing, providerLabel }
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [phone, setPhone] = useState('');
   const [postalCode, setPostalCode] = useState('');
-  const [addressNumber, setAddressNumber] = useState('');
 
   // Card data
   const [cardNumber, setCardNumber] = useState('');
@@ -654,7 +652,6 @@ function CardCheckoutForm({ onSubmit, submitLabel, isProcessing, providerLabel }
         cpfCnpj,
         phone,
         postalCode,
-        addressNumber,
         cardNumber,
         cardHolderName,
         expiryMonth,
@@ -786,15 +783,9 @@ function CardCheckoutForm({ onSubmit, submitLabel, isProcessing, providerLabel }
         <Label htmlFor="phone">Telefone</Label>
         <Input id="phone" placeholder="(00) 00000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="postalCode">CEP</Label>
-          <Input id="postalCode" placeholder="00000-000" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="addressNumber">Nº endereço</Label>
-          <Input id="addressNumber" placeholder="123" value={addressNumber} onChange={(e) => setAddressNumber(e.target.value)} />
-        </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="postalCode">CEP</Label>
+        <Input id="postalCode" placeholder="00000-000" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
       </div>
 
       <Button className="w-full" size="lg" onClick={() => { if (validatePersonalData()) setStep('card'); }}>
