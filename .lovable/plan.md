@@ -1,33 +1,40 @@
 
 
-# Fix: Show free storage on Credits page + data location answer
+# Enforce Transfer Storage Limits During Upload
 
 ## Problem
-Credits.tsx only checks `hasTransferPlan` (paid plans). When user has only free 0.5GB, it shows "Ative um plano..." marketing text instead of showing the free storage bar. The hook already exposes `hasFreeStorageOnly` and `freeTransferBytes` but Credits.tsx doesn't use them.
+Storage limits exist in `photographer_accounts.free_transfer_bytes` but are never checked during photo uploads. Users can upload beyond their limit. The Dashboard's `TransferStorageIndicator` also hides when there's no paid plan (line 41: `!hasTransferPlan` returns null), so free-storage users never see warnings.
 
-## Fix: `src/pages/Credits.tsx`
+## Changes
 
-1. Destructure `hasFreeStorageOnly` and `freeTransferBytes` from `useTransferStorage()`
-2. Add a new condition branch between `hasTransferPlan` and the fallback marketing text:
+### 1. `src/components/PhotoUploader.tsx` — Add storage limit props and enforcement
 
-```
-hasTransferPlan → show plan name + storage bar (existing)
-hasFreeStorageOnly → show "Armazenamento gratuito" + 0.5GB bar + used/limit
-else → show "Ative um plano..." marketing (existing)
-```
+- Add optional props: `storageLimit?: number`, `storageUsed?: number`, `onStorageLimitHit?: () => void`
+- In `addFiles()`, when `skipCredits` is true (Transfer mode), estimate total bytes of selected files and check against remaining storage
+- If files would exceed limit: calculate how many fit, toast warning "Galeria será salva com X de Y fotos. Faça upgrade ou exclua galerias antigas para liberar espaço.", only queue the files that fit
+- If storage is already full: block upload entirely with toast error
+- Add a storage warning banner (like the credit warning) when storage is ≥90% full
 
-The free storage block will show:
-- Label: "Armazenamento gratuito"
-- Usage: "X MB de 512 MB usados"
-- Progress bar
-- Small note: "Incluído no cadastro"
+### 2. `src/pages/DeliverCreate.tsx` — Pass storage props to PhotoUploader
 
-## Data location answer
+- Pass `storageLimit={storageLimitBytes}`, `storageUsed={storageUsedBytes}` and a callback `onStorageLimitHit` to the PhotoUploader on line 482-489
+- The callback will show a toast and refetch storage data
 
-Credits and storage limits are stored in `photographer_accounts`:
-- `photo_credits` — Select credit balance
-- `free_transfer_bytes` — free storage (0.5GB default)
-- `credits_purchased_total` / `credits_consumed_total` — aggregates
+### 3. `src/pages/DeliverDetail.tsx` — Same storage props for edit page
 
-The `profiles` table only stores identity data (email, name). Mixing billing data into `profiles` is not recommended — `photographer_accounts` is the correct place and already has a 1:1 relationship with `user_id`. Both projects query the same table.
+- Import `useTransferStorage` and pass the same storage props to PhotoUploader on line 276
+
+### 4. `src/pages/Dashboard.tsx` — Show indicator for free storage users too
+
+- Line 41: Change condition from `!hasTransferPlan` to `!hasTransferPlan && !hasFreeStorageOnly`
+- Add `hasFreeStorageOnly` to the destructured values
+- Show storage full badge (destructive) when `storageUsedPercent >= 100`
+
+### 5. `src/pages/Credits.tsx` — Add storage full badge
+
+- When `storageUsedPercent >= 100` (for both paid and free), show a small destructive badge "Armazenamento cheio" next to the progress bar
+
+### Technical detail
+- Storage check is approximate (uses `file.size` of originals as estimate) — matches how `get_transfer_storage_bytes` RPC counts `original_file_size`
+- The server-side (r2-upload edge function) should ideally also enforce limits, but client-side enforcement provides immediate UX feedback
 
