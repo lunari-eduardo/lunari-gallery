@@ -12,6 +12,40 @@ import { toast } from 'sonner';
 import { PixPaymentDisplay } from '@/components/credits/PixPaymentDisplay';
 import { cn } from '@/lib/utils';
 
+/* ─── CPF / CNPJ mathematical validation ─── */
+
+function isValidCPF(cpf: string): boolean {
+  cpf = cpf.replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (10 - i);
+  let rem = (sum * 10) % 11;
+  if (rem === 10) rem = 0;
+  if (rem !== parseInt(cpf[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (11 - i);
+  rem = (sum * 10) % 11;
+  if (rem === 10) rem = 0;
+  return rem === parseInt(cpf[10]);
+}
+
+function isValidCNPJ(cnpj: string): boolean {
+  cnpj = cnpj.replace(/\D/g, '');
+  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+  const weights1 = [5,4,3,2,9,8,7,6,5,4,3,2];
+  const weights2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += parseInt(cnpj[i]) * weights1[i];
+  let rem = sum % 11;
+  const d1 = rem < 2 ? 0 : 11 - rem;
+  if (parseInt(cnpj[12]) !== d1) return false;
+  sum = 0;
+  for (let i = 0; i < 13; i++) sum += parseInt(cnpj[i]) * weights2[i];
+  rem = sum % 11;
+  const d2 = rem < 2 ? 0 : 11 - rem;
+  return parseInt(cnpj[13]) === d2;
+}
+
 /* ─── State types ─── */
 
 interface SelectPayment {
@@ -621,7 +655,13 @@ function CardCheckoutForm({ onSubmit, submitLabel, isProcessing, providerLabel }
   const validatePersonalData = (): boolean => {
     if (!name.trim()) { toast.error('Informe seu nome completo.'); return false; }
     const cleanCpf = cpfCnpj.replace(/\D/g, '');
-    if (cleanCpf.length !== 11 && cleanCpf.length !== 14) { toast.error('CPF ou CNPJ inválido.'); return false; }
+    if (cleanCpf.length === 11) {
+      if (!isValidCPF(cleanCpf)) { toast.error('CPF inválido. Verifique os dígitos.'); return false; }
+    } else if (cleanCpf.length === 14) {
+      if (!isValidCNPJ(cleanCpf)) { toast.error('CNPJ inválido. Verifique os dígitos.'); return false; }
+    } else {
+      toast.error('CPF (11 dígitos) ou CNPJ (14 dígitos) inválido.'); return false;
+    }
     const cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length < 10) { toast.error('Telefone inválido.'); return false; }
     const cleanCep = postalCode.replace(/\D/g, '');
