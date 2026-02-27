@@ -37,14 +37,18 @@ import gallerySelectLogo from '@/assets/gallery-select-logo.png';
 import galleryTransferLogo from '@/assets/gallery-transfer-logo.png';
 
 function TransferStorageIndicator() {
-  const { hasTransferPlan, storageUsedBytes, storageLimitBytes, planName, isAdmin, isLoading, isOverLimit, daysUntilDeletion } = useTransferStorage();
-  if (isLoading || isAdmin || !hasTransferPlan) return null;
+  const { hasTransferPlan, hasFreeStorageOnly, storageUsedBytes, storageLimitBytes, storageUsedPercent, planName, isAdmin, isLoading, isOverLimit, daysUntilDeletion } = useTransferStorage();
+  if (isLoading || isAdmin || (!hasTransferPlan && !hasFreeStorageOnly)) return null;
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <HardDrive className="h-3.5 w-3.5" />
         {formatStorageSize(storageUsedBytes)} de {formatStorageSize(storageLimitBytes)} usados
         {planName && <span>· {planName}</span>}
+        {!hasTransferPlan && hasFreeStorageOnly && <span>· Gratuito</span>}
+        {storageUsedPercent >= 100 && (
+          <span className="ml-1 inline-flex items-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-destructive-foreground">Cheio</span>
+        )}
       </p>
       {isOverLimit && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2.5">

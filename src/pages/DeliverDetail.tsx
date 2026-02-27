@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
+import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { getPhotoUrl } from '@/lib/photoUrl';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,8 @@ export default function DeliverDetail() {
     deletePhoto,
     isLoading: galleriesLoading,
   } = useSupabaseGalleries();
+
+  const transferStorage = useTransferStorage();
 
   const [photos, setPhotos] = useState<GaleriaPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -276,6 +279,8 @@ export default function DeliverDetail() {
                 galleryId={id!}
                 onUploadComplete={handleUploadComplete}
                 skipCredits={true}
+                storageLimit={transferStorage.storageLimitBytes}
+                storageUsed={transferStorage.storageUsedBytes}
               />
             </div>
           )}

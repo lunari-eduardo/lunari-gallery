@@ -484,6 +484,8 @@ export default function DeliverCreate() {
                   maxLongEdge={2560}
                   allowDownload={true}
                   skipCredits={true}
+                  storageLimit={storageLimitBytes}
+                  storageUsed={storageUsedBytes}
                   onUploadComplete={handleUploadComplete}
                   onUploadingChange={setIsUploading}
                 />

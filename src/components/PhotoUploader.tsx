@@ -26,6 +26,9 @@ interface PhotoUploaderProps {
   watermarkConfig?: WatermarkConfig;
   allowDownload?: boolean;
   skipCredits?: boolean;
+  storageLimit?: number;
+  storageUsed?: number;
+  onStorageLimitHit?: () => void;
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
@@ -38,6 +41,9 @@ export function PhotoUploader({
   watermarkConfig,
   allowDownload = false,
   skipCredits = false,
+  storageLimit,
+  storageUsed,
+  onStorageLimitHit,
   onUploadComplete,
   onUploadStart,
   onUploadingChange,
@@ -111,9 +117,13 @@ export function PhotoUploader({
     };
   }, []);
 
+  const storageRemaining = (storageLimit != null && storageUsed != null) ? Math.max(0, storageLimit - storageUsed) : Infinity;
+  const storageUsedPercent = (storageLimit != null && storageLimit > 0 && storageUsed != null) ? Math.round((storageUsed / storageLimit) * 100) : 0;
+  const isStorageFull = storageLimit != null && storageUsed != null && storageUsed >= storageLimit;
+
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
-    const validFiles = fileArray.filter(isValidImageType);
+    let validFiles = fileArray.filter(isValidImageType);
 
     if (validFiles.length !== fileArray.length) {
       toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
@@ -122,6 +132,32 @@ export function PhotoUploader({
     if (!skipCredits && !isAdmin && !canUpload(validFiles.length)) {
       toast.error(`Créditos insuficientes. Você tem ${photoCredits} créditos e está tentando enviar ${validFiles.length} fotos.`);
       return;
+    }
+
+    // Enforce storage limits for Transfer galleries
+    if (skipCredits && storageLimit != null && storageUsed != null) {
+      const remaining = Math.max(0, storageLimit - storageUsed);
+      if (remaining <= 0) {
+        toast.error('Armazenamento cheio. Faça upgrade ou exclua galerias antigas para liberar espaço.');
+        onStorageLimitHit?.();
+        return;
+      }
+      let cumulativeSize = 0;
+      const fitFiles: File[] = [];
+      for (const f of validFiles) {
+        if (cumulativeSize + f.size <= remaining) {
+          cumulativeSize += f.size;
+          fitFiles.push(f);
+        } else {
+          break;
+        }
+      }
+      if (fitFiles.length < validFiles.length) {
+        toast.warning(`Galeria será salva com ${fitFiles.length} de ${validFiles.length} fotos. Faça upgrade ou exclua galerias antigas para liberar espaço.`);
+        onStorageLimitHit?.();
+      }
+      if (fitFiles.length === 0) return;
+      validFiles = fitFiles;
     }
 
     // Refresh session before starting
@@ -139,7 +175,7 @@ export function PhotoUploader({
       onUploadStart?.();
       onUploadingChange?.(true);
     }
-  }, [isAdmin, canUpload, photoCredits, skipCredits, isUploading, getPipeline, onUploadStart, onUploadingChange]);
+  }, [isAdmin, canUpload, photoCredits, skipCredits, isUploading, getPipeline, onUploadStart, onUploadingChange, storageLimit, storageUsed, onStorageLimitHit]);
 
   const removeItem = useCallback((id: string) => {
     pipelineRef.current?.revokePreview(id);
@@ -185,6 +221,23 @@ export function PhotoUploader({
 
   return (
     <div className={cn('space-y-4', className)}>
+      {/* Storage Warning for Transfer */}
+      {skipCredits && storageLimit != null && storageUsedPercent >= 90 && (
+        <div className={cn(
+          "flex items-center gap-2 p-3 rounded-lg border",
+          isStorageFull
+            ? "bg-destructive/10 border-destructive/20"
+            : "bg-warning/10 border-warning/20"
+        )}>
+          <AlertTriangle className={cn("h-4 w-4 shrink-0", isStorageFull ? "text-destructive" : "text-warning")} />
+          <span className={cn("text-sm", isStorageFull ? "text-destructive" : "text-warning")}>
+            {isStorageFull
+              ? 'Armazenamento cheio. Faça upgrade ou exclua galerias antigas.'
+              : 'Armazenamento quase cheio. Considere fazer upgrade.'}
+          </span>
+        </div>
+      )}
+
       {/* Credit Warning */}
       {!skipCredits && !isAdmin && photoCredits < 10 && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
