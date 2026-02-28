@@ -1896,6 +1896,7 @@ export type Database = {
           created_at: string
           credits_consumed_total: number | null
           credits_purchased_total: number | null
+          credits_subscription: number
           deletion_scheduled_at: string | null
           free_transfer_bytes: number
           galleries_published_total: number
@@ -1918,6 +1919,7 @@ export type Database = {
           created_at?: string
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
+          credits_subscription?: number
           deletion_scheduled_at?: string | null
           free_transfer_bytes?: number
           galleries_published_total?: number
@@ -1940,6 +1942,7 @@ export type Database = {
           created_at?: string
           credits_consumed_total?: number | null
           credits_purchased_total?: number | null
+          credits_subscription?: number
           deletion_scheduled_at?: string | null
           free_transfer_bytes?: number
           galleries_published_total?: number
@@ -3071,6 +3074,10 @@ export type Database = {
         Args: { p_appointment_id: string; p_keep_payments?: boolean }
         Returns: Json
       }
+      expire_subscription_credits: {
+        Args: { _user_id: string }
+        Returns: undefined
+      }
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
@@ -3115,6 +3122,10 @@ export type Database = {
       }
       recompute_session_paid: {
         Args: { p_session_id: string }
+        Returns: undefined
+      }
+      renew_subscription_credits: {
+        Args: { _amount: number; _user_id: string }
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }

@@ -16,8 +16,14 @@ const PLANS: Record<string, { monthlyPrice: number; yearlyPrice: number; name: s
   transfer_20gb: { monthlyPrice: 2490, yearlyPrice: 23904, name: "Transfer 20GB" },
   transfer_50gb: { monthlyPrice: 3490, yearlyPrice: 33504, name: "Transfer 50GB" },
   transfer_100gb: { monthlyPrice: 5990, yearlyPrice: 57504, name: "Transfer 100GB" },
-  combo_studio_pro: { monthlyPrice: 4490, yearlyPrice: 45278, name: "Studio Pro + Select 2k" },
-  combo_completo: { monthlyPrice: 6490, yearlyPrice: 65478, name: "Studio Pro + Select 2k + Transfer 20GB" },
+  combo_pro_select2k: { monthlyPrice: 4490, yearlyPrice: 45259, name: "Studio Pro + Select 2k" },
+  combo_completo: { monthlyPrice: 6490, yearlyPrice: 66198, name: "Studio Pro + Select 2k + Transfer 20GB" },
+};
+
+// Plans that grant subscription credits per cycle
+const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
+  combo_pro_select2k: 2000,
+  combo_completo: 2000,
 };
 
 function getNextBusinessDay(): string {
@@ -217,6 +223,20 @@ Deno.serve(async (req) => {
 
     if (insertError) {
       console.error("Insert error:", insertError);
+    }
+
+    // Grant subscription credits if plan includes them (combos)
+    const subCredits = PLAN_SUBSCRIPTION_CREDITS[planType];
+    if (subCredits && subCredits > 0) {
+      const { error: creditError } = await adminClient.rpc("renew_subscription_credits", {
+        _user_id: userId,
+        _amount: subCredits,
+      });
+      if (creditError) {
+        console.error("Failed to grant subscription credits:", creditError);
+      } else {
+        console.log(`Granted ${subCredits} subscription credits for plan ${planType}`);
+      }
     }
 
     console.log("Subscription created successfully:", asaasData.id, "status:", asaasData.status);
