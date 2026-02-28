@@ -15,6 +15,12 @@ const STORAGE_LIMITS: Record<string, number> = {
   combo_completo: 20 * GB,
 };
 
+// Plans that grant subscription credits per cycle
+const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
+  combo_pro_select2k: 2000,
+  combo_completo: 2000,
+};
+
 const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
   // Studio
   studio_starter: { monthly: 1490, yearly: 15198 },
@@ -253,12 +259,34 @@ Deno.serve(async (req) => {
     if (event === "SUBSCRIPTION_DELETED" || event === "SUBSCRIPTION_INACTIVATED") {
       const subId = subscription?.id || body.id;
       if (subId) {
+        // Get subscription before updating status to know the plan
+        const { data: sub } = await adminClient
+          .from("subscriptions_asaas")
+          .select("*")
+          .eq("asaas_subscription_id", subId)
+          .single();
+
         await adminClient
           .from("subscriptions_asaas")
           .update({ status: "CANCELLED" })
           .eq("asaas_subscription_id", subId);
 
         console.log("Subscription cancelled:", subId);
+
+        // Expire subscription credits if plan included them
+        if (sub) {
+          const subCredits = PLAN_SUBSCRIPTION_CREDITS[sub.plan_type];
+          if (subCredits && subCredits > 0) {
+            const { error: expireError } = await adminClient.rpc("expire_subscription_credits", {
+              _user_id: sub.user_id,
+            });
+            if (expireError) {
+              console.error("Failed to expire subscription credits:", expireError);
+            } else {
+              console.log(`Expired subscription credits for user ${sub.user_id}`);
+            }
+          }
+        }
       }
     }
 
@@ -272,15 +300,31 @@ Deno.serve(async (req) => {
 
         console.log("Subscription renewed:", subId);
 
-        // Check for pending downgrade on renewal
         const { data: sub } = await adminClient
           .from("subscriptions_asaas")
           .select("*")
           .eq("asaas_subscription_id", subId)
           .single();
 
-        if (sub?.pending_downgrade_plan) {
-          await applyDowngrade(adminClient, sub);
+        if (sub) {
+          // Renew subscription credits if plan includes them
+          const subCredits = PLAN_SUBSCRIPTION_CREDITS[sub.plan_type];
+          if (subCredits && subCredits > 0) {
+            const { error: creditError } = await adminClient.rpc("renew_subscription_credits", {
+              _user_id: sub.user_id,
+              _amount: subCredits,
+            });
+            if (creditError) {
+              console.error("Failed to renew subscription credits:", creditError);
+            } else {
+              console.log(`Renewed ${subCredits} subscription credits for user ${sub.user_id}`);
+            }
+          }
+
+          // Check for pending downgrade on renewal
+          if (sub.pending_downgrade_plan) {
+            await applyDowngrade(adminClient, sub);
+          }
         }
       }
     }

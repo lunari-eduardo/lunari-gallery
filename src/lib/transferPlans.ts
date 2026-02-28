@@ -113,3 +113,15 @@ export function formatStorageSize(bytes: number): string {
 
 /** Free storage for all users (0.5GB). */
 export const FREE_TRANSFER_BYTES = 536870912; // 0.5GB
+
+/** Monthly subscription credits granted per plan (only plans that include Select). */
+export const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
+  combo_pro_select2k: 2000,
+  combo_completo: 2000,
+};
+
+/** Returns how many subscription credits a plan grants per cycle, or 0. */
+export function getPlanSubscriptionCredits(planType: string | null | undefined): number {
+  if (!planType) return 0;
+  return PLAN_SUBSCRIPTION_CREDITS[planType] ?? 0;
+}

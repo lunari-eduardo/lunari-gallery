@@ -18,7 +18,7 @@ import transferLogo from '@/assets/gallery-transfer-logo.png';
 export default function Credits() {
   const navigate = useNavigate();
   const { isAdmin } = useAuthContext();
-  const { photoCredits, isLoading: isLoadingCredits } = usePhotoCredits();
+  const { photoCredits, creditsPurchased, creditsSubscription, isLoading: isLoadingCredits } = usePhotoCredits();
   const { purchases } = useCreditPackages();
   const { storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, hasFreeStorageOnly, planName, isLoading: isLoadingTransfer } = useTransferStorage();
 
@@ -59,9 +59,15 @@ export default function Credits() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">créditos disponíveis</p>
-              <p className="text-xs text-muted-foreground/60">
-                Seus créditos não vencem
-              </p>
+              {creditsSubscription > 0 ? (
+                <p className="text-xs text-muted-foreground/60">
+                  {creditsSubscription.toLocaleString('pt-BR')} do plano · {creditsPurchased.toLocaleString('pt-BR')} avulsos
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground/60">
+                  Seus créditos não vencem
+                </p>
+              )}
             </div>
           )}
 
