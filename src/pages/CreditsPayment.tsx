@@ -65,6 +65,7 @@ interface SubscriptionPayment {
   isUpgrade?: boolean;
   prorataValueCents?: number;
   currentSubscriptionId?: string;
+  subscriptionIdsToCancel?: string[];
   currentPlanName?: string;
 }
 
@@ -497,10 +498,9 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
             remoteIp = ipData.ip || '';
           } catch { remoteIp = ''; }
 
-          if (isUpgrade && pkg.currentSubscriptionId) {
-            // Upgrade flow
-            const result = await upgradeSubscription({
-              currentSubscriptionId: pkg.currentSubscriptionId,
+          if (isUpgrade && (pkg.currentSubscriptionId || pkg.subscriptionIdsToCancel?.length)) {
+            // Upgrade flow — support both single and multi-subscription cancel
+            const upgradeBody: any = {
               newPlanType: pkg.planType,
               billingCycle: pkg.billingCycle,
               creditCard: {
@@ -519,7 +519,16 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
                 phone: cardData.phone.replace(/\D/g, ''),
               },
               remoteIp,
-            });
+            };
+
+            // Multi-sub cancel for combos
+            if (pkg.subscriptionIdsToCancel && pkg.subscriptionIdsToCancel.length > 0) {
+              upgradeBody.subscriptionIdsToCancel = pkg.subscriptionIdsToCancel;
+            } else if (pkg.currentSubscriptionId) {
+              upgradeBody.currentSubscriptionId = pkg.currentSubscriptionId;
+            }
+
+            const result = await upgradeSubscription(upgradeBody);
 
             if (result.status === 'ACTIVE' || result.newSubscriptionId) {
               toast.success('Upgrade realizado com sucesso!');

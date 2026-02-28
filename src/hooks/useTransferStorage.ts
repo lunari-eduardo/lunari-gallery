@@ -7,41 +7,41 @@ import { differenceInDays } from 'date-fns';
 export function useTransferStorage() {
   const { user, isAdmin } = useAuthContext();
 
-  // Fetch active subscription plan_type (Transfer or Combo with transfer)
+  // Fetch active subscription with transfer storage (user may have multiple subs)
   const { data: subscription, isLoading: isLoadingSub } = useQuery({
     queryKey: ['transfer-subscription', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      // Try ACTIVE/PENDING/OVERDUE first
-      const { data: activeSub, error: activeError } = await supabase
+      // Fetch ALL ACTIVE/PENDING/OVERDUE subscriptions
+      const { data: activeSubs, error: activeError } = await supabase
         .from('subscriptions_asaas' as any)
         .select('plan_type, status')
         .eq('user_id', user.id)
         .in('status', ['ACTIVE', 'PENDING', 'OVERDUE'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
       if (activeError) {
         console.error('Error fetching transfer subscription:', activeError);
         return null;
       }
-      if (activeSub) return activeSub as unknown as { plan_type: string; status: string };
+      const activeCasted = (activeSubs as unknown as { plan_type: string; status: string }[]) || [];
+      // Find the one that has transfer storage
+      const transferSub = activeCasted.find(s => hasTransferStorage(s.plan_type));
+      if (transferSub) return transferSub;
 
       // Fallback: CANCELLED with future next_due_date (still in active period)
-      const { data: cancelledSub, error: cancelledError } = await supabase
+      const { data: cancelledSubs, error: cancelledError } = await supabase
         .from('subscriptions_asaas' as any)
         .select('plan_type, status')
         .eq('user_id', user.id)
         .eq('status', 'CANCELLED')
         .gte('next_due_date', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
       if (cancelledError) {
         console.error('Error fetching cancelled subscription:', cancelledError);
         return null;
       }
-      return (cancelledSub as unknown as { plan_type: string; status: string }) || null;
+      const cancelledCasted = (cancelledSubs as unknown as { plan_type: string; status: string }[]) || [];
+      return cancelledCasted.find(s => hasTransferStorage(s.plan_type)) || null;
     },
     enabled: !!user?.id,
   });
