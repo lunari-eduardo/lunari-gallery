@@ -1,39 +1,46 @@
 
 
-## Diagnóstico
+## Redesign da página Gerenciar Assinaturas
 
-### Problema 1: Combo cards inativos na página Credits
-Os botões "Quero integrar" e "Estruturar meu negócio" em `Credits.tsx` (linhas 238 e 258) chamam `toast.info('Em breve!')` em vez de navegar para o checkout. Na página `CreditsCheckout.tsx`, os combos já estão funcionais (linhas 402-411).
+### Objetivo
+Alinhar o visual com a página de Configurações (padrão `lunari-card`) e unificar o aviso de cancelamento **dentro** do card do plano.
 
-### Problema 2: Plano Transfer ativo não aparece no Gallery
-O hook `useTransferStorage.ts` busca a assinatura ativa com `.limit(1).maybeSingle()` **sem filtrar por plan_type**. O usuário `bb4e...` possui `studio_starter` (ACTIVE) e `transfer_5gb` (ACTIVE). Como a query ordena por `created_at DESC` e retorna apenas 1 registro, provavelmente retorna `studio_starter` (criado mais recentemente). Como `hasTransferStorage('studio_starter')` retorna `false`, a UI mostra "Armazenamento gratuito".
+### Mudanças em `src/pages/SubscriptionManagement.tsx`
 
----
+**1. Estrutura do SubscriptionCard — unificar tudo em um único `lunari-card`**
 
-## Plano de Implementação
+Cada assinatura será um único card contendo:
+- Header: ícone + nome do plano + badge de status
+- Grid de detalhes (valor, próxima cobrança, assinante desde)
+- Se cancelada mas ainda ativa: banner amber **dentro** do card com botão "Desfazer cancelamento"
+- Se há downgrade pendente: banner amber **dentro** do card
+- Ações (Upgrade/Downgrade + Cancelar) **dentro** do card, separadas por `Separator`
 
-### 1. Corrigir `useTransferStorage` para buscar assinatura com transfer
-Em `src/hooks/useTransferStorage.ts`, alterar a query de assinatura ativa para buscar **todas** as assinaturas ativas e depois filtrar localmente pela que tem transfer storage. Alternativa: buscar todas e usar `hasTransferStorage()` para encontrar a correta.
+**2. Estilo visual**
+- Trocar `rounded-xl border bg-card` por classe `lunari-card`
+- Usar padrão icon+title do Settings (div 10x10 rounded-lg bg-primary/10 + ícone)
+- Remover cards separados para aviso de cancelamento, downgrade e ações
+- Separar seções internas com `border-t` ou `Separator`
 
-- Remover `.limit(1).maybeSingle()` na query ativa
-- Buscar todas as ativas e filtrar com `hasTransferStorage(plan_type)`
-- Aplicar mesma lógica ao fallback de canceladas
+**3. Layout do card unificado:**
+```text
+┌─────────────────────────────────────────────┐
+│ [icon] Plano Atual                  [Badge] │
+│         Transfer 5 GB                       │
+│         Plano mensal                        │
+│─────────────────────────────────────────────│
+│ 💳 Valor    📅 Próx. cobrança   📅 Desde   │
+│─────────────────────────────────────────────│
+│ ⚠️ Assinatura cancelada — ativo até X      │  ← só se cancelada
+│    [Desfazer cancelamento]                  │
+│─────────────────────────────────────────────│
+│ ⚠️ Downgrade agendado para Y  [Cancelar]   │  ← só se pendente
+│─────────────────────────────────────────────│
+│ [Upgrade/Downgrade]  [Cancelar assinatura]  │  ← só se ativa
+│ Alterações proporcionais ao período atual.  │
+└─────────────────────────────────────────────┘
+```
 
-### 2. Ativar combo cards na página Credits
-Em `src/pages/Credits.tsx`, substituir `toast.info('Em breve!')` por navegação para o checkout:
-- "Quero integrar" → `navigate('/credits/checkout?tab=select')` (scroll para combos)
-- "Estruturar meu negócio" → `navigate('/credits/checkout?tab=select')` (scroll para combos)
-
-### 3. Verificar prorata no checkout de combos
-Na `CreditsCheckout.tsx`, a detecção de upgrade (`hasActiveTransferSub`) verifica apenas `activeSub` (primeira assinatura). Para combos, o usuário pode ter Studio + Transfer ativos simultaneamente. O `handleSubscribe` no combo já passa para a tela de pagamento, mas a prorata precisa considerar **ambas** assinaturas que serão canceladas.
-
-- Na chamada `handleSubscribe` para combos, verificar se há `transferSub` e/ou `studioSub` ativos
-- Se sim, passar `subscriptionIdsToCancel[]` em vez de `currentSubscriptionId` singular
-- Atualizar `CreditsPayment.tsx` para aceitar array de IDs e chamar `asaas-upgrade-subscription` com `subscriptionIdsToCancel`
-
-### Arquivos impactados
-- `src/hooks/useTransferStorage.ts` — corrigir query de assinatura
-- `src/pages/Credits.tsx` — ativar botões combo
-- `src/pages/CreditsCheckout.tsx` — prorata multi-assinatura para combos
-- `src/pages/CreditsPayment.tsx` — suportar upgrade com múltiplas assinaturas canceladas
+### Arquivo impactado
+- `src/pages/SubscriptionManagement.tsx` — rewrite do `SubscriptionCard`
 
