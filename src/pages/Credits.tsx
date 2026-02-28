@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Infinity, ShoppingCart, CheckCircle2, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { toast } from 'sonner';
+
 import selectLogo from '@/assets/gallery-select-logo.png';
 import transferLogo from '@/assets/gallery-transfer-logo.png';
 
@@ -235,7 +235,7 @@ export default function Credits() {
               <p className="text-xl font-bold text-primary">
                 R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
               </p>
-              <Button size="sm" className="px-4" onClick={() => toast.info('Em breve!')}>
+              <Button size="sm" className="px-4" onClick={() => navigate('/credits/checkout?tab=select')}>
                 Quero integrar
               </Button>
             </div>
@@ -255,7 +255,7 @@ export default function Credits() {
               <p className="text-xl font-bold text-primary">
                 R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
               </p>
-              <Button size="sm" className="px-4" onClick={() => toast.info('Em breve!')}>
+              <Button size="sm" className="px-4" onClick={() => navigate('/credits/checkout?tab=select')}>
                 Estruturar meu negócio
               </Button>
             </div>

@@ -108,7 +108,8 @@ interface CreatePaymentParams {
 }
 
 interface UpgradeSubscriptionParams {
-  currentSubscriptionId: string;
+  currentSubscriptionId?: string;
+  subscriptionIdsToCancel?: string[];
   newPlanType: string;
   billingCycle: 'MONTHLY' | 'YEARLY';
   creditCard: {

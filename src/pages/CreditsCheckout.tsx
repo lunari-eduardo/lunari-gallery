@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
-import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
+import { useAsaasSubscription, AsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -145,6 +145,12 @@ export default function CreditsCheckout() {
   const hasActiveTransferSub = !!activeSub && activeSub.status === 'ACTIVE' && activeTab === 'transfer';
   const isUpgradeMode = urlUpgradeMode || hasActiveTransferSub;
 
+  // For combos, user may have Studio + Transfer active simultaneously
+  // Collect all active subscription IDs that would be cancelled
+  const getActiveSubsToCancel = (): AsaasSubscription[] => {
+    return allSubs.filter(s => s.status === 'ACTIVE' || s.status === 'PENDING' || s.status === 'OVERDUE');
+  };
+
   const currentPlanType = activeSub?.plan_type || urlCurrentPlan;
   const currentBillingCycle = activeSub?.billing_cycle || urlBillingCycle;
   const nextDueDate = activeSub?.next_due_date || urlNextDueDate;
@@ -202,15 +208,57 @@ export default function CreditsCheckout() {
         },
       });
     } else {
-      navigate('/credits/checkout/pay', {
-        state: {
-          type: 'subscription',
-          planType,
-          planName,
-          billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
-          priceCents,
-        },
-      });
+      // Check if this is a combo and user has existing subs to cancel
+      const subsToCancel = getActiveSubsToCancel();
+      const isComboUpgrade = subsToCancel.length > 0 && (planType === 'combo_pro_select2k' || planType === 'combo_completo');
+
+      if (isComboUpgrade) {
+        const newPlanPrices = ALL_PLAN_PRICES[planType];
+        const newPriceCentsForCycle = selectedCycle === 'YEARLY'
+          ? (newPlanPrices?.yearly || priceCents)
+          : (newPlanPrices?.monthly || priceCents);
+
+        // Calculate combined prorata from all existing subs
+        let totalCreditCents = 0;
+        const cancelNames: string[] = [];
+        for (const sub of subsToCancel) {
+          const subPrices = ALL_PLAN_PRICES[sub.plan_type];
+          if (!subPrices) continue;
+          const subPriceCents = sub.billing_cycle === 'YEARLY' ? subPrices.yearly : subPrices.monthly;
+          const subCycleDays = sub.billing_cycle === 'YEARLY' ? 365 : 30;
+          const subDaysRemaining = sub.next_due_date
+            ? Math.max(0, differenceInDays(new Date(sub.next_due_date), new Date()))
+            : 0;
+          totalCreditCents += Math.round(subPriceCents * (subDaysRemaining / subCycleDays));
+          cancelNames.push(getPlanDisplayName(sub.plan_type) || sub.plan_type);
+        }
+
+        const prorataValueCents = Math.max(0, newPriceCentsForCycle - totalCreditCents);
+
+        navigate('/credits/checkout/pay', {
+          state: {
+            type: 'subscription',
+            planType,
+            planName,
+            billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
+            priceCents: newPriceCentsForCycle,
+            isUpgrade: true,
+            prorataValueCents,
+            subscriptionIdsToCancel: subsToCancel.map(s => s.id),
+            currentPlanName: cancelNames.join(' + '),
+          },
+        });
+      } else {
+        navigate('/credits/checkout/pay', {
+          state: {
+            type: 'subscription',
+            planType,
+            planName,
+            billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
+            priceCents,
+          },
+        });
+      }
     }
   };
 
