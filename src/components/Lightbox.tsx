@@ -167,7 +167,13 @@ export function Lightbox({
                      activeElement?.tagName === 'TEXTAREA' ||
                      activeElement?.getAttribute('contenteditable') === 'true';
     
-    if (e.key === 'Escape') onClose();
+    if (e.key === 'Escape') {
+      if (window.history.state?.lightbox) {
+        closedByPopstateRef.current = true;
+        window.history.back();
+      }
+      onClose();
+    }
     
     // Only process navigation and selection shortcuts when not typing
     if (!isTyping) {
@@ -179,6 +185,27 @@ export function Lightbox({
       }
     }
   }, [currentIndex, photos.length, currentPhoto?.id, disabled, onClose, onNavigate, onSelect]);
+
+  // Push history state so mobile back button closes lightbox instead of navigating away
+  const closedByPopstateRef = useRef(false);
+
+  useEffect(() => {
+    window.history.pushState({ lightbox: true }, '');
+
+    const handlePopstate = () => {
+      closedByPopstateRef.current = true;
+      onClose();
+    };
+
+    window.addEventListener('popstate', handlePopstate);
+    return () => {
+      window.removeEventListener('popstate', handlePopstate);
+      // If closing via cleanup (unmount) and we still have our history entry, remove it
+      if (!closedByPopstateRef.current && window.history.state?.lightbox) {
+        window.history.back();
+      }
+    };
+  }, []); // intentionally empty – run once on mount
 
   // Block native browser gestures and keyboard handling
   useEffect(() => {
@@ -319,9 +346,17 @@ export function Lightbox({
     setShowComment(false);
   };
 
+  const handleManualClose = useCallback(() => {
+    if (window.history.state?.lightbox) {
+      closedByPopstateRef.current = true;
+      window.history.back();
+    }
+    onClose();
+  }, [onClose]);
+
   const handleBackgroundClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
-      onClose();
+      handleManualClose();
     }
   };
 
@@ -381,7 +416,7 @@ export function Lightbox({
             variant="ghost"
             size="icon"
             className="text-white hover:bg-white/10"
-            onClick={onClose}
+            onClick={handleManualClose}
           >
             <X className="h-5 w-5" />
           </Button>

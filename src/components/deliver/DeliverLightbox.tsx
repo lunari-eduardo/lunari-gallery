@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { DeliverPhoto } from './DeliverPhotoGrid';
@@ -22,9 +22,36 @@ export function DeliverLightbox({ photos, currentIndex, onClose, onNavigate, onD
     if (currentIndex < photos.length - 1) onNavigate(currentIndex + 1);
   }, [currentIndex, photos.length, onNavigate]);
 
+  // Push history state so mobile back button closes lightbox
+  const closedByPopstateRef = useRef(false);
+
+  useEffect(() => {
+    window.history.pushState({ lightbox: true }, '');
+
+    const handlePopstate = () => {
+      closedByPopstateRef.current = true;
+      onClose();
+    };
+
+    window.addEventListener('popstate', handlePopstate);
+    return () => {
+      window.removeEventListener('popstate', handlePopstate);
+      if (!closedByPopstateRef.current && window.history.state?.lightbox) {
+        window.history.back();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        // Manual close: remove history entry
+        if (window.history.state?.lightbox) {
+          closedByPopstateRef.current = true;
+          window.history.back();
+        }
+        onClose();
+      }
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
     };
@@ -56,7 +83,13 @@ export function DeliverLightbox({ photos, currentIndex, onClose, onNavigate, onD
             <Download className="w-5 h-5" />
           </button>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (window.history.state?.lightbox) {
+                closedByPopstateRef.current = true;
+                window.history.back();
+              }
+              onClose();
+            }}
             className="p-2 text-white/70 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
