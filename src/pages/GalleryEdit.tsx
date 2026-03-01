@@ -526,7 +526,14 @@ export default function GalleryEdit() {
                 Fotos da Galeria
               </CardTitle>
               <CardDescription>
-                {photos.length || localPhotoCount || gallery.totalFotos} fotos nesta galeria
+                {(() => {
+                  const total = photos.length || localPhotoCount || gallery.totalFotos;
+                  if (activeFolderId) {
+                    const folderCount = photos.filter(p => p.pastaId === activeFolderId).length;
+                    return `${folderCount} fotos nesta pasta (${total} total)`;
+                  }
+                  return `${total} fotos nesta galeria`;
+                })()}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -537,16 +544,21 @@ export default function GalleryEdit() {
                 onActiveFolderChange={setActiveFolderId}
               />
 
-              {/* Photo List */}
-              {isLoadingPhotos ? (
+              {/* Photo List - filtered by active folder */}
+              {(() => {
+                const filteredPhotos = activeFolderId
+                  ? photos.filter((p) => p.pastaId === activeFolderId)
+                  : photos;
+                
+                return isLoadingPhotos ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              ) : photos.length > 0 ? (
+              ) : filteredPhotos.length > 0 ? (
                 <ScrollArea className="h-[450px] rounded-md border">
                   <Table>
                     <TableBody>
-                      {photos.map((photo) => (
+                      {filteredPhotos.map((photo) => (
                         <TableRow key={photo.id}>
                           <TableCell className="w-14 p-2">
                             <img
@@ -578,9 +590,10 @@ export default function GalleryEdit() {
                 </ScrollArea>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhuma foto nesta galeria
+                  {activeFolderId ? 'Nenhuma foto nesta pasta' : 'Nenhuma foto nesta galeria'}
                 </p>
-              )}
+              );
+              })()}
 
               {/* Upload Button / Uploader */}
               {!showPhotoUploader ? (

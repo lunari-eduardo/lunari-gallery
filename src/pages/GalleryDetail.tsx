@@ -80,7 +80,25 @@ export default function GalleryDetail() {
     enabled: !!supabaseGallery && !!id,
   });
 
-  // Fetch gallery actions from database for timeline
+  // Fetch gallery folders
+  const { data: galleryFolders = [] } = useQuery({
+    queryKey: ['galeria-pastas', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('galeria_pastas')
+        .select('*')
+        .eq('galeria_id', id!)
+        .order('ordem');
+      if (error) {
+        console.error('Error fetching folders:', error);
+        return [];
+      }
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
+
   const { data: galleryActions = [] } = useQuery({
     queryKey: ['galeria-acoes', id],
     queryFn: async () => {
@@ -247,7 +265,7 @@ export default function GalleryDetail() {
       isFavorite: photo.isFavorite ?? false,
       comment: photo.comment || undefined,
       order: photo.orderIndex || index,
-      folderId: (photo as any).pastaId || null,
+      folderId: photo.pastaId || null,
     }));
   }, [supabasePhotos, supabaseGallery, getPhotoUrl]);
 
@@ -930,6 +948,7 @@ export default function GalleryDetail() {
         photos={transformedPhotos}
         clientName={supabaseGallery.clienteNome || 'Cliente'}
         filter={codesFilter}
+        folders={galleryFolders}
       />
 
       {/* Send Gallery Modal */}

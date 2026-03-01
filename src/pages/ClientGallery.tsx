@@ -1616,20 +1616,40 @@ export default function ClientGallery() {
         valorJaPago={valorJaPago}
       />
 
-      {lightboxIndex !== null && (
-        <Lightbox
-          photos={localPhotos}
-          currentIndex={lightboxIndex}
-          allowComments={gallery.settings.allowComments}
-          allowDownload={gallery.settings.allowDownload}
-          disabled={isBlocked}
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={setLightboxIndex}
-          onSelect={(photoId) => toggleSelection(photoId)}
-          onComment={handleComment}
-          onFavorite={handleFavorite}
-        />
-      )}
+      {lightboxIndex !== null && (() => {
+        const lightboxPhotos = (hasFolders && activeFolderId) ? displayPhotos : localPhotos;
+        const lightboxIdx = (hasFolders && activeFolderId)
+          ? displayPhotos.findIndex((_, i) => {
+              const originalIdx = localPhotos.findIndex(p => p.id === displayPhotos[i]?.id);
+              return originalIdx === lightboxIndex;
+            })
+          : lightboxIndex;
+        const actualIdx = lightboxIdx >= 0 ? lightboxIdx : 0;
+        return (
+          <Lightbox
+            photos={lightboxPhotos}
+            currentIndex={actualIdx}
+            allowComments={gallery.settings.allowComments}
+            allowDownload={gallery.settings.allowDownload}
+            disabled={isBlocked}
+            onClose={() => setLightboxIndex(null)}
+            onNavigate={(idx) => {
+              if (hasFolders && activeFolderId) {
+                const photo = lightboxPhotos[idx];
+                if (photo) {
+                  const origIdx = localPhotos.findIndex(p => p.id === photo.id);
+                  setLightboxIndex(origIdx >= 0 ? origIdx : idx);
+                }
+              } else {
+                setLightboxIndex(idx);
+              }
+            }}
+            onSelect={(photoId) => toggleSelection(photoId)}
+            onComment={handleComment}
+            onFavorite={handleFavorite}
+          />
+        );
+      })()}
     </div>
   );
 }

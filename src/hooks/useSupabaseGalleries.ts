@@ -23,6 +23,7 @@ export interface GaleriaPhoto {
   isFavorite: boolean;
   comment: string | null;
   orderIndex: number;
+  pastaId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -217,6 +218,7 @@ function transformPhoto(row: any): GaleriaPhoto {
     isFavorite: row.is_favorite ?? false,
     comment: row.comment,
     orderIndex: row.order_index,
+    pastaId: row.pasta_id || null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
