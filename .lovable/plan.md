@@ -1,46 +1,21 @@
 
 
-## Redesign da página Gerenciar Assinaturas
+## Corrigir botão "Voltar" do mobile no Lightbox
 
-### Objetivo
-Alinhar o visual com a página de Configurações (padrão `lunari-card`) e unificar o aviso de cancelamento **dentro** do card do plano.
+### Problema
+Quando o lightbox está aberto, o botão de voltar do dispositivo móvel aciona `history.back()`, que navega para fora do site em vez de simplesmente fechar o lightbox.
 
-### Mudanças em `src/pages/SubscriptionManagement.tsx`
+### Solução
+Usar a History API: ao abrir o lightbox, fazer `history.pushState` para criar uma entrada no histórico. Escutar o evento `popstate` para interceptar o botão voltar e chamar `onClose()` em vez de sair da página.
 
-**1. Estrutura do SubscriptionCard — unificar tudo em um único `lunari-card`**
+### Arquivos impactados
 
-Cada assinatura será um único card contendo:
-- Header: ícone + nome do plano + badge de status
-- Grid de detalhes (valor, próxima cobrança, assinante desde)
-- Se cancelada mas ainda ativa: banner amber **dentro** do card com botão "Desfazer cancelamento"
-- Se há downgrade pendente: banner amber **dentro** do card
-- Ações (Upgrade/Downgrade + Cancelar) **dentro** do card, separadas por `Separator`
+**1. `src/components/Lightbox.tsx`**
+- Adicionar `useEffect` que faz `window.history.pushState({ lightbox: true }, '')` no mount
+- Escutar `popstate` — quando disparado, chamar `onClose()`
+- No cleanup, se o state ainda tiver `lightbox`, fazer `history.back()` para limpar a entrada extra
+- No `onClose` manual (botão X, Escape), fazer `history.back()` para remover a entrada do histórico
 
-**2. Estilo visual**
-- Trocar `rounded-xl border bg-card` por classe `lunari-card`
-- Usar padrão icon+title do Settings (div 10x10 rounded-lg bg-primary/10 + ícone)
-- Remover cards separados para aviso de cancelamento, downgrade e ações
-- Separar seções internas com `border-t` ou `Separator`
-
-**3. Layout do card unificado:**
-```text
-┌─────────────────────────────────────────────┐
-│ [icon] Plano Atual                  [Badge] │
-│         Transfer 5 GB                       │
-│         Plano mensal                        │
-│─────────────────────────────────────────────│
-│ 💳 Valor    📅 Próx. cobrança   📅 Desde   │
-│─────────────────────────────────────────────│
-│ ⚠️ Assinatura cancelada — ativo até X      │  ← só se cancelada
-│    [Desfazer cancelamento]                  │
-│─────────────────────────────────────────────│
-│ ⚠️ Downgrade agendado para Y  [Cancelar]   │  ← só se pendente
-│─────────────────────────────────────────────│
-│ [Upgrade/Downgrade]  [Cancelar assinatura]  │  ← só se ativa
-│ Alterações proporcionais ao período atual.  │
-└─────────────────────────────────────────────┘
-```
-
-### Arquivo impactado
-- `src/pages/SubscriptionManagement.tsx` — rewrite do `SubscriptionCard`
+**2. `src/components/deliver/DeliverLightbox.tsx`**
+- Mesma lógica de `pushState` + `popstate` listener
 
