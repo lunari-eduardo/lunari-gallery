@@ -34,6 +34,17 @@ export function FolderManager({
     onFoldersChange?.(folders);
   }, [folders, onFoldersChange]);
 
+  // Auto-select first folder if folders exist and none selected
+  useEffect(() => {
+    if (folders.length > 0 && activeFolderId === null) {
+      onActiveFolderChange(folders[0].id);
+    }
+    // If active folder was deleted, select first available
+    if (folders.length > 0 && activeFolderId && !folders.find(f => f.id === activeFolderId)) {
+      onActiveFolderChange(folders[0].id);
+    }
+  }, [folders, activeFolderId, onActiveFolderChange]);
+
   const handleAdd = async () => {
     if (!newName.trim()) return;
     const folder = await createFolder(newName.trim());
@@ -104,94 +115,86 @@ export function FolderManager({
         </div>
       )}
 
-      {/* Folder tabs */}
-      <div className="flex flex-wrap gap-2">
-        {/* "Geral" (all / no folder) */}
-        <button
-          type="button"
-          onClick={() => onActiveFolderChange(null)}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border',
-            activeFolderId === null
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-          )}
-        >
-          <FolderOpen className="h-3.5 w-3.5" />
-          Geral
-        </button>
-
-        {folders.map((folder, index) => (
-          <div key={folder.id} className="group relative flex items-center">
-            {editingId === folder.id ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  autoFocus
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleRename(folder.id);
-                    if (e.key === 'Escape') setEditingId(null);
-                  }}
-                  className="h-8 w-32 text-sm"
-                />
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRename(folder.id)}>
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingId(null)}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onActiveFolderChange(folder.id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border',
-                  activeFolderId === folder.id
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                )}
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                {folder.nome}
-              </button>
-            )}
-
-            {/* Actions on hover */}
-            {editingId !== folder.id && (
-              <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
+      {/* Folder tabs - only show when folders exist */}
+      {folders.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {folders.map((folder, index) => (
+            <div key={folder.id} className="group relative flex items-center">
+              {editingId === folder.id ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    autoFocus
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRename(folder.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    className="h-8 w-32 text-sm"
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRename(folder.id)}>
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => { setEditingId(folder.id); setEditingName(folder.nome); }}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground"
-                  title="Renomear"
+                  onClick={() => onActiveFolderChange(folder.id)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border',
+                    activeFolderId === folder.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                  )}
                 >
-                  <Pencil className="h-3 w-3" />
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  {folder.nome}
                 </button>
-                {index > 0 && (
-                  <button type="button" onClick={() => handleMoveUp(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para cima">
-                    <ChevronUp className="h-3 w-3" />
+              )}
+
+              {/* Actions on hover */}
+              {editingId !== folder.id && (
+                <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
+                  <button
+                    type="button"
+                    onClick={() => { setEditingId(folder.id); setEditingName(folder.nome); }}
+                    className="p-1 rounded hover:bg-muted text-muted-foreground"
+                    title="Renomear"
+                  >
+                    <Pencil className="h-3 w-3" />
                   </button>
-                )}
-                {index < folders.length - 1 && (
-                  <button type="button" onClick={() => handleMoveDown(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para baixo">
-                    <ChevronDown className="h-3 w-3" />
+                  {index > 0 && (
+                    <button type="button" onClick={() => handleMoveUp(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para cima">
+                      <ChevronUp className="h-3 w-3" />
+                    </button>
+                  )}
+                  {index < folders.length - 1 && (
+                    <button type="button" onClick={() => handleMoveDown(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para baixo">
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => deleteFolder(folder.id)}
+                    className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                    title="Excluir pasta"
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => deleteFolder(folder.id)}
-                  className="p-1 rounded hover:bg-destructive/10 text-destructive"
-                  title="Excluir pasta"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Warning: folders exist but none selected */}
+      {folders.length > 0 && !activeFolderId && (
+        <p className="text-xs text-destructive">Selecione uma pasta para enviar fotos</p>
+      )}
     </div>
   );
 }

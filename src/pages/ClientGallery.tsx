@@ -98,6 +98,8 @@ export default function ClientGallery() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [hasAutoOpenedDownload, setHasAutoOpenedDownload] = useState(false);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [folderViewMode, setFolderViewMode] = useState<'albums' | 'grid'>('albums');
   
   
   // Payment state
@@ -359,6 +361,7 @@ export default function ClientGallery() {
         isFavorite: photo.is_favorite || false,
         comment: photo.comment || '',
         order: photo.order_index || 0,
+        folderId: photo.pasta_id || null,
       };
     });
   }, [supabasePhotos, transformedGallery]);
@@ -672,11 +675,23 @@ export default function ClientGallery() {
     return baseColors as React.CSSProperties;
   }, [galleryResponse?.theme, galleryResponse?.clientMode]);
 
-  // Loading state
+  // Extract folders from gallery response
+  const galleryFolders = galleryResponse?.folders || [];
+  const hasFolders = galleryFolders.length > 0;
+
+  // Loading state with branded skeleton
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background" style={themeStyles}>
+        {galleryResponse?.studioSettings?.studio_logo_url && (
+          <img 
+            src={galleryResponse.studioSettings.studio_logo_url} 
+            alt="" 
+            className="h-16 max-w-[200px] object-contain mb-6 opacity-60"
+          />
+        )}
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+        <p className="mt-4 text-sm text-muted-foreground">Carregando galeria...</p>
       </div>
     );
   }
@@ -1296,7 +1311,13 @@ export default function ClientGallery() {
               variant="terracotta" 
               size="xl" 
               className="w-full"
-              onClick={() => setShowWelcome(false)}
+              onClick={() => {
+                setShowWelcome(false);
+                if (hasFolders) {
+                  setFolderViewMode('albums');
+                  setActiveFolderId(null);
+                }
+              }}
             >
               {isExpired ? 'Visualizar Galeria' : 'Começar Seleção'}
             </Button>
@@ -1393,7 +1414,91 @@ export default function ClientGallery() {
     );
   }
 
-  // Bloco 'confirmed' removido - agora verificamos isConfirmed no início do render
+  // Album selection screen — shown when gallery has folders and user hasn't picked one
+  if (hasFolders && folderViewMode === 'albums' && activeFolderId === null) {
+    return (
+      <div 
+        className={cn(
+          "min-h-screen flex flex-col bg-background text-foreground",
+          effectiveBackgroundMode === 'dark' && 'dark'
+        )}
+        style={themeStyles}
+      >
+        {galleryResponse?.studioSettings?.studio_logo_url && (
+          <header className="flex items-center justify-center p-4 border-b border-border/50">
+            <img 
+              src={galleryResponse.studioSettings.studio_logo_url} 
+              alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
+              className="h-12 max-w-[180px] object-contain"
+            />
+          </header>
+        )}
+        <main className="flex-1 flex flex-col items-center p-6">
+          <h2 
+            className="text-3xl sm:text-4xl font-normal mb-2 text-center"
+            style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
+          >
+            {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
+          </h2>
+          <p className="text-muted-foreground mb-8 text-sm">{localPhotos.length} fotos</p>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl w-full">
+            {galleryFolders.map((folder: { id: string; nome: string; ordem: number }) => {
+              const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
+              const thumb = folderPhotos[0];
+              const folderSelectedCount = folderPhotos.filter(p => p.isSelected).length;
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => {
+                    setActiveFolderId(folder.id);
+                    setFolderViewMode('grid');
+                  }}
+                  className="group relative aspect-[3/4] rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 transition-all hover:shadow-lg"
+                >
+                  {thumb ? (
+                    <img
+                      src={thumb.thumbnailUrl}
+                      alt={folder.nome}
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-muted" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
+                    <p className="text-white font-medium text-sm sm:text-base leading-tight">{folder.nome}</p>
+                    <p className="text-white/70 text-xs mt-0.5">
+                      {folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''}
+                      {folderSelectedCount > 0 && ` · ${folderSelectedCount} selecionada${folderSelectedCount !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Compute filtered photos for grid
+  const displayPhotos = (() => {
+    let base = localPhotos;
+    // Filter by folder when active
+    if (hasFolders && activeFolderId) {
+      base = base.filter(p => p.folderId === activeFolderId);
+    }
+    // Then apply filter mode
+    if (filterMode === 'favorites') return base.filter(p => p.isFavorite);
+    if (filterMode === 'selected') return base.filter(p => p.isSelected);
+    return base;
+  })();
+
+  // Active folder name
+  const activeFolderName = hasFolders && activeFolderId
+    ? galleryFolders.find((f: { id: string; nome: string }) => f.id === activeFolderId)?.nome
+    : null;
 
   return (
     <div 
@@ -1408,7 +1513,7 @@ export default function ClientGallery() {
         sessionName={gallery.sessionName}
         sessionFont={getFontFamilyById(gallery.settings.sessionFont)}
         titleCaseMode={gallery.settings.titleCaseMode || 'normal'}
-        totalPhotos={localPhotos.length}
+        totalPhotos={hasFolders && activeFolderId ? displayPhotos.length : localPhotos.length}
         deadline={hasDeadline ? gallery.settings.deadline : null}
         hasDeadline={hasDeadline}
         hoursUntilDeadline={hoursUntilDeadline}
@@ -1426,15 +1531,45 @@ export default function ClientGallery() {
         favoritesCount={localPhotos.filter(p => p.isFavorite).length}
       />
 
+      {/* Folder navigation bar */}
+      {hasFolders && activeFolderId && (
+        <div className="sticky top-[60px] z-30 bg-background/95 backdrop-blur border-b border-border/30 px-3 py-2">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <button
+              onClick={() => {
+                setActiveFolderId(null);
+                setFolderViewMode('albums');
+              }}
+              className="shrink-0 px-3 py-1 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:bg-muted transition-colors"
+            >
+              ← Álbuns
+            </button>
+            {galleryFolders.map((f: { id: string; nome: string }) => {
+              const isActive = f.id === activeFolderId;
+              const count = localPhotos.filter(p => p.folderId === f.id).length;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setActiveFolderId(f.id)}
+                  className={cn(
+                    'shrink-0 px-3 py-1 rounded-lg text-xs font-medium transition-colors border',
+                    isActive 
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {f.nome} ({count})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Main Content - Full width gallery */}
       <main className="flex-1 py-2 pb-28">
         <MasonryGrid>
-          {(filterMode === 'favorites' 
-            ? localPhotos.filter(p => p.isFavorite)
-            : filterMode === 'selected'
-            ? localPhotos.filter(p => p.isSelected)
-            : localPhotos
-          ).map((photo) => {
+          {displayPhotos.map((photo) => {
             const originalIndex = localPhotos.findIndex(p => p.id === photo.id);
             return (
               <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
