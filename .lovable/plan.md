@@ -1,146 +1,133 @@
 
 
-## Plano: Sistema de Pastas (Álbuns) dentro de Galerias Select e Transfer
+## Plano: Pastas Obrigatórias + Visualização por Pasta + Códigos Separados + Performance
 
-### Escopo da mudança
+### Problemas identificados
 
-Adicionar suporte a múltiplas pastas dentro de uma galeria, permitindo que o fotógrafo organize fotos em categorias (ex: "Cerimônia", "Festa", "Making Of") tanto em galerias Select quanto Transfer.
-
----
-
-### 1. Banco de Dados
-
-**Nova tabela `galeria_pastas`:**
-
-```text
-galeria_pastas
-├── id           (uuid, PK)
-├── galeria_id   (uuid, FK → galerias.id ON DELETE CASCADE)
-├── user_id      (uuid, NOT NULL)
-├── nome         (text, NOT NULL)
-├── ordem        (integer, DEFAULT 0)
-├── created_at   (timestamptz)
-└── updated_at   (timestamptz)
-```
-
-**Nova coluna em `galeria_fotos`:**
-- `pasta_id` (uuid, nullable, FK → galeria_pastas.id ON SET NULL)
-
-**RLS:**
-- Fotógrafo: ALL onde `auth.uid() = user_id`
-- Cliente (SELECT): via join com `galerias` onde `public_token IS NOT NULL` e status válido (mesma lógica das fotos)
-- Cliente (UPDATE em galeria_fotos): política existente já cobre, pois o `pasta_id` não é alterado pelo cliente
+1. **"Geral" aparece sem pastas criadas** — Deve sumir; sem pastas = comportamento legado (sem tabs)
+2. **Fotos não filtram por pasta no client Select** — `ClientGallery.tsx` ignora `pasta_id` e `folders` do response
+3. **Fotos fora de pastas quando pastas existem** — Ao criar pastas, upload deve obrigar seleção de pasta
+4. **Códigos de seleção não separam por pasta** — `PhotoCodesModal` gera um bloco único
+5. **Cliente Select não vê pastas elegantemente** — Na welcome screen, se houver pastas, mostrar grid de pastas como "álbuns" com thumb grande
+6. **Performance do primeiro carregamento** — Loading spinner branco sem contexto; fotos carregam todas de uma vez
 
 ---
 
-### 2. Arquivos impactados
+### Arquivos impactados
 
-#### Backend (Edge Functions)
-- **`supabase/functions/gallery-access/index.ts`** — Buscar pastas da galeria e incluir no response (`galeria_pastas`). Ordenar fotos agrupadas por pasta.
-- **`supabase/functions/client-selection/index.ts`** — Sem alteração (seleção é por foto, não por pasta).
+#### 1. `src/components/FolderManager.tsx`
+- Remover botão "Geral" fixo — se não há pastas, nada aparece
+- Quando existem pastas, forçar seleção de uma pasta ativa (não permitir `null`)
+- Ao criar a primeira pasta, auto-selecionar como ativa
 
-#### Hooks & Types
-- **`src/types/gallery.ts`** — Novo tipo `GalleryFolder { id, name, order }`.
-- **`src/hooks/useSupabaseGalleries.ts`** — Funções `createFolder`, `updateFolder`, `deleteFolder`, `reorderFolders`. Incluir pastas no fetch de galeria.
+#### 2. `src/pages/GalleryCreate.tsx` (Step 4)
+- Se há pastas criadas e `activeFolderId === null`, mostrar aviso: "Selecione uma pasta para enviar fotos"
+- Desabilitar upload se há pastas e nenhuma está selecionada
+- Fotos enviadas no grid (`uploadedPhotos`) devem mostrar a pasta associada
 
-#### Criação de Galeria (Select)
-- **`src/pages/GalleryCreate.tsx`** — No Step 4 (Fotos):
-  - Adicionar UI para criar/renomear/reordenar pastas (tabs ou lista)
-  - Cada pasta tem seu próprio `PhotoUploader` ou um seletor de "pasta ativa"
-  - Pasta padrão "Geral" criada automaticamente se nenhuma for definida
-  - PhotoUploader recebe `pastaId` como prop
+#### 3. `src/pages/GalleryEdit.tsx`
+- Mesma lógica: se há pastas, obrigar seleção antes do upload
 
-#### Criação de Galeria (Transfer)
-- **`src/pages/DeliverCreate.tsx`** — No Step 2 (Fotos):
-  - Mesmo sistema de pastas com tabs para organizar uploads
-  - `DeliverPhotoManager` recebe `pastaId` para filtrar/exibir
+#### 4. `src/pages/DeliverCreate.tsx`
+- Mesma lógica para Transfer
 
-#### Edição de Galeria
-- **`src/pages/GalleryEdit.tsx`** — Seção de fotos:
-  - Listar pastas existentes com opção de renomear/reordenar
-  - Upload de novas fotos em pasta específica
-  - Mover fotos entre pastas (drag ou select)
+#### 5. `src/pages/ClientGallery.tsx` — **Maior mudança**
 
-#### Upload Pipeline
-- **`src/components/PhotoUploader.tsx`** — Nova prop `folderId?: string`, passado ao `UploadPipeline`.
-- **`src/lib/uploadPipeline.ts`** — Aceitar `folderId`, incluir no INSERT da `galeria_fotos`.
+**Welcome screen com pastas:**
+- Se `galleryResponse.folders?.length > 0`, ao clicar "Começar Seleção", mostrar tela intermediária de **seleção de pasta** (álbuns)
+- Cada pasta exibida como card grande com thumbnail da primeira foto + nome da pasta (tipografia elegante)
+- Ao clicar numa pasta, filtrar grid por `pasta_id`
+- Adicionar estado `activeFolderId` e `folderViewMode` ('albums' | 'grid')
+- Botão "Voltar" no grid para retornar à tela de álbuns
 
-#### Visualização do Cliente (Select)
-- **`src/pages/ClientGallery.tsx`** — 
-  - Buscar pastas do response da Edge Function
-  - Renderizar tabs/botões para filtrar por pasta
-  - Manter opção "Todas" como padrão
-  - Contadores de seleção por pasta
+**Grid filtrado:**
+- Quando `activeFolderId !== null`, filtrar `localPhotos` por `pasta_id` (precisa incluir `pasta_id` no transform de photos)
+- Header mostrar nome da pasta ativa
+- Contadores de seleção por pasta
 
-#### Visualização do Cliente (Transfer)
-- **`src/pages/ClientDeliverGallery.tsx`** —
-  - Renderizar seções separadas por pasta ou tabs de navegação
-  - Download por pasta (ZIP)
+**Sem pastas:**
+- Comportamento idêntico ao atual — nenhuma mudança visual
 
-#### Componentes auxiliares (novo)
-- **`src/components/FolderManager.tsx`** — Componente reutilizável para criar/renomear/reordenar pastas (usado em GalleryCreate, DeliverCreate e GalleryEdit)
+#### 6. `src/pages/ClientDeliverGallery.tsx`
+- Se há pastas, mostrar tela de álbuns (cards com thumbs) em vez de tabs horizontais
+- Cada álbum leva ao grid filtrado
+- Botão voltar para lista de álbuns
 
-#### Componentes existentes
-- **`src/components/deliver/DeliverPhotoManager.tsx`** — Filtrar fotos por pasta
-- **`src/components/deliver/DeliverPhotoGrid.tsx`** — Aceitar agrupamento por pasta
-- **`src/components/deliver/DeliverHeader.tsx`** — Navegação entre pastas
+#### 7. `src/components/PhotoCodesModal.tsx`
+- Receber `folders` como prop
+- Se há pastas, gerar códigos **separados por pasta** (cada pasta com seu bloco)
+- Adicionar opção "Todos juntos" para código unificado
+- Exibir nome da pasta como heading antes de cada bloco
+
+#### 8. `src/pages/GalleryDetail.tsx`
+- Passar `folders` e `photos` com `pasta_id` ao `PhotoCodesModal`
+
+#### 9. `supabase/functions/gallery-access/index.ts`
+- Já retorna `folders` — OK
+- Para select: incluir `pasta_id` no SELECT de fotos (já está em `*`)
+
+#### 10. Performance do primeiro carregamento
+- **`ClientGallery.tsx`**: Trocar spinner branco por skeleton com branding (logo do estúdio + nome da sessão do `galleryResponse` inicial)
+- **`ClientDeliverGallery.tsx`**: Lazy load de imagens com `loading="lazy"` (já existe)
+- Adicionar `<link rel="preconnect">` ao domínio R2 no `index.html`
 
 ---
 
-### 3. UX do Fotógrafo (Criação/Edição)
+### Detalhes técnicos
 
+**Inclusão de `pasta_id` nas photos do client (Select):**
+O transform em `ClientGallery.tsx` (linha ~330) precisa incluir `pasta_id` no objeto `GalleryPhoto`. Adicionar campo `folderId?: string | null` ao tipo `GalleryPhoto` em `src/types/gallery.ts`.
+
+**Tela de álbuns (Select e Transfer):**
 ```text
 ┌─────────────────────────────────────┐
-│  Pastas                    [+ Nova] │
-│  ┌──────┐ ┌──────┐ ┌────────────┐  │
-│  │Geral │ │Cerim.│ │ Making Of  │  │
-│  └──────┘ └──────┘ └────────────┘  │
+│         [Studio Logo]               │
 │                                     │
-│  ┌─────────────────────────────┐    │
-│  │   PhotoUploader             │    │
-│  │   (uploads vão para a       │    │
-│  │    pasta selecionada)       │    │
-│  └─────────────────────────────┘    │
+│    ┌──────────┐  ┌──────────┐       │
+│    │  📷      │  │  📷      │       │
+│    │  thumb   │  │  thumb   │       │
+│    │          │  │          │       │
+│    │ Cerimônia│  │  Festa   │       │
+│    │  32 fotos│  │  48 fotos│       │
+│    └──────────┘  └──────────┘       │
 │                                     │
-│  [12 fotos nesta pasta]            │
+│    ┌──────────┐                     │
+│    │  📷      │                     │
+│    │  thumb   │                     │
+│    │          │                     │
+│    │Making Of │                     │
+│    │  12 fotos│                     │
+│    └──────────┘                     │
 └─────────────────────────────────────┘
 ```
 
-- Criar pastas antes ou durante o upload
-- Pasta ativa define onde os uploads serão salvos
-- Renomear pastas inline (clique no nome)
-- Reordenar por drag ou botões ↑↓
-- Excluir pasta move fotos para "Geral" (ou exclui se vazia)
+**Códigos separados por pasta:**
+```text
+┌───────────────────────────────┐
+│  Cerimônia                    │
+│  ┌─────────────────────────┐  │
+│  │ "IMG001" OR "IMG002"... │  │
+│  └─────────────────────────┘  │
+│                               │
+│  Festa                        │
+│  ┌─────────────────────────┐  │
+│  │ "IMG050" OR "IMG051"... │  │
+│  └─────────────────────────┘  │
+│                               │
+│  [Copiar todos juntos]        │
+│  [Copiar por pasta ▼]        │
+└───────────────────────────────┘
+```
 
 ---
 
-### 4. UX do Cliente
+### Ordem de implementação
 
-**Select:** Tabs horizontais no topo do grid (abaixo do header). Tab "Todas" + uma tab por pasta. Contadores de seleção em cada tab.
-
-**Transfer:** Seções separadas por pasta com título e divider, ou tabs se preferir navegação compacta. Botão "Baixar pasta" por seção.
-
----
-
-### 5. Ordem de implementação
-
-1. Migração de banco (tabela `galeria_pastas` + coluna `pasta_id` em `galeria_fotos`)
-2. Tipo `GalleryFolder` + hook de CRUD de pastas
-3. Componente `FolderManager`
-4. Integrar `folderId` no `PhotoUploader` e `uploadPipeline`
-5. Atualizar `GalleryCreate` Step 4 com gerenciamento de pastas
-6. Atualizar `DeliverCreate` Step 2 com gerenciamento de pastas
-7. Atualizar `GalleryEdit` com gerenciamento de pastas
-8. Atualizar Edge Function `gallery-access` para retornar pastas
-9. Atualizar `ClientGallery` com tabs de pasta
-10. Atualizar `ClientDeliverGallery` com seções/tabs de pasta
-
----
-
-### 6. Detalhes técnicos
-
-- Pastas são opcionais: galerias sem pastas continuam funcionando normalmente (fotos com `pasta_id = null` aparecem como antes)
-- A pasta "Geral" não é criada no banco — fotos sem `pasta_id` são exibidas como "Geral"
-- Ao excluir uma pasta, `ON SET NULL` mantém as fotos na galeria (voltam para "Geral")
-- O pipeline de upload insere `pasta_id` junto com os demais campos no INSERT da `galeria_fotos`
+1. Adicionar `folderId` ao tipo `GalleryPhoto`
+2. Atualizar `FolderManager` (remover "Geral", obrigar seleção)
+3. Atualizar `GalleryCreate`, `DeliverCreate`, `GalleryEdit` (obrigar pasta se existirem)
+4. Atualizar `ClientGallery` (tela de álbuns + filtro por pasta)
+5. Atualizar `ClientDeliverGallery` (tela de álbuns)
+6. Atualizar `PhotoCodesModal` (códigos por pasta)
+7. Melhorar loading do primeiro carregamento
 
