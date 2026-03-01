@@ -441,6 +441,12 @@ export function Lightbox({
               }}
               onContextMenu={(e) => e.preventDefault()}
             />
+            {/* Invisible overlay to prevent image inspection/saving */}
+            <div 
+              className="absolute inset-0 z-[5]" 
+              style={{ background: 'url(data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7)' }}
+              onContextMenu={(e) => e.preventDefault()}
+            />
           </div>
         </div>
       </div>

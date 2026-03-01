@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
 import { applyTitleCase } from '@/lib/textTransform';
+import { useImageProtection } from '@/hooks/useImageProtection';
 import ClientDeliverGallery from '@/pages/ClientDeliverGallery';
 
 // Helper to convert HEX to HSL values for CSS variables
@@ -77,6 +78,9 @@ export default function ClientGallery() {
   const { id, token } = useParams();
   const location = useLocation();
   const queryClient = useQueryClient();
+  
+  // Apply image protection (blocks print, right-click, shortcuts)
+  useImageProtection();
   
   // Determine if we're using token or legacy UUID
   const identifier = token || id;
@@ -1394,7 +1398,7 @@ export default function ClientGallery() {
   return (
     <div 
       className={cn(
-        "min-h-screen flex flex-col bg-background text-foreground",
+        "min-h-screen flex flex-col bg-background text-foreground gallery-protected",
         effectiveBackgroundMode === 'dark' && 'dark'
       )}
       style={themeStyles}
