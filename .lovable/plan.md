@@ -1,133 +1,61 @@
 
 
-## Plano: Pastas Obrigatórias + Visualização por Pasta + Códigos Separados + Performance
+## Plano: Completar implementação de pastas — gaps identificados
 
-### Problemas identificados
+### Problemas encontrados
 
-1. **"Geral" aparece sem pastas criadas** — Deve sumir; sem pastas = comportamento legado (sem tabs)
-2. **Fotos não filtram por pasta no client Select** — `ClientGallery.tsx` ignora `pasta_id` e `folders` do response
-3. **Fotos fora de pastas quando pastas existem** — Ao criar pastas, upload deve obrigar seleção de pasta
-4. **Códigos de seleção não separam por pasta** — `PhotoCodesModal` gera um bloco único
-5. **Cliente Select não vê pastas elegantemente** — Na welcome screen, se houver pastas, mostrar grid de pastas como "álbuns" com thumb grande
-6. **Performance do primeiro carregamento** — Loading spinner branco sem contexto; fotos carregam todas de uma vez
+**1. `GaleriaPhoto` não tem `pastaId`** (`src/hooks/useSupabaseGalleries.ts`)
+- O tipo `GaleriaPhoto` (linha 11-28) não inclui `pastaId`
+- A função `transformPhoto` (linha 204-222) não mapeia `pasta_id` → `pastaId`
+- Consequência: na tela de edição (`GalleryEdit`) e detalhes (`GalleryDetail`), as fotos não carregam `pastaId`, impossibilitando filtragem
 
----
+**2. GalleryEdit não filtra fotos por pasta** (`src/pages/GalleryEdit.tsx`)
+- Linha 549: o loop `photos.map(...)` renderiza TODAS as fotos sem filtrar por `activeFolderId`
+- Precisa filtrar `photos` pelo `activeFolderId` quando pastas existem
 
-### Arquivos impactados
+**3. GalleryDetail não passa `folders` ao `PhotoCodesModal`** (`src/pages/GalleryDetail.tsx`)
+- Linha 927-933: `PhotoCodesModal` é renderizado sem a prop `folders`
+- Precisa buscar pastas da galeria e passá-las
+- As fotos (`transformedPhotos`) já mapeiam `folderId` (linha 250), porém dependem de `(photo as any).pastaId` que é `undefined` porque `GaleriaPhoto` não tem esse campo
 
-#### 1. `src/components/FolderManager.tsx`
-- Remover botão "Geral" fixo — se não há pastas, nada aparece
-- Quando existem pastas, forçar seleção de uma pasta ativa (não permitir `null`)
-- Ao criar a primeira pasta, auto-selecionar como ativa
+**4. GalleryDetail tabs "Fotos" não filtra por pasta**
+- Linhas 593-617: O grid de todas as fotos não tem navegação por pastas
 
-#### 2. `src/pages/GalleryCreate.tsx` (Step 4)
-- Se há pastas criadas e `activeFolderId === null`, mostrar aviso: "Selecione uma pasta para enviar fotos"
-- Desabilitar upload se há pastas e nenhuma está selecionada
-- Fotos enviadas no grid (`uploadedPhotos`) devem mostrar a pasta associada
-
-#### 3. `src/pages/GalleryEdit.tsx`
-- Mesma lógica: se há pastas, obrigar seleção antes do upload
-
-#### 4. `src/pages/DeliverCreate.tsx`
-- Mesma lógica para Transfer
-
-#### 5. `src/pages/ClientGallery.tsx` — **Maior mudança**
-
-**Welcome screen com pastas:**
-- Se `galleryResponse.folders?.length > 0`, ao clicar "Começar Seleção", mostrar tela intermediária de **seleção de pasta** (álbuns)
-- Cada pasta exibida como card grande com thumbnail da primeira foto + nome da pasta (tipografia elegante)
-- Ao clicar numa pasta, filtrar grid por `pasta_id`
-- Adicionar estado `activeFolderId` e `folderViewMode` ('albums' | 'grid')
-- Botão "Voltar" no grid para retornar à tela de álbuns
-
-**Grid filtrado:**
-- Quando `activeFolderId !== null`, filtrar `localPhotos` por `pasta_id` (precisa incluir `pasta_id` no transform de photos)
-- Header mostrar nome da pasta ativa
-- Contadores de seleção por pasta
-
-**Sem pastas:**
-- Comportamento idêntico ao atual — nenhuma mudança visual
-
-#### 6. `src/pages/ClientDeliverGallery.tsx`
-- Se há pastas, mostrar tela de álbuns (cards com thumbs) em vez de tabs horizontais
-- Cada álbum leva ao grid filtrado
-- Botão voltar para lista de álbuns
-
-#### 7. `src/components/PhotoCodesModal.tsx`
-- Receber `folders` como prop
-- Se há pastas, gerar códigos **separados por pasta** (cada pasta com seu bloco)
-- Adicionar opção "Todos juntos" para código unificado
-- Exibir nome da pasta como heading antes de cada bloco
-
-#### 8. `src/pages/GalleryDetail.tsx`
-- Passar `folders` e `photos` com `pasta_id` ao `PhotoCodesModal`
-
-#### 9. `supabase/functions/gallery-access/index.ts`
-- Já retorna `folders` — OK
-- Para select: incluir `pasta_id` no SELECT de fotos (já está em `*`)
-
-#### 10. Performance do primeiro carregamento
-- **`ClientGallery.tsx`**: Trocar spinner branco por skeleton com branding (logo do estúdio + nome da sessão do `galleryResponse` inicial)
-- **`ClientDeliverGallery.tsx`**: Lazy load de imagens com `loading="lazy"` (já existe)
-- Adicionar `<link rel="preconnect">` ao domínio R2 no `index.html`
+**5. Lightbox no ClientGallery mostra TODAS as fotos** (linha 1619-1631)
+- `photos={localPhotos}` deveria ser filtrado por pasta ativa quando `activeFolderId` está definido, senão a navegação no lightbox pula entre pastas
 
 ---
 
-### Detalhes técnicos
+### Arquivos e alterações
 
-**Inclusão de `pasta_id` nas photos do client (Select):**
-O transform em `ClientGallery.tsx` (linha ~330) precisa incluir `pasta_id` no objeto `GalleryPhoto`. Adicionar campo `folderId?: string | null` ao tipo `GalleryPhoto` em `src/types/gallery.ts`.
+#### 1. `src/hooks/useSupabaseGalleries.ts`
+- Adicionar `pastaId: string | null` ao tipo `GaleriaPhoto`
+- Na `transformPhoto`: mapear `pastaId: row.pasta_id || null`
 
-**Tela de álbuns (Select e Transfer):**
-```text
-┌─────────────────────────────────────┐
-│         [Studio Logo]               │
-│                                     │
-│    ┌──────────┐  ┌──────────┐       │
-│    │  📷      │  │  📷      │       │
-│    │  thumb   │  │  thumb   │       │
-│    │          │  │          │       │
-│    │ Cerimônia│  │  Festa   │       │
-│    │  32 fotos│  │  48 fotos│       │
-│    └──────────┘  └──────────┘       │
-│                                     │
-│    ┌──────────┐                     │
-│    │  📷      │                     │
-│    │  thumb   │                     │
-│    │          │                     │
-│    │Making Of │                     │
-│    │  12 fotos│                     │
-│    └──────────┘                     │
-└─────────────────────────────────────┘
-```
+#### 2. `src/pages/GalleryEdit.tsx`
+- Filtrar lista de fotos pelo `activeFolderId` quando pastas existem
+- Criar variável `filteredPhotos` que filtra `photos` por `(photo as any).pastaId === activeFolderId`
+- Usar `filteredPhotos` no grid (linhas 549-577) e no contador (linha 529)
 
-**Códigos separados por pasta:**
-```text
-┌───────────────────────────────┐
-│  Cerimônia                    │
-│  ┌─────────────────────────┐  │
-│  │ "IMG001" OR "IMG002"... │  │
-│  └─────────────────────────┘  │
-│                               │
-│  Festa                        │
-│  ┌─────────────────────────┐  │
-│  │ "IMG050" OR "IMG051"... │  │
-│  └─────────────────────────┘  │
-│                               │
-│  [Copiar todos juntos]        │
-│  [Copiar por pasta ▼]        │
-└───────────────────────────────┘
-```
+#### 3. `src/pages/GalleryDetail.tsx`
+- Buscar pastas via query: `supabase.from('galeria_pastas').select('*').eq('galeria_id', id).order('ordem')`
+- Passar `folders={folders}` ao `PhotoCodesModal` (linha 927)
+- Corrigir mapeamento de `folderId` (remover cast `as any`, usar `photo.pastaId`)
+- Adicionar navegação por pastas na tab "Fotos" (tabs de pasta + filtro)
+
+#### 4. `src/pages/ClientGallery.tsx` — Lightbox
+- Linha 1619: trocar `photos={localPhotos}` por `photos={displayPhotos}` quando pastas ativas, para que navegação do lightbox fique dentro da pasta
+- Ajustar `currentIndex` e `onNavigate` para trabalhar com array filtrado
+
+#### 5. `src/pages/ClientDeliverGallery.tsx`
+- Verificar se lightbox também usa fotos filtradas por pasta (já parece correto com `photos={photos}` que é filtrado)
 
 ---
 
 ### Ordem de implementação
 
-1. Adicionar `folderId` ao tipo `GalleryPhoto`
-2. Atualizar `FolderManager` (remover "Geral", obrigar seleção)
-3. Atualizar `GalleryCreate`, `DeliverCreate`, `GalleryEdit` (obrigar pasta se existirem)
-4. Atualizar `ClientGallery` (tela de álbuns + filtro por pasta)
-5. Atualizar `ClientDeliverGallery` (tela de álbuns)
-6. Atualizar `PhotoCodesModal` (códigos por pasta)
-7. Melhorar loading do primeiro carregamento
+1. Corrigir `GaleriaPhoto` type + `transformPhoto` (base para tudo)
+2. Corrigir `GalleryEdit` — filtrar fotos por pasta
+3. Corrigir `GalleryDetail` — buscar pastas, passar ao modal, filtrar tab Fotos
+4. Corrigir `ClientGallery` — lightbox usar fotos filtradas por pasta
 
