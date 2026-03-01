@@ -247,6 +247,7 @@ export default function GalleryDetail() {
       isFavorite: photo.isFavorite ?? false,
       comment: photo.comment || undefined,
       order: photo.orderIndex || index,
+      folderId: (photo as any).pastaId || null,
     }));
   }, [supabasePhotos, supabaseGallery, getPhotoUrl]);
 

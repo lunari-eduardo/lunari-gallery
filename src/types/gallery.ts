@@ -98,6 +98,7 @@ export interface GalleryPhoto {
   isFavorite: boolean;        // Foto favoritada pelo cliente
   comment?: string;
   order: number;
+  folderId?: string | null;   // pasta_id - folder association
 }
 
 export interface GalleryAction {

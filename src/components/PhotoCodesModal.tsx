@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { GalleryPhoto } from '@/types/gallery';
+import { GalleryFolderRow } from '@/hooks/useGalleryFolders';
 
 type CodeFormat = 'windows' | 'mac' | 'lightroom' | 'txt';
 
@@ -32,6 +33,7 @@ interface PhotoCodesModalProps {
   photos: GalleryPhoto[];
   clientName: string;
   filter?: 'all' | 'favorites';
+  folders?: GalleryFolderRow[];
 }
 
 const formatLabels: Record<CodeFormat, string> = {
@@ -46,56 +48,66 @@ export function PhotoCodesModal({
   onOpenChange, 
   photos,
   clientName,
-  filter = 'all'
+  filter = 'all',
+  folders = [],
 }: PhotoCodesModalProps) {
   const [format, setFormat] = useState<CodeFormat>('windows');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const selectedPhotos = photos.filter(p => {
     if (!p.isSelected) return false;
     if (filter === 'favorites') return p.isFavorite;
     return true;
   });
+
+  const hasFolders = folders.length > 0;
+
+  // Group photos by folder
+  const photosByFolder = hasFolders
+    ? folders.map(folder => ({
+        folder,
+        photos: selectedPhotos.filter(p => p.folderId === folder.id),
+      })).filter(g => g.photos.length > 0)
+    : [];
   
-  const generateCode = (): string => {
-    if (selectedPhotos.length === 0) return 'Nenhuma foto selecionada';
+  const generateCodeForPhotos = (photoList: GalleryPhoto[]): string => {
+    if (photoList.length === 0) return 'Nenhuma foto selecionada';
     
-    // Usar nome original sem extensão (compatível com qualquer formato RAW/JPEG)
-    const filenames = selectedPhotos.map(p => removeExtension(p.originalFilename || p.filename));
+    const filenames = photoList.map(p => removeExtension(p.originalFilename || p.filename));
     
     switch (format) {
       case 'windows':
-        // Windows Explorer search: "filename1" OR "filename2"
         return filenames.map(f => `"${f}"`).join(' OR ');
-      
       case 'mac':
-        // Mac Finder: filename1.jpg OR filename2.jpg
         return filenames.join(' OR ');
-      
       case 'lightroom':
-        // Lightroom filter: filename1.jpg, filename2.jpg
         return filenames.join(', ');
-      
       case 'txt':
-        // Simple list: one per line
         return filenames.join('\n');
-      
       default:
         return '';
     }
   };
 
-  const handleCopy = () => {
-    const code = generateCode();
+  const generateAllCode = (): string => {
+    if (!hasFolders) return generateCodeForPhotos(selectedPhotos);
+    
+    return photosByFolder.map(g => {
+      const code = generateCodeForPhotos(g.photos);
+      return `── ${g.folder.nome} (${g.photos.length}) ──\n${code}`;
+    }).join('\n\n');
+  };
+
+  const handleCopy = (code: string, label: string) => {
     navigator.clipboard.writeText(code);
-    setCopied(true);
+    setCopied(label);
     toast.success('Código copiado!');
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-semibold">
             Códigos para separação das fotos
@@ -125,24 +137,63 @@ export function PhotoCodesModal({
             </div>
           </div>
 
+          {/* Per-folder codes */}
+          {hasFolders && photosByFolder.length > 0 && (
+            <div className="space-y-4">
+              {photosByFolder.map(({ folder, photos: folderPhotos }) => {
+                const code = generateCodeForPhotos(folderPhotos);
+                const copyLabel = `folder-${folder.id}`;
+                return (
+                  <div key={folder.id} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-1.5 text-sm font-medium">
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        {folder.nome}
+                        <span className="text-muted-foreground font-normal">
+                          ({folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''})
+                        </span>
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => handleCopy(code, copyLabel)}
+                      >
+                        {copied === copyLabel ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        {copied === copyLabel ? 'Copiado' : 'Copiar'}
+                      </Button>
+                    </div>
+                    <Textarea
+                      readOnly
+                      value={code}
+                      className="font-mono text-xs min-h-[60px] resize-none bg-muted/50"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* All together (or single block if no folders) */}
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs">
+              {hasFolders ? 'Todos juntos — ' : ''}
               {selectedPhotos.length} foto{selectedPhotos.length !== 1 ? 's' : ''} selecionada{selectedPhotos.length !== 1 ? 's' : ''}
             </Label>
             <Textarea
               readOnly
-              value={generateCode()}
+              value={hasFolders ? generateAllCode() : generateCodeForPhotos(selectedPhotos)}
               className="font-mono text-sm min-h-[120px] resize-none bg-muted/50"
             />
           </div>
 
           <Button 
-            onClick={handleCopy}
+            onClick={() => handleCopy(hasFolders ? generateAllCode() : generateCodeForPhotos(selectedPhotos), 'all')}
             variant="terracotta"
             className="w-full"
             disabled={selectedPhotos.length === 0}
           >
-            {copied ? (
+            {copied === 'all' ? (
               <>
                 <Check className="h-4 w-4 mr-2" />
                 Copiado!
@@ -150,7 +201,7 @@ export function PhotoCodesModal({
             ) : (
               <>
                 <Copy className="h-4 w-4 mr-2" />
-                Copiar Código
+                {hasFolders ? 'Copiar Todos os Códigos' : 'Copiar Código'}
               </>
             )}
           </Button>

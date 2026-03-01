@@ -7,7 +7,7 @@ import { DeliverWelcomeModal } from '@/components/deliver/DeliverWelcomeModal';
 import { downloadDeliverPhoto, downloadAllDeliverPhotos } from '@/lib/deliverDownloadUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
 import { TitleCaseMode } from '@/types/gallery';
-import { PhotoPaths } from '@/lib/photoUrl';
+import { PhotoPaths, getPhotoUrl as getPhotoUrlLib } from '@/lib/photoUrl';
 import { toast } from 'sonner';
 
 interface DeliverGalleryData {
@@ -63,7 +63,6 @@ export default function ClientDeliverGallery({ data }: Props) {
   const folders = data.folders || [];
   const hasFolders = folders.length > 0;
 
-  // Theme: simple light/dark only
   const isDark = data.clientMode === 'dark' || (!data.clientMode);
   const bgColor = isDark ? '#1C1917' : '#FAF9F7';
   const textColor = isDark ? '#F5F5F4' : '#2D2A26';
@@ -77,12 +76,12 @@ export default function ClientDeliverGallery({ data }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [heroEntered, setHeroEntered] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [folderViewMode, setFolderViewMode] = useState<'albums' | 'grid'>(hasFolders ? 'albums' : 'grid');
 
   const sessionFont = gallery.settings?.sessionFont
     ? getFontFamilyById(gallery.settings.sessionFont)
     : undefined;
 
-  // Transform photos
   const allPhotos: DeliverPhoto[] = useMemo(() => {
     return data.photos.map((p) => ({
       id: p.id,
@@ -98,23 +97,20 @@ export default function ClientDeliverGallery({ data }: Props) {
     }));
   }, [data.photos]);
 
-  // Filter photos by active folder
   const photos = useMemo(() => {
     if (!hasFolders || activeFolderId === null) return allPhotos;
     return allPhotos.filter(p => p.folderId === activeFolderId);
   }, [allPhotos, activeFolderId, hasFolders]);
 
-  // Cover photo for hero - use coverPhotoId if set
   const coverPhotoId = gallery.settings?.coverPhotoId;
   const coverPhotoSource = coverPhotoId
-    ? photos.find(p => p.id === coverPhotoId) || photos[0]
-    : photos[0];
+    ? allPhotos.find(p => p.id === coverPhotoId) || allPhotos[0]
+    : allPhotos[0];
 
   const coverPhoto: PhotoPaths | null = coverPhotoSource
     ? { storageKey: coverPhotoSource.storageKey, previewPath: coverPhotoSource.previewPath, width: coverPhotoSource.width, height: coverPhotoSource.height }
     : null;
 
-  // Set favicon
   useEffect(() => {
     if (studioSettings?.favicon_url) {
       const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement || document.createElement('link');
@@ -146,7 +142,10 @@ export default function ClientDeliverGallery({ data }: Props) {
         storageKey: p.originalPath || p.storageKey,
         filename: p.originalFilename,
       }));
-      await downloadAllDeliverPhotos(gallery.id, downloadable, `${gallery.sessionName}.zip`, (current, total) => {
+      const zipName = activeFolderId && hasFolders
+        ? `${gallery.sessionName} - ${folders.find(f => f.id === activeFolderId)?.nome || 'fotos'}.zip`
+        : `${gallery.sessionName}.zip`;
+      await downloadAllDeliverPhotos(gallery.id, downloadable, zipName, (current, total) => {
         if (current === total) toast.success(`${total} fotos baixadas!`);
       });
     } catch {
@@ -156,65 +155,87 @@ export default function ClientDeliverGallery({ data }: Props) {
     }
   };
 
-  return (
-    <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
-      {/* Hero cover */}
-      <DeliverHero
-        coverPhoto={coverPhoto}
-        sessionName={gallery.sessionName}
-        studioName={studioSettings?.studio_name}
-        sessionFont={sessionFont}
-        titleCaseMode={gallery.settings?.titleCaseMode}
-        isDark={isDark}
-        primaryColor={primaryColor}
-        onEnter={() => setHeroEntered(true)}
-      />
-
-      {/* Gallery section */}
-      <div id="deliver-gallery">
-        <DeliverHeader
+  // Album view for Transfer galleries
+  if (hasFolders && folderViewMode === 'albums') {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
+        <DeliverHero
+          coverPhoto={coverPhoto}
           sessionName={gallery.sessionName}
-          photoCount={photos.length}
-          expirationDate={gallery.expirationDate}
+          studioName={studioSettings?.studio_name}
           sessionFont={sessionFont}
           titleCaseMode={gallery.settings?.titleCaseMode}
-          onDownloadAll={handleDownloadAll}
-          isDownloading={isDownloading}
           isDark={isDark}
-          bgColor={bgColor}
           primaryColor={primaryColor}
+          onEnter={() => setHeroEntered(true)}
         />
 
-        {/* Folder tabs */}
+        <div id="deliver-gallery" className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-normal mb-1" style={{ fontFamily: sessionFont }}>
+              {gallery.sessionName}
+            </h2>
+            <p className="text-sm" style={{ color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>
+              {allPhotos.length} fotos
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {folders.map(folder => {
+              const folderPhotos = allPhotos.filter(p => p.folderId === folder.id);
+              const thumb = folderPhotos[0];
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => { setActiveFolderId(folder.id); setFolderViewMode('grid'); }}
+                  className="group relative aspect-[3/4] rounded-xl overflow-hidden transition-all hover:shadow-lg"
+                  style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }}
+                >
+                  {thumb ? (
+                    <img
+                      src={getPhotoUrlLib({ storageKey: thumb.storageKey, thumbPath: thumb.thumbPath, width: thumb.width, height: thumb.height }, 'thumbnail')}
+                      alt={folder.nome}
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="absolute inset-0" style={{ backgroundColor: isDark ? '#2A2520' : '#EDE9E4' }} />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
+                    <p className="text-white font-medium text-sm sm:text-base leading-tight">{folder.nome}</p>
+                    <p className="text-white/70 text-xs mt-0.5">{folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <DeliverWelcomeModal open={showWelcome} onClose={handleCloseWelcome} message={gallery.welcomeMessage || ''} sessionName={gallery.sessionName} clientName={gallery.clientName} studioName={studioSettings?.studio_name} isDark={isDark} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
+      {!hasFolders && (
+        <DeliverHero coverPhoto={coverPhoto} sessionName={gallery.sessionName} studioName={studioSettings?.studio_name} sessionFont={sessionFont} titleCaseMode={gallery.settings?.titleCaseMode} isDark={isDark} primaryColor={primaryColor} onEnter={() => setHeroEntered(true)} />
+      )}
+
+      <div id="deliver-gallery">
+        <DeliverHeader sessionName={gallery.sessionName} photoCount={photos.length} expirationDate={gallery.expirationDate} sessionFont={sessionFont} titleCaseMode={gallery.settings?.titleCaseMode} onDownloadAll={handleDownloadAll} isDownloading={isDownloading} isDark={isDark} bgColor={bgColor} primaryColor={primaryColor} />
+
         {hasFolders && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setActiveFolderId(null)}
-                className="px-3 py-1.5 rounded-lg text-sm transition-colors border"
-                style={{
-                  backgroundColor: activeFolderId === null ? primaryColor : 'transparent',
-                  color: activeFolderId === null ? bgColor : textColor,
-                  borderColor: activeFolderId === null ? primaryColor : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
-                  opacity: activeFolderId === null ? 1 : 0.7,
-                }}
-              >
-                Todas ({allPhotos.length})
+              <button onClick={() => { setActiveFolderId(null); setFolderViewMode('albums'); }} className="px-3 py-1.5 rounded-lg text-sm transition-colors border" style={{ backgroundColor: 'transparent', color: textColor, borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', opacity: 0.7 }}>
+                ← Álbuns
               </button>
               {folders.map(f => {
                 const count = allPhotos.filter(p => p.folderId === f.id).length;
+                const isActive = activeFolderId === f.id;
                 return (
-                  <button
-                    key={f.id}
-                    onClick={() => setActiveFolderId(f.id)}
-                    className="px-3 py-1.5 rounded-lg text-sm transition-colors border"
-                    style={{
-                      backgroundColor: activeFolderId === f.id ? primaryColor : 'transparent',
-                      color: activeFolderId === f.id ? bgColor : textColor,
-                      borderColor: activeFolderId === f.id ? primaryColor : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
-                      opacity: activeFolderId === f.id ? 1 : 0.7,
-                    }}
-                  >
+                  <button key={f.id} onClick={() => setActiveFolderId(f.id)} className="px-3 py-1.5 rounded-lg text-sm transition-colors border" style={{ backgroundColor: isActive ? primaryColor : 'transparent', color: isActive ? bgColor : textColor, borderColor: isActive ? primaryColor : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), opacity: isActive ? 1 : 0.7 }}>
                     {f.nome} ({count})
                   </button>
                 );
@@ -223,36 +244,14 @@ export default function ClientDeliverGallery({ data }: Props) {
           </div>
         )}
 
-        <DeliverPhotoGrid
-          photos={photos}
-          onPhotoClick={(i) => setLightboxIndex(i)}
-          onDownload={handleDownloadSingle}
-          bgColor={bgColor}
-        />
-
+        <DeliverPhotoGrid photos={photos} onPhotoClick={(i) => setLightboxIndex(i)} onDownload={handleDownloadSingle} bgColor={bgColor} />
       </div>
 
-      {/* Lightbox */}
       {lightboxIndex !== null && (
-        <DeliverLightbox
-          photos={photos}
-          currentIndex={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={setLightboxIndex}
-          onDownload={handleDownloadSingle}
-        />
+        <DeliverLightbox photos={photos} currentIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} onNavigate={setLightboxIndex} onDownload={handleDownloadSingle} />
       )}
 
-      {/* Welcome modal */}
-      <DeliverWelcomeModal
-        open={showWelcome}
-        onClose={handleCloseWelcome}
-        message={gallery.welcomeMessage || ''}
-        sessionName={gallery.sessionName}
-        clientName={gallery.clientName}
-        studioName={studioSettings?.studio_name}
-        isDark={isDark}
-      />
+      <DeliverWelcomeModal open={showWelcome} onClose={handleCloseWelcome} message={gallery.welcomeMessage || ''} sessionName={gallery.sessionName} clientName={gallery.clientName} studioName={studioSettings?.studio_name} isDark={isDark} />
     </div>
   );
 }
