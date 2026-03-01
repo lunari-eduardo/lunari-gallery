@@ -56,6 +56,7 @@ export interface UploadResult {
 
 export interface PipelineOptions {
   galleryId: string;
+  folderId?: string | null;
   maxLongEdge: 1024 | 1920 | 2560;
   quality: number;
   watermarkConfig?: WatermarkConfig;
@@ -367,6 +368,10 @@ export class UploadPipeline {
     formData.append('height', compressed.height.toString());
     formData.append('uploadKey', uploadKey);
     formData.append('originalFileSize', item.file.size.toString());
+
+    if (this.opts.folderId) {
+      formData.append('folderId', this.opts.folderId);
+    }
 
     if (this.opts.skipCredits) {
       formData.append('skipCredits', 'true');

@@ -33,6 +33,12 @@ interface DeliverGalleryData {
     height?: number;
     preview_path?: string | null;
     thumb_path?: string | null;
+    pasta_id?: string | null;
+  }>;
+  folders?: Array<{
+    id: string;
+    nome: string;
+    ordem: number;
   }>;
   studioSettings?: {
     studio_name?: string;
@@ -54,6 +60,8 @@ interface Props {
 
 export default function ClientDeliverGallery({ data }: Props) {
   const { gallery, studioSettings } = data;
+  const folders = data.folders || [];
+  const hasFolders = folders.length > 0;
 
   // Theme: simple light/dark only
   const isDark = data.clientMode === 'dark' || (!data.clientMode);
@@ -68,13 +76,14 @@ export default function ClientDeliverGallery({ data }: Props) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [heroEntered, setHeroEntered] = useState(false);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
   const sessionFont = gallery.settings?.sessionFont
     ? getFontFamilyById(gallery.settings.sessionFont)
     : undefined;
 
   // Transform photos
-  const photos: DeliverPhoto[] = useMemo(() => {
+  const allPhotos: DeliverPhoto[] = useMemo(() => {
     return data.photos.map((p) => ({
       id: p.id,
       storageKey: p.storage_key,
@@ -85,8 +94,15 @@ export default function ClientDeliverGallery({ data }: Props) {
       height: p.height || 600,
       thumbPath: p.thumb_path,
       previewPath: p.preview_path,
+      folderId: p.pasta_id || null,
     }));
   }, [data.photos]);
+
+  // Filter photos by active folder
+  const photos = useMemo(() => {
+    if (!hasFolders || activeFolderId === null) return allPhotos;
+    return allPhotos.filter(p => p.folderId === activeFolderId);
+  }, [allPhotos, activeFolderId, hasFolders]);
 
   // Cover photo for hero - use coverPhotoId if set
   const coverPhotoId = gallery.settings?.coverPhotoId;
@@ -168,6 +184,44 @@ export default function ClientDeliverGallery({ data }: Props) {
           bgColor={bgColor}
           primaryColor={primaryColor}
         />
+
+        {/* Folder tabs */}
+        {hasFolders && (
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveFolderId(null)}
+                className="px-3 py-1.5 rounded-lg text-sm transition-colors border"
+                style={{
+                  backgroundColor: activeFolderId === null ? primaryColor : 'transparent',
+                  color: activeFolderId === null ? bgColor : textColor,
+                  borderColor: activeFolderId === null ? primaryColor : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
+                  opacity: activeFolderId === null ? 1 : 0.7,
+                }}
+              >
+                Todas ({allPhotos.length})
+              </button>
+              {folders.map(f => {
+                const count = allPhotos.filter(p => p.folderId === f.id).length;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveFolderId(f.id)}
+                    className="px-3 py-1.5 rounded-lg text-sm transition-colors border"
+                    style={{
+                      backgroundColor: activeFolderId === f.id ? primaryColor : 'transparent',
+                      color: activeFolderId === f.id ? bgColor : textColor,
+                      borderColor: activeFolderId === f.id ? primaryColor : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
+                      opacity: activeFolderId === f.id ? 1 : 0.7,
+                    }}
+                  >
+                    {f.nome} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <DeliverPhotoGrid
           photos={photos}

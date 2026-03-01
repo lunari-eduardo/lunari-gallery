@@ -23,6 +23,7 @@ export interface UploadedPhoto {
 
 interface PhotoUploaderProps {
   galleryId: string;
+  folderId?: string | null;
   maxLongEdge?: 1024 | 1920 | 2560;
   watermarkConfig?: WatermarkConfig;
   allowDownload?: boolean;
@@ -38,6 +39,7 @@ interface PhotoUploaderProps {
 
 export function PhotoUploader({
   galleryId,
+  folderId,
   maxLongEdge = 1920,
   watermarkConfig,
   allowDownload = false,
@@ -65,6 +67,7 @@ export function PhotoUploader({
     if (!pipelineRef.current) {
       pipelineRef.current = new UploadPipeline({
         galleryId,
+        folderId,
         maxLongEdge,
         quality: 0.8,
         watermarkConfig,
@@ -109,15 +112,23 @@ export function PhotoUploader({
       });
     }
     return pipelineRef.current;
-  }, [galleryId, maxLongEdge, watermarkConfig, allowDownload, skipCredits, onUploadComplete, onUploadingChange, refetchCredits]);
+  }, [galleryId, folderId, maxLongEdge, watermarkConfig, allowDownload, skipCredits, onUploadComplete, onUploadingChange, refetchCredits]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount or when folderId changes
   useEffect(() => {
     return () => {
       pipelineRef.current?.destroy();
       pipelineRef.current = null;
     };
   }, []);
+
+  // Reset pipeline when folderId changes
+  useEffect(() => {
+    if (pipelineRef.current && !pipelineRef.current.isActive) {
+      pipelineRef.current.destroy();
+      pipelineRef.current = null;
+    }
+  }, [folderId]);
 
   const storageRemaining = (storageLimit != null && storageUsed != null) ? Math.max(0, storageLimit - storageUsed) : Infinity;
   const storageUsedPercent = (storageLimit != null && storageLimit > 0 && storageUsed != null) ? Math.round((storageUsed / storageLimit) * 100) : 0;

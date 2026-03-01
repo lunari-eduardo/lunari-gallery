@@ -29,6 +29,7 @@ import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
+import { FolderManager } from '@/components/FolderManager';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -99,6 +100,7 @@ export default function GalleryEdit() {
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPhotoUploader, setShowPhotoUploader] = useState(false);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
   // Initialize form with gallery data
   useEffect(() => {
@@ -528,6 +530,13 @@ export default function GalleryEdit() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Folder Manager */}
+              <FolderManager
+                galleryId={gallery.id}
+                activeFolderId={activeFolderId}
+                onActiveFolderChange={setActiveFolderId}
+              />
+
               {/* Photo List */}
               {isLoadingPhotos ? (
                 <div className="flex items-center justify-center py-8">
@@ -595,7 +604,7 @@ export default function GalleryEdit() {
                       Fechar
                     </Button>
                   </div>
-                  <PhotoUploader galleryId={gallery.id} onUploadComplete={handleUploadComplete} />
+                  <PhotoUploader galleryId={gallery.id} folderId={activeFolderId} onUploadComplete={handleUploadComplete} />
                 </div>
               )}
             </CardContent>

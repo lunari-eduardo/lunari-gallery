@@ -19,6 +19,7 @@ import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { Client, GalleryPermission, TitleCaseMode } from '@/types/gallery';
 import { FontSelect } from '@/components/FontSelect';
 import { DeliverPhotoManager } from '@/components/deliver/DeliverPhotoManager';
+import { FolderManager } from '@/components/FolderManager';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { formatStorageSize } from '@/lib/transferPlans';
 import { Progress } from '@/components/ui/progress';
@@ -63,6 +64,9 @@ export default function DeliverCreate() {
   const [photoRefreshKey, setPhotoRefreshKey] = useState(0);
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
   const [photoCount, setPhotoCount] = useState(0);
+
+  // Folder management
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
   // Step 3: Message
   const [welcomeMessage, setWelcomeMessage] = useState('');
@@ -477,10 +481,21 @@ export default function DeliverCreate() {
             <p className="text-sm text-muted-foreground">
               As fotos serão armazenadas em alta resolução para download direto pelo cliente.
             </p>
+
+            {/* Folder Manager */}
+            {supabaseGalleryId && (
+              <FolderManager
+                galleryId={supabaseGalleryId}
+                activeFolderId={activeFolderId}
+                onActiveFolderChange={setActiveFolderId}
+              />
+            )}
+
             {supabaseGalleryId && (
               <>
                 <PhotoUploader
                   galleryId={supabaseGalleryId}
+                  folderId={activeFolderId}
                   maxLongEdge={2560}
                   allowDownload={true}
                   skipCredits={true}

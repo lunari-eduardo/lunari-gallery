@@ -28,6 +28,7 @@ import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
 import { usePaymentIntegration } from '@/hooks/usePaymentIntegration';
 import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
+import { FolderManager } from '@/components/FolderManager';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay, buildRegrasFromDiscountPackages } from '@/lib/pricingUtils';
 import { supabase } from '@/integrations/supabase/client';
@@ -169,6 +170,8 @@ export default function GalleryCreate() {
   const [showUploadedPhotos, setShowUploadedPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
 
+  // Folder management
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   // Frozen pricing rules from Gestão session (for PRO+Gallery users)
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
   const [isLoadingRegras, setIsLoadingRegras] = useState(false);
@@ -1433,11 +1436,21 @@ export default function GalleryCreate() {
               </p>
             </div>
 
+            {/* Folder Manager */}
+            {supabaseGalleryId && (
+              <FolderManager
+                galleryId={supabaseGalleryId}
+                activeFolderId={activeFolderId}
+                onActiveFolderChange={setActiveFolderId}
+              />
+            )}
+
             {isCreatingGallery ? <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                 <p className="text-muted-foreground">Preparando galeria para uploads...</p>
               </div> : supabaseGalleryId ? <PhotoUploader
             galleryId={supabaseGalleryId}
+            folderId={activeFolderId}
             maxLongEdge={imageResizeOption}
             watermarkConfig={{
               mode: watermarkType === 'standard' ? 'system' : watermarkType === 'custom' ? 'custom' : 'none',

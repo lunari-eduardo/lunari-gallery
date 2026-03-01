@@ -1234,6 +1234,7 @@ export type Database = {
           original_file_size: number | null
           original_filename: string
           original_path: string | null
+          pasta_id: string | null
           preview_path: string | null
           preview_wm_path: string | null
           processing_status: string | null
@@ -1260,6 +1261,7 @@ export type Database = {
           original_file_size?: number | null
           original_filename: string
           original_path?: string | null
+          pasta_id?: string | null
           preview_path?: string | null
           preview_wm_path?: string | null
           processing_status?: string | null
@@ -1286,6 +1288,7 @@ export type Database = {
           original_file_size?: number | null
           original_filename?: string
           original_path?: string | null
+          pasta_id?: string | null
           preview_path?: string | null
           preview_wm_path?: string | null
           processing_status?: string | null
@@ -1299,6 +1302,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "galeria_fotos_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "galeria_fotos_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "galeria_pastas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      galeria_pastas: {
+        Row: {
+          created_at: string
+          galeria_id: string
+          id: string
+          nome: string
+          ordem: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          galeria_id: string
+          id?: string
+          nome: string
+          ordem?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          galeria_id?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "galeria_pastas_galeria_id_fkey"
             columns: ["galeria_id"]
             isOneToOne: false
             referencedRelation: "galerias"

@@ -1,4 +1,10 @@
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
+
+export interface GalleryFolder {
+  id: string;
+  name: string;
+  order: number;
+}
 export type TitleCaseMode = 'normal' | 'uppercase' | 'titlecase';
 
 // Gestão integration - parameters received via URL when creating gallery from Gestão

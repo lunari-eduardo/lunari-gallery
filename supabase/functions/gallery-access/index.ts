@@ -81,9 +81,16 @@ serve(async (req) => {
       // Fetch photos
       const { data: photos } = await supabase
         .from("galeria_fotos")
-        .select("id, storage_key, original_path, original_filename, filename, width, height, preview_path, thumb_path")
+        .select("id, storage_key, original_path, original_filename, filename, width, height, preview_path, thumb_path, pasta_id")
         .eq("galeria_id", gallery.id)
         .order("original_filename", { ascending: true });
+
+      // Fetch folders
+      const { data: folders } = await supabase
+        .from("galeria_pastas")
+        .select("id, nome, ordem")
+        .eq("galeria_id", gallery.id)
+        .order("ordem");
 
       // Fetch studio settings
       const { data: settings } = await supabase
@@ -145,6 +152,7 @@ serve(async (req) => {
             },
           },
           photos: photos || [],
+          folders: folders || [],
           studioSettings: settings || null,
           theme: themeData,
           clientMode,
@@ -460,6 +468,13 @@ serve(async (req) => {
       console.error("Error fetching photos:", photosError);
     }
 
+    // 5b. Fetch folders for the gallery
+    const { data: folders } = await supabase
+      .from("galeria_pastas")
+      .select("id, nome, ordem")
+      .eq("galeria_id", gallery.id)
+      .order("ordem");
+
     // 6. Fetch photographer settings (for studio name, logo, etc.)
     const { data: settings } = await supabase
       .from("gallery_settings")
@@ -560,6 +575,7 @@ serve(async (req) => {
           valorTotalVendido: gallery.valor_total_vendido || 0,
         },
         photos: photos || [],
+        folders: folders || [],
         studioSettings: settings || null,
         // Theme data for client gallery appearance
         theme: themeData,
