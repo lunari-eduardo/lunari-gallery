@@ -195,6 +195,7 @@ Deno.serve(async (req) => {
     const originalPath = formData.get("originalPath") as string | null;
     const uploadKey = formData.get("uploadKey") as string | null;
     const skipCredits = formData.get("skipCredits") === "true";
+    const folderId = formData.get("folderId") as string | null;
     const originalFileSizeRaw = formData.get("originalFileSize") as string | null;
     const originalFileSize = originalFileSizeRaw ? parseInt(originalFileSizeRaw, 10) : null;
 
@@ -335,6 +336,7 @@ Deno.serve(async (req) => {
         order_index: 0,
         processing_status: 'ready',
         upload_key: uploadKey || null,
+        pasta_id: folderId || null,
       })
       .select()
       .single();

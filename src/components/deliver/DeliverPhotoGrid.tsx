@@ -12,6 +12,7 @@ export interface DeliverPhoto {
   height: number;
   thumbPath?: string | null;
   previewPath?: string | null;
+  folderId?: string | null;
 }
 
 interface DeliverPhotoGridProps {
