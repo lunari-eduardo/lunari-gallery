@@ -11,10 +11,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useQuery } from '@tanstack/react-query';
 import { GalleryPhoto, WatermarkSettings } from '@/types/gallery';
+import { useImageProtection } from '@/hooks/useImageProtection';
 
 export default function GalleryPreview() {
   const { id } = useParams();
   const navigate = useNavigate();
+  
+  // Apply image protection (blocks print, right-click, shortcuts)
+  useImageProtection();
   
   const { getGallery, fetchGalleryPhotos, getPhotoUrl, isLoading } = useSupabaseGalleries();
   
@@ -83,7 +87,7 @@ export default function GalleryPreview() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background gallery-protected">
       {/* Read-only Banner */}
       <Alert className="rounded-none border-x-0 border-t-0 bg-amber-500/10 border-amber-500/20">
         <Eye className="h-4 w-4 text-amber-600" />

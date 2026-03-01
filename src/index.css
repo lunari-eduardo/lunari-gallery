@@ -242,6 +242,51 @@
   }
 }
 
+/* Gallery image protection */
+.gallery-protected {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.gallery-protected img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.gallery-blur-active {
+  filter: blur(30px) brightness(0.5);
+  transition: filter 0.15s ease-in;
+}
+
+.gallery-blur-active::after {
+  content: 'Captura de tela não permitida';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: hsl(var(--foreground));
+  font-size: 1.25rem;
+  font-weight: 600;
+  z-index: 9999;
+  text-align: center;
+  filter: none;
+}
+
+@media print {
+  .gallery-protected {
+    display: none !important;
+  }
+  body::after {
+    content: 'Impressão não permitida';
+    display: block;
+    text-align: center;
+    padding-top: 40vh;
+    font-size: 1.5rem;
+    color: #333;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

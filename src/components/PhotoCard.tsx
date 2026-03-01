@@ -49,26 +49,36 @@ export function PhotoCard({
           <span className="text-xs">Erro ao carregar</span>
         </div>
       ) : (
-        <img
-          src={photo.previewUrl}
-          alt={photo.filename}
-          className={cn(
-            'w-full h-auto block transition-all duration-500',
-            !isLoaded && 'opacity-0',
-            isLoaded && 'opacity-100'
+        <>
+          <img
+            src={photo.previewUrl}
+            alt={photo.filename}
+            className={cn(
+              'w-full h-auto block transition-all duration-500 select-none',
+              !isLoaded && 'opacity-0',
+              isLoaded && 'opacity-100'
+            )}
+            draggable={false}
+            onLoad={() => setIsLoaded(true)}
+            onError={(e) => {
+              console.error('Imagem falhou:', {
+                src: e.currentTarget.src,
+                filename: photo.filename,
+                previewUrl: photo.previewUrl,
+              });
+              setHasError(true);
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          {/* Invisible overlay to prevent image inspection/saving */}
+          {isLoaded && (
+            <div 
+              className="absolute inset-0 z-[1]" 
+              style={{ background: 'url(data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7)' }}
+              onContextMenu={(e) => e.preventDefault()}
+            />
           )}
-          draggable={false}
-          onLoad={() => setIsLoaded(true)}
-          onError={(e) => {
-            console.error('Imagem falhou:', {
-              src: e.currentTarget.src,
-              filename: photo.filename,
-              previewUrl: photo.previewUrl,
-            });
-            setHasError(true);
-          }}
-          onContextMenu={(e) => e.preventDefault()}
-        />
+        </>
       )}
 
       {/* Loading skeleton */}
