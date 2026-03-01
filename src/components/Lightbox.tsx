@@ -385,7 +385,7 @@ export function Lightbox({
           <span className="text-white/80 text-sm">
             {currentIndex + 1} / {photos.length}
           </span>
-          <span className="text-white/60 text-sm hidden sm:block">
+          <span className="text-white/40 text-xs truncate max-w-[200px] sm:max-w-[400px]">
             {currentPhoto.originalFilename || currentPhoto.filename}
           </span>
         </div>
