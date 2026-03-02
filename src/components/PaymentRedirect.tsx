@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, CreditCard, Loader2 } from 'lucide-react';
+import { ExternalLink, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +42,10 @@ export function PaymentRedirect({
     bgColor: 'bg-primary/10',
   };
 
+  const isValidUrl = checkoutUrl && checkoutUrl.startsWith('http');
+
   useEffect(() => {
+    if (!isValidUrl) return; // Don't countdown if URL is invalid
     if (countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
       return () => clearTimeout(timer);
@@ -50,12 +53,43 @@ export function PaymentRedirect({
       setRedirected(true);
       window.location.href = checkoutUrl;
     }
-  }, [countdown, checkoutUrl, redirected]);
+  }, [countdown, checkoutUrl, redirected, isValidUrl]);
 
   const handleManualRedirect = () => {
+    if (!isValidUrl) return;
     setRedirected(true);
     window.location.href = checkoutUrl;
   };
+
+  // Show error screen if URL is invalid
+  if (!isValidUrl) {
+    return (
+      <div 
+        className={cn(
+          "min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4",
+          backgroundMode === 'dark' && 'dark'
+        )}
+        style={themeStyles}
+      >
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center bg-destructive/10">
+            <AlertCircle className="h-10 w-10 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold">Erro no pagamento</h1>
+            <p className="text-muted-foreground">
+              Não foi possível gerar o link de pagamento. Por favor, tente novamente ou entre em contato com o fotógrafo.
+            </p>
+          </div>
+          {onCancel && (
+            <Button onClick={onCancel} variant="outline" className="w-full">
+              Voltar
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 

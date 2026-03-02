@@ -361,54 +361,73 @@ Deno.serve(async (req) => {
         const descricao = `${extrasACobrar} foto${extrasACobrar !== 1 ? 's' : ''} extra${extrasACobrar !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
 
         try {
-          console.log(`💳 Invoking ${functionName}...`);
+          // Use fetch() directly instead of supabase.functions.invoke() to get full error details
+          const functionUrl = `${supabaseUrl}/functions/v1/${functionName}`;
+          console.log(`💳 Calling ${functionName} via fetch()...`);
           
-          const { data: paymentData, error: paymentError } = await supabase.functions.invoke(functionName, {
-            body: {
+          const paymentFetchResponse = await fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
               clienteId: gallery.cliente_id,
               sessionId: sessionIdTexto,
               valor: valorTotal,
               descricao,
               userId: gallery.user_id,
-              galleryToken: gallery.public_token, // For redirect URL
-              galeriaId: galleryId, // Pass gallery ID for linking
-              qtdFotos: extrasACobrar, // Pass quantity for credit tracking
-            }
+              galleryToken: gallery.public_token,
+              galeriaId: galleryId,
+              qtdFotos: extrasACobrar,
+            }),
           });
 
-          console.log(`💳 Payment response:`, { success: paymentData?.success, error: paymentError?.message || paymentData?.error });
+          let paymentData: Record<string, unknown> | null = null;
+          const paymentContentType = paymentFetchResponse.headers.get('content-type') || '';
+          
+          if (paymentContentType.includes('application/json')) {
+            paymentData = await paymentFetchResponse.json();
+          } else {
+            const textBody = await paymentFetchResponse.text();
+            console.error(`❌ ${functionName} returned non-JSON (${paymentContentType}):`, textBody.substring(0, 300));
+          }
 
-          if (!paymentError && paymentData?.success) {
-            // === NORMALIZAÇÃO ROBUSTA: aceita múltiplos formatos de resposta ===
+          console.log(`💳 Payment response (status ${paymentFetchResponse.status}):`, JSON.stringify({
+            success: paymentData?.success,
+            error: paymentData?.error,
+            code: paymentData?.code,
+          }));
+
+          if (paymentFetchResponse.ok && paymentData?.success) {
             const checkoutUrl = paymentData.checkoutUrl || paymentData.paymentLink || paymentData.checkout_url;
-            
-            // Captura cobrancaId de múltiplos formatos possíveis
-            const cobrancaId = paymentData.cobrancaId || paymentData.cobranca?.id || paymentData.cobranca_id;
+            const cobrancaId = paymentData.cobrancaId || (paymentData.cobranca as Record<string, unknown>)?.id || paymentData.cobranca_id;
 
             paymentResponse = {
-              checkoutUrl,
+              checkoutUrl: checkoutUrl as string,
               provedor: integracao.provedor,
-              cobrancaId,
+              cobrancaId: cobrancaId as string,
             };
 
             statusPagamento = 'pendente';
             console.log(`💳 Payment created successfully: ${cobrancaId} via ${integracao.provedor}`);
           } else {
-            // CRITICAL: Payment creation FAILED - DO NOT confirm gallery!
-            console.error('❌ CRITICAL: Payment creation failed:', paymentError?.message || paymentData?.error);
+            const errorMsg = (paymentData?.error as string) || 'Falha na criação do link de pagamento';
+            const errorCode = (paymentData?.code as string) || 'PAYMENT_FAILED';
+            const errorDetails = (paymentData?.details as string) || '';
+            console.error(`❌ CRITICAL: Payment creation failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
             
             return new Response(
               JSON.stringify({
-                error: 'Erro ao criar cobrança. Tente novamente.',
-                code: 'PAYMENT_FAILED',
-                details: paymentError?.message || paymentData?.error || 'Falha na criação do link de pagamento'
+                error: errorMsg,
+                code: errorCode,
+                details: errorDetails,
               }),
               { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
         } catch (payErr) {
-          // CRITICAL: Payment invocation error - DO NOT confirm gallery!
-          console.error('❌ CRITICAL: Payment invocation error:', payErr);
+          console.error('❌ CRITICAL: Payment fetch error:', payErr);
           
           return new Response(
             JSON.stringify({

@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface RequestBody {
@@ -14,38 +14,58 @@ interface RequestBody {
   redirectUrl?: string;
   webhookUrl?: string;
   galleryToken?: string;
-  galeriaId?: string; // Gallery ID for linking charge to gallery
-  qtdFotos?: number; // Quantity of extra photos being charged
+  galeriaId?: string;
+  qtdFotos?: number;
 }
 
-interface InfinitePayItem {
-  quantity: number;
-  price: number; // in centavos
-  description: string;
+// --- Retry + Timeout helpers ---
+const PAYMENT_TIMEOUT = 30_000;
+const MAX_RETRIES = 3;
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  attempt = 1,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PAYMENT_TIMEOUT);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    // Retry on 5xx or network-level failures
+    if (response.status >= 500 && attempt < MAX_RETRIES) {
+      const delay = 1000 * Math.pow(2, attempt - 1) + Math.random() * 500;
+      console.warn(`⚠️ InfinitePay API returned ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt}/${MAX_RETRIES})`);
+      await new Promise(r => setTimeout(r, delay));
+      return fetchWithRetry(url, options, attempt + 1);
+    }
+
+    return response;
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+
+    if (attempt < MAX_RETRIES) {
+      const delay = 1000 * Math.pow(2, attempt - 1) + Math.random() * 500;
+      console.warn(`⚠️ InfinitePay API error: ${errMsg}, retrying in ${Math.round(delay)}ms (attempt ${attempt}/${MAX_RETRIES})`);
+      await new Promise(r => setTimeout(r, delay));
+      return fetchWithRetry(url, options, attempt + 1);
+    }
+
+    throw error;
+  }
 }
 
-interface InfinitePayPayload {
-  handle: string;
-  items: InfinitePayItem[];
-  order_nsu?: string;
-  redirect_url?: string;
-  webhook_url?: string;
-  customer?: {
-    name?: string;
-    email?: string;
-    phone_number?: string;
-  };
-}
-
-interface InfinitePayResponse {
-  url?: string;           // Campo retornado pela API InfinitePay
-  checkout_url?: string;  // Fallback para compatibilidade
-  slug?: string;
-  error?: string;
+function errorResponse(status: number, error: string, code: string, details?: string) {
+  return new Response(
+    JSON.stringify({ success: false, error, code, details }),
+    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -53,35 +73,24 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, qtdFotos }: RequestBody = await req.json();
 
-    // Validate required fields - valor e userId são sempre obrigatórios
+    // Validate required fields - userId is always required (passed in body, no JWT needed)
     if (!valor || !userId) {
-      console.error('Missing required fields:', { valor, userId });
-      return new Response(
-        JSON.stringify({ success: false, error: 'valor e userId são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse(400, 'valor e userId são obrigatórios', 'MISSING_FIELDS');
     }
 
-    // Validar que temos referência (cliente OU galeria)
     if (!clienteId && !galeriaId) {
-      console.error('Cobrança requer cliente_id ou galeria_id');
-      return new Response(
-        JSON.stringify({ success: false, error: 'É necessário um cliente ou galeria vinculada para criar cobrança' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse(400, 'É necessário um cliente ou galeria vinculada para criar cobrança', 'MISSING_REFERENCE');
     }
 
-    // Log informativo para galerias públicas
     if (!clienteId && galeriaId) {
       console.log('⚠️ Criando cobrança InfinitePay para galeria pública (sem cliente vinculado)');
     }
 
-    // 1. Fetch InfinitePay handle from user integrations
+    // 1. Fetch InfinitePay handle
     const { data: integracao, error: integracaoError } = await supabase
       .from('usuarios_integracoes')
       .select('dados_extras')
@@ -92,121 +101,97 @@ Deno.serve(async (req) => {
 
     if (integracaoError) {
       console.error('Integration fetch error:', integracaoError);
-      return new Response(
-        JSON.stringify({ error: 'Erro ao buscar integração InfinitePay' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse(500, 'Erro ao buscar integração InfinitePay', 'INTEGRATION_ERROR');
     }
 
     const handle = (integracao?.dados_extras as { handle?: string })?.handle;
 
     if (!handle) {
-      console.error('No InfinitePay handle found for user:', userId);
-      return new Response(
-        JSON.stringify({ error: 'InfinitePay não configurado para este usuário' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse(400, 'InfinitePay não configurado para este usuário', 'NO_HANDLE');
     }
 
-    // 2. Generate unique order_nsu for tracking
+    // 2. Build payload
     const orderNsu = `gallery-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-
-    // 3. Convert value to centavos (InfinitePay expects price in centavos)
     const valorCentavos = Math.round(valor * 100);
 
-    // 4. Build InfinitePay payload according to official API docs
-    const infinitePayload: InfinitePayPayload = {
-      handle: handle,
-      items: [
-        {
-          quantity: 1,
-          price: valorCentavos,
-          description: descricao.substring(0, 100), // Limit description length
-        }
-      ],
+    const infinitePayload: Record<string, unknown> = {
+      handle,
+      items: [{ quantity: 1, price: valorCentavos, description: descricao.substring(0, 100) }],
       order_nsu: orderNsu,
     };
 
-    // Add redirect URL - build from gallery token if available
+    // Redirect URL
     if (redirectUrl) {
       infinitePayload.redirect_url = redirectUrl;
     } else if (galleryToken) {
-      // Build redirect URL to gallery with payment success parameter
-      // Using the production URL pattern
-      // Primary domain updated for Lunari production
       const baseUrl = 'https://gallery.lunarihub.com';
       infinitePayload.redirect_url = `${baseUrl}/g/${galleryToken}?payment=success`;
-      console.log(`💳 Redirect URL configurada: ${infinitePayload.redirect_url}`);
+      console.log(`💳 Redirect URL: ${infinitePayload.redirect_url}`);
     }
 
-    // Add webhook URL for payment notifications
-    if (webhookUrl) {
-      infinitePayload.webhook_url = webhookUrl;
-    } else {
-      // Default webhook URL pointing to our edge function
-      infinitePayload.webhook_url = `${supabaseUrl}/functions/v1/infinitepay-webhook`;
+    // Webhook URL
+    infinitePayload.webhook_url = webhookUrl || `${supabaseUrl}/functions/v1/infinitepay-webhook`;
+    console.log(`💳 Webhook URL: ${infinitePayload.webhook_url}`);
+
+    // 3. Call InfinitePay API with retry + timeout
+    console.log(`💳 Calling InfinitePay API...`);
+
+    let infinitePayResponse: Response;
+    try {
+      infinitePayResponse = await fetchWithRetry(
+        'https://api.infinitepay.io/invoices/public/checkout/links',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(infinitePayload),
+        },
+      );
+    } catch (fetchErr: unknown) {
+      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      console.error('💳 InfinitePay API unreachable after retries:', msg);
+      return errorResponse(502, 'InfinitePay indisponível. Tente novamente em alguns minutos.', 'INFINITEPAY_UNAVAILABLE', msg);
     }
-    
-    console.log(`💳 Webhook URL configurada: ${infinitePayload.webhook_url}`);
 
-    console.log(`💳 Calling InfinitePay API with payload:`, JSON.stringify(infinitePayload));
+    console.log(`💳 InfinitePay API status: ${infinitePayResponse.status}`);
 
-    // 5. Call InfinitePay API to create checkout link
-    const infinitePayResponse = await fetch('https://api.infinitepay.io/invoices/public/checkout/links', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(infinitePayload),
-    });
-
+    // 4. Validate Content-Type before parsing
+    const contentType = infinitePayResponse.headers.get('content-type') || '';
     const responseText = await infinitePayResponse.text();
-    console.log(`💳 InfinitePay API response status: ${infinitePayResponse.status}`);
-    console.log(`💳 InfinitePay API response body: ${responseText}`);
+
+    if (!contentType.includes('application/json')) {
+      console.error(`💳 InfinitePay returned non-JSON (${contentType}):`, responseText.substring(0, 300));
+      return errorResponse(502, 'InfinitePay retornou resposta inesperada. Tente novamente.', 'INFINITEPAY_NON_JSON', `Content-Type: ${contentType}`);
+    }
 
     if (!infinitePayResponse.ok) {
-      console.error('InfinitePay API error:', responseText);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao criar link de pagamento InfinitePay',
-          details: responseText 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('💳 InfinitePay API error:', responseText.substring(0, 500));
+      return errorResponse(502, 'Erro ao criar link de pagamento InfinitePay', 'INFINITEPAY_API_ERROR', responseText.substring(0, 200));
     }
 
-    let infinitePayData: InfinitePayResponse;
+    let infinitePayData: { url?: string; checkout_url?: string; slug?: string };
     try {
       infinitePayData = JSON.parse(responseText);
     } catch {
-      console.error('Failed to parse InfinitePay response:', responseText);
-      return new Response(
-        JSON.stringify({ error: 'Resposta inválida da InfinitePay' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('💳 Failed to parse InfinitePay response:', responseText.substring(0, 300));
+      return errorResponse(502, 'Resposta inválida da InfinitePay', 'INFINITEPAY_PARSE_ERROR');
     }
 
-    // Use 'url' (API atual) com fallback para 'checkout_url'
     const checkoutUrl = infinitePayData.url || infinitePayData.checkout_url;
     const invoiceSlug = infinitePayData.slug;
 
     if (!checkoutUrl) {
-      console.error('No checkout_url in InfinitePay response:', infinitePayData);
-      return new Response(
-        JSON.stringify({ error: 'InfinitePay não retornou URL de checkout' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('💳 No checkout_url in response:', JSON.stringify(infinitePayData));
+      return errorResponse(502, 'InfinitePay não retornou URL de checkout', 'NO_CHECKOUT_URL');
     }
 
-    console.log(`💳 InfinitePay checkout URL generated: ${checkoutUrl}`);
+    console.log(`💳 Checkout URL generated: ${checkoutUrl}`);
 
-    // 6. Create charge record in database with gallery link and photo quantity
-    // Aceita cliente_id NULL para galerias públicas
+    // 5. Create charge record
     const { data: cobranca, error: cobrancaError } = await supabase
       .from('cobrancas')
       .insert({
         user_id: userId,
-        cliente_id: clienteId || null, // Permite NULL para galerias públicas
+        cliente_id: clienteId || null,
         session_id: sessionId || null,
         valor,
         descricao,
@@ -215,21 +200,18 @@ Deno.serve(async (req) => {
         status: 'pendente',
         ip_checkout_url: checkoutUrl,
         ip_order_nsu: orderNsu,
-        galeria_id: galeriaId || null, // Link charge to gallery
-        qtd_fotos: qtdFotos || 0, // Store quantity for credit tracking
+        galeria_id: galeriaId || null,
+        qtd_fotos: qtdFotos || 0,
       })
       .select('id')
       .single();
 
     if (cobrancaError) {
       console.error('Charge creation error:', cobrancaError);
-      return new Response(
-        JSON.stringify({ error: 'Erro ao criar registro de cobrança' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse(500, 'Erro ao criar registro de cobrança', 'CHARGE_DB_ERROR', cobrancaError.message);
     }
 
-    console.log(`✅ InfinitePay charge created: ${cobranca.id} with order_nsu: ${orderNsu}`);
+    console.log(`✅ Charge created: ${cobranca.id} order_nsu: ${orderNsu}`);
 
     return new Response(
       JSON.stringify({
@@ -240,13 +222,11 @@ Deno.serve(async (req) => {
         invoiceSlug,
         provedor: 'infinitepay',
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-  } catch (error) {
-    console.error('InfinitePay create link error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Erro interno do servidor', details: String(error) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[infinitepay-create-link] Error:', error);
+    return errorResponse(500, 'Erro interno do servidor', 'INTERNAL_ERROR', msg);
   }
 });
