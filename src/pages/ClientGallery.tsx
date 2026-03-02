@@ -483,7 +483,26 @@ export default function ClientGallery() {
       });
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao confirmar seleção');
+      // Parse error code from message if available
+      const msg = error.message || 'Erro ao confirmar seleção';
+      
+      // Show contextual error messages based on error codes from backend
+      if (msg.includes('Nenhum método de pagamento configurado') || msg.includes('NO_PAYMENT_PROVIDER')) {
+        toast.error('Pagamento não disponível', {
+          description: 'O fotógrafo ainda não configurou o método de pagamento. Entre em contato com ele.',
+          duration: 8000,
+        });
+      } else if (msg.includes('InfinitePay indisponível') || msg.includes('INFINITEPAY_UNAVAILABLE')) {
+        toast.error('Serviço de pagamento indisponível', {
+          description: 'Tente novamente em alguns minutos.',
+          duration: 6000,
+        });
+      } else {
+        toast.error('Erro ao processar pagamento', {
+          description: msg,
+          duration: 6000,
+        });
+      }
     },
   });
 
