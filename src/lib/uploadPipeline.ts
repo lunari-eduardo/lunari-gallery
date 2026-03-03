@@ -107,7 +107,7 @@ export class UploadPipeline {
 
   constructor(options: PipelineOptions) {
     this.opts = options as any;
-    this.maxCompress = options.maxCompressionSlots ?? 2;
+    this.maxCompress = options.maxCompressionSlots ?? Math.min(Math.max(2, Math.floor((navigator.hardwareConcurrency || 4) / 2)), 4);
     this.maxUpload = options.maxUploadSlots ?? getDefaultUploadSlots();
   }
 
