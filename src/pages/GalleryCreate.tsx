@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon, Eye, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -190,7 +191,7 @@ export default function GalleryCreate() {
     deletePhoto,
   } = useSupabaseGalleries();
 
-  const { refetch: refetchCredits } = usePhotoCredits();
+  const queryClient = useQueryClient();
 
   const handleDeleteUploadedPhoto = async (photoId: string) => {
     if (!supabaseGalleryId || deletingPhotoId) return;
@@ -198,23 +199,10 @@ export default function GalleryCreate() {
     try {
       await deletePhoto({ galleryId: supabaseGalleryId, photoId });
 
-      // Refund 1 credit
+      // Refund 1 credit via RPC (handles subscription vs purchased bucket)
       if (user) {
-        const { data: acc } = await supabase
-          .from('photographer_accounts')
-          .select('photo_credits, credits_consumed_total')
-          .eq('user_id', user.id)
-          .single();
-        if (acc) {
-          await supabase
-            .from('photographer_accounts')
-            .update({
-              photo_credits: (acc.photo_credits || 0) + 1,
-              credits_consumed_total: Math.max(0, (acc.credits_consumed_total || 0) - 1),
-            })
-            .eq('user_id', user.id);
-        }
-        refetchCredits();
+        await supabase.rpc('refund_photo_credit' as any, { _user_id: user.id });
+        queryClient.invalidateQueries({ queryKey: ['photo-credits'] });
       }
 
       setUploadedPhotos(prev => prev.filter(p => p.id !== photoId));

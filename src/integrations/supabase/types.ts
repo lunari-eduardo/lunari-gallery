@@ -3172,6 +3172,7 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      refund_photo_credit: { Args: { _user_id: string }; Returns: undefined }
       renew_subscription_credits: {
         Args: { _amount: number; _user_id: string }
         Returns: undefined
