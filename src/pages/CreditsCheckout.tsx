@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ALL_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize, PLAN_INCLUDES } from '@/lib/transferPlans';
+import { ALL_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize, PLAN_INCLUDES, getPlanHierarchyLevel, isSubActiveForPlan } from '@/lib/transferPlans';
 import { differenceInDays } from 'date-fns';
 
 
@@ -224,6 +224,12 @@ export default function CreditsCheckout() {
   };
 
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
+    // Guard: block if user already has this exact plan active
+    if (isSubActiveForPlan(allSubs, planType)) {
+      toast.error('Você já possui este plano ativo.');
+      return;
+    }
+
     const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
     const newPlanPrices = ALL_PLAN_PRICES[planType];
     const newPriceCentsForCycle = selectedCycle === 'YEARLY'
@@ -450,17 +456,30 @@ export default function CreditsCheckout() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {COMBO_PLANS.map((plan) => {
                 const priceCents = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+                const comboPlanType = plan.highlight ? 'combo_completo' : 'combo_pro_select2k';
+                const isCurrentCombo = isSubActiveForPlan(allSubs, comboPlanType);
+                const userHighestLevel = Math.max(...allSubs.filter(s => ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) || (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())).map(s => getPlanHierarchyLevel(s.plan_type)), 0);
+                const cardLevel = getPlanHierarchyLevel(comboPlanType);
+                const isInferiorToActive = !isCurrentCombo && userHighestLevel > cardLevel && userHighestLevel >= 100; // Only compare within combo+ tier
+
                 return (
                   <div
                     key={plan.name}
                     className={cn(
                       'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
-                      plan.highlight
-                        ? 'border-primary shadow-md ring-1 ring-primary/20'
-                        : 'border-border shadow-sm'
+                      isCurrentCombo
+                        ? 'border-primary/50 bg-primary/5 opacity-80'
+                        : plan.highlight
+                          ? 'border-primary shadow-md ring-1 ring-primary/20'
+                          : 'border-border shadow-sm'
                     )}
                   >
-                    {plan.tag && (
+                    {isCurrentCombo && (
+                      <Badge variant="secondary" className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs">
+                        Plano atual
+                      </Badge>
+                    )}
+                    {!isCurrentCombo && plan.tag && (
                       <Badge className="absolute -top-3 left-6 text-xs">
                         {plan.tag}
                       </Badge>
@@ -488,16 +507,22 @@ export default function CreditsCheckout() {
                         Economize 16% em relação ao mensal
                       </p>
                     )}
-                    <Button className="mt-6 px-8" size="lg" onClick={() => {
-                      const priceCents = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-                      handleSubscribe(
-                        plan.highlight ? 'combo_completo' : 'combo_pro_select2k',
-                        plan.name,
-                        priceCents
-                      );
-                    }}>
-                      {plan.buttonLabel}
-                    </Button>
+                    {isCurrentCombo ? (
+                      <Button className="mt-6 px-8" size="lg" variant="outline" onClick={() => navigate('/credits/subscription')}>
+                        Gerenciar assinatura
+                      </Button>
+                    ) : isInferiorToActive ? (
+                      <Button className="mt-6 px-8" size="lg" variant="outline" disabled>
+                        <ArrowDown className="h-4 w-4 mr-1.5" />
+                        Plano inferior ao atual
+                      </Button>
+                    ) : (
+                      <Button className="mt-6 px-8" size="lg" onClick={() => {
+                        handleSubscribe(comboPlanType, plan.name, priceCents);
+                      }}>
+                        {plan.buttonLabel}
+                      </Button>
+                    )}
                     {billingPeriod === 'yearly' && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
                         <Info className="h-3 w-3 shrink-0 text-primary" />
@@ -765,43 +790,65 @@ export default function CreditsCheckout() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-primary/50 bg-primary/5 p-8 transition-all hover:shadow-md">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                <div className="space-y-2">
-                  <p className="text-lg font-semibold text-foreground">{TRANSFER_COMBO.name}</p>
-                  <p className="text-3xl font-bold text-primary">
-                    {formatPrice(billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice)}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                    </span>
-                  </p>
-                  {billingPeriod === 'yearly' && (
-                    <>
-                      <Badge variant="secondary" className="text-[10px] px-2 py-0.5 w-fit">
-                        Até 12x sem juros
-                      </Badge>
-                      <p className="text-xs text-muted-foreground">
-                        apenas {formatPrice(Math.round(TRANSFER_COMBO.yearlyPrice / 12))}/mês
+            {(() => {
+              const isCurrentComboCompleto = isSubActiveForPlan(allSubs, 'combo_completo');
+              const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
+
+              return (
+                <div className={cn(
+                  "rounded-2xl border p-8 transition-all hover:shadow-md",
+                  isCurrentComboCompleto
+                    ? "border-primary/50 bg-primary/5 opacity-80"
+                    : "border-primary/50 bg-primary/5"
+                )}>
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div className="space-y-2">
+                      {isCurrentComboCompleto && (
+                        <Badge variant="secondary" className="text-xs mb-2">
+                          Plano atual
+                        </Badge>
+                      )}
+                      <p className="text-lg font-semibold text-foreground">{TRANSFER_COMBO.name}</p>
+                      <p className="text-3xl font-bold text-primary">
+                        {formatPrice(comboPrice)}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                        </span>
                       </p>
-                    </>
-                  )}
+                      {billingPeriod === 'yearly' && (
+                        <>
+                          <Badge variant="secondary" className="text-[10px] px-2 py-0.5 w-fit">
+                            Até 12x sem juros
+                          </Badge>
+                          <p className="text-xs text-muted-foreground">
+                            apenas {formatPrice(Math.round(TRANSFER_COMBO.yearlyPrice / 12))}/mês
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {isCurrentComboCompleto ? (
+                        <Button size="lg" className="px-8 shrink-0" variant="outline" onClick={() => navigate('/credits/subscription')}>
+                          Gerenciar assinatura
+                        </Button>
+                      ) : (
+                        <Button size="lg" className="px-8 shrink-0" onClick={() => {
+                          handleSubscribe('combo_completo', TRANSFER_COMBO.name, comboPrice);
+                        }}>
+                          Conhecer plano completo
+                        </Button>
+                      )}
+                      {billingPeriod === 'yearly' && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Info className="h-3 w-3 shrink-0 text-primary" />
+                          Renovação manual após 12 meses
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Button size="lg" className="px-8 shrink-0" onClick={() => {
-                    const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
-                    handleSubscribe('combo_completo', TRANSFER_COMBO.name, comboPrice);
-                  }}>
-                    Conhecer plano completo
-                  </Button>
-                  {billingPeriod === 'yearly' && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Info className="h-3 w-3 shrink-0 text-primary" />
-                      Renovação manual após 12 meses
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+              );
+            })()}
           </section>
         </>
       )}
