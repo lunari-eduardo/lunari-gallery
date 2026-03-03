@@ -460,23 +460,35 @@ export default function CreditsCheckout() {
                 const isCurrentCombo = isSubActiveForPlan(allSubs, comboPlanType);
                 const userHighestLevel = Math.max(...allSubs.filter(s => ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) || (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())).map(s => getPlanHierarchyLevel(s.plan_type)), 0);
                 const cardLevel = getPlanHierarchyLevel(comboPlanType);
-                const isInferiorToActive = !isCurrentCombo && userHighestLevel > cardLevel && userHighestLevel >= 100; // Only compare within combo+ tier
+                const isInferiorToActive = !isCurrentCombo && userHighestLevel > cardLevel && userHighestLevel >= 100;
+
+                // Cycle upgrade detection: user has this combo on MONTHLY but viewing YEARLY
+                const activeComboSub = allSubs.find(s => s.plan_type === comboPlanType && ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status));
+                const currentComboCycle = activeComboSub?.billing_cycle || 'MONTHLY';
+                const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+                const isCycleUpgrade = isCurrentCombo && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
 
                 return (
                   <div
                     key={plan.name}
                     className={cn(
                       'relative flex flex-col rounded-2xl border bg-card p-8 transition-all hover:shadow-md',
-                      isCurrentCombo
+                      isCurrentCombo && !isCycleUpgrade
                         ? 'border-primary/50 bg-primary/5 opacity-80'
                         : plan.highlight
                           ? 'border-primary shadow-md ring-1 ring-primary/20'
                           : 'border-border shadow-sm'
                     )}
                   >
-                    {isCurrentCombo && (
+                    {isCurrentCombo && !isCycleUpgrade && (
                       <Badge variant="secondary" className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs">
                         Plano atual
+                      </Badge>
+                    )}
+                    {isCycleUpgrade && (
+                      <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs gap-1">
+                        <ArrowUp className="h-3 w-3" />
+                        Mudar para anual
                       </Badge>
                     )}
                     {!isCurrentCombo && plan.tag && (
@@ -507,7 +519,14 @@ export default function CreditsCheckout() {
                         Economize 16% em relação ao mensal
                       </p>
                     )}
-                    {isCurrentCombo ? (
+                    {isCycleUpgrade ? (
+                      <Button className="mt-6 px-8" size="lg" onClick={() => {
+                        handleSubscribe(comboPlanType, plan.name, priceCents);
+                      }}>
+                        <ArrowUp className="h-4 w-4 mr-1.5" />
+                        Mudar para anual
+                      </Button>
+                    ) : isCurrentCombo ? (
                       <Button className="mt-6 px-8" size="lg" variant="outline" onClick={() => navigate('/credits/subscription')}>
                         Gerenciar assinatura
                       </Button>
@@ -634,11 +653,13 @@ export default function CreditsCheckout() {
 
                 const planKey = `transfer_${plan.storage.toLowerCase()}`;
                 const isCurrentPlan = isUpgradeMode && planKey === currentPlanType;
-                const isDowngrade = isUpgradeMode && currentPlanPrices && (
-                  effectiveBilling === 'YEARLY'
-                    ? plan.yearlyPrice <= currentPriceCents
-                    : plan.monthlyPrice <= currentPriceCents
+
+                // Hierarchy-based downgrade: a transfer solo is ALWAYS inferior to a combo
+                const cardHierarchy = getPlanHierarchyLevel(planKey);
+                const highestActiveLevel = Math.max(
+                  ...activeSubs.map(s => getPlanHierarchyLevel(s.plan_type)), 0
                 );
+                const isDowngrade = isUpgradeMode && !isCurrentPlan && highestActiveLevel > cardHierarchy;
 
                 // Prorata calculation using per-sub credit (transfer sub only) + cross-product
                 let prorataValue: number | null = null;
@@ -794,18 +815,30 @@ export default function CreditsCheckout() {
               const isCurrentComboCompleto = isSubActiveForPlan(allSubs, 'combo_completo');
               const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
 
+              // Cycle upgrade: user has combo_completo MONTHLY but viewing YEARLY
+              const activeComboSub = allSubs.find(s => s.plan_type === 'combo_completo' && ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status));
+              const currentComboCycle = activeComboSub?.billing_cycle || 'MONTHLY';
+              const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+              const isCycleUpgrade = isCurrentComboCompleto && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
+
               return (
                 <div className={cn(
                   "rounded-2xl border p-8 transition-all hover:shadow-md",
-                  isCurrentComboCompleto
+                  isCurrentComboCompleto && !isCycleUpgrade
                     ? "border-primary/50 bg-primary/5 opacity-80"
                     : "border-primary/50 bg-primary/5"
                 )}>
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div className="space-y-2">
-                      {isCurrentComboCompleto && (
+                      {isCurrentComboCompleto && !isCycleUpgrade && (
                         <Badge variant="secondary" className="text-xs mb-2">
                           Plano atual
+                        </Badge>
+                      )}
+                      {isCycleUpgrade && (
+                        <Badge className="text-xs mb-2 gap-1">
+                          <ArrowUp className="h-3 w-3" />
+                          Mudar para anual
                         </Badge>
                       )}
                       <p className="text-lg font-semibold text-foreground">{TRANSFER_COMBO.name}</p>
@@ -827,7 +860,14 @@ export default function CreditsCheckout() {
                       )}
                     </div>
                     <div className="flex flex-col gap-2">
-                      {isCurrentComboCompleto ? (
+                      {isCycleUpgrade ? (
+                        <Button size="lg" className="px-8 shrink-0" onClick={() => {
+                          handleSubscribe('combo_completo', TRANSFER_COMBO.name, comboPrice);
+                        }}>
+                          <ArrowUp className="h-4 w-4 mr-1.5" />
+                          Mudar para anual
+                        </Button>
+                      ) : isCurrentComboCompleto ? (
                         <Button size="lg" className="px-8 shrink-0" variant="outline" onClick={() => navigate('/credits/subscription')}>
                           Gerenciar assinatura
                         </Button>
