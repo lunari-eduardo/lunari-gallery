@@ -77,6 +77,7 @@ export default function CreditsPayment() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthContext();
+  const [installments, setInstallments] = useState(1);
 
   const pkg = location.state as PaymentState | null;
 
@@ -125,13 +126,13 @@ export default function CreditsPayment() {
             {pkg.type === 'select' ? (
               <SelectForm pkg={pkg} formattedPrice={formattedPrice} />
             ) : (
-              <SubscriptionForm pkg={pkg} formattedPrice={formattedPrice} />
+              <SubscriptionForm pkg={pkg} formattedPrice={formattedPrice} installments={installments} setInstallments={setInstallments} />
             )}
           </div>
 
           {/* Right: Order summary */}
           <div className="order-first lg:order-last">
-            <OrderSummary pkg={pkg} formattedPrice={formattedPrice} />
+            <OrderSummary pkg={pkg} formattedPrice={formattedPrice} installments={installments} />
           </div>
         </div>
       </main>
@@ -143,8 +144,9 @@ export default function CreditsPayment() {
    ORDER SUMMARY
    ═══════════════════════════════════════════ */
 
-function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPrice: string }) {
+function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState; formattedPrice: string; installments: number }) {
   const isUpgrade = pkg.type === 'subscription' && pkg.isUpgrade;
+  const isYearly = pkg.type === 'subscription' && pkg.billingCycle === 'YEARLY';
   const prorataFormatted = isUpgrade && pkg.prorataValueCents != null
     ? (pkg.prorataValueCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : null;
@@ -161,7 +163,9 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
             ? `${pkg.credits.toLocaleString('pt-BR')} créditos`
             : isUpgrade
               ? `Upgrade de ${pkg.currentPlanName || 'plano atual'}`
-              : `Assinatura ${pkg.billingCycle === 'MONTHLY' ? 'mensal' : 'anual'}`}
+              : isYearly
+                ? (installments === 1 ? 'Assinatura anual' : 'Compra parcelada')
+                : 'Assinatura mensal'}
         </p>
       </div>
       <div className="border-t pt-4 space-y-2">
@@ -180,7 +184,7 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
                 {creditFormatted && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Crédito de planos ativos</span>
-                    <span className="text-green-600 font-medium">-{creditFormatted}</span>
+                    <span className="text-primary font-medium">-{creditFormatted}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold text-base">
@@ -199,6 +203,15 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
               <span className="text-muted-foreground">Subtotal</span>
               <span className="text-foreground">{formattedPrice}</span>
             </div>
+            {/* Installment breakdown for yearly */}
+            {isYearly && installments > 1 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Parcelas</span>
+                <span className="text-foreground font-medium">
+                  {installments}x de {((pkg.priceCents / 100) / installments).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} sem juros
+                </span>
+              </div>
+            )}
             <div className="flex justify-between font-semibold text-base">
               <span className="text-foreground">Total</span>
               <span className="text-primary">{formattedPrice}</span>
@@ -207,12 +220,16 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
         )}
       </div>
 
-      {/* Annual renewal badge */}
-      {pkg.type === 'subscription' && pkg.billingCycle === 'YEARLY' && !isUpgrade && (
+      {/* Annual renewal info */}
+      {isYearly && !isUpgrade && (
         <div className="border-t pt-4">
           <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
-            <span>Renovação manual após 12 meses. Você será notificado antes do vencimento.</span>
+            <span>
+              {installments === 1
+                ? 'Renovação automática a cada 12 meses.'
+                : 'Renovação manual após 12 meses. Você será notificado antes do vencimento.'}
+            </span>
           </div>
         </div>
       )}
@@ -447,7 +464,7 @@ function SelectCardForm({ pkg, formattedPrice }: { pkg: SelectPayment; formatted
    SUBSCRIPTION FORM
    ═══════════════════════════════════════════ */
 
-function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; formattedPrice: string }) {
+function SubscriptionForm({ pkg, formattedPrice, installments, setInstallments }: { pkg: SubscriptionPayment; formattedPrice: string; installments: number; setInstallments: (v: number) => void }) {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const {
@@ -459,7 +476,6 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
 
   const isYearly = pkg.billingCycle === 'YEARLY';
   const isUpgrade = !!pkg.isUpgrade;
-  const [installments, setInstallments] = useState(1);
 
   const installmentOptions = isYearly && !isUpgrade
     ? Array.from({ length: 12 }, (_, i) => {
@@ -476,19 +492,79 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
     <div className="space-y-5">
       {/* Installment selector for yearly (non-upgrade) */}
       {isYearly && !isUpgrade && installmentOptions.length > 0 && (
-        <div className="rounded-lg border bg-card p-4 space-y-3">
-          <Label className="text-sm font-medium">Parcelas</Label>
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={installments}
-            onChange={(e) => setInstallments(Number(e.target.value))}
+        <div className="rounded-xl border-2 border-primary/30 bg-card p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Forma de Pagamento</span>
+          </div>
+
+          {/* À vista option */}
+          <button
+            type="button"
+            onClick={() => setInstallments(1)}
+            className={cn(
+              'w-full flex items-center justify-between rounded-lg border-2 p-4 text-left transition-all',
+              installments === 1
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-muted-foreground/30'
+            )}
           >
-            {installmentOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            <div>
+              <p className="text-sm font-semibold text-foreground">À vista</p>
+              <p className="text-sm text-primary font-medium">
+                {(pkg.priceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+            <Badge variant="secondary" className="text-[10px] shrink-0">Renovação automática</Badge>
+          </button>
+
+          {/* Parcelado option */}
+          <button
+            type="button"
+            onClick={() => { if (installments <= 1) setInstallments(2); }}
+            className={cn(
+              'w-full flex flex-col rounded-lg border-2 p-4 text-left transition-all',
+              installments > 1
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-muted-foreground/30'
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Parcelado</p>
+                <p className="text-sm text-primary font-medium">até 12x sem juros</p>
+              </div>
+              <Badge variant="outline" className="text-[10px] shrink-0">Renovação manual</Badge>
+            </div>
+          </button>
+
+          {/* Installment count selector when parcelado is chosen */}
+          {installments > 1 && (
+            <div className="pl-1 space-y-2">
+              <Label className="text-xs text-muted-foreground">Número de parcelas</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={installments}
+                onChange={(e) => setInstallments(Number(e.target.value))}
+              >
+                {installmentOptions.filter(opt => opt.value >= 2).map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Contextual renewal warning */}
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>
+              {installments === 1
+                ? 'Sua assinatura será renovada automaticamente a cada 12 meses.'
+                : 'Este plano terá renovação manual. Você será notificado antes do vencimento para renovar.'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -547,8 +623,38 @@ function SubscriptionForm({ pkg, formattedPrice }: { pkg: SubscriptionPayment; f
             } else {
               throw new Error('Upgrade não foi aprovado. Verifique os dados do cartão.');
             }
+          } else if (isYearly && installments === 1) {
+            // Yearly à vista: recurring yearly subscription (auto-renewal)
+            const result = await createSubscription({
+              planType: pkg.planType,
+              billingCycle: 'YEARLY',
+              creditCard: {
+                holderName: cardData.cardHolderName.toUpperCase(),
+                number: cardData.cardNumber.replace(/\s/g, ''),
+                expiryMonth: cardData.expiryMonth.padStart(2, '0'),
+                expiryYear: cardData.expiryYear,
+                ccv: cardData.ccv,
+              },
+              creditCardHolderInfo: {
+                name: cardData.name,
+                email: user?.email || '',
+                cpfCnpj: cardData.cpfCnpj.replace(/\D/g, ''),
+                postalCode: cardData.postalCode.replace(/\D/g, ''),
+                addressNumber: 'S/N',
+                phone: cardData.phone.replace(/\D/g, ''),
+              },
+              remoteIp,
+            });
+
+            if (result.status === 'ACTIVE' || result.subscriptionId) {
+              toast.success('Assinatura anual ativada com sucesso!');
+              setTimeout(() => navigate('/credits'), 3000);
+              return { success: true };
+            } else {
+              throw new Error('Pagamento não foi aprovado. Verifique os dados do cartão.');
+            }
           } else if (isYearly) {
-            // Yearly: one-time payment with installments
+            // Yearly parcelado: one-time payment with installments (manual renewal)
             const result = await createPayment({
               productType: 'subscription_yearly',
               planType: pkg.planType,
