@@ -125,3 +125,60 @@ export function getPlanSubscriptionCredits(planType: string | null | undefined):
   if (!planType) return 0;
   return PLAN_SUBSCRIPTION_CREDITS[planType] ?? 0;
 }
+
+/**
+ * Plan hierarchy levels for comparison.
+ * Higher number = more complete plan.
+ * Cross-family: combos > individual plans.
+ */
+const PLAN_HIERARCHY: Record<string, number> = {
+  // Studio
+  studio_starter: 10,
+  studio_pro: 20,
+  // Transfer (isolated)
+  transfer_5gb: 30,
+  transfer_20gb: 40,
+  transfer_50gb: 50,
+  transfer_100gb: 60,
+  // Combos (always higher than isolated)
+  combo_pro_select2k: 100,
+  combo_completo: 200,
+};
+
+/** Returns hierarchy level for a plan. Higher = more complete. */
+export function getPlanHierarchyLevel(planType: string | null | undefined): number {
+  if (!planType) return 0;
+  return PLAN_HIERARCHY[planType] ?? 0;
+}
+
+/**
+ * Checks if user has an active subscription for the given planType.
+ * Considers CANCELLED subs still in their paid period as active.
+ */
+export function isSubActiveForPlan(
+  subs: Array<{ plan_type: string; status: string; next_due_date: string | null }>,
+  planType: string
+): boolean {
+  return subs.some(s => {
+    if (s.plan_type !== planType) return false;
+    if (['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status)) return true;
+    if (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date()) return true;
+    return false;
+  });
+}
+
+/**
+ * Returns the highest active plan type from a list of subscriptions.
+ */
+export function getHighestActivePlan(
+  subs: Array<{ plan_type: string; status: string; next_due_date: string | null }>
+): string | null {
+  const activeSubs = subs.filter(s =>
+    ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) ||
+    (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())
+  );
+  if (activeSubs.length === 0) return null;
+  return activeSubs.reduce((best, s) =>
+    getPlanHierarchyLevel(s.plan_type) > getPlanHierarchyLevel(best.plan_type) ? s : best
+  ).plan_type;
+}

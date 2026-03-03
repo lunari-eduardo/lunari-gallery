@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useCreditPackages } from '@/hooks/useCreditPackages';
 import { useAsaasSubscription } from '@/hooks/useAsaasSubscription';
+import { isSubActiveForPlan } from '@/lib/transferPlans';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,7 +80,18 @@ export default function CreditsPayment() {
   const { user } = useAuthContext();
   const [installments, setInstallments] = useState(1);
 
+  const { subscriptions: allSubs, isLoading: subsLoading } = useAsaasSubscription();
+
   const pkg = location.state as PaymentState | null;
+
+  // Guard: redirect if user already has this subscription plan active
+  useEffect(() => {
+    if (subsLoading || !pkg || pkg.type !== 'subscription' || pkg.isUpgrade) return;
+    if (isSubActiveForPlan(allSubs, pkg.planType)) {
+      toast.error('Você já possui este plano ativo.');
+      navigate('/credits/subscription', { replace: true });
+    }
+  }, [subsLoading, allSubs, pkg, navigate]);
 
   if (!pkg) {
     return (
