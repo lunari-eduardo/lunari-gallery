@@ -1,111 +1,49 @@
 
 
-## Plano: Corrigir "Mudar para anual" e Adicionar Renovação Antecipada
+## Plano: Conceder créditos de assinatura no upgrade e corrigir variável undefined
 
-### Problema 1: "Mudar para anual" não funciona
+### Problema raiz
 
-O botão "Mudar para anual" chama `handleSubscribe('combo_completo', ...)` que na linha 228 executa:
+A Edge Function `asaas-upgrade-subscription` (linha 393) finaliza o upgrade sem chamar `renew_subscription_credits`. Tanto `asaas-create-subscription` (linha 229-240) quanto o webhook `SUBSCRIPTION_RENEWED` (linha 311-321) fazem essa chamada, mas o fluxo de upgrade não.
+
+Resultado: usuário contrata combo_completo via upgrade, recebe storage de 20GB mas `credits_subscription` permanece 0.
+
+### Bug secundário
+
+Linha 427 referencia `newSubData` que só existe no branch de assinatura recorrente (linha 347). No branch de pagamento parcelado (`useInstallmentPayment`), `newSubData` é `undefined` — causa erro silencioso na resposta.
+
+### Correção em `supabase/functions/asaas-upgrade-subscription/index.ts`
+
+**1. Adicionar mapa de créditos de assinatura (após PLANS, ~linha 22):**
 ```typescript
-if (isSubActiveForPlan(allSubs, planType)) {
-  toast.error('Você já possui este plano ativo.');
-  return;
-}
-```
-Como o usuário já tem `combo_completo` mensal ativo, o guard bloqueia. O sistema não distingue "mesmo plano, ciclo diferente" de "mesmo plano duplicado".
-
-**Correção em `src/pages/CreditsCheckout.tsx` — `handleSubscribe` (linhas 226-310):**
-
-Adicionar detecção de cycle upgrade antes do guard:
-```typescript
-const handleSubscribe = (planType, planName, priceCents) => {
-  const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
-  
-  // Detect cycle upgrade: same plan, different cycle (monthly→yearly)
-  const existingSub = allSubs.find(s => 
-    s.plan_type === planType && 
-    ['ACTIVE','PENDING','OVERDUE'].includes(s.status)
-  );
-  const isCycleUpgrade = existingSub && existingSub.billing_cycle !== selectedCycle;
-  
-  // Guard: block only if exact same plan AND same cycle
-  if (!isCycleUpgrade && isSubActiveForPlan(allSubs, planType)) {
-    toast.error('Você já possui este plano ativo.');
-    return;
-  }
-  
-  if (isCycleUpgrade) {
-    // Treat as upgrade: cancel current, apply prorata, create new
-    // Navigate to payment with isUpgrade=true and the existing sub ID
-    navigate('/credits/checkout/pay', {
-      state: {
-        type: 'subscription',
-        planType,
-        planName,
-        billingCycle: selectedCycle,
-        priceCents: newPriceCentsForCycle,
-        isUpgrade: true,
-        prorataValueCents: calculatedProrata,
-        currentSubscriptionId: existingSub.id,
-        subscriptionIdsToCancel: [existingSub.id],
-        currentPlanName: getPlanDisplayName(existingSub.plan_type),
-      },
-    });
-    return;
-  }
-  // ... rest of existing logic
+const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
+  combo_pro_select2k: 2000,
+  combo_completo: 2000,
 };
 ```
 
-O cálculo de prorata segue a mesma lógica existente: `crédito = preçoAtual * diasRestantes / totalDiasCiclo`. O valor líquido é `preçoAnual - crédito`.
-
-A Edge Function `asaas-upgrade-subscription` já suporta este fluxo — cancela a sub antiga, cobra o valor líquido e cria a nova assinatura anual.
-
-### Problema 2: Renovação Antecipada de planos anuais
-
-Na página `SubscriptionManagement.tsx`, planos anuais precisam de um botão "Renovar antecipadamente" que:
-1. Encerra a assinatura atual
-2. Cria uma nova assinatura idêntica
-3. Reinicia o ciclo de 12 meses
-4. **Sem prorata** — é uma compra intencional do valor cheio
-
-**Correção em `src/pages/SubscriptionManagement.tsx`:**
-
-No `SubscriptionCard`, para assinaturas YEARLY ativas, adicionar botão "Renovar antecipadamente" ao lado de "Upgrade / Downgrade":
-
+**2. Após step 7 (reativação de galerias, ~linha 423), adicionar step 8:**
 ```typescript
-{subscription.billing_cycle === 'YEARLY' && !isCancelled && (
-  <Button variant="outline" size="sm" className="gap-1.5"
-    onClick={() => handleEarlyRenewal(subscription)}>
-    <RotateCcw className="h-3.5 w-3.5" />
-    Renovar antecipadamente
-  </Button>
-)}
-```
-
-O fluxo de renovação antecipada reutiliza `handleSubscribe` mas com flag `isRenewal: true`:
-- Navega para `/credits/checkout/pay` com `isUpgrade: true` + `isRenewal: true`
-- O `OrderSummary` mostra "Renovação antecipada" em vez de "Upgrade"
-- O `prorataValueCents` = preço cheio (sem desconto, renovação voluntária)
-
-**Alteração no `SubscriptionPayment` type (CreditsPayment.tsx):**
-```typescript
-interface SubscriptionPayment {
-  // ... existing fields
-  isRenewal?: boolean; // early renewal flag
+// 8. Grant subscription credits if new plan includes them
+const subCredits = PLAN_SUBSCRIPTION_CREDITS[newPlanType];
+if (subCredits && subCredits > 0) {
+  const { error: creditError } = await adminClient.rpc("renew_subscription_credits", {
+    _user_id: userId,
+    _amount: subCredits,
+  });
+  if (creditError) {
+    console.error("Failed to grant subscription credits on upgrade:", creditError);
+  } else {
+    console.log(`Granted ${subCredits} subscription credits for upgrade to ${newPlanType}`);
+  }
 }
 ```
 
-**Alteração no `OrderSummary` (CreditsPayment.tsx):**
-- Se `isRenewal`, mostrar "Renovação antecipada" e não exibir crédito de prorata
-- Texto: "Sua assinatura atual será encerrada e um novo ciclo de 12 meses iniciará."
+**3. Corrigir referência `newSubData` na resposta (linha 427-431):**
 
-**Alteração na Edge Function `asaas-upgrade-subscription`:**
-- Já suporta o fluxo (cancela antiga, cria nova). Quando `netChargeCents === newPriceCents` (sem prorata), o step 3 de pagamento proporcional é pulado automaticamente pois o valor do one-time payment é zero.
-- Na verdade, para renovação antecipada o prorata do plano antigo deve ser ZERO (usuário aceita perder os dias restantes). Então o frontend envia `prorataValueCents = priceCents` (valor cheio).
+Substituir `newSubData.id` e `newSubData.status` por `newAsaasId` e `newStatus` que já existem como variáveis locais.
 
-### Arquivos modificados
+### Arquivo modificado
 
-1. `src/pages/CreditsCheckout.tsx` — `handleSubscribe`: adicionar detecção de cycle upgrade antes do guard
-2. `src/pages/SubscriptionManagement.tsx` — adicionar botão "Renovar antecipadamente" para planos anuais
-3. `src/pages/CreditsPayment.tsx` — adicionar `isRenewal` ao type e ajustar `OrderSummary`
+- `supabase/functions/asaas-upgrade-subscription/index.ts` — 3 alterações, deploy necessário
 
