@@ -175,6 +175,7 @@ function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState
             const creditFormatted = creditCents > 0
               ? (creditCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
               : null;
+            const netCents = pkg.prorataValueCents ?? pkg.priceCents;
             return (
               <>
                 <div className="flex justify-between text-sm">
@@ -191,8 +192,19 @@ function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState
                   <span className="text-foreground">Pagar agora</span>
                   <span className="text-primary">{prorataFormatted}</span>
                 </div>
+                {/* Installment breakdown for upgrade */}
+                {isYearly && installments > 1 && (
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-muted-foreground">Parcelas</span>
+                    <span className="text-foreground font-medium">
+                      {installments}x de {((netCents / 100) / installments).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} sem juros
+                    </span>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  A partir do próximo ciclo, o valor será {formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}.
+                  {installments === 1
+                    ? `A partir do próximo ciclo, o valor será ${formattedPrice}/${pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}.`
+                    : 'Renovação manual após 12 meses.'}
                 </p>
               </>
             );
@@ -221,7 +233,7 @@ function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState
       </div>
 
       {/* Annual renewal info */}
-      {isYearly && !isUpgrade && (
+      {isYearly && (
         <div className="border-t pt-4">
           <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
@@ -477,10 +489,15 @@ function SubscriptionForm({ pkg, formattedPrice, installments, setInstallments }
   const isYearly = pkg.billingCycle === 'YEARLY';
   const isUpgrade = !!pkg.isUpgrade;
 
-  const installmentOptions = isYearly && !isUpgrade
+  // For upgrades, installment base is the net charge (prorataValueCents); for new subs, full price
+  const installmentBaseCents = isUpgrade && pkg.prorataValueCents != null
+    ? pkg.prorataValueCents
+    : pkg.priceCents;
+
+  const installmentOptions = isYearly
     ? Array.from({ length: 12 }, (_, i) => {
         const n = i + 1;
-        const value = (pkg.priceCents / 100 / n);
+        const value = (installmentBaseCents / 100 / n);
         return {
           value: n,
           label: `${n}x de ${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} sem juros`,
@@ -490,8 +507,8 @@ function SubscriptionForm({ pkg, formattedPrice, installments, setInstallments }
 
   return (
     <div className="space-y-5">
-      {/* Installment selector for yearly (non-upgrade) */}
-      {isYearly && !isUpgrade && installmentOptions.length > 0 && (
+      {/* Installment selector for yearly plans (new + upgrade) */}
+      {isYearly && installmentOptions.length > 0 && (
         <div className="rounded-xl border-2 border-primary/30 bg-card p-5 space-y-4">
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-primary" />
@@ -512,7 +529,7 @@ function SubscriptionForm({ pkg, formattedPrice, installments, setInstallments }
             <div>
               <p className="text-sm font-semibold text-foreground">À vista</p>
               <p className="text-sm text-primary font-medium">
-                {(pkg.priceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                {(installmentBaseCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
             </div>
             <Badge variant="secondary" className="text-[10px] shrink-0">Renovação automática</Badge>
@@ -612,6 +629,11 @@ function SubscriptionForm({ pkg, formattedPrice, installments, setInstallments }
               upgradeBody.subscriptionIdsToCancel = pkg.subscriptionIdsToCancel;
             } else if (pkg.currentSubscriptionId) {
               upgradeBody.currentSubscriptionId = pkg.currentSubscriptionId;
+            }
+
+            // Pass installmentCount for yearly upgrades with installments > 1
+            if (isYearly && installments > 1) {
+              upgradeBody.installmentCount = installments;
             }
 
             const result = await upgradeSubscription(upgradeBody);

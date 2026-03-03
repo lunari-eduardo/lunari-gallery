@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
       creditCard,
       creditCardHolderInfo,
       remoteIp,
+      installmentCount, // optional: when > 1 and YEARLY, use one-time payment instead of subscription
     } = body;
 
     // Build list of subscription IDs to cancel
@@ -238,61 +239,128 @@ Deno.serve(async (req) => {
       console.log("Prorata payment created:", payData.id, "status:", payData.status);
     }
 
-    // 4. Create new subscription in Asaas
-    const newValueReais = newPriceCents / 100;
-    const newSubPayload: Record<string, unknown> = {
-      customer: account.asaas_customer_id,
-      billingType: "CREDIT_CARD",
-      cycle: billingCycle,
-      value: newValueReais,
-      nextDueDate: (() => {
-        // If any cancelled sub had a different cycle, restart the cycle
-        const anyCycleDiffers = idsToCancel.length > 0; // we always restart for annual
-        if (billingCycle === 'YEARLY') {
-          // Monthly→Annual: restart cycle, next due = now + 1 year
-          const d = new Date();
-          d.setFullYear(d.getFullYear() + 1);
-          return d.toISOString().split("T")[0];
-        }
-        return latestNextDueDate || getNextBusinessDay();
-      })(),
-      description: `${newPlan.name} - ${billingCycle === "YEARLY" ? "Anual" : "Mensal"}`,
-      externalReference: userId,
-      creditCard: {
-        holderName: creditCard.holderName,
-        number: creditCard.number.replace(/\s/g, ""),
-        expiryMonth: creditCard.expiryMonth,
-        expiryYear: creditCard.expiryYear,
-        ccv: creditCard.ccv,
-      },
-      creditCardHolderInfo: {
-        name: creditCardHolderInfo.name,
-        email: creditCardHolderInfo.email || user.email,
-        cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
-        postalCode: creditCardHolderInfo.postalCode.replace(/\D/g, ""),
-        addressNumber: creditCardHolderInfo.addressNumber || "S/N",
-        phone: creditCardHolderInfo.phone.replace(/\D/g, ""),
-      },
-    };
-    if (remoteIp) newSubPayload.remoteIp = remoteIp;
+    // 4. Create new subscription or one-time installment payment
+    const useInstallmentPayment = installmentCount && installmentCount > 1 && billingCycle === "YEARLY";
 
-    const newSubRes = await fetch(`${ASAAS_BASE_URL}/v3/subscriptions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", access_token: ASAAS_API_KEY },
-      body: JSON.stringify(newSubPayload),
-    });
+    let newAsaasId: string;
+    let newStatus: string;
+    let creditCardToken: string | null = null;
+    let newNextDueDate: string;
 
-    const newSubData = await newSubRes.json();
-    if (!newSubRes.ok) {
-      console.error("New subscription error:", newSubData);
-      const errMsg = newSubData.errors?.[0]?.description || "Falha ao criar nova assinatura";
-      return new Response(JSON.stringify({ error: errMsg }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (useInstallmentPayment) {
+      // ── Installment flow: one-time payment via /v3/payments ──
+      const installmentValue = Math.round(netChargeCents / installmentCount) / 100;
+      const paymentPayload: Record<string, unknown> = {
+        customer: account.asaas_customer_id,
+        billingType: "CREDIT_CARD",
+        value: netChargeReais,
+        installmentCount,
+        installmentValue,
+        dueDate: getNextBusinessDay(),
+        description: `Upgrade: ${cancelledNames.join(' + ')} → ${newPlan.name} (Anual ${installmentCount}x)`,
+        externalReference: userId,
+        creditCard: {
+          holderName: creditCard.holderName,
+          number: creditCard.number.replace(/\s/g, ""),
+          expiryMonth: creditCard.expiryMonth,
+          expiryYear: creditCard.expiryYear,
+          ccv: creditCard.ccv,
+        },
+        creditCardHolderInfo: {
+          name: creditCardHolderInfo.name,
+          email: creditCardHolderInfo.email || user.email,
+          cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
+          postalCode: creditCardHolderInfo.postalCode.replace(/\D/g, ""),
+          addressNumber: creditCardHolderInfo.addressNumber || "S/N",
+          phone: creditCardHolderInfo.phone.replace(/\D/g, ""),
+        },
+      };
+      if (remoteIp) paymentPayload.remoteIp = remoteIp;
+
+      const payRes = await fetch(`${ASAAS_BASE_URL}/v3/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", access_token: ASAAS_API_KEY },
+        body: JSON.stringify(paymentPayload),
       });
-    }
 
-    const creditCardToken = newSubData.creditCard?.creditCardToken || null;
+      const payData = await payRes.json();
+      if (!payRes.ok) {
+        console.error("Installment payment error:", payData);
+        const errMsg = payData.errors?.[0]?.description || "Falha ao criar pagamento parcelado";
+        return new Response(JSON.stringify({ error: errMsg }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      newAsaasId = payData.id;
+      newStatus = payData.status === "CONFIRMED" || payData.status === "RECEIVED" ? "ACTIVE" : payData.status;
+      creditCardToken = payData.creditCard?.creditCardToken || null;
+      // next_due_date = +1 year from now
+      const d = new Date();
+      d.setFullYear(d.getFullYear() + 1);
+      newNextDueDate = d.toISOString().split("T")[0];
+
+      console.log("Installment upgrade payment created:", payData.id, "status:", payData.status, `${installmentCount}x`);
+    } else {
+      // ── Subscription flow: recurring via /v3/subscriptions ──
+      const newValueReais = newPriceCents / 100;
+      const newSubPayload: Record<string, unknown> = {
+        customer: account.asaas_customer_id,
+        billingType: "CREDIT_CARD",
+        cycle: billingCycle,
+        value: newValueReais,
+        nextDueDate: (() => {
+          if (billingCycle === 'YEARLY') {
+            const d = new Date();
+            d.setFullYear(d.getFullYear() + 1);
+            return d.toISOString().split("T")[0];
+          }
+          return latestNextDueDate || getNextBusinessDay();
+        })(),
+        description: `${newPlan.name} - ${billingCycle === "YEARLY" ? "Anual" : "Mensal"}`,
+        externalReference: userId,
+        creditCard: {
+          holderName: creditCard.holderName,
+          number: creditCard.number.replace(/\s/g, ""),
+          expiryMonth: creditCard.expiryMonth,
+          expiryYear: creditCard.expiryYear,
+          ccv: creditCard.ccv,
+        },
+        creditCardHolderInfo: {
+          name: creditCardHolderInfo.name,
+          email: creditCardHolderInfo.email || user.email,
+          cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
+          postalCode: creditCardHolderInfo.postalCode.replace(/\D/g, ""),
+          addressNumber: creditCardHolderInfo.addressNumber || "S/N",
+          phone: creditCardHolderInfo.phone.replace(/\D/g, ""),
+        },
+      };
+      if (remoteIp) newSubPayload.remoteIp = remoteIp;
+
+      const newSubRes = await fetch(`${ASAAS_BASE_URL}/v3/subscriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", access_token: ASAAS_API_KEY },
+        body: JSON.stringify(newSubPayload),
+      });
+
+      const newSubData = await newSubRes.json();
+      if (!newSubRes.ok) {
+        console.error("New subscription error:", newSubData);
+        const errMsg = newSubData.errors?.[0]?.description || "Falha ao criar nova assinatura";
+        return new Response(JSON.stringify({ error: errMsg }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      newAsaasId = newSubData.id;
+      newStatus = newSubData.status || "ACTIVE";
+      creditCardToken = newSubData.creditCard?.creditCardToken || null;
+      newNextDueDate = newSubData.nextDueDate;
+
+      console.log("Subscription upgrade created:", newSubData.id);
+    }
 
     // 5. Insert new subscription in DB
     const { data: newSub } = await adminClient
@@ -300,26 +368,29 @@ Deno.serve(async (req) => {
       .insert({
         user_id: userId,
         asaas_customer_id: account.asaas_customer_id,
-        asaas_subscription_id: newSubData.id,
+        asaas_subscription_id: useInstallmentPayment ? null : newAsaasId,
         plan_type: newPlanType,
         billing_cycle: billingCycle,
-        status: newSubData.status || "ACTIVE",
+        status: newStatus,
         value_cents: newPriceCents,
-        next_due_date: newSubData.nextDueDate,
+        next_due_date: newNextDueDate,
         metadata: {
           creditCardToken,
-          creditCardBrand: newSubData.creditCard?.creditCardBrand || null,
-          creditCardNumber: newSubData.creditCard?.creditCardNumber || null,
           upgraded_from: cancelledNames,
           prorata_payment_id: prorataPaymentId,
           prorata_credit_cents: totalProrataValueCents,
           net_charge_cents: netChargeCents,
+          ...(useInstallmentPayment ? {
+            paymentType: "one_time",
+            installmentCount,
+            asaas_payment_id: newAsaasId,
+          } : {}),
         },
       })
       .select()
       .single();
 
-    console.log("Upgrade complete:", newSubData.id);
+    console.log("Upgrade complete:", newAsaasId);
 
     // 6. Clear over-limit mode
     await adminClient
