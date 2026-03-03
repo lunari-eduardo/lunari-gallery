@@ -310,7 +310,10 @@ export function useAsaasSubscription() {
       const { data, error } = await supabase.functions.invoke('asaas-downgrade-subscription', {
         body: params,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = await parseEdgeFunctionError(error);
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
       return data as { success: boolean; scheduledPlan: string; message: string };
     },
