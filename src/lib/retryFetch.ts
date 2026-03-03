@@ -102,10 +102,10 @@ export function getUploadErrorMessage(error: Error): string {
     return 'Sem permissão para enviar fotos.';
   }
   if (msg.includes('network') || msg.includes('fetch') || msg.includes('offline')) {
-    return 'Erro de conexão. Verifique sua internet.';
+    return 'Erro ao enviar';
   }
 
-  return 'Erro ao enviar. Verifique sua conexão.';
+  return 'Erro ao enviar';
 }
 
 /**

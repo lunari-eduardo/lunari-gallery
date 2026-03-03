@@ -27,7 +27,7 @@ import { useGestaoParams } from '@/hooks/useGestaoParams';
 import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
 import { usePaymentIntegration } from '@/hooks/usePaymentIntegration';
 import { generateId } from '@/lib/storage';
-import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
+import { PhotoUploader, UploadedPhoto, QueueState } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay, buildRegrasFromDiscountPackages } from '@/lib/pricingUtils';
@@ -169,6 +169,8 @@ export default function GalleryCreate() {
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [showUploadedPhotos, setShowUploadedPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [uploadErrorCount, setUploadErrorCount] = useState(0);
 
   // Folder management
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -604,6 +606,19 @@ export default function GalleryCreate() {
         }
         await createSupabaseGalleryForUploads();
       }
+
+      // Block advancing from step 4 (Fotos) with pending uploads or errors
+      if (currentStep === 4) {
+        if (isUploadingPhotos) {
+          toast.error('Aguarde finalizar os uploads antes de prosseguir.');
+          return;
+        }
+        if (uploadErrorCount > 0) {
+          toast.error(`Existem ${uploadErrorCount} arquivo(s) com erro. Reenvie ou remova antes de prosseguir.`);
+          return;
+        }
+      }
+
       setCurrentStep(currentStep + 1);
     } else {
       // Final step - save all configurations, publish automatically, and navigate to the gallery
@@ -1459,7 +1474,12 @@ export default function GalleryCreate() {
               opacity: watermarkOpacity
             }}
             allowDownload={allowDownload}
-            onUploadComplete={handlePhotoUploadComplete} /> :
+            onUploadComplete={handlePhotoUploadComplete}
+            onUploadingChange={setIsUploadingPhotos}
+            onQueueStateChange={(state: QueueState) => {
+              setUploadErrorCount(state.errorCount);
+              setIsUploadingPhotos(state.isUploading);
+            }} /> :
           <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
                 <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">

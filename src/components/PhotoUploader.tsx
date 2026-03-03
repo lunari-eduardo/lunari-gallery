@@ -21,6 +21,13 @@ export interface UploadedPhoto {
   height: number;
 }
 
+export interface QueueState {
+  isUploading: boolean;
+  errorCount: number;
+  totalCount: number;
+  doneCount: number;
+}
+
 interface PhotoUploaderProps {
   galleryId: string;
   folderId?: string | null;
@@ -34,6 +41,7 @@ interface PhotoUploaderProps {
   onUploadComplete?: (photos: UploadedPhoto[]) => void;
   onUploadStart?: () => void;
   onUploadingChange?: (isUploading: boolean) => void;
+  onQueueStateChange?: (state: QueueState) => void;
   className?: string;
 }
 
@@ -50,6 +58,7 @@ export function PhotoUploader({
   onUploadComplete,
   onUploadStart,
   onUploadingChange,
+  onQueueStateChange,
   className,
 }: PhotoUploaderProps) {
   const navigate = useNavigate();
@@ -59,6 +68,8 @@ export function PhotoUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pipelineRef = useRef<UploadPipeline | null>(null);
   const completedResults = useRef<UploadResult[]>([]);
+  const retryRoundRef = useRef(0);
+  const maxAutoRetryRounds = 2;
 
   const { photoCredits, isAdmin, canUpload, refetch: refetchCredits } = usePhotoCredits();
 
@@ -86,19 +97,42 @@ export function PhotoUploader({
         onPipelineComplete: () => {
           const results = completedResults.current;
           const currentItems = pipelineRef.current?.items || [];
-          const errorCount = currentItems.filter(i => i.status === 'error').length;
+          const errItems = currentItems.filter(i => i.status === 'error');
+          const retryableItems = errItems.filter(i => i.retryCount < 3);
+
+          // Auto-retry logic
+          if (retryableItems.length > 0 && retryRoundRef.current < maxAutoRetryRounds) {
+            retryRoundRef.current++;
+            const round = retryRoundRef.current;
+            const delay = round * 5000;
+            toast.info(`${retryableItems.length} arquivo(s) com erro. Tentando novamente automaticamente...`);
+            setTimeout(() => {
+              if (!pipelineRef.current) return;
+              retryableItems.forEach(item => pipelineRef.current?.retry(item.id));
+            }, delay);
+            return; // Don't finalize yet
+          }
 
           setIsUploading(false);
           onUploadingChange?.(false);
+          retryRoundRef.current = 0;
+
+          // Notify queue state
+          onQueueStateChange?.({
+            isUploading: false,
+            errorCount: errItems.length,
+            totalCount: currentItems.length,
+            doneCount: currentItems.filter(i => i.status === 'done').length,
+          });
 
           if (results.length > 0) {
-            if (errorCount > 0) {
-              toast.warning(`${results.length} foto(s) enviada(s), ${errorCount} com erro.`);
+            if (errItems.length > 0) {
+              toast.warning(`${results.length} foto(s) enviada(s), ${errItems.length} com erro.`);
             } else {
               toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
             }
             onUploadComplete?.(results as UploadedPhoto[]);
-          } else if (errorCount > 0) {
+          } else if (errItems.length > 0) {
             toast.error('Falha ao enviar fotos. Tente novamente.');
           }
 
@@ -112,7 +146,7 @@ export function PhotoUploader({
       });
     }
     return pipelineRef.current;
-  }, [galleryId, folderId, maxLongEdge, watermarkConfig, allowDownload, skipCredits, onUploadComplete, onUploadingChange, refetchCredits]);
+  }, [galleryId, folderId, maxLongEdge, watermarkConfig, allowDownload, skipCredits, onUploadComplete, onUploadingChange, onQueueStateChange, refetchCredits]);
 
   // Cleanup on unmount or when folderId changes
   useEffect(() => {
@@ -365,7 +399,7 @@ export function PhotoUploader({
 
                 {/* Status Overlay */}
                 {item.status !== 'queued' && (
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center z-10">
                     {item.status === 'done' ? (
                       <CheckCircle2 className="h-8 w-8 text-green-400" />
                     ) : item.status === 'error' ? (
@@ -414,13 +448,15 @@ export function PhotoUploader({
                   </button>
                 )}
 
-                {/* File Size */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                  <p className="text-xs text-white truncate">{item.file.name}</p>
-                  <p className="text-xs text-white/70">
-                    {formatFileSize(item.file.size)}
-                  </p>
-                </div>
+                {/* File Size - hidden when error to avoid blocking retry button */}
+                {item.status !== 'error' && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 pointer-events-none">
+                    <p className="text-xs text-white truncate">{item.file.name}</p>
+                    <p className="text-xs text-white/70">
+                      {formatFileSize(item.file.size)}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
