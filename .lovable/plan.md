@@ -1,56 +1,53 @@
 
 
-## Plano: Correção de Cobranças InfinitePay na Finalização de Seleção
+## Plano: Corrigir Prorata Cross-Product e Resumo de Pagamento
 
 ### Problemas identificados
 
-Analisei o fluxo completo: `ClientGallery.tsx` → `confirm-selection` → `infinitepay-create-link` → InfinitePay API, e também o fluxo de retorno via `gallery-access` + `check-payment-status`.
+**1. Gallery usa apenas a última assinatura para cálculo de crédito**
+Em `CreditsCheckout.tsx`, `activeSub` pega apenas UMA assinatura (a última ativa). Quando o usuário tem Transfer 5GB (R$12,90) + Studio Starter (R$14,90 via Gestão), `currentPriceCents` vira R$14,90 (Studio), e o crédito exibido nos cards Transfer é R$14,40 em vez de R$12,90 proporcional.
 
-**Problema 1: `supabase.functions.invoke()` engole detalhes do erro**
-Em `confirm-selection` (linha 366), quando chama `infinitepay-create-link` via `supabase.functions.invoke()`, se a função interna retorna HTTP 400/500, o SDK coloca o erro em `paymentError` mas a mensagem é genérica ("Edge Function returned a non-2xx status code"). Os detalhes reais do erro (ex: "InfinitePay não retornou URL de checkout") são perdidos. O `confirm-selection` retorna para o cliente apenas `paymentError.message` que não ajuda a diagnosticar.
+**2. Gallery não detecta sobreposição de capabilities (cross-product)**
+Gestão usa `getOverlappingSubs()` com `PLAN_INCLUDES` para encontrar TODAS as assinaturas que se sobrepõem ao plano alvo. Gallery não tem essa lógica — só detecta combos de forma simplificada via `getActiveSubsToCancel()` que retorna TODAS as subs ativas indiscriminadamente.
 
-**Problema 2: `infinitepay-create-link` não retorna `success: false` em todas as respostas de erro**
-As respostas de erro nas linhas 96, 169, 184, 196, 226 retornam `{ error: '...' }` sem o campo `success: false`. Quando `supabase.functions.invoke()` consegue parsear o body (status 200 com erro lógico hipotético), o check `paymentData?.success` falha silenciosamente.
+**3. Upgrade Transfer ignora assinatura Studio existente**
+Na tab Transfer, `isUpgradeMode` usa `activeSub` (que pode ser Studio, não Transfer). O cálculo de prorata deveria:
+- Para upgrade Transfer→Transfer: creditar apenas o Transfer ativo
+- Para upgrade para Combo: creditar Transfer + Studio (ambos são absorvidos)
 
-**Problema 3: InfinitePay API pode retornar non-JSON (HTML error pages)**
-A API `api.infinitepay.io` pode retornar 502/503 com body HTML. O código atual tenta `JSON.parse(responseText)` e falha, mas sem retry. Um erro transitório causa falha permanente para o cliente.
-
-**Problema 4: Sem timeout nem retry na chamada à API InfinitePay**
-`fetch()` sem `AbortSignal` + sem retry. Se a API demora ou falha temporariamente, o cliente recebe erro sem segunda chance.
-
-**Problema 5: Erro genérico para o cliente final**
-`ClientGallery.tsx` (linha 486) mostra `error.message` que vem da Edge Function. Quando é "Erro ao processar cobrança. Tente novamente.", o cliente não tem contexto e nem botão de retry automático.
+**4. Resumo mostra "Diferença proporcional" em vez de "Crédito de planos ativos"**
+O `OrderSummary` em `CreditsPayment.tsx` exibe `prorataFormatted` como "Diferença proporcional". Deveria mostrar o valor do CRÉDITO (newPrice - prorataValue) como "Crédito de planos ativos" e o valor líquido como "Pagar agora".
 
 ---
 
-### Correções propostas
+### Correções
 
-#### 1. `supabase/functions/infinitepay-create-link/index.ts`
-- Adicionar retry com backoff exponencial (3 tentativas) na chamada à API InfinitePay
-- Validar `Content-Type` da resposta antes de parsear JSON
-- Padronizar TODAS as respostas de erro com `{ success: false, error: '...', code: '...' }`
-- Adicionar timeout de 30s via `AbortSignal`
+#### 1. `src/pages/CreditsCheckout.tsx` — Portar lógica cross-product do Gestão
 
-#### 2. `supabase/functions/confirm-selection/index.ts`
-- Trocar `supabase.functions.invoke()` por `fetch()` direto ao endpoint da Edge Function (`${supabaseUrl}/functions/v1/infinitepay-create-link`). Isso dá controle total sobre o parsing da resposta e evita o SDK engolir erros.
-- Extrair `error` e `code` do body JSON da resposta, não do wrapper do SDK
-- Logar o body completo da resposta de erro para diagnóstico
-- Propagar `code` de erro para o cliente para permitir ações específicas (retry, reconfigurar provedor, etc.)
+- Adicionar `getOverlappingSubs(targetPlanType)` usando `PLAN_INCLUDES` (já importado de `transferPlans.ts`)
+- Adicionar `getCrossProductProrata(targetPlanType, targetPriceCents)` — mesma lógica do Gestão com cap de crédito por plano
+- Corrigir `handleSubscribe`:
+  - No modo upgrade Transfer: calcular crédito apenas do `transferSub`, mas também verificar cross-product (se tem Studio e vai para Combo)
+  - No modo combo: usar `getCrossProductProrata` para somar créditos de todas as subs sobrepostas
+- Corrigir cards Transfer: exibir prorata usando crédito combinado correto (Transfer atual + cross-product se aplicável)
+- Passar `creditCents` (valor do crédito) no state de navegação para exibir no OrderSummary
 
-#### 3. `src/pages/ClientGallery.tsx`
-- No `onError` da `confirmMutation`: mostrar mensagem mais clara baseada no `code` de erro
-- Adicionar botão "Tentar novamente" automático quando erro é `PAYMENT_FAILED` ou `PAYMENT_ERROR`
-- Para `NO_PAYMENT_PROVIDER`: mostrar mensagem orientando o cliente a contatar o fotógrafo
+#### 2. `src/pages/CreditsPayment.tsx` — Corrigir OrderSummary
 
-#### 4. `src/components/PaymentRedirect.tsx`
-- Tratar `checkoutUrl` vazio/undefined: ao invés de redirecionar para `undefined`, mostrar tela de erro com instruções
+- Receber `creditCents` adicional no `SubscriptionPayment` interface
+- Calcular `creditAmount = priceCents - prorataValueCents`
+- Exibir:
+  - "Valor do novo plano" → R$ X/mês
+  - "Crédito de planos ativos" → R$ Y (valor do crédito, em verde ou destaque)
+  - "Pagar agora" → R$ Z (prorataValueCents)
+
+#### 3. `src/lib/transferPlans.ts` — Já tem `PLAN_INCLUDES`, nenhuma mudança necessária
 
 ---
 
-### Ordem de implementação
+### Ordem
 
-1. Robustecer `infinitepay-create-link` (retry, timeout, validação, respostas padronizadas)
-2. Corrigir `confirm-selection` para usar `fetch()` direto e propagar erros detalhados
-3. Melhorar UX de erro em `ClientGallery.tsx` (retry, mensagens contextuais)
-4. Proteger `PaymentRedirect.tsx` contra URL inválida
+1. Portar `getOverlappingSubs` + `getCrossProductProrata` para `CreditsCheckout.tsx`
+2. Corrigir `handleSubscribe` e cálculo de prorata nos cards
+3. Atualizar `OrderSummary` para mostrar "Crédito de planos ativos"
 
