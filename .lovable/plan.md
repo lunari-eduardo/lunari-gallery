@@ -1,56 +1,64 @@
 
 
-## Plano: Dois Fluxos de Pagamento Anual + Destaque no Checkout
+## Plano: Parcelamento em Upgrades Anuais
 
-### Contexto atual
+### Problema
 
-- Planos anuais **sempre** usam `createPayment` (pagamento avulso parcelável), sem renovação automática
-- Planos mensais usam `createSubscription` (recorrência automática)
-- O `asaas-create-subscription` já suporta `billingCycle: 'YEARLY'` — cria assinatura recorrente anual no Asaas
+O seletor de parcelas só aparece para novas assinaturas anuais (`isYearly && !isUpgrade`). Em upgrades anuais (screenshot do usuário), o checkout vai direto para cartão sem opção de parcelar. A API de subscriptions do Asaas (`/v3/subscriptions`) não suporta `installmentCount` — apenas `/v3/payments` suporta.
 
-### Dois fluxos para plano anual
+### Solução
 
-| Opção | Endpoint | Renovação | Parcelas |
-|-------|----------|-----------|----------|
-| À vista (1x) | `asaas-create-subscription` (YEARLY) | Automática | 1x |
-| Parcelado (2-12x) | `asaas-create-payment` | Manual | 2-12x |
+Adicionar o seletor de parcelas também para upgrades anuais. Quando o usuário escolhe parcelar (2-12x), o upgrade usa apenas `/v3/payments` (pagamento avulso parcelado) em vez de criar uma nova subscription recorrente.
 
 ### Alterações
 
 #### 1. `src/pages/CreditsPayment.tsx` — SubscriptionForm
 
-**Área de parcelamento com destaque:**
-- Reformular o seletor de parcelas para ficar visualmente proeminente (card com borda primária)
-- Dividir em duas opções visuais claras:
-  - **"À vista"** com badge "Renovação automática" — seleciona 1x e roteia para `createSubscription`
-  - **"Parcelado"** com badge "Renovação manual" — permite 2-12x e roteia para `createPayment`
-- Aviso contextual abaixo da seleção:
-  - Se à vista: "Sua assinatura será renovada automaticamente a cada 12 meses."
-  - Se parcelado: "Este plano terá renovação manual. Você será notificado antes do vencimento para renovar."
+- Mudar condição do seletor de parcelas de `isYearly && !isUpgrade` para `isYearly`
+- Ajustar cálculo do valor base para parcelas em upgrades: usar `prorataValueCents` (valor líquido após crédito) em vez de `priceCents`
+- No submit do upgrade:
+  - `installments === 1` → fluxo atual (`upgradeSubscription` → cancela + cria subscription)
+  - `installments > 1` → novo fluxo: chama `upgradeSubscription` com `installmentCount` para que o backend use payment em vez de subscription
 
-**Lógica de submit:**
-- `installments === 1` → chamar `createSubscription({ billingCycle: 'YEARLY', ... })` (assinatura recorrente)
-- `installments > 1` → chamar `createPayment({ productType: 'subscription_yearly', installmentCount, ... })` (pagamento avulso)
+#### 2. `supabase/functions/asaas-upgrade-subscription/index.ts`
 
-#### 2. `src/pages/CreditsPayment.tsx` — OrderSummary
+- Aceitar novo campo `installmentCount` no body
+- Quando `installmentCount > 1` e `billingCycle === 'YEARLY'`:
+  - Mantém cancelamento das subs antigas (igual)
+  - Mantém pagamento prorata (igual)
+  - Em vez de criar subscription em `/v3/subscriptions`, cria payment em `/v3/payments` com `installmentCount` e `installmentValue` (valor total do novo plano, não apenas o prorata)
+  - Grava em `subscriptions_asaas` com `metadata.paymentType: 'one_time'` e `metadata.installmentCount`
+- Quando `installmentCount <= 1`: fluxo atual inalterado
 
-- Quando anual: mostrar se é "Assinatura anual" (à vista) ou "Compra parcelada" (parcelado)
-- Mostrar parcelas no resumo: "12x de R$ X sem juros"
-- Aviso de renovação no rodapé do resumo
+#### 3. `src/pages/CreditsPayment.tsx` — OrderSummary
 
-#### 3. `src/pages/CreditsCheckout.tsx` — Nenhuma mudança estrutural
+- Mostrar parcelas no resumo também para upgrades anuais parcelados
+- Badge de renovação manual/automática para upgrades anuais
 
-Os cards já passam `billingCycle: 'YEARLY'` via navigate state. A distinção à vista vs parcelado é feita no checkout (CreditsPayment).
+### Detalhe técnico do fluxo parcelado em upgrade
 
-### Nenhuma mudança em Edge Functions
+```
+1. Cancela subs antigas no Asaas (DELETE /v3/subscriptions/{id})
+2. Calcula prorata credit das subs canceladas
+3. Cobra prorata (net charge) como payment avulso SEM parcelas (valor proporcional residual)
+4. Cria payment do novo plano COMPLETO com installmentCount (valor cheio anual, parcelado)
+5. Grava subscription_asaas com paymentType: 'one_time', next_due_date = +1 ano
+```
 
-- `asaas-create-subscription` já suporta `YEARLY`
-- `asaas-create-payment` já suporta `installmentCount`
-- Ambos já gravam em `subscriptions_asaas` com os campos corretos
+Espera — reanalisando: no upgrade, o "pagar agora" já é o net charge (newPrice - creditProrata). Para parcelar, devemos parcelar esse net charge, não o valor cheio. Então:
 
-### Ordem de implementação
+```
+1. Cancela subs antigas
+2. Calcula net charge = newPriceCents - prorataCredit  
+3. Se installments > 1: cria 1 payment com valor = netCharge, installmentCount, installmentValue
+4. Se installments === 1: cria subscription recorrente + payment prorata (fluxo atual)
+5. Em ambos os casos, grava em subscriptions_asaas
+```
 
-1. Reformular área de parcelas no `SubscriptionForm` com os dois fluxos visuais
-2. Ajustar lógica de submit para rotear entre subscription e payment
-3. Atualizar `OrderSummary` para refletir tipo de renovação e parcelas
+### Ordem
+
+1. Atualizar edge function `asaas-upgrade-subscription` para suportar `installmentCount`
+2. Expandir seletor de parcelas no `SubscriptionForm` para upgrades
+3. Passar `installmentCount` no body do `upgradeSubscription`
+4. Atualizar `OrderSummary` para upgrades parcelados
 
