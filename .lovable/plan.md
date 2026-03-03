@@ -1,66 +1,67 @@
 
 
-## Plano: Seção de Expansão com visual de Landing Page
+## Plano: Corrigir lógica de upgrade/downgrade entre ciclos e adicionar upgrade de ciclo
 
-### O que muda
+### Problemas identificados
 
-A seção inferior (linhas 207-301) será transformada visualmente para parecer uma mini landing page embutida, com mais respiro, tipografia maior, layout mais dramático e sensação de seção independente.
+**1. Transfer cards mostram "Fazer upgrade" no ciclo anual quando usuário tem combo_completo mensal**
 
-### Alterações em `src/pages/Credits.tsx`
+Na linha 637-641 de `CreditsCheckout.tsx`, a lógica de `isDowngrade` compara **preços** entre ciclos diferentes:
+```typescript
+const isDowngrade = isUpgradeMode && currentPlanPrices && (
+  effectiveBilling === 'YEARLY'
+    ? plan.yearlyPrice <= currentPriceCents  // compara preço anual vs preço mensal do combo!
+    : plan.monthlyPrice <= currentPriceCents
+);
+```
+Quando o usuário tem combo_completo mensal (6490 cents), ao ver transfer anual (ex: transfer_5gb = 12384/ano), `12384 > 6490` → sistema diz que não é downgrade. **Errado.** Transfer solo é SEMPRE inferior a combo_completo independente do ciclo.
 
-**1. Container da seção:**
-- Trocar `border-t border-border/30` por um fundo sutil diferenciado: `bg-muted/30 -mx-4 px-4 md:-mx-6 md:px-6 py-12 rounded-2xl` (ou usar margem negativa para sangrar o container)
-- Mais padding vertical (py-12 em vez de pt-8)
+**2. Combo card no Transfer tab não oferece upgrade de ciclo (mensal → anual)**
 
-**2. Headline com escala de landing page:**
-- Pergunta racional mantida mas com mais espaço
-- Headline principal: `text-2xl md:text-3xl font-bold tracking-tight` (escala de hero)
-- Subtexto: `text-sm md:text-base text-muted-foreground max-w-lg` (mais legível)
-- Centralizar todo o bloco de texto no topo da seção
+Na linha 794, `isSubActiveForPlan` detecta o combo como "Plano atual" e mostra "Gerenciar assinatura". Mas se o usuário tem combo mensal e está vendo preços anuais, deveria oferecer upgrade de ciclo (mensal → anual).
 
-**3. Cards com mais presença:**
-- Grid `md:grid-cols-2` lado a lado em vez de empilhados verticalmente
-- Cada card: layout vertical (não horizontal) com mais padding (`p-8`)
-- Preço com destaque maior: `text-2xl font-bold` com `/mês` menor
-- Benefícios com mais espaçamento
-- CTA centralizado no card com mais respiro
-- Card do Combo Completo com borda levemente destacada (`border-primary/20`) ou fundo sutil
+### Correções em `src/pages/CreditsCheckout.tsx`
 
-**4. Tipografia e espaçamento geral:**
-- Mais gap entre elementos (space-y-8 entre headline e cards)
-- Texto dos benefícios ligeiramente maior (`text-sm` em vez de `text-xs`)
-- Ícones dos benefícios maiores (`h-4 w-4`)
+**Correção 1 — Usar hierarquia de plano em vez de preço para detectar downgrade nos Transfer cards (linhas 636-641)**
 
-### Estrutura visual
+Substituir a lógica de preço por comparação de hierarquia:
+```typescript
+const cardHierarchy = getPlanHierarchyLevel(planKey);
+const isCurrentPlan = isUpgradeMode && planKey === currentPlanType;
 
-```text
-┌─────────────────────────────────────────────────────┐
-│                  bg-muted/30 rounded                │
-│                                                     │
-│   Você usa créditos com frequência?                 │
-│                                                     │
-│   Estruture seu negócio                             │
-│   para crescer                                      │
-│   Gestão, seleção e entrega integrados...           │
-│                                                     │
-│   ┌──────────────────┐  ┌──────────────────┐        │
-│   │ Studio Pro +     │  │ ◆ Mais completo  │        │
-│   │ Select 2k        │  │ Studio + Select  │        │
-│   │                  │  │ + Transfer 20GB  │        │
-│   │ • Gestão         │  │                  │        │
-│   │ • 2k créditos    │  │ • Gestão         │        │
-│   │ • Integração     │  │ • Créditos       │        │
-│   │                  │  │ • Entrega        │        │
-│   │  R$ 44,90/mês    │  │                  │        │
-│   │                  │  │  R$ 64,90/mês    │        │
-│   │ [Conhecer planos]│  │ [Conhecer tudo]  │        │
-│   │  Assinar agora → │  │  Assinar agora → │        │
-│   └──────────────────┘  └──────────────────┘        │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+// Get highest active plan level across ALL subs (not just transfer)
+const highestActiveLevel = Math.max(
+  ...activeSubs.map(s => getPlanHierarchyLevel(s.plan_type)), 0
+);
+
+// A transfer solo is ALWAYS a downgrade if user has a combo (higher hierarchy)
+const isDowngrade = !isCurrentPlan && highestActiveLevel > cardHierarchy;
 ```
 
-### Arquivo
+Isso garante que todo transfer solo (level 30-60) é downgrade quando o usuário tem combo_completo (level 200).
 
-- `src/pages/Credits.tsx` — linhas 207-301
+**Correção 2 — Adicionar upgrade de ciclo no combo card do Transfer tab (linhas 793-851)**
+
+Quando o combo está ativo MAS o `billingPeriod` visualizado é diferente do ciclo atual da sub:
+- Se usuário tem combo mensal e está vendo aba anual → mostrar botão "Mudar para anual" (upgrade de ciclo)
+- Se usuário tem combo anual e está vendo aba mensal → mostrar como "Plano atual" (downgrade de ciclo pode ser feito em Gerenciar)
+
+Lógica:
+```typescript
+const isCurrentComboCompleto = isSubActiveForPlan(allSubs, 'combo_completo');
+const activeComboSub = allSubs.find(s => s.plan_type === 'combo_completo' && ['ACTIVE','PENDING','OVERDUE'].includes(s.status));
+const currentComboCycle = activeComboSub?.billing_cycle || 'MONTHLY';
+const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+const isCycleUpgrade = isCurrentComboCompleto && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
+```
+
+Se `isCycleUpgrade`: mostrar botão "Mudar para anual" que chama `handleSubscribe` com o preço anual e flag de upgrade.
+
+**Correção 3 — Mesma lógica para combo cards na aba Select (linhas 460-463)**
+
+Aplicar a mesma detecção de upgrade de ciclo nos combo cards da aba Select. Se o usuário tem combo_pro_select2k mensal e está vendo anual, oferecer upgrade de ciclo.
+
+### Arquivos modificados
+
+- `src/pages/CreditsCheckout.tsx` — 3 blocos de código alterados
 
