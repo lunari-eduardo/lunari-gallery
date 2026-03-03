@@ -166,23 +166,33 @@ function OrderSummary({ pkg, formattedPrice }: { pkg: PaymentState; formattedPri
       </div>
       <div className="border-t pt-4 space-y-2">
         {isUpgrade && prorataFormatted ? (
-          <>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Valor do novo plano</span>
-              <span className="text-foreground">{formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Diferença proporcional</span>
-              <span className="text-foreground">{prorataFormatted}</span>
-            </div>
-            <div className="flex justify-between font-semibold text-base">
-              <span className="text-foreground">Pagar agora</span>
-              <span className="text-primary">{prorataFormatted}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              A partir do próximo ciclo, o valor será {formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}.
-            </p>
-          </>
+          (() => {
+            const creditCents = pkg.priceCents - (pkg.prorataValueCents ?? 0);
+            const creditFormatted = creditCents > 0
+              ? (creditCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+              : null;
+            return (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Valor do novo plano</span>
+                  <span className="text-foreground">{formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}</span>
+                </div>
+                {creditFormatted && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Crédito de planos ativos</span>
+                    <span className="text-green-600 font-medium">-{creditFormatted}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold text-base">
+                  <span className="text-foreground">Pagar agora</span>
+                  <span className="text-primary">{prorataFormatted}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  A partir do próximo ciclo, o valor será {formattedPrice}/{pkg.billingCycle === 'MONTHLY' ? 'mês' : 'ano'}.
+                </p>
+              </>
+            );
+          })()
         ) : (
           <>
             <div className="flex justify-between text-sm">

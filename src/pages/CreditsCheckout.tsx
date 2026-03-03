@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ALL_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize } from '@/lib/transferPlans';
+import { ALL_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize, PLAN_INCLUDES } from '@/lib/transferPlans';
 import { differenceInDays } from 'date-fns';
 
 
@@ -141,28 +141,70 @@ export default function CreditsCheckout() {
   const urlNextDueDate = searchParams.get('next_due_date') || '';
   const urlSubscriptionId = searchParams.get('subscription_id') || '';
 
-  // Auto-detect: if there's an active subscription (ACTIVE status) and we're on transfer tab
-  const hasActiveTransferSub = !!activeSub && activeSub.status === 'ACTIVE' && activeTab === 'transfer';
+  // Auto-detect: if there's an active transfer sub and we're on transfer tab
+  const hasActiveTransferSub = !!transferSub && (transferSub.status === 'ACTIVE' || transferSub.status === 'PENDING' || transferSub.status === 'OVERDUE') && activeTab === 'transfer';
   const isUpgradeMode = urlUpgradeMode || hasActiveTransferSub;
 
-  // For combos, user may have Studio + Transfer active simultaneously
-  // Collect all active subscription IDs that would be cancelled
-  const getActiveSubsToCancel = (): AsaasSubscription[] => {
-    return allSubs.filter(s => s.status === 'ACTIVE' || s.status === 'PENDING' || s.status === 'OVERDUE');
-  };
+  // All active subs for cross-product detection
+  const activeSubs = allSubs.filter(s => s.status === 'ACTIVE' || s.status === 'PENDING' || s.status === 'OVERDUE');
 
-  const currentPlanType = activeSub?.plan_type || urlCurrentPlan;
-  const currentBillingCycle = activeSub?.billing_cycle || urlBillingCycle;
-  const nextDueDate = activeSub?.next_due_date || urlNextDueDate;
-  const currentSubscriptionId = activeSub?.id || urlSubscriptionId;
+  // For transfer tab, the "current" sub is the transfer sub specifically
+  const currentPlanType = activeTab === 'transfer'
+    ? (transferSub?.plan_type || urlCurrentPlan)
+    : (activeSub?.plan_type || urlCurrentPlan);
+  const currentSub = activeTab === 'transfer' ? transferSub : activeSub;
+  const currentBillingCycle = currentSub?.billing_cycle || urlBillingCycle;
+  const nextDueDate = currentSub?.next_due_date || urlNextDueDate;
+  const currentSubscriptionId = currentSub?.id || urlSubscriptionId;
 
   const currentPlanPrices = ALL_PLAN_PRICES[currentPlanType];
   const currentPriceCents = currentPlanPrices
     ? (currentBillingCycle === 'YEARLY' ? currentPlanPrices.yearly : currentPlanPrices.monthly)
     : 0;
 
-  const daysRemaining = nextDueDate ? Math.max(0, differenceInDays(new Date(nextDueDate), new Date())) : 0;
-  const totalCycleDays = currentBillingCycle === 'YEARLY' ? 365 : 30;
+  const stdCycleDays = currentBillingCycle === 'YEARLY' ? 365 : 30;
+  const daysRemaining = nextDueDate ? Math.min(Math.max(0, differenceInDays(new Date(nextDueDate), new Date())), stdCycleDays) : 0;
+  const totalCycleDays = stdCycleDays;
+
+  /** Find active subs whose capabilities overlap with the target plan */
+  function getOverlappingSubs(targetPlanType: string): AsaasSubscription[] {
+    const targetIncludes = PLAN_INCLUDES[targetPlanType];
+    if (!targetIncludes) return [];
+    return activeSubs.filter(sub => {
+      if (sub.plan_type === targetPlanType) return false;
+      const subIncludes = PLAN_INCLUDES[sub.plan_type];
+      if (!subIncludes) return false;
+      return (targetIncludes.studio && subIncludes.studio) ||
+             (targetIncludes.select && subIncludes.select) ||
+             (targetIncludes.transfer && subIncludes.transfer);
+    });
+  }
+
+  /** Calculate combined prorata credit from overlapping subs */
+  function getCrossProductProrata(targetPlanType: string, targetPriceCents: number) {
+    const overlapping = getOverlappingSubs(targetPlanType);
+    if (overlapping.length === 0) return null;
+    let totalCreditCents = 0;
+    const idsToCancel: string[] = [];
+    for (const sub of overlapping) {
+      const subPrices = ALL_PLAN_PRICES[sub.plan_type];
+      if (!subPrices) continue;
+      const subPriceCents = sub.billing_cycle === 'YEARLY' ? subPrices.yearly : subPrices.monthly;
+      const subDaysRemaining = sub.next_due_date
+        ? Math.max(0, differenceInDays(new Date(sub.next_due_date), new Date()))
+        : 0;
+      const subCycleDays = sub.billing_cycle === 'YEARLY' ? 365 : 30;
+      const cappedSubDays = Math.min(subDaysRemaining, subCycleDays);
+      const rawCredit = Math.round(subPriceCents * (cappedSubDays / subCycleDays));
+      totalCreditCents += Math.min(rawCredit, subPriceCents);
+      idsToCancel.push(sub.id);
+    }
+    return {
+      creditCents: totalCreditCents,
+      prorataValueCents: Math.max(0, targetPriceCents - totalCreditCents),
+      subscriptionIdsToCancel: idsToCancel,
+    };
+  }
 
   const avulsos = packages?.filter(p => p.sort_order < 10) || [];
 
@@ -182,17 +224,33 @@ export default function CreditsCheckout() {
   };
 
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
-    // In upgrade mode, the user can change billing cycle via the toggle
     const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+    const newPlanPrices = ALL_PLAN_PRICES[planType];
+    const newPriceCentsForCycle = selectedCycle === 'YEARLY'
+      ? (newPlanPrices?.yearly || priceCents)
+      : (newPlanPrices?.monthly || priceCents);
 
     if (isUpgradeMode && currentSubscriptionId) {
-      // Calculate prorata: credit = currentPrice * (daysRemaining / currentCycleDays)
-      const newPlanPrices = ALL_PLAN_PRICES[planType];
-      const newPriceCentsForCycle = selectedCycle === 'YEARLY'
-        ? (newPlanPrices?.yearly || priceCents)
-        : (newPlanPrices?.monthly || priceCents);
-      const creditCents = Math.round(currentPriceCents * (daysRemaining / totalCycleDays));
-      const prorataValueCents = Math.max(0, newPriceCentsForCycle - creditCents);
+      // Same-family upgrade (e.g. transfer_5gb → transfer_20gb)
+      const creditCents = Math.min(Math.round(currentPriceCents * (daysRemaining / totalCycleDays)), currentPriceCents);
+
+      // Also check for cross-product overlaps (e.g., user has studio + transfer, upgrading to combo)
+      const crossProduct = getCrossProductProrata(planType, newPriceCentsForCycle);
+      const allIdsToCancel = [currentSubscriptionId];
+      let combinedCredit = creditCents;
+      if (crossProduct) {
+        const extraIds = crossProduct.subscriptionIdsToCancel.filter(id => id !== currentSubscriptionId);
+        allIdsToCancel.push(...extraIds);
+        // Add cross-product credits, but avoid double-counting the current sub
+        combinedCredit += crossProduct.creditCents - (crossProduct.subscriptionIdsToCancel.includes(currentSubscriptionId) ? creditCents : 0);
+      }
+      const finalProrata = Math.max(0, newPriceCentsForCycle - combinedCredit);
+
+      const cancelNames = allIdsToCancel
+        .map(id => activeSubs.find(s => s.id === id))
+        .filter(Boolean)
+        .map(s => getPlanDisplayName(s!.plan_type))
+        .join(' + ');
 
       navigate('/credits/checkout/pay', {
         state: {
@@ -202,38 +260,21 @@ export default function CreditsCheckout() {
           billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
           priceCents: newPriceCentsForCycle,
           isUpgrade: true,
-          prorataValueCents,
+          prorataValueCents: finalProrata,
           currentSubscriptionId,
-          currentPlanName: getPlanDisplayName(currentPlanType) || currentPlanType,
+          subscriptionIdsToCancel: allIdsToCancel,
+          currentPlanName: cancelNames || getPlanDisplayName(currentPlanType) || currentPlanType,
         },
       });
     } else {
-      // Check if this is a combo and user has existing subs to cancel
-      const subsToCancel = getActiveSubsToCancel();
-      const isComboUpgrade = subsToCancel.length > 0 && (planType === 'combo_pro_select2k' || planType === 'combo_completo');
-
-      if (isComboUpgrade) {
-        const newPlanPrices = ALL_PLAN_PRICES[planType];
-        const newPriceCentsForCycle = selectedCycle === 'YEARLY'
-          ? (newPlanPrices?.yearly || priceCents)
-          : (newPlanPrices?.monthly || priceCents);
-
-        // Calculate combined prorata from all existing subs
-        let totalCreditCents = 0;
-        const cancelNames: string[] = [];
-        for (const sub of subsToCancel) {
-          const subPrices = ALL_PLAN_PRICES[sub.plan_type];
-          if (!subPrices) continue;
-          const subPriceCents = sub.billing_cycle === 'YEARLY' ? subPrices.yearly : subPrices.monthly;
-          const subCycleDays = sub.billing_cycle === 'YEARLY' ? 365 : 30;
-          const subDaysRemaining = sub.next_due_date
-            ? Math.max(0, differenceInDays(new Date(sub.next_due_date), new Date()))
-            : 0;
-          totalCreditCents += Math.round(subPriceCents * (subDaysRemaining / subCycleDays));
-          cancelNames.push(getPlanDisplayName(sub.plan_type) || sub.plan_type);
-        }
-
-        const prorataValueCents = Math.max(0, newPriceCentsForCycle - totalCreditCents);
+      // No current sub in this family — check cross-product (e.g., user has transfer_5gb, selecting combo)
+      const crossProduct = getCrossProductProrata(planType, newPriceCentsForCycle);
+      if (crossProduct && crossProduct.subscriptionIdsToCancel.length > 0) {
+        const cancelNames = crossProduct.subscriptionIdsToCancel
+          .map(id => activeSubs.find(s => s.id === id))
+          .filter(Boolean)
+          .map(s => getPlanDisplayName(s!.plan_type))
+          .join(' + ');
 
         navigate('/credits/checkout/pay', {
           state: {
@@ -243,9 +284,9 @@ export default function CreditsCheckout() {
             billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
             priceCents: newPriceCentsForCycle,
             isUpgrade: true,
-            prorataValueCents,
-            subscriptionIdsToCancel: subsToCancel.map(s => s.id),
-            currentPlanName: cancelNames.join(' + '),
+            prorataValueCents: crossProduct.prorataValueCents,
+            subscriptionIdsToCancel: crossProduct.subscriptionIdsToCancel,
+            currentPlanName: cancelNames,
           },
         });
       } else {
@@ -255,7 +296,7 @@ export default function CreditsCheckout() {
             planType,
             planName,
             billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
-            priceCents,
+            priceCents: newPriceCentsForCycle,
           },
         });
       }
@@ -574,12 +615,22 @@ export default function CreditsCheckout() {
                     : plan.monthlyPrice <= currentPriceCents
                 );
 
-                // Prorata calculation: credit = currentPrice * (daysRemaining / cycleDays), net = newPrice - credit
+                // Prorata calculation using per-sub credit (transfer sub only) + cross-product
                 let prorataValue: number | null = null;
+                let creditDisplay: number | null = null;
                 if (isUpgradeMode && !isCurrentPlan && !isDowngrade) {
                   const newPrice = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
-                  const creditCents = Math.round(currentPriceCents * (daysRemaining / totalCycleDays));
-                  prorataValue = Math.max(0, newPrice - creditCents);
+                  // Credit from current transfer sub
+                  const transferCreditCents = Math.min(Math.round(currentPriceCents * (daysRemaining / totalCycleDays)), currentPriceCents);
+                  // Check cross-product (e.g. also has studio sub that overlaps if upgrading to combo)
+                  const crossProduct = getCrossProductProrata(planKey, newPrice);
+                  let combinedCredit = transferCreditCents;
+                  if (crossProduct) {
+                    const extraCredit = crossProduct.creditCents - (crossProduct.subscriptionIdsToCancel.includes(currentSubscriptionId) ? transferCreditCents : 0);
+                    combinedCredit += extraCredit;
+                  }
+                  creditDisplay = combinedCredit;
+                  prorataValue = Math.max(0, newPrice - combinedCredit);
                 }
 
                 return (
@@ -633,9 +684,9 @@ export default function CreditsCheckout() {
                       )
                     )}
 
-                    {isUpgradeMode && prorataValue !== null && (
+                    {isUpgradeMode && creditDisplay !== null && creditDisplay > 0 && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Crédito do plano atual: {formatPrice(Math.round(currentPriceCents * (daysRemaining / totalCycleDays)))}
+                        Crédito de planos ativos: {formatPrice(creditDisplay)}
                       </p>
                     )}
 
