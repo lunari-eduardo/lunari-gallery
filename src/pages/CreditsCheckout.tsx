@@ -665,24 +665,26 @@ export default function CreditsCheckout() {
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">Armazenamento mensal</p>
 
-                    <p className="text-3xl font-bold text-primary mt-5">
-                      {formatPrice(price)}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
-                      </span>
-                    </p>
-
-                    {(
-                      billingPeriod === 'monthly' ? (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Ou {formatPrice(altPrice)} por ano (20% off)
+                    <div className="mt-5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-3xl font-bold text-primary">
+                          {formatPrice(price)}
+                          <span className="text-sm font-normal text-muted-foreground">
+                            /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
+                          </span>
                         </p>
-                      ) : (
+                        {effectiveBilling === 'YEARLY' && (
+                          <Badge variant="secondary" className="text-[10px] px-2 py-0.5">
+                            Até 12x sem juros
+                          </Badge>
+                        )}
+                      </div>
+                      {effectiveBilling === 'YEARLY' && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Equivale a {monthlyEquiv}/mês
+                          apenas {monthlyEquiv}/mês
                         </p>
-                      )
-                    )}
+                      )}
+                    </div>
 
                     {isUpgradeMode && creditDisplay !== null && creditDisplay > 0 && (
                       <p className="text-xs text-muted-foreground mt-1">
@@ -692,18 +694,19 @@ export default function CreditsCheckout() {
 
                     {prorataValue !== null && (
                       <p className="text-sm font-medium text-primary mt-2">
-                        Pagar agora: {formatPrice(prorataValue)} <span className="text-xs font-normal text-muted-foreground">(proporcional)</span>
+                        Pagar agora: {formatPrice(prorataValue)}
                       </p>
                     )}
 
+                    <div className="mt-auto pt-6">
                     {isCurrentPlan ? (
-                      <Button className="mt-6 px-8" size="lg" disabled>
+                      <Button className="w-full px-8" size="lg" disabled>
                         Plano atual
                       </Button>
                     ) : isDowngrade ? (
                       <Button
                         variant="outline"
-                        className="mt-6 px-8 gap-1.5"
+                        className="w-full px-8 gap-1.5"
                         size="lg"
                         onClick={() => {
                           setDowngradeConfirmed(false);
@@ -718,7 +721,7 @@ export default function CreditsCheckout() {
                         Agendar downgrade
                       </Button>
                     ) : (
-                      <Button className="mt-6 px-8" size="lg" onClick={() => {
+                      <Button className="w-full px-8" size="lg" onClick={() => {
                         handleSubscribe(
                           planKey,
                           `Transfer ${plan.name}`,
@@ -728,6 +731,7 @@ export default function CreditsCheckout() {
                         {isUpgradeMode ? 'Fazer upgrade' : 'Assinar'}
                       </Button>
                     )}
+                    </div>
 
                     {billingPeriod === 'yearly' && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
@@ -772,9 +776,14 @@ export default function CreditsCheckout() {
                     </span>
                   </p>
                   {billingPeriod === 'yearly' && (
-                    <p className="text-xs text-primary/80">
-                      Equivale a {formatPrice(Math.round(TRANSFER_COMBO.yearlyPrice / 12))}/mês
-                    </p>
+                    <>
+                      <Badge variant="secondary" className="text-[10px] px-2 py-0.5 w-fit">
+                        Até 12x sem juros
+                      </Badge>
+                      <p className="text-xs text-muted-foreground">
+                        apenas {formatPrice(Math.round(TRANSFER_COMBO.yearlyPrice / 12))}/mês
+                      </p>
+                    </>
                   )}
                 </div>
                 <div className="flex flex-col gap-2">
