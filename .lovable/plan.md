@@ -1,36 +1,56 @@
 
 
-## Plano: Ajustes visuais nos cards Transfer
+## Plano: Dois Fluxos de Pagamento Anual + Destaque no Checkout
 
-### Alterações nos cards Transfer (linhas 668-697)
+### Contexto atual
 
-**Mensal — remover valor anual e "(proporcional)":**
-- Linha 675-685: Remover o bloco que mostra "Ou R$ X por ano (20% off)" quando `billingPeriod === 'monthly'`
-- Linha 695: Remover `(proporcional)` do texto "Pagar agora"
+- Planos anuais **sempre** usam `createPayment` (pagamento avulso parcelável), sem renovação automática
+- Planos mensais usam `createSubscription` (recorrência automática)
+- O `asaas-create-subscription` já suporta `billingCycle: 'YEARLY'` — cria assinatura recorrente anual no Asaas
 
-**Anual — reorganizar hierarquia:**
-- Remover "Equivale a R$ X/mês" da posição atual (linha 681-683)
-- Adicionar badge "Até 12x sem juros" junto ao preço principal anual
-- Abaixo do preço, adicionar "apenas R$ X/mês" (valor mensal equivalente)
+### Dois fluxos para plano anual
 
-**Alinhar botões:**
-- Usar `mt-auto` no botão para empurrar todos ao fundo do card, garantindo alinhamento entre cards com diferentes quantidades de texto (crédito/prorata)
+| Opção | Endpoint | Renovação | Parcelas |
+|-------|----------|-----------|----------|
+| À vista (1x) | `asaas-create-subscription` (YEARLY) | Automática | 1x |
+| Parcelado (2-12x) | `asaas-create-payment` | Manual | 2-12x |
 
-### Resumo das mudanças no bloco de preço (linhas 668-697):
+### Alterações
 
-```
-Preço principal (R$ X /mês ou /ano)
-  → Se anual: Badge "Até 12x sem juros"
-  → Se anual: "apenas R$ X/mês" abaixo
-  → Se mensal: nada abaixo do preço
-Se upgrade com crédito: "Crédito de planos ativos: R$ X"
-Se upgrade com prorata: "Pagar agora: R$ X" (sem "proporcional")
-```
+#### 1. `src/pages/CreditsPayment.tsx` — SubscriptionForm
 
-### Arquivo: `src/pages/CreditsCheckout.tsx`
-- Linhas 668-697: Reescrever bloco de preço + info
-- Linhas 700-730: Adicionar `mt-auto` ao wrapper do botão
+**Área de parcelamento com destaque:**
+- Reformular o seletor de parcelas para ficar visualmente proeminente (card com borda primária)
+- Dividir em duas opções visuais claras:
+  - **"À vista"** com badge "Renovação automática" — seleciona 1x e roteia para `createSubscription`
+  - **"Parcelado"** com badge "Renovação manual" — permite 2-12x e roteia para `createPayment`
+- Aviso contextual abaixo da seleção:
+  - Se à vista: "Sua assinatura será renovada automaticamente a cada 12 meses."
+  - Se parcelado: "Este plano terá renovação manual. Você será notificado antes do vencimento para renovar."
 
-### Também aplicar ao combo Transfer (linhas 764-795):
-- Remover "Equivale a R$ X/mês" e trocar por "apenas R$ X/mês" abaixo do preço anual
+**Lógica de submit:**
+- `installments === 1` → chamar `createSubscription({ billingCycle: 'YEARLY', ... })` (assinatura recorrente)
+- `installments > 1` → chamar `createPayment({ productType: 'subscription_yearly', installmentCount, ... })` (pagamento avulso)
+
+#### 2. `src/pages/CreditsPayment.tsx` — OrderSummary
+
+- Quando anual: mostrar se é "Assinatura anual" (à vista) ou "Compra parcelada" (parcelado)
+- Mostrar parcelas no resumo: "12x de R$ X sem juros"
+- Aviso de renovação no rodapé do resumo
+
+#### 3. `src/pages/CreditsCheckout.tsx` — Nenhuma mudança estrutural
+
+Os cards já passam `billingCycle: 'YEARLY'` via navigate state. A distinção à vista vs parcelado é feita no checkout (CreditsPayment).
+
+### Nenhuma mudança em Edge Functions
+
+- `asaas-create-subscription` já suporta `YEARLY`
+- `asaas-create-payment` já suporta `installmentCount`
+- Ambos já gravam em `subscriptions_asaas` com os campos corretos
+
+### Ordem de implementação
+
+1. Reformular área de parcelas no `SubscriptionForm` com os dois fluxos visuais
+2. Ajustar lógica de submit para rotear entre subscription e payment
+3. Atualizar `OrderSummary` para refletir tipo de renovação e parcelas
 
