@@ -1,64 +1,62 @@
 
 
-## Plano: Parcelamento em Upgrades Anuais
+## Plano: Proteção contra Duplicação de Assinaturas
 
 ### Problema
 
-O seletor de parcelas só aparece para novas assinaturas anuais (`isYearly && !isUpgrade`). Em upgrades anuais (screenshot do usuário), o checkout vai direto para cartão sem opção de parcelar. A API de subscriptions do Asaas (`/v3/subscriptions`) não suporta `installmentCount` — apenas `/v3/payments` suporta.
-
-### Solução
-
-Adicionar o seletor de parcelas também para upgrades anuais. Quando o usuário escolhe parcelar (2-12x), o upgrade usa apenas `/v3/payments` (pagamento avulso parcelado) em vez de criar uma nova subscription recorrente.
+Os cards de combo e transfer combo na página de planos não verificam se o usuário já possui o plano ativo. O botão "Conhecer plano completo" sempre leva ao checkout, permitindo recompra do mesmo plano e gerando assinaturas duplicadas.
 
 ### Alterações
 
-#### 1. `src/pages/CreditsPayment.tsx` — SubscriptionForm
+#### 1. `src/pages/CreditsCheckout.tsx` — Detecção de plano ativo em todos os cards
 
-- Mudar condição do seletor de parcelas de `isYearly && !isUpgrade` para `isYearly`
-- Ajustar cálculo do valor base para parcelas em upgrades: usar `prorataValueCents` (valor líquido após crédito) em vez de `priceCents`
-- No submit do upgrade:
-  - `installments === 1` → fluxo atual (`upgradeSubscription` → cancela + cria subscription)
-  - `installments > 1` → novo fluxo: chama `upgradeSubscription` com `installmentCount` para que o backend use payment em vez de subscription
+**Transfer cards (linhas 600-754):** Já detectam `isCurrentPlan` para Transfer isolados. OK.
 
-#### 2. `supabase/functions/asaas-upgrade-subscription/index.ts`
+**Combo cards na aba Select (linhas 450-510):** Adicionar lógica de detecção:
+- Verificar se `activeSubs` contém uma sub com `plan_type` igual ao combo (`combo_pro_select2k` ou `combo_completo`)
+- Se sim → badge "Plano atual" + botão "Gerenciar assinatura" (navega para `/credits/subscription`)
+- Se o plano ativo é superior (combo_completo ativo e card é combo_pro_select2k) → mostrar como downgrade
 
-- Aceitar novo campo `installmentCount` no body
-- Quando `installmentCount > 1` e `billingCycle === 'YEARLY'`:
-  - Mantém cancelamento das subs antigas (igual)
-  - Mantém pagamento prorata (igual)
-  - Em vez de criar subscription em `/v3/subscriptions`, cria payment em `/v3/payments` com `installmentCount` e `installmentValue` (valor total do novo plano, não apenas o prorata)
-  - Grava em `subscriptions_asaas` com `metadata.paymentType: 'one_time'` e `metadata.installmentCount`
-- Quando `installmentCount <= 1`: fluxo atual inalterado
+**Transfer combo block (linhas 768-804):** Mesma lógica:
+- Se `activeSubs` contém `combo_completo` → badge "Plano atual" + botão "Gerenciar assinatura"
+- Se user tem plano superior → ocultar ou desabilitar
 
-#### 3. `src/pages/CreditsPayment.tsx` — OrderSummary
+**Lógica de hierarquia de planos:** Criar helper `getPlanHierarchyLevel(planType)` que retorna um número representando o nível do plano. Comparar níveis para determinar se é upgrade, downgrade ou plano atual.
 
-- Mostrar parcelas no resumo também para upgrades anuais parcelados
-- Badge de renovação manual/automática para upgrades anuais
-
-### Detalhe técnico do fluxo parcelado em upgrade
-
-```
-1. Cancela subs antigas no Asaas (DELETE /v3/subscriptions/{id})
-2. Calcula prorata credit das subs canceladas
-3. Cobra prorata (net charge) como payment avulso SEM parcelas (valor proporcional residual)
-4. Cria payment do novo plano COMPLETO com installmentCount (valor cheio anual, parcelado)
-5. Grava subscription_asaas com paymentType: 'one_time', next_due_date = +1 ano
+```text
+Hierarquia (do menor ao maior):
+transfer_5gb < transfer_20gb < transfer_50gb < transfer_100gb
+combo_pro_select2k < combo_completo
+studio_starter < studio_pro
+Cross-family: combo_completo > qualquer transfer isolado
 ```
 
-Espera — reanalisando: no upgrade, o "pagar agora" já é o net charge (newPrice - creditProrata). Para parcelar, devemos parcelar esse net charge, não o valor cheio. Então:
+#### 2. `src/pages/CreditsCheckout.tsx` — `handleSubscribe` guard
 
-```
-1. Cancela subs antigas
-2. Calcula net charge = newPriceCents - prorataCredit  
-3. Se installments > 1: cria 1 payment com valor = netCharge, installmentCount, installmentValue
-4. Se installments === 1: cria subscription recorrente + payment prorata (fluxo atual)
-5. Em ambos os casos, grava em subscriptions_asaas
-```
+No início de `handleSubscribe`, verificar:
+- Se `planType` já existe em `activeSubs` com status ACTIVE/PENDING → bloquear com `toast.error('Você já possui este plano ativo.')` e return
+- Incluir verificação para subs com `status === 'CANCELLED'` mas `next_due_date` no futuro (período ativo restante)
 
-### Ordem
+#### 3. `src/pages/CreditsPayment.tsx` — Guard no checkout
 
-1. Atualizar edge function `asaas-upgrade-subscription` para suportar `installmentCount`
-2. Expandir seletor de parcelas no `SubscriptionForm` para upgrades
-3. Passar `installmentCount` no body do `upgradeSubscription`
-4. Atualizar `OrderSummary` para upgrades parcelados
+No mount do componente de checkout, se `type === 'subscription'`:
+- Buscar subs ativas via `useAsaasSubscription`
+- Se `planType` do state já está ativo → mostrar mensagem de erro e redirecionar para `/credits/subscription`
+- Isso serve como proteção dupla (caso o usuário acesse a URL diretamente)
+
+#### 4. Comportamento por caso
+
+| Estado | Card mostra | Botão |
+|--------|-------------|-------|
+| Plano exatamente igual e ativo (recorrente ou parcelado dentro da validade) | Badge "Plano atual" | "Gerenciar assinatura" → `/credits/subscription` |
+| Plano inferior ao ativo | Normal | "Agendar downgrade" |
+| Plano superior ao ativo | Normal com prorata | "Fazer upgrade" |
+| Plano parcelado expirado | Normal | "Assinar" (permite recompra) |
+| Sem plano ativo | Normal | "Assinar" |
+
+#### 5. Arquivos modificados
+
+- `src/pages/CreditsCheckout.tsx` — guards nos cards de combo e transfer combo + guard em handleSubscribe
+- `src/pages/CreditsPayment.tsx` — guard no mount contra plano duplicado
+- `src/lib/transferPlans.ts` — adicionar helper `getPlanHierarchyLevel`
 
