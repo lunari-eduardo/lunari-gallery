@@ -1,49 +1,48 @@
 
 
-## Plano: Conceder créditos de assinatura no upgrade e corrigir variável undefined
+## Plano: Corrigir créditos de assinaturas existentes + Downgrade CORS
 
-### Problema raiz
+### Problema 1: Créditos não concedidos em assinaturas anteriores
 
-A Edge Function `asaas-upgrade-subscription` (linha 393) finaliza o upgrade sem chamar `renew_subscription_credits`. Tanto `asaas-create-subscription` (linha 229-240) quanto o webhook `SUBSCRIPTION_RENEWED` (linha 311-321) fazem essa chamada, mas o fluxo de upgrade não.
+O `asaas-upgrade-subscription` foi corrigido para conceder créditos no upgrade, mas assinaturas criadas via `asaas-create-subscription` JÁ tinham essa lógica (linha 229-233). O problema é que o usuário mencionado fez upgrade de planos existentes (Studio + Transfer → combo_completo), e o upgrade antigo NÃO tinha o `renew_subscription_credits`. A correção já foi deployada, mas as assinaturas criadas ANTES da correção ficaram sem créditos.
 
-Resultado: usuário contrata combo_completo via upgrade, recebe storage de 20GB mas `credits_subscription` permanece 0.
+**Solução**: Migração SQL para conceder 2000 `credits_subscription` a todos os usuários com assinatura ativa de combo que têm `credits_subscription = 0`.
 
-### Bug secundário
-
-Linha 427 referencia `newSubData` que só existe no branch de assinatura recorrente (linha 347). No branch de pagamento parcelado (`useInstallmentPayment`), `newSubData` é `undefined` — causa erro silencioso na resposta.
-
-### Correção em `supabase/functions/asaas-upgrade-subscription/index.ts`
-
-**1. Adicionar mapa de créditos de assinatura (após PLANS, ~linha 22):**
-```typescript
-const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
-  combo_pro_select2k: 2000,
-  combo_completo: 2000,
-};
+```sql
+UPDATE photographer_accounts pa
+SET credits_subscription = 2000, updated_at = now()
+WHERE credits_subscription = 0
+  AND EXISTS (
+    SELECT 1 FROM subscriptions_asaas sa
+    WHERE sa.user_id = pa.user_id
+      AND sa.plan_type IN ('combo_pro_select2k', 'combo_completo')
+      AND sa.status IN ('ACTIVE', 'PENDING', 'OVERDUE')
+  );
 ```
 
-**2. Após step 7 (reativação de galerias, ~linha 423), adicionar step 8:**
-```typescript
-// 8. Grant subscription credits if new plan includes them
-const subCredits = PLAN_SUBSCRIPTION_CREDITS[newPlanType];
-if (subCredits && subCredits > 0) {
-  const { error: creditError } = await adminClient.rpc("renew_subscription_credits", {
-    _user_id: userId,
-    _amount: subCredits,
-  });
-  if (creditError) {
-    console.error("Failed to grant subscription credits on upgrade:", creditError);
-  } else {
-    console.log(`Granted ${subCredits} subscription credits for upgrade to ${newPlanType}`);
-  }
-}
-```
+Também inserir registro no `credit_ledger` para auditoria.
 
-**3. Corrigir referência `newSubData` na resposta (linha 427-431):**
+### Problema 2: CORS error no downgrade mensal
 
-Substituir `newSubData.id` e `newSubData.status` por `newAsaasId` e `newStatus` que já existem como variáveis locais.
+O screenshot mostra CORS error ao chamar `asaas-downgrade-subscription`. A função tem CORS headers corretos e está no `config.toml`. Os logs mostram que ela funciona para outros downgrades (combo_completo → transfer_20gb). O erro de CORS geralmente indica que o isolate do Deno crashou antes de responder (cold start timeout).
 
-### Arquivo modificado
+**Solução**: Redesplegar a edge function `asaas-downgrade-subscription` para forçar recriação do isolate. Não há bug de código — a lógica de validação (`newMonthly < currentMonthly`) permite corretamente transfer_5gb (1290) < combo_completo (6490).
 
-- `supabase/functions/asaas-upgrade-subscription/index.ts` — 3 alterações, deploy necessário
+### Problema 3: Verificar todos os cenários de downgrade
+
+Cenários possíveis e validação:
+- combo_completo (6490) → qualquer transfer solo ✓ (1290-5990 < 6490)
+- combo_completo (6490) → combo_pro_select2k (4490) ✓ (4490 < 6490)
+- combo_completo (6490) → studio_pro (3590) ✓ — **MAS** a UI não mostra studio cards na aba Transfer
+- combo_pro_select2k (4490) → studio_pro (3590) ✓
+- combo_pro_select2k (4490) → transfer solo ✓
+- transfer_100gb (5990) → transfer_50gb/20gb/5gb ✓
+
+**Problema identificado**: Quando o usuário tem combo_completo e quer fazer downgrade para um plano studio (sem transfer), a UI na aba Select não oferece "Agendar downgrade" para studio_pro/studio_starter. Preciso verificar e corrigir se necessário.
+
+### Arquivos a modificar
+
+1. **Migração SQL** — conceder créditos a assinantes combo existentes
+2. **Redeploy** `asaas-downgrade-subscription` — forçar recriação do isolate
+3. **`src/pages/CreditsCheckout.tsx`** — verificar se aba Select oferece downgrade para combos → studio
 
