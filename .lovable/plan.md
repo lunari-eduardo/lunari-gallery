@@ -1,67 +1,111 @@
 
 
-## Plano: Corrigir lógica de upgrade/downgrade entre ciclos e adicionar upgrade de ciclo
+## Plano: Corrigir "Mudar para anual" e Adicionar Renovação Antecipada
 
-### Problemas identificados
+### Problema 1: "Mudar para anual" não funciona
 
-**1. Transfer cards mostram "Fazer upgrade" no ciclo anual quando usuário tem combo_completo mensal**
-
-Na linha 637-641 de `CreditsCheckout.tsx`, a lógica de `isDowngrade` compara **preços** entre ciclos diferentes:
+O botão "Mudar para anual" chama `handleSubscribe('combo_completo', ...)` que na linha 228 executa:
 ```typescript
-const isDowngrade = isUpgradeMode && currentPlanPrices && (
-  effectiveBilling === 'YEARLY'
-    ? plan.yearlyPrice <= currentPriceCents  // compara preço anual vs preço mensal do combo!
-    : plan.monthlyPrice <= currentPriceCents
-);
+if (isSubActiveForPlan(allSubs, planType)) {
+  toast.error('Você já possui este plano ativo.');
+  return;
+}
 ```
-Quando o usuário tem combo_completo mensal (6490 cents), ao ver transfer anual (ex: transfer_5gb = 12384/ano), `12384 > 6490` → sistema diz que não é downgrade. **Errado.** Transfer solo é SEMPRE inferior a combo_completo independente do ciclo.
+Como o usuário já tem `combo_completo` mensal ativo, o guard bloqueia. O sistema não distingue "mesmo plano, ciclo diferente" de "mesmo plano duplicado".
 
-**2. Combo card no Transfer tab não oferece upgrade de ciclo (mensal → anual)**
+**Correção em `src/pages/CreditsCheckout.tsx` — `handleSubscribe` (linhas 226-310):**
 
-Na linha 794, `isSubActiveForPlan` detecta o combo como "Plano atual" e mostra "Gerenciar assinatura". Mas se o usuário tem combo mensal e está vendo preços anuais, deveria oferecer upgrade de ciclo (mensal → anual).
-
-### Correções em `src/pages/CreditsCheckout.tsx`
-
-**Correção 1 — Usar hierarquia de plano em vez de preço para detectar downgrade nos Transfer cards (linhas 636-641)**
-
-Substituir a lógica de preço por comparação de hierarquia:
+Adicionar detecção de cycle upgrade antes do guard:
 ```typescript
-const cardHierarchy = getPlanHierarchyLevel(planKey);
-const isCurrentPlan = isUpgradeMode && planKey === currentPlanType;
-
-// Get highest active plan level across ALL subs (not just transfer)
-const highestActiveLevel = Math.max(
-  ...activeSubs.map(s => getPlanHierarchyLevel(s.plan_type)), 0
-);
-
-// A transfer solo is ALWAYS a downgrade if user has a combo (higher hierarchy)
-const isDowngrade = !isCurrentPlan && highestActiveLevel > cardHierarchy;
+const handleSubscribe = (planType, planName, priceCents) => {
+  const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+  
+  // Detect cycle upgrade: same plan, different cycle (monthly→yearly)
+  const existingSub = allSubs.find(s => 
+    s.plan_type === planType && 
+    ['ACTIVE','PENDING','OVERDUE'].includes(s.status)
+  );
+  const isCycleUpgrade = existingSub && existingSub.billing_cycle !== selectedCycle;
+  
+  // Guard: block only if exact same plan AND same cycle
+  if (!isCycleUpgrade && isSubActiveForPlan(allSubs, planType)) {
+    toast.error('Você já possui este plano ativo.');
+    return;
+  }
+  
+  if (isCycleUpgrade) {
+    // Treat as upgrade: cancel current, apply prorata, create new
+    // Navigate to payment with isUpgrade=true and the existing sub ID
+    navigate('/credits/checkout/pay', {
+      state: {
+        type: 'subscription',
+        planType,
+        planName,
+        billingCycle: selectedCycle,
+        priceCents: newPriceCentsForCycle,
+        isUpgrade: true,
+        prorataValueCents: calculatedProrata,
+        currentSubscriptionId: existingSub.id,
+        subscriptionIdsToCancel: [existingSub.id],
+        currentPlanName: getPlanDisplayName(existingSub.plan_type),
+      },
+    });
+    return;
+  }
+  // ... rest of existing logic
+};
 ```
 
-Isso garante que todo transfer solo (level 30-60) é downgrade quando o usuário tem combo_completo (level 200).
+O cálculo de prorata segue a mesma lógica existente: `crédito = preçoAtual * diasRestantes / totalDiasCiclo`. O valor líquido é `preçoAnual - crédito`.
 
-**Correção 2 — Adicionar upgrade de ciclo no combo card do Transfer tab (linhas 793-851)**
+A Edge Function `asaas-upgrade-subscription` já suporta este fluxo — cancela a sub antiga, cobra o valor líquido e cria a nova assinatura anual.
 
-Quando o combo está ativo MAS o `billingPeriod` visualizado é diferente do ciclo atual da sub:
-- Se usuário tem combo mensal e está vendo aba anual → mostrar botão "Mudar para anual" (upgrade de ciclo)
-- Se usuário tem combo anual e está vendo aba mensal → mostrar como "Plano atual" (downgrade de ciclo pode ser feito em Gerenciar)
+### Problema 2: Renovação Antecipada de planos anuais
 
-Lógica:
+Na página `SubscriptionManagement.tsx`, planos anuais precisam de um botão "Renovar antecipadamente" que:
+1. Encerra a assinatura atual
+2. Cria uma nova assinatura idêntica
+3. Reinicia o ciclo de 12 meses
+4. **Sem prorata** — é uma compra intencional do valor cheio
+
+**Correção em `src/pages/SubscriptionManagement.tsx`:**
+
+No `SubscriptionCard`, para assinaturas YEARLY ativas, adicionar botão "Renovar antecipadamente" ao lado de "Upgrade / Downgrade":
+
 ```typescript
-const isCurrentComboCompleto = isSubActiveForPlan(allSubs, 'combo_completo');
-const activeComboSub = allSubs.find(s => s.plan_type === 'combo_completo' && ['ACTIVE','PENDING','OVERDUE'].includes(s.status));
-const currentComboCycle = activeComboSub?.billing_cycle || 'MONTHLY';
-const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
-const isCycleUpgrade = isCurrentComboCompleto && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
+{subscription.billing_cycle === 'YEARLY' && !isCancelled && (
+  <Button variant="outline" size="sm" className="gap-1.5"
+    onClick={() => handleEarlyRenewal(subscription)}>
+    <RotateCcw className="h-3.5 w-3.5" />
+    Renovar antecipadamente
+  </Button>
+)}
 ```
 
-Se `isCycleUpgrade`: mostrar botão "Mudar para anual" que chama `handleSubscribe` com o preço anual e flag de upgrade.
+O fluxo de renovação antecipada reutiliza `handleSubscribe` mas com flag `isRenewal: true`:
+- Navega para `/credits/checkout/pay` com `isUpgrade: true` + `isRenewal: true`
+- O `OrderSummary` mostra "Renovação antecipada" em vez de "Upgrade"
+- O `prorataValueCents` = preço cheio (sem desconto, renovação voluntária)
 
-**Correção 3 — Mesma lógica para combo cards na aba Select (linhas 460-463)**
+**Alteração no `SubscriptionPayment` type (CreditsPayment.tsx):**
+```typescript
+interface SubscriptionPayment {
+  // ... existing fields
+  isRenewal?: boolean; // early renewal flag
+}
+```
 
-Aplicar a mesma detecção de upgrade de ciclo nos combo cards da aba Select. Se o usuário tem combo_pro_select2k mensal e está vendo anual, oferecer upgrade de ciclo.
+**Alteração no `OrderSummary` (CreditsPayment.tsx):**
+- Se `isRenewal`, mostrar "Renovação antecipada" e não exibir crédito de prorata
+- Texto: "Sua assinatura atual será encerrada e um novo ciclo de 12 meses iniciará."
+
+**Alteração na Edge Function `asaas-upgrade-subscription`:**
+- Já suporta o fluxo (cancela antiga, cria nova). Quando `netChargeCents === newPriceCents` (sem prorata), o step 3 de pagamento proporcional é pulado automaticamente pois o valor do one-time payment é zero.
+- Na verdade, para renovação antecipada o prorata do plano antigo deve ser ZERO (usuário aceita perder os dias restantes). Então o frontend envia `prorataValueCents = priceCents` (valor cheio).
 
 ### Arquivos modificados
 
-- `src/pages/CreditsCheckout.tsx` — 3 blocos de código alterados
+1. `src/pages/CreditsCheckout.tsx` — `handleSubscribe`: adicionar detecção de cycle upgrade antes do guard
+2. `src/pages/SubscriptionManagement.tsx` — adicionar botão "Renovar antecipadamente" para planos anuais
+3. `src/pages/CreditsPayment.tsx` — adicionar `isRenewal` ao type e ajustar `OrderSummary`
 
