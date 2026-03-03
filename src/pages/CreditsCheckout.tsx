@@ -224,13 +224,56 @@ export default function CreditsCheckout() {
   };
 
   const handleSubscribe = (planType: string, planName: string, priceCents: number) => {
-    // Guard: block if user already has this exact plan active
-    if (isSubActiveForPlan(allSubs, planType)) {
+    const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+
+    // Detect cycle upgrade: same plan, different cycle (e.g. monthly→yearly)
+    const existingSubForPlan = allSubs.find(s =>
+      s.plan_type === planType &&
+      ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status)
+    );
+    const isCycleUpgrade = !!existingSubForPlan && existingSubForPlan.billing_cycle !== selectedCycle;
+
+    // Guard: block only if exact same plan AND same cycle
+    if (!isCycleUpgrade && isSubActiveForPlan(allSubs, planType)) {
       toast.error('Você já possui este plano ativo.');
       return;
     }
 
-    const selectedCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
+    // Handle cycle upgrade (e.g. combo_completo MONTHLY → YEARLY)
+    if (isCycleUpgrade && existingSubForPlan) {
+      const newPlanPricesForCycle = ALL_PLAN_PRICES[planType];
+      const newCyclePriceCents = selectedCycle === 'YEARLY'
+        ? (newPlanPricesForCycle?.yearly || priceCents)
+        : (newPlanPricesForCycle?.monthly || priceCents);
+      
+      // Calculate prorata credit from existing sub
+      const existingPrices = ALL_PLAN_PRICES[existingSubForPlan.plan_type];
+      const existingPriceCents = existingPrices
+        ? (existingSubForPlan.billing_cycle === 'YEARLY' ? existingPrices.yearly : existingPrices.monthly)
+        : 0;
+      const existingCycleDays = existingSubForPlan.billing_cycle === 'YEARLY' ? 365 : 30;
+      const existingDaysRemaining = existingSubForPlan.next_due_date
+        ? Math.min(Math.max(0, differenceInDays(new Date(existingSubForPlan.next_due_date), new Date())), existingCycleDays)
+        : 0;
+      const creditCents = Math.min(Math.round(existingPriceCents * (existingDaysRemaining / existingCycleDays)), existingPriceCents);
+      const finalProrata = Math.max(0, newCyclePriceCents - creditCents);
+
+      navigate('/credits/checkout/pay', {
+        state: {
+          type: 'subscription',
+          planType,
+          planName,
+          billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
+          priceCents: newCyclePriceCents,
+          isUpgrade: true,
+          prorataValueCents: finalProrata,
+          currentSubscriptionId: existingSubForPlan.id,
+          subscriptionIdsToCancel: [existingSubForPlan.id],
+          currentPlanName: getPlanDisplayName(existingSubForPlan.plan_type) || existingSubForPlan.plan_type,
+        },
+      });
+      return;
+    }
     const newPlanPrices = ALL_PLAN_PRICES[planType];
     const newPriceCentsForCycle = selectedCycle === 'YEARLY'
       ? (newPlanPrices?.yearly || priceCents)

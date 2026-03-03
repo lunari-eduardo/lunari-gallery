@@ -18,7 +18,7 @@ import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getPlanDisplayName, PLAN_FAMILIES } from '@/lib/transferPlans';
+import { getPlanDisplayName, PLAN_FAMILIES, ALL_PLAN_PRICES } from '@/lib/transferPlans';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   ACTIVE: { label: 'Ativa', variant: 'default' },
@@ -129,6 +129,27 @@ function SubscriptionCard({
   };
   const handleReactivate = async () => {
     try { await onReactivate(subscription.id); } catch { /* toast handled */ }
+  };
+
+  const handleEarlyRenewal = () => {
+    const prices = ALL_PLAN_PRICES[subscription.plan_type];
+    if (!prices) return;
+    const priceCents = subscription.billing_cycle === 'YEARLY' ? prices.yearly : prices.monthly;
+    navigate('/credits/checkout/pay', {
+      state: {
+        type: 'subscription',
+        planType: subscription.plan_type,
+        planName: getPlanDisplayName(subscription.plan_type) || subscription.plan_type,
+        billingCycle: subscription.billing_cycle || 'YEARLY',
+        priceCents,
+        isUpgrade: true,
+        isRenewal: true,
+        prorataValueCents: priceCents, // full price, no prorata credit
+        currentSubscriptionId: subscription.id,
+        subscriptionIdsToCancel: [subscription.id],
+        currentPlanName: getPlanDisplayName(subscription.plan_type),
+      },
+    });
   };
 
   return (
@@ -250,6 +271,18 @@ function SubscriptionCard({
                 <ArrowRight className="h-3.5 w-3.5" />
                 Upgrade / Downgrade
               </Button>
+
+              {subscription.billing_cycle === 'YEARLY' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEarlyRenewal}
+                  className="gap-1.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Renovar antecipadamente
+                </Button>
+              )}
 
               <AlertDialog>
                 <AlertDialogTrigger asChild>
