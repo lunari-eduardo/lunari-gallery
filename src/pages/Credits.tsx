@@ -206,53 +206,54 @@ export default function Credits() {
 
       {/* Strategic expansion section */}
       {!isAdmin && (
-        <div className="pt-8 mt-4 border-t border-border/30 space-y-6">
-          <div className="space-y-3">
+        <div className="bg-muted/30 -mx-4 px-4 md:-mx-6 md:px-6 py-12 md:py-16 rounded-2xl space-y-10">
+          {/* Header centrado — landing page style */}
+          <div className="text-center max-w-2xl mx-auto space-y-4">
             <p className="text-sm text-muted-foreground">
               Você usa créditos com frequência?{' '}
               <span className="text-muted-foreground/60">
                 Talvez um plano integrado faça mais sentido no longo prazo.
               </span>
             </p>
-            <div>
-              <h2 className="text-lg font-semibold">Estruture seu negócio para crescer</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Gestão, galerias de seleção e entrega integrados para quem quer escalar com organização.
-              </p>
-            </div>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Estruture seu negócio para crescer</h2>
+            <p className="text-sm md:text-base text-muted-foreground max-w-lg mx-auto">
+              Gestão, galerias de seleção e entrega integrados para quem quer escalar com organização.
+            </p>
           </div>
 
-          <div className="space-y-4">
+          {/* Cards grid lado a lado */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {/* Card 1 — Studio Pro + Select 2k */}
-            <div className="rounded-lg border border-border/60 p-5 md:p-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <div className="space-y-3 flex-1">
-                <p className="text-sm font-semibold">Studio Pro + Gallery Select 2k</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
+            <div className="rounded-xl border border-border/60 bg-background p-7 md:p-8 flex flex-col gap-5">
+              <div className="space-y-2">
+                <p className="text-base font-semibold">Studio Pro + Gallery Select 2k</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   Para quem quer profissionalizar o fluxo de atendimento e seleção com gestão integrada.
                 </p>
-                <ul className="space-y-1">
-                  {['Gestão completa com Lunari Studio', '2.000 créditos mensais incluídos', 'Integração automática com galerias no workflow'].map((b) => (
-                    <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
               </div>
-              <div className="flex flex-col items-start md:items-end gap-2 md:pt-1 shrink-0">
-                <p className="text-base font-bold text-foreground">
-                  R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
+              <ul className="space-y-2 flex-1">
+                {['Gestão completa com Lunari Studio', '2.000 créditos mensais incluídos', 'Integração automática com galerias no workflow'].map((b) => (
+                  <li key={b} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              <div className="pt-2 space-y-3">
+                <p className="text-2xl font-bold text-foreground">
+                  R$ 44,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
                 </p>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => navigate('/credits/checkout?tab=select')}
+                  className="w-full"
                 >
                   Conhecer planos
                 </Button>
                 <button
                   onClick={() => navigate('/credits/checkout?tab=select')}
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  className="block w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors"
                 >
                   Assinar agora →
                 </button>
@@ -260,38 +261,39 @@ export default function Credits() {
             </div>
 
             {/* Card 2 — Combo Completo */}
-            <div className="relative rounded-lg border border-border/60 p-5 md:p-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <Badge variant="secondary" className="absolute -top-2.5 left-4 text-[10px] font-medium">
+            <div className="relative rounded-xl border border-primary/20 bg-background p-7 md:p-8 flex flex-col gap-5">
+              <Badge variant="secondary" className="absolute -top-2.5 left-5 text-[10px] font-medium">
                 Mais completo
               </Badge>
-              <div className="space-y-3 flex-1">
-                <p className="text-sm font-semibold">Studio Pro + Select 2k + Transfer 20GB</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
+              <div className="space-y-2">
+                <p className="text-base font-semibold">Studio Pro + Select 2k + Transfer 20GB</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   Tudo integrado: gestão, seleção e entrega profissional no seu estilo — para quem quer escalar de verdade.
                 </p>
-                <ul className="space-y-1">
-                  {['Gestão completa', 'Créditos mensais incluídos', 'Entrega profissional personalizada'].map((b) => (
-                    <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
               </div>
-              <div className="flex flex-col items-start md:items-end gap-2 md:pt-1 shrink-0">
-                <p className="text-base font-bold text-foreground">
-                  R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
+              <ul className="space-y-2 flex-1">
+                {['Gestão completa', 'Créditos mensais incluídos', 'Entrega profissional personalizada'].map((b) => (
+                  <li key={b} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              <div className="pt-2 space-y-3">
+                <p className="text-2xl font-bold text-foreground">
+                  R$ 64,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
                 </p>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => navigate('/credits/checkout?tab=select')}
+                  className="w-full"
                 >
                   Conhecer estrutura completa
                 </Button>
                 <button
                   onClick={() => navigate('/credits/checkout?tab=select')}
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  className="block w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors"
                 >
                   Assinar agora →
                 </button>
