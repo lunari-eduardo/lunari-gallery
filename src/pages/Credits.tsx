@@ -204,60 +204,98 @@ export default function Credits() {
         </div>
       </div>
 
-      {/* Combo plans */}
+      {/* Strategic expansion section */}
       {!isAdmin && (
-        <div className="bg-muted/50 rounded-xl p-5 md:p-6 space-y-4">
-          <div>
-            <p className="text-xs text-muted-foreground/70 italic mb-1">
-              Quer ter o sistema de gestão mais completo integrado às suas galerias?
+        <div className="pt-8 mt-4 border-t border-border/30 space-y-6">
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Você usa créditos com frequência?{' '}
+              <span className="text-muted-foreground/60">
+                Talvez um plano integrado faça mais sentido no longo prazo.
+              </span>
             </p>
-            <h2 className="text-base font-semibold">Cresça com uma estrutura completa</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Para quem quer integrar gestão, seleção e armazenamento em um único fluxo profissional.
-            </p>
+            <div>
+              <h2 className="text-lg font-semibold">Estruture seu negócio para crescer</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Gestão, galerias de seleção e entrega integrados para quem quer escalar com organização.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Card 1 - Studio */}
-            <div className="rounded-lg border bg-card p-4 space-y-3">
-              <p className="text-sm font-semibold">Studio Pro + Gallery Select 2k</p>
-              <p className="text-xs text-muted-foreground">
-                Gestão completa com Lunari Studio + 2.000 créditos mensais incluídos
-              </p>
-              <ul className="space-y-1">
-                {['Integração automática com Gallery', 'Controle de clientes', 'Agenda', 'Fluxo de trabalho', 'Automações de pagamentos'].map((b) => (
-                  <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xl font-bold text-primary">
-                R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
-              </p>
-              <Button size="sm" className="px-4" onClick={() => navigate('/credits/checkout?tab=select')}>
-                Quero integrar
-              </Button>
+          <div className="space-y-4">
+            {/* Card 1 — Studio Pro + Select 2k */}
+            <div className="rounded-lg border border-border/60 p-5 md:p-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div className="space-y-3 flex-1">
+                <p className="text-sm font-semibold">Studio Pro + Gallery Select 2k</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Para quem quer profissionalizar o fluxo de atendimento e seleção com gestão integrada.
+                </p>
+                <ul className="space-y-1">
+                  {['Gestão completa com Lunari Studio', '2.000 créditos mensais incluídos', 'Integração automática com galerias no workflow'].map((b) => (
+                    <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-col items-start md:items-end gap-2 md:pt-1 shrink-0">
+                <p className="text-base font-bold text-foreground">
+                  R$ 44,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate('/credits/checkout?tab=select')}
+                >
+                  Conhecer planos
+                </Button>
+                <button
+                  onClick={() => navigate('/credits/checkout?tab=select')}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Assinar agora →
+                </button>
+              </div>
             </div>
 
-            {/* Card 2 - Completo */}
-            <div className="relative rounded-lg border bg-card p-4 space-y-3">
-              <Badge className="absolute -top-2.5 left-4 text-xs">Mais completo</Badge>
-              <p className="text-sm font-semibold">Studio Pro + Select 2k + Transfer 20GB</p>
-              <ul className="space-y-1">
-                {['Gestão completa', 'Créditos mensais incluídos', 'Entrega profissional no seu estilo'].map((b) => (
-                  <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xl font-bold text-primary">
-                R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
-              </p>
-              <Button size="sm" className="px-4" onClick={() => navigate('/credits/checkout?tab=select')}>
-                Estruturar meu negócio
-              </Button>
+            {/* Card 2 — Combo Completo */}
+            <div className="relative rounded-lg border border-border/60 p-5 md:p-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <Badge variant="secondary" className="absolute -top-2.5 left-4 text-[10px] font-medium">
+                Mais completo
+              </Badge>
+              <div className="space-y-3 flex-1">
+                <p className="text-sm font-semibold">Studio Pro + Select 2k + Transfer 20GB</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Tudo integrado: gestão, seleção e entrega profissional no seu estilo — para quem quer escalar de verdade.
+                </p>
+                <ul className="space-y-1">
+                  {['Gestão completa', 'Créditos mensais incluídos', 'Entrega profissional personalizada'].map((b) => (
+                    <li key={b} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-col items-start md:items-end gap-2 md:pt-1 shrink-0">
+                <p className="text-base font-bold text-foreground">
+                  R$ 64,90<span className="text-xs font-normal text-muted-foreground">/mês</span>
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate('/credits/checkout?tab=select')}
+                >
+                  Conhecer estrutura completa
+                </Button>
+                <button
+                  onClick={() => navigate('/credits/checkout?tab=select')}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Assinar agora →
+                </button>
+              </div>
             </div>
           </div>
         </div>
