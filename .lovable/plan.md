@@ -1,74 +1,66 @@
 
 
-## Plano: Redesign da Seção de Combos — De "Bloco de Venda" para "Bloco de Expansão Estratégica"
+## Plano: Seção de Expansão com visual de Landing Page
 
 ### O que muda
 
-A seção de combos (linhas 207-264 de `src/pages/Credits.tsx`) será totalmente redesenhada para ter um tom educativo e aspiracional, reduzindo a pressão de compra e aumentando a percepção premium.
+A seção inferior (linhas 207-301) será transformada visualmente para parecer uma mini landing page embutida, com mais respiro, tipografia maior, layout mais dramático e sensação de seção independente.
 
 ### Alterações em `src/pages/Credits.tsx`
 
-**1. Separação visual clara da parte superior:**
-- Remover `bg-muted/50 rounded-xl` (muito similar a um card de checkout)
-- Adicionar separador com mais espaço vertical (`pt-8 mt-4 border-t border-border/30`)
-- Headline e subtexto reposicionados com tom estratégico
+**1. Container da seção:**
+- Trocar `border-t border-border/30` por um fundo sutil diferenciado: `bg-muted/30 -mx-4 px-4 md:-mx-6 md:px-6 py-12 rounded-2xl` (ou usar margem negativa para sangrar o container)
+- Mais padding vertical (py-12 em vez de pt-8)
 
-**2. Nova headline e copy:**
-- Pergunta racional: *"Você usa créditos com frequência?"*
-- Subtexto: *"Talvez um plano integrado faça mais sentido no longo prazo."*
-- Headline principal: **"Estruture seu negócio para crescer"**
-- Sub: *"Gestão, galerias de seleção e entrega integrados para quem quer escalar com organização."*
+**2. Headline com escala de landing page:**
+- Pergunta racional mantida mas com mais espaço
+- Headline principal: `text-2xl md:text-3xl font-bold tracking-tight` (escala de hero)
+- Subtexto: `text-sm md:text-base text-muted-foreground max-w-lg` (mais legível)
+- Centralizar todo o bloco de texto no topo da seção
 
-**3. Cards horizontais (layout editorial):**
-- Cards mudam de grid `md:grid-cols-2` vertical para cards horizontais mais largos (`flex` horizontal em desktop)
-- Mais texto explicativo, menos cara de plano
-- Preço presente mas não dominante (tamanho menor, alinhado à direita)
+**3. Cards com mais presença:**
+- Grid `md:grid-cols-2` lado a lado em vez de empilhados verticalmente
+- Cada card: layout vertical (não horizontal) com mais padding (`p-8`)
+- Preço com destaque maior: `text-2xl font-bold` com `/mês` menor
+- Benefícios com mais espaçamento
+- CTA centralizado no card com mais respiro
+- Card do Combo Completo com borda levemente destacada (`border-primary/20`) ou fundo sutil
 
-**4. CTAs repensados:**
-- CTA principal: botão `variant="outline"` com texto **"Conhecer planos"** → navega para checkout
-- CTA secundário: link inline pequeno **"Assinar agora →"** abaixo do botão
-- Remove botões grandes e diretos como "Quero integrar" e "Estruturar meu negócio"
+**4. Tipografia e espaçamento geral:**
+- Mais gap entre elementos (space-y-8 entre headline e cards)
+- Texto dos benefícios ligeiramente maior (`text-sm` em vez de `text-xs`)
+- Ícones dos benefícios maiores (`h-4 w-4`)
 
-**5. Card Combo Completo:**
-- Mantém badge "Mais completo" mas em tom sutil
-- Mesmo padrão editorial: mais texto, CTA "Conhecer estrutura completa", link secundário "Assinar agora"
-
-### Estrutura visual resultante
+### Estrutura visual
 
 ```text
-─────────────── separador sutil ───────────────
-
-"Você usa créditos com frequência?"
-"Talvez um plano integrado faça mais sentido."
-
-Estruture seu negócio para crescer
-Gestão, seleção e entrega integrados para escalar.
-
-┌─────────────────────────────────────────────┐
-│ Studio Pro + Gallery Select 2k              │
-│ Para quem quer profissionalizar o fluxo...  │
-│ • Gestão completa                           │
-│ • 2.000 créditos mensais                    │
-│ • Integração com galerias        R$ 44,90/m │
-│                                             │
-│ [ Conhecer planos ]                         │
-│   Assinar agora →                           │
-└─────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────┐
-│ ◆ Mais completo                             │
-│ Studio Pro + Select 2k + Transfer 20GB      │
-│ Tudo integrado: gestão, seleção e entrega   │
-│ • Gestão completa                           │
-│ • Créditos mensais incluídos                │
-│ • Entrega profissional           R$ 64,90/m │
-│                                             │
-│ [ Conhecer estrutura completa ]             │
-│   Assinar agora →                           │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                  bg-muted/30 rounded                │
+│                                                     │
+│   Você usa créditos com frequência?                 │
+│                                                     │
+│   Estruture seu negócio                             │
+│   para crescer                                      │
+│   Gestão, seleção e entrega integrados...           │
+│                                                     │
+│   ┌──────────────────┐  ┌──────────────────┐        │
+│   │ Studio Pro +     │  │ ◆ Mais completo  │        │
+│   │ Select 2k        │  │ Studio + Select  │        │
+│   │                  │  │ + Transfer 20GB  │        │
+│   │ • Gestão         │  │                  │        │
+│   │ • 2k créditos    │  │ • Gestão         │        │
+│   │ • Integração     │  │ • Créditos       │        │
+│   │                  │  │ • Entrega        │        │
+│   │  R$ 44,90/mês    │  │                  │        │
+│   │                  │  │  R$ 64,90/mês    │        │
+│   │ [Conhecer planos]│  │ [Conhecer tudo]  │        │
+│   │  Assinar agora → │  │  Assinar agora → │        │
+│   └──────────────────┘  └──────────────────┘        │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
 
-### Arquivo modificado
+### Arquivo
 
-- `src/pages/Credits.tsx` — seção de combos (linhas 207-264)
+- `src/pages/Credits.tsx` — linhas 207-301
 
