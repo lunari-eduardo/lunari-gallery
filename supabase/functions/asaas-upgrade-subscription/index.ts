@@ -21,6 +21,11 @@ const PLANS: Record<string, { monthlyPrice: number; yearlyPrice: number; name: s
   combo_completo: { monthlyPrice: 6490, yearlyPrice: 66198, name: "Combo Completo" },
 };
 
+const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
+  combo_pro_select2k: 2000,
+  combo_completo: 2000,
+};
+
 function daysBetween(a: Date, b: Date): number {
   const msPerDay = 86400000;
   return Math.max(0, Math.round((b.getTime() - a.getTime()) / msPerDay));
@@ -422,10 +427,24 @@ Deno.serve(async (req) => {
       console.log("Reactivated expired_due_to_plan galleries for user:", userId);
     }
 
+    // 8. Grant subscription credits if new plan includes them
+    const subCredits = PLAN_SUBSCRIPTION_CREDITS[newPlanType];
+    if (subCredits && subCredits > 0) {
+      const { error: creditError } = await adminClient.rpc("renew_subscription_credits", {
+        _user_id: userId,
+        _amount: subCredits,
+      });
+      if (creditError) {
+        console.error("Failed to grant subscription credits on upgrade:", creditError);
+      } else {
+        console.log(`Granted ${subCredits} subscription credits for upgrade to ${newPlanType}`);
+      }
+    }
+
     return new Response(
       JSON.stringify({
-        newSubscriptionId: newSubData.id,
-        status: newSubData.status || "ACTIVE",
+        newSubscriptionId: newAsaasId,
+        status: newStatus || "ACTIVE",
         prorataPaymentId,
         prorataValueCents: totalProrataValueCents,
         netChargeCents,
