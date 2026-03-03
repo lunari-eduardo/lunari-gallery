@@ -1,99 +1,83 @@
 
-Objetivo: eliminar falhas de UX no upload, aumentar robustez para lotes grandes (centenas) e bloquear avanço da criação da galeria quando houver arquivos com erro não resolvidos.
 
-Diagnóstico (com base no código atual):
-1) Mensagem de erro
-- Origem: `src/lib/retryFetch.ts` (`getUploadErrorMessage`).
-- Fallback atual retorna: “Erro ao enviar. Verifique sua conexão.” (igual ao problema reportado).
+## Plano: Corrigir estorno de créditos ao excluir foto no upload
 
-2) Botão “Tentar novamente” escondido
-- Origem: `src/components/PhotoUploader.tsx`.
-- O card tem overlays concorrentes (status + faixa de nome/tamanho no rodapé). A faixa de nome fica por cima do botão em alguns estados, bloqueando clique.
+### Problema
 
-3) Falhas não são reprocessadas automaticamente ao fim do lote
-- Hoje existe retry interno por request (3 tentativas no pipeline), mas quando o pipeline termina com itens em `error`, não há rodada automática de reenvio no cliente.
+1. **Estorno no bucket errado**: `handleDeleteUploadedPhoto` (GalleryCreate.tsx:201-216) sempre incrementa `photo_credits` (avulsos), mas o consumo via `consume_photo_credits` debita `credits_subscription` primeiro. Resultado: créditos de assinatura são consumidos mas nunca devolvidos; créditos avulsos inflam artificialmente.
 
-4) Usuário consegue prosseguir no wizard com erro pendente
-- `src/pages/GalleryCreate.tsx` não recebe estado de erro/upload do `PhotoUploader` e `handleNext` não bloqueia passo 4 com erro.
-- Resultado: pode avançar sem resolver uploads falhos.
+2. **Cache stale**: `refetchCredits()` é chamado no hook de GalleryCreate, mas o `PhotoUploader` tem sua própria instância de `usePhotoCredits()` com `staleTime: 10s`. O número exibido ("X créditos disponíveis") não atualiza imediatamente. Precisa usar `queryClient.invalidateQueries` para forçar refetch em todas as instâncias.
 
-5) Escalabilidade para centenas de arquivos
-- Gargalos no front:
-  - atualização de item via `setItems(prev => prev.map(...))` em toda mudança de progresso (custo alto com muitos itens),
-  - ingestão de muitos arquivos de uma vez (criação massiva de object URLs e renderizações),
-  - ausência de ajuste explícito de concorrência por capacidade do dispositivo na camada de UI.
+### Solução
 
-Plano de implementação (completo e funcional):
+**A) Criar RPC `refund_photo_credit` no banco** (nova migração SQL)
 
-A) UX de erro e clique no retry (PhotoUploader + retryFetch)
-1. `src/lib/retryFetch.ts`
-- Alterar fallback final para: `Erro ao enviar`.
-- Ajustar também o branch de network para mesma mensagem curta (evitar voltar ao texto antigo em cenários comuns).
+```sql
+CREATE OR REPLACE FUNCTION refund_photo_credit(_user_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  sub_balance INTEGER;
+  sub_cap INTEGER;
+BEGIN
+  SELECT COALESCE(credits_subscription, 0)
+  INTO sub_balance
+  FROM photographer_accounts
+  WHERE user_id = _user_id FOR UPDATE;
 
-2. `src/components/PhotoUploader.tsx`
-- Corrigir stacking/click:
-  - definir z-index da camada de erro/retry acima da faixa do nome,
-  - aplicar `pointer-events-none` na faixa de nome/tamanho e `pointer-events-auto` no botão de retry,
-  - opcionalmente ocultar faixa inferior enquanto status = `error` para evitar colisão visual.
-- Resultado: “Tentar novamente” sempre clicável.
+  -- Determine subscription cap from active combo plan
+  SELECT CASE sa.plan_type
+    WHEN 'combo_pro_select2k' THEN 2000
+    WHEN 'combo_completo' THEN 2000
+    ELSE 0
+  END INTO sub_cap
+  FROM subscriptions_asaas sa
+  WHERE sa.user_id = _user_id
+    AND sa.status IN ('ACTIVE','PENDING','OVERDUE')
+    AND sa.plan_type IN ('combo_pro_select2k','combo_completo')
+  LIMIT 1;
 
-B) Reenvio automático pós-lote (PhotoUploader)
-1. Adicionar retry automático em rodadas após `onPipelineComplete`:
-- Regra:
-  - Se terminou e existem itens `error` com `retryCount < 3`, iniciar rodada automática.
-  - 2 rodadas automáticas no máximo (ex.: +5s e +10s).
-  - Em cada rodada, chamar `pipeline.retry(id)` para todos erros retryáveis.
-- Evitar loop infinito com contador em `useRef`.
-- Exibir toast informativo: “X arquivo(s) com erro. Tentando novamente automaticamente...”.
+  sub_cap := COALESCE(sub_cap, 0);
 
-2. Finalização:
-- Só considerar “estado final com erro” após esgotar rodadas automáticas.
-- Manter retry manual por item disponível.
+  -- Refund to subscription bucket if below cap, else to purchased
+  IF sub_balance < sub_cap THEN
+    UPDATE photographer_accounts
+    SET credits_subscription = credits_subscription + 1,
+        credits_consumed_total = GREATEST(0, COALESCE(credits_consumed_total,0) - 1),
+        updated_at = NOW()
+    WHERE user_id = _user_id;
+  ELSE
+    UPDATE photographer_accounts
+    SET photo_credits = photo_credits + 1,
+        credits_consumed_total = GREATEST(0, COALESCE(credits_consumed_total,0) - 1),
+        updated_at = NOW()
+    WHERE user_id = _user_id;
+  END IF;
+END;
+$$;
+```
 
-C) Bloqueio de avanço com notificação (GalleryCreate)
-1. `src/components/PhotoUploader.tsx`
-- Expor callback novo para estado do lote (ex.: `onQueueStateChange`):
-  - `isUploading`
-  - `errorCount`
-  - `retryableErrorCount`
-  - `totalCount`
-  - `doneCount`
+Lógica: se `credits_subscription` está abaixo do teto do plano, o crédito foi originalmente consumido daí — devolve para lá. Caso contrário, devolve para `photo_credits`.
 
-2. `src/pages/GalleryCreate.tsx`
-- Armazenar estado vindo do uploader (ex.: `isUploadingPhotos`, `uploadErrorCount`).
-- Passar `onUploadingChange` e `onQueueStateChange` ao `PhotoUploader`.
-- No `handleNext`, quando `currentStep === 4`:
-  - se `isUploadingPhotos`: bloquear e notificar “Aguarde finalizar os uploads.”
-  - se `uploadErrorCount > 0`: bloquear e notificar “Existem arquivos com erro. Reenvie ou remova antes de prosseguir.”
-- Opcional recomendado: banner fixo no passo 4 com contagem de erros pendentes.
+**B) Atualizar `handleDeleteUploadedPhoto` em GalleryCreate.tsx**
 
-D) Melhoria de velocidade para centenas (sem quebrar robustez)
-1. `src/components/PhotoUploader.tsx`
-- Trocar atualização por `map` global para atualização pontual por índice/id (reduz rerender massivo).
-- Ingerir arquivos em chunks ao adicionar (ex.: 50 por ciclo com pequeno yield `setTimeout(0)`), para evitar travamento ao selecionar centenas.
+Substituir o bloco manual de UPDATE (linhas 202-216) por chamada ao RPC:
+```typescript
+await supabase.rpc('refund_photo_credit', { _user_id: user.id });
+```
 
-2. `src/lib/uploadPipeline.ts` + `PhotoUploader`
-- Ajustar concorrência de compressão dinamicamente por `navigator.hardwareConcurrency` (ex.: 2 padrão, 3 em máquinas mais fortes).
-- Manter upload concorrente controlado (não agressivo para evitar aumento de erro).
+**C) Invalidar cache corretamente**
 
-3. Preservar segurança de crédito/idempotência
-- Sem alterar fluxo de débito pós-sucesso nem `upload_key`.
+Substituir `refetchCredits()` por:
+```typescript
+queryClient.invalidateQueries({ queryKey: ['photo-credits'] });
+```
 
-Arquivos-alvo:
-- `src/lib/retryFetch.ts`
-- `src/components/PhotoUploader.tsx`
-- `src/pages/GalleryCreate.tsx`
-- `src/lib/uploadPipeline.ts` (ajustes leves de throughput)
+Isso força refetch imediato em todas as instâncias (incluindo PhotoUploader).
 
-Critérios de aceite:
-1) Erro visível por item como “Erro ao enviar” (sem “verifique sua conexão”).
-2) Botão “Tentar novamente” sempre clicável nos cards com erro.
-3) Ao terminar lote com erros, sistema dispara tentativas automáticas adicionais.
-4) No passo 4, com erro pendente, “Próximo” não avança e exibe aviso claro.
-5) Com 300+ arquivos, UI permanece responsiva e throughput melhora perceptivelmente (sem regressão de crédito/idempotência).
+### Arquivos modificados
 
-Risco e mitigação:
-- Risco: auto-retry disparar múltiplas finalizações.
-- Mitigação: controle por `retryRoundRef`, guarda de estado ativo e reset explícito no fim.
-- Risco: regressão em Deliver (usa mesmo uploader).
-- Mitigação: callbacks novos opcionais; comportamento default mantido para telas que não usam bloqueio de passo.
+1. **Nova migração SQL** — criar função `refund_photo_credit`
+2. **`src/pages/GalleryCreate.tsx`** — usar RPC + invalidateQueries
+3. **`src/integrations/supabase/types.ts`** — adicionar tipo da nova RPC
+
