@@ -22,9 +22,9 @@
     --primary-hover: 18 55% 48%;
     --primary-glow: 18 55% 70%;
 
-    /* Soft Green Secondary */
-    --secondary: 120 20% 62%;
-    --secondary-foreground: 25 20% 15%;
+    /* Neutral Gray Secondary */
+    --secondary: 220 10% 50%;
+    --secondary-foreground: 0 0% 100%;
 
     /* Warm Neutrals */
     --muted: 220 10% 95%;
@@ -51,8 +51,8 @@
     /* Custom Lunari tokens */
     --terracotta: 18 55% 55%;
     --terracotta-light: 18 45% 85%;
-    --sage: 120 20% 62%;
-    --sage-light: 120 20% 92%;
+    --sage: 220 10% 50%;
+    --sage-light: 220 10% 92%;
     --cream: 40 30% 95%;
     --warm-gray: 30 10% 60%;
 
@@ -93,8 +93,8 @@
     --primary-hover: 18 55% 65%;
     --primary-glow: 18 55% 45%;
 
-    --secondary: 120 20% 55%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: 220 10% 45%;
+    --secondary-foreground: 0 0% 100%;
 
     --muted: 0 0% 18%;
     --muted-foreground: 0 0% 60%;
@@ -117,8 +117,8 @@
 
     --terracotta: 18 55% 60%;
     --terracotta-light: 18 40% 25%;
-    --sage: 120 20% 55%;
-    --sage-light: 120 15% 20%;
+    --sage: 220 10% 45%;
+    --sage-light: 220 10% 20%;
     --cream: 0 0% 14%;
     --warm-gray: 0 0% 50%;
 
