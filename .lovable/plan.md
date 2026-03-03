@@ -1,62 +1,74 @@
 
 
-## Plano: Proteção contra Duplicação de Assinaturas
+## Plano: Redesign da Seção de Combos — De "Bloco de Venda" para "Bloco de Expansão Estratégica"
 
-### Problema
+### O que muda
 
-Os cards de combo e transfer combo na página de planos não verificam se o usuário já possui o plano ativo. O botão "Conhecer plano completo" sempre leva ao checkout, permitindo recompra do mesmo plano e gerando assinaturas duplicadas.
+A seção de combos (linhas 207-264 de `src/pages/Credits.tsx`) será totalmente redesenhada para ter um tom educativo e aspiracional, reduzindo a pressão de compra e aumentando a percepção premium.
 
-### Alterações
+### Alterações em `src/pages/Credits.tsx`
 
-#### 1. `src/pages/CreditsCheckout.tsx` — Detecção de plano ativo em todos os cards
+**1. Separação visual clara da parte superior:**
+- Remover `bg-muted/50 rounded-xl` (muito similar a um card de checkout)
+- Adicionar separador com mais espaço vertical (`pt-8 mt-4 border-t border-border/30`)
+- Headline e subtexto reposicionados com tom estratégico
 
-**Transfer cards (linhas 600-754):** Já detectam `isCurrentPlan` para Transfer isolados. OK.
+**2. Nova headline e copy:**
+- Pergunta racional: *"Você usa créditos com frequência?"*
+- Subtexto: *"Talvez um plano integrado faça mais sentido no longo prazo."*
+- Headline principal: **"Estruture seu negócio para crescer"**
+- Sub: *"Gestão, galerias de seleção e entrega integrados para quem quer escalar com organização."*
 
-**Combo cards na aba Select (linhas 450-510):** Adicionar lógica de detecção:
-- Verificar se `activeSubs` contém uma sub com `plan_type` igual ao combo (`combo_pro_select2k` ou `combo_completo`)
-- Se sim → badge "Plano atual" + botão "Gerenciar assinatura" (navega para `/credits/subscription`)
-- Se o plano ativo é superior (combo_completo ativo e card é combo_pro_select2k) → mostrar como downgrade
+**3. Cards horizontais (layout editorial):**
+- Cards mudam de grid `md:grid-cols-2` vertical para cards horizontais mais largos (`flex` horizontal em desktop)
+- Mais texto explicativo, menos cara de plano
+- Preço presente mas não dominante (tamanho menor, alinhado à direita)
 
-**Transfer combo block (linhas 768-804):** Mesma lógica:
-- Se `activeSubs` contém `combo_completo` → badge "Plano atual" + botão "Gerenciar assinatura"
-- Se user tem plano superior → ocultar ou desabilitar
+**4. CTAs repensados:**
+- CTA principal: botão `variant="outline"` com texto **"Conhecer planos"** → navega para checkout
+- CTA secundário: link inline pequeno **"Assinar agora →"** abaixo do botão
+- Remove botões grandes e diretos como "Quero integrar" e "Estruturar meu negócio"
 
-**Lógica de hierarquia de planos:** Criar helper `getPlanHierarchyLevel(planType)` que retorna um número representando o nível do plano. Comparar níveis para determinar se é upgrade, downgrade ou plano atual.
+**5. Card Combo Completo:**
+- Mantém badge "Mais completo" mas em tom sutil
+- Mesmo padrão editorial: mais texto, CTA "Conhecer estrutura completa", link secundário "Assinar agora"
+
+### Estrutura visual resultante
 
 ```text
-Hierarquia (do menor ao maior):
-transfer_5gb < transfer_20gb < transfer_50gb < transfer_100gb
-combo_pro_select2k < combo_completo
-studio_starter < studio_pro
-Cross-family: combo_completo > qualquer transfer isolado
+─────────────── separador sutil ───────────────
+
+"Você usa créditos com frequência?"
+"Talvez um plano integrado faça mais sentido."
+
+Estruture seu negócio para crescer
+Gestão, seleção e entrega integrados para escalar.
+
+┌─────────────────────────────────────────────┐
+│ Studio Pro + Gallery Select 2k              │
+│ Para quem quer profissionalizar o fluxo...  │
+│ • Gestão completa                           │
+│ • 2.000 créditos mensais                    │
+│ • Integração com galerias        R$ 44,90/m │
+│                                             │
+│ [ Conhecer planos ]                         │
+│   Assinar agora →                           │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ ◆ Mais completo                             │
+│ Studio Pro + Select 2k + Transfer 20GB      │
+│ Tudo integrado: gestão, seleção e entrega   │
+│ • Gestão completa                           │
+│ • Créditos mensais incluídos                │
+│ • Entrega profissional           R$ 64,90/m │
+│                                             │
+│ [ Conhecer estrutura completa ]             │
+│   Assinar agora →                           │
+└─────────────────────────────────────────────┘
 ```
 
-#### 2. `src/pages/CreditsCheckout.tsx` — `handleSubscribe` guard
+### Arquivo modificado
 
-No início de `handleSubscribe`, verificar:
-- Se `planType` já existe em `activeSubs` com status ACTIVE/PENDING → bloquear com `toast.error('Você já possui este plano ativo.')` e return
-- Incluir verificação para subs com `status === 'CANCELLED'` mas `next_due_date` no futuro (período ativo restante)
-
-#### 3. `src/pages/CreditsPayment.tsx` — Guard no checkout
-
-No mount do componente de checkout, se `type === 'subscription'`:
-- Buscar subs ativas via `useAsaasSubscription`
-- Se `planType` do state já está ativo → mostrar mensagem de erro e redirecionar para `/credits/subscription`
-- Isso serve como proteção dupla (caso o usuário acesse a URL diretamente)
-
-#### 4. Comportamento por caso
-
-| Estado | Card mostra | Botão |
-|--------|-------------|-------|
-| Plano exatamente igual e ativo (recorrente ou parcelado dentro da validade) | Badge "Plano atual" | "Gerenciar assinatura" → `/credits/subscription` |
-| Plano inferior ao ativo | Normal | "Agendar downgrade" |
-| Plano superior ao ativo | Normal com prorata | "Fazer upgrade" |
-| Plano parcelado expirado | Normal | "Assinar" (permite recompra) |
-| Sem plano ativo | Normal | "Assinar" |
-
-#### 5. Arquivos modificados
-
-- `src/pages/CreditsCheckout.tsx` — guards nos cards de combo e transfer combo + guard em handleSubscribe
-- `src/pages/CreditsPayment.tsx` — guard no mount contra plano duplicado
-- `src/lib/transferPlans.ts` — adicionar helper `getPlanHierarchyLevel`
+- `src/pages/Credits.tsx` — seção de combos (linhas 207-264)
 
