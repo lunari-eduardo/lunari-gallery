@@ -64,6 +64,7 @@ interface SubscriptionPayment {
   billingCycle: 'MONTHLY' | 'YEARLY';
   priceCents: number;
   isUpgrade?: boolean;
+  isRenewal?: boolean;
   prorataValueCents?: number;
   currentSubscriptionId?: string;
   subscriptionIdsToCancel?: string[];
@@ -158,8 +159,9 @@ export default function CreditsPayment() {
 
 function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState; formattedPrice: string; installments: number }) {
   const isUpgrade = pkg.type === 'subscription' && pkg.isUpgrade;
+  const isRenewal = pkg.type === 'subscription' && pkg.isRenewal;
   const isYearly = pkg.type === 'subscription' && pkg.billingCycle === 'YEARLY';
-  const prorataFormatted = isUpgrade && pkg.prorataValueCents != null
+  const prorataFormatted = isUpgrade && !isRenewal && pkg.prorataValueCents != null
     ? (pkg.prorataValueCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : null;
 
@@ -173,11 +175,13 @@ function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState
         <p className="text-sm text-muted-foreground">
           {pkg.type === 'select'
             ? `${pkg.credits.toLocaleString('pt-BR')} créditos`
-            : isUpgrade
-              ? `Upgrade de ${pkg.currentPlanName || 'plano atual'}`
-              : isYearly
-                ? (installments === 1 ? 'Assinatura anual' : 'Compra parcelada')
-                : 'Assinatura mensal'}
+            : isRenewal
+              ? 'Renovação antecipada'
+              : isUpgrade
+                ? `Upgrade de ${pkg.currentPlanName || 'plano atual'}`
+                : isYearly
+                  ? (installments === 1 ? 'Assinatura anual' : 'Compra parcelada')
+                  : 'Assinatura mensal'}
         </p>
       </div>
       <div className="border-t pt-4 space-y-2">
@@ -244,8 +248,20 @@ function OrderSummary({ pkg, formattedPrice, installments }: { pkg: PaymentState
         )}
       </div>
 
+      {/* Renewal info */}
+      {isRenewal && (
+        <div className="border-t pt-4">
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>
+              Sua assinatura atual será encerrada e um novo ciclo de 12 meses iniciará.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Annual renewal info */}
-      {isYearly && (
+      {isYearly && !isRenewal && (
         <div className="border-t pt-4">
           <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
