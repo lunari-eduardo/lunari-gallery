@@ -3,6 +3,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useCreditPackages } from '@/hooks/useCreditPackages';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
+import { useUnifiedPlans } from '@/hooks/useUnifiedPlans';
 import { formatStorageSize } from '@/lib/transferPlans';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,11 @@ export default function Credits() {
   const { photoCredits, creditsPurchased, creditsSubscription, isLoading: isLoadingCredits } = usePhotoCredits();
   const { purchases } = useCreditPackages();
   const { storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, hasFreeStorageOnly, planName, isLoading: isLoadingTransfer } = useTransferStorage();
+  const { getPlanPrice } = useUnifiedPlans();
+
+  const comboProMonthly = getPlanPrice('combo_pro_select2k', 'monthly');
+  const comboFullMonthly = getPlanPrice('combo_completo', 'monthly');
+  const formatPriceBRL = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <div className="space-y-10">
@@ -241,7 +247,7 @@ export default function Credits() {
               </ul>
               <div className="pt-2 space-y-3">
                 <p className="text-2xl font-bold text-foreground">
-                  R$ 44,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
+                  {formatPriceBRL(comboProMonthly)}<span className="text-sm font-normal text-muted-foreground">/mês</span>
                 </p>
                 <Button
                   size="sm"
@@ -281,7 +287,7 @@ export default function Credits() {
               </ul>
               <div className="pt-2 space-y-3">
                 <p className="text-2xl font-bold text-foreground">
-                  R$ 64,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
+                  {formatPriceBRL(comboFullMonthly)}<span className="text-sm font-normal text-muted-foreground">/mês</span>
                 </p>
                 <Button
                   size="sm"

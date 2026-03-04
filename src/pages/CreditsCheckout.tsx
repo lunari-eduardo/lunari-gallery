@@ -3,10 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { useAsaasSubscription, AsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
+import { useUnifiedPlans } from '@/hooks/useUnifiedPlans';
+import { useCouponValidation } from '@/hooks/useCouponValidation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -31,15 +34,17 @@ import {
   ArrowDown,
   AlertTriangle,
   Loader2,
+  Tag,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ALL_PLAN_PRICES, getPlanDisplayName, getStorageLimitBytes, formatStorageSize, PLAN_INCLUDES, getPlanHierarchyLevel, isSubActiveForPlan } from '@/lib/transferPlans';
+import { getStorageLimitBytes, formatStorageSize, getPlanHierarchyLevel, isSubActiveForPlan, getPlanDisplayName } from '@/lib/transferPlans';
 import { differenceInDays } from 'date-fns';
 
 
 /* ═══════════════════════════════════════════
-   STATIC DATA
+   STATIC DATA (non-price)
    ═══════════════════════════════════════════ */
 
 const BENEFITS_AVULSO = [
@@ -50,8 +55,18 @@ const BENEFITS_AVULSO = [
   { icon: ShieldCheck, label: 'Sem taxa ou comissão' },
 ];
 
-const COMBO_PLANS = [
+const BENEFITS_TRANSFER = [
+  { icon: Users, label: 'Galerias atreladas ao cliente' },
+  { icon: Camera, label: 'Entrega profissional' },
+  { icon: ShieldCheck, label: 'Acesso rápido e estável' },
+  { icon: Image, label: 'Expansão conforme necessidade' },
+  { icon: Check, label: 'Download do arquivo original' },
+];
+
+/* Fallback static data used when dynamic plans haven't loaded */
+const FALLBACK_COMBO_PLANS = [
   {
+    code: 'combo_pro_select2k',
     name: 'Studio Pro + Select 2k',
     monthlyPrice: 4490,
     yearlyPrice: 45259,
@@ -68,6 +83,7 @@ const COMBO_PLANS = [
     highlight: false,
   },
   {
+    code: 'combo_completo',
     name: 'Studio Pro + Select 2k + Transfer 20GB',
     monthlyPrice: 6490,
     yearlyPrice: 66198,
@@ -84,8 +100,15 @@ const COMBO_PLANS = [
   },
 ];
 
+const FALLBACK_TRANSFER_PLANS = [
+  { code: 'transfer_5gb', name: '5GB', monthlyPrice: 1290, yearlyPrice: 12384, storage: '5GB', highlight: false },
+  { code: 'transfer_20gb', name: '20GB', monthlyPrice: 2490, yearlyPrice: 23904, storage: '20GB', highlight: true, tag: 'Mais escolhido' },
+  { code: 'transfer_50gb', name: '50GB', monthlyPrice: 3490, yearlyPrice: 33504, storage: '50GB', highlight: false },
+  { code: 'transfer_100gb', name: '100GB', monthlyPrice: 5990, yearlyPrice: 57504, storage: '100GB', highlight: false },
+];
+
 const COMPARISON_ROWS = [
-  { label: 'Preço', avulso: 'A partir de R$ 19,90', pro: 'R$ 44,90/mês', full: 'R$ 64,90/mês' },
+  { label: 'Preço', avulso: 'A partir de R$ 19,90', pro: '', full: '' }, // prices filled dynamically
   { label: 'Clientes ilimitados', avulso: true, pro: true, full: true },
   { label: 'Galerias ilimitadas', avulso: true, pro: true, full: true },
   { label: 'Resolução até 2560px', avulso: true, pro: true, full: true },
@@ -95,27 +118,6 @@ const COMPARISON_ROWS = [
   { label: 'Controle financeiro', avulso: false, pro: true, full: true },
   { label: 'Entrega profissional', avulso: false, pro: false, full: true },
 ];
-
-const TRANSFER_PLANS = [
-  { name: '5GB', monthlyPrice: 1290, yearlyPrice: 12384, storage: '5GB', highlight: false },
-  { name: '20GB', monthlyPrice: 2490, yearlyPrice: 23904, storage: '20GB', highlight: true, tag: 'Mais escolhido' },
-  { name: '50GB', monthlyPrice: 3490, yearlyPrice: 33504, storage: '50GB', highlight: false },
-  { name: '100GB', monthlyPrice: 5990, yearlyPrice: 57504, storage: '100GB', highlight: false },
-];
-
-const BENEFITS_TRANSFER = [
-  { icon: Users, label: 'Galerias atreladas ao cliente' },
-  { icon: Camera, label: 'Entrega profissional' },
-  { icon: ShieldCheck, label: 'Acesso rápido e estável' },
-  { icon: Image, label: 'Expansão conforme necessidade' },
-  { icon: Check, label: 'Download do arquivo original' },
-];
-
-const TRANSFER_COMBO = {
-  name: 'Studio Pro + Select 2k + Transfer 20GB',
-  monthlyPrice: 6490,
-  yearlyPrice: 66198,
-};
 
 /* ═══════════════════════════════════════════
    COMPONENT
@@ -132,6 +134,71 @@ export default function CreditsCheckout() {
     const urlCycle = searchParams.get('billing_cycle');
     if (urlCycle === 'YEARLY') return 'yearly';
     return 'monthly';
+  });
+
+  // Dynamic pricing from unified_plans
+  const { getPlanPrice, getPlanName: dynamicPlanName, getAllPlanPrices, getPlanIncludes, getTransferPlans, getComboPlans, isLoading: isLoadingPlans } = useUnifiedPlans();
+
+  // Coupon
+  const { coupon, isValidating: isValidatingCoupon, validateCoupon, clearCoupon } = useCouponValidation();
+  const [couponInput, setCouponInput] = useState('');
+
+  // Dynamic plan prices (backward compat)
+  const ALL_PLAN_PRICES = getAllPlanPrices();
+  const PLAN_INCLUDES = getPlanIncludes();
+
+  // Build transfer plans from dynamic data or fallback
+  const dynamicTransfer = getTransferPlans();
+  const TRANSFER_PLANS = dynamicTransfer
+    ? dynamicTransfer.map((p) => ({
+        code: p.code,
+        name: p.name.replace('Transfer ', '').replace('transfer_', ''),
+        monthlyPrice: p.monthly_price_cents,
+        yearlyPrice: p.yearly_price_cents,
+        storage: formatStorageSize(p.transfer_storage_bytes),
+        highlight: p.code === 'transfer_20gb',
+        tag: p.code === 'transfer_20gb' ? 'Mais escolhido' : undefined,
+      }))
+    : FALLBACK_TRANSFER_PLANS;
+
+  // Build combo plans from dynamic data or fallback
+  const dynamicCombos = getComboPlans();
+  const COMBO_PLANS = dynamicCombos
+    ? dynamicCombos.map((p) => ({
+        code: p.code,
+        name: p.name,
+        monthlyPrice: p.monthly_price_cents,
+        yearlyPrice: p.yearly_price_cents,
+        credits: p.select_credits_monthly,
+        benefits: p.code === 'combo_completo'
+          ? ['Gestão completa', `${p.select_credits_monthly.toLocaleString('pt-BR')} créditos mensais`, `${formatStorageSize(p.transfer_storage_bytes)} de armazenamento profissional`, 'Entrega profissional no seu estilo']
+          : ['Sistema completo de gestão', `${p.select_credits_monthly.toLocaleString('pt-BR')} créditos mensais`, 'Integração automática com Gallery', 'Controle de clientes', 'Fluxo de trabalho', 'Automações de pagamentos'],
+        buttonLabel: 'Assinar',
+        highlight: p.code === 'combo_completo',
+        tag: p.code === 'combo_completo' ? 'Mais completo' : undefined,
+      }))
+    : FALLBACK_COMBO_PLANS;
+
+  // Transfer combo card
+  const comboCompletoData = COMBO_PLANS.find((p) => p.code === 'combo_completo');
+  const TRANSFER_COMBO = {
+    name: comboCompletoData?.name || 'Studio Pro + Select 2k + Transfer 20GB',
+    monthlyPrice: comboCompletoData?.monthlyPrice || 6490,
+    yearlyPrice: comboCompletoData?.yearlyPrice || 66198,
+  };
+
+  // Comparison row prices (dynamic)
+  const proMonthly = getPlanPrice('combo_pro_select2k', 'monthly');
+  const fullMonthly = getPlanPrice('combo_completo', 'monthly');
+  const comparisonRows = COMPARISON_ROWS.map((row) => {
+    if (row.label === 'Preço') {
+      return {
+        ...row,
+        pro: `R$ ${(proMonthly / 100).toFixed(2).replace('.', ',')}/mês`,
+        full: `R$ ${(fullMonthly / 100).toFixed(2).replace('.', ',')}/mês`,
+      };
+    }
+    return row;
   });
 
   // Upgrade mode: auto-detect from hook OR from URL params
@@ -241,16 +308,10 @@ export default function CreditsCheckout() {
 
     // Handle cycle upgrade (e.g. combo_completo MONTHLY → YEARLY)
     if (isCycleUpgrade && existingSubForPlan) {
-      const newPlanPricesForCycle = ALL_PLAN_PRICES[planType];
-      const newCyclePriceCents = selectedCycle === 'YEARLY'
-        ? (newPlanPricesForCycle?.yearly || priceCents)
-        : (newPlanPricesForCycle?.monthly || priceCents);
+      const newCyclePriceCents = getPlanPrice(planType, selectedCycle === 'YEARLY' ? 'yearly' : 'monthly');
       
       // Calculate prorata credit from existing sub
-      const existingPrices = ALL_PLAN_PRICES[existingSubForPlan.plan_type];
-      const existingPriceCents = existingPrices
-        ? (existingSubForPlan.billing_cycle === 'YEARLY' ? existingPrices.yearly : existingPrices.monthly)
-        : 0;
+      const existingPriceCents = getPlanPrice(existingSubForPlan.plan_type, existingSubForPlan.billing_cycle === 'YEARLY' ? 'yearly' : 'monthly');
       const existingCycleDays = existingSubForPlan.billing_cycle === 'YEARLY' ? 365 : 30;
       const existingDaysRemaining = existingSubForPlan.next_due_date
         ? Math.min(Math.max(0, differenceInDays(new Date(existingSubForPlan.next_due_date), new Date())), existingCycleDays)
@@ -269,28 +330,24 @@ export default function CreditsCheckout() {
           prorataValueCents: finalProrata,
           currentSubscriptionId: existingSubForPlan.id,
           subscriptionIdsToCancel: [existingSubForPlan.id],
-          currentPlanName: getPlanDisplayName(existingSubForPlan.plan_type) || existingSubForPlan.plan_type,
+          currentPlanName: dynamicPlanName(existingSubForPlan.plan_type) || getPlanDisplayName(existingSubForPlan.plan_type) || existingSubForPlan.plan_type,
+          ...(coupon.valid ? { couponCode: coupon.code } : {}),
         },
       });
       return;
     }
-    const newPlanPrices = ALL_PLAN_PRICES[planType];
-    const newPriceCentsForCycle = selectedCycle === 'YEARLY'
-      ? (newPlanPrices?.yearly || priceCents)
-      : (newPlanPrices?.monthly || priceCents);
+
+    const newPriceCentsForCycle = getPlanPrice(planType, selectedCycle === 'YEARLY' ? 'yearly' : 'monthly');
 
     if (isUpgradeMode && currentSubscriptionId) {
-      // Same-family upgrade (e.g. transfer_5gb → transfer_20gb)
+      // Same-family upgrade
       const creditCents = Math.min(Math.round(currentPriceCents * (daysRemaining / totalCycleDays)), currentPriceCents);
-
-      // Also check for cross-product overlaps (e.g., user has studio + transfer, upgrading to combo)
       const crossProduct = getCrossProductProrata(planType, newPriceCentsForCycle);
       const allIdsToCancel = [currentSubscriptionId];
       let combinedCredit = creditCents;
       if (crossProduct) {
         const extraIds = crossProduct.subscriptionIdsToCancel.filter(id => id !== currentSubscriptionId);
         allIdsToCancel.push(...extraIds);
-        // Add cross-product credits, but avoid double-counting the current sub
         combinedCredit += crossProduct.creditCents - (crossProduct.subscriptionIdsToCancel.includes(currentSubscriptionId) ? creditCents : 0);
       }
       const finalProrata = Math.max(0, newPriceCentsForCycle - combinedCredit);
@@ -298,7 +355,7 @@ export default function CreditsCheckout() {
       const cancelNames = allIdsToCancel
         .map(id => activeSubs.find(s => s.id === id))
         .filter(Boolean)
-        .map(s => getPlanDisplayName(s!.plan_type))
+        .map(s => dynamicPlanName(s!.plan_type) || getPlanDisplayName(s!.plan_type))
         .join(' + ');
 
       navigate('/credits/checkout/pay', {
@@ -312,17 +369,18 @@ export default function CreditsCheckout() {
           prorataValueCents: finalProrata,
           currentSubscriptionId,
           subscriptionIdsToCancel: allIdsToCancel,
-          currentPlanName: cancelNames || getPlanDisplayName(currentPlanType) || currentPlanType,
+          currentPlanName: cancelNames || dynamicPlanName(currentPlanType) || getPlanDisplayName(currentPlanType) || currentPlanType,
+          ...(coupon.valid ? { couponCode: coupon.code } : {}),
         },
       });
     } else {
-      // No current sub in this family — check cross-product (e.g., user has transfer_5gb, selecting combo)
+      // No current sub in this family — check cross-product
       const crossProduct = getCrossProductProrata(planType, newPriceCentsForCycle);
       if (crossProduct && crossProduct.subscriptionIdsToCancel.length > 0) {
         const cancelNames = crossProduct.subscriptionIdsToCancel
           .map(id => activeSubs.find(s => s.id === id))
           .filter(Boolean)
-          .map(s => getPlanDisplayName(s!.plan_type))
+          .map(s => dynamicPlanName(s!.plan_type) || getPlanDisplayName(s!.plan_type))
           .join(' + ');
 
         navigate('/credits/checkout/pay', {
@@ -336,6 +394,7 @@ export default function CreditsCheckout() {
             prorataValueCents: crossProduct.prorataValueCents,
             subscriptionIdsToCancel: crossProduct.subscriptionIdsToCancel,
             currentPlanName: cancelNames,
+            ...(coupon.valid ? { couponCode: coupon.code } : {}),
           },
         });
       } else {
@@ -346,6 +405,7 @@ export default function CreditsCheckout() {
             planName,
             billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
             priceCents: newPriceCentsForCycle,
+            ...(coupon.valid ? { couponCode: coupon.code } : {}),
           },
         });
       }
@@ -380,6 +440,29 @@ export default function CreditsCheckout() {
 
   const newDowngradeLimitBytes = downgradeDialog ? getStorageLimitBytes(downgradeDialog.planType) : 0;
   const isOverLimitOnDowngrade = downgradeDialog ? storageUsedBytes > newDowngradeLimitBytes : false;
+
+  // Loading state
+  if (isLoadingPlans) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+          <div className="container max-w-6xl py-3 flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/credits')} className="gap-1.5">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+          </div>
+        </header>
+        <div className="container max-w-6xl py-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-96 rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -495,21 +578,34 @@ export default function CreditsCheckout() {
               <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} />
             </div>
 
+            {/* Coupon input for subscriptions */}
+            <CouponField
+              couponInput={couponInput}
+              setCouponInput={setCouponInput}
+              coupon={coupon}
+              isValidating={isValidatingCoupon}
+              onValidate={() => validateCoupon(couponInput)}
+              onClear={clearCoupon}
+            />
+
             {/* Combo cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {COMBO_PLANS.map((plan) => {
                 const priceCents = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-                const comboPlanType = plan.highlight ? 'combo_completo' : 'combo_pro_select2k';
+                const comboPlanType = plan.code || (plan.highlight ? 'combo_completo' : 'combo_pro_select2k');
                 const isCurrentCombo = isSubActiveForPlan(allSubs, comboPlanType);
                 const userHighestLevel = Math.max(...allSubs.filter(s => ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) || (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())).map(s => getPlanHierarchyLevel(s.plan_type)), 0);
                 const cardLevel = getPlanHierarchyLevel(comboPlanType);
                 const isInferiorToActive = !isCurrentCombo && userHighestLevel > cardLevel && userHighestLevel >= 100;
 
-                // Cycle upgrade detection: user has this combo on MONTHLY but viewing YEARLY
+                // Cycle upgrade detection
                 const activeComboSub = allSubs.find(s => s.plan_type === comboPlanType && ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status));
                 const currentComboCycle = activeComboSub?.billing_cycle || 'MONTHLY';
                 const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
                 const isCycleUpgrade = isCurrentCombo && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
+
+                // Apply coupon discount for display
+                const displayPrice = coupon.valid ? coupon.calculateDiscount(priceCents) : priceCents;
 
                 return (
                   <div
@@ -551,12 +647,28 @@ export default function CreditsCheckout() {
                         </li>
                       ))}
                     </ul>
-                    <p className="text-2xl font-bold text-primary mt-6">
-                      {formatPrice(priceCents)}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                      </span>
-                    </p>
+                    <div className="mt-6">
+                      {coupon.valid && displayPrice !== priceCents ? (
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground line-through">
+                            {formatPrice(priceCents)}
+                          </p>
+                          <p className="text-2xl font-bold text-primary">
+                            {formatPrice(displayPrice)}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                            </span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-2xl font-bold text-primary">
+                          {formatPrice(priceCents)}
+                          <span className="text-sm font-normal text-muted-foreground">
+                            /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                          </span>
+                        </p>
+                      )}
+                    </div>
                     {billingPeriod === 'yearly' && (
                       <p className="text-xs text-primary/80 mt-1">
                         Economize 16% em relação ao mensal
@@ -628,7 +740,7 @@ export default function CreditsCheckout() {
                   </tr>
                 </thead>
                 <tbody>
-                  {COMPARISON_ROWS.map((row, i) => (
+                  {comparisonRows.map((row, i) => (
                     <tr key={row.label} className={cn('border-b last:border-0', i % 2 === 0 && 'bg-muted/10')}>
                       <td className="px-6 py-4 font-medium text-foreground">{row.label}</td>
                       {(['avulso', 'pro', 'full'] as const).map((col) => {
@@ -666,7 +778,7 @@ export default function CreditsCheckout() {
                 <ArrowUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-foreground">
-                    Seu plano atual: <span className="text-primary">{getPlanDisplayName(currentPlanType)}</span>
+                    Seu plano atual: <span className="text-primary">{dynamicPlanName(currentPlanType) || getPlanDisplayName(currentPlanType)}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Você pagará apenas a diferença proporcional ao período restante ({daysRemaining} dias restantes).
@@ -683,35 +795,44 @@ export default function CreditsCheckout() {
             </div>
           </section>
 
+          {/* Coupon input for transfer subscriptions */}
+          <section className="container max-w-6xl pb-6 relative z-[1]">
+            <CouponField
+              couponInput={couponInput}
+              setCouponInput={setCouponInput}
+              coupon={coupon}
+              isValidating={isValidatingCoupon}
+              onValidate={() => validateCoupon(couponInput)}
+              onClear={clearCoupon}
+            />
+          </section>
+
           {/* Transfer plan cards */}
           <section className="container max-w-6xl pb-20 relative z-[1]">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {TRANSFER_PLANS.map((plan) => {
                 const effectiveBilling = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
                 const price = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
-                const altPrice = effectiveBilling === 'YEARLY' ? plan.monthlyPrice : plan.yearlyPrice;
                 const monthlyEquiv = effectiveBilling === 'YEARLY'
                   ? formatPrice(Math.round(plan.yearlyPrice / 12))
                   : null;
 
-                const planKey = `transfer_${plan.storage.toLowerCase()}`;
+                const planKey = plan.code || `transfer_${plan.storage.toLowerCase()}`;
                 const isCurrentPlan = isUpgradeMode && planKey === currentPlanType;
 
-                // Hierarchy-based downgrade: a transfer solo is ALWAYS inferior to a combo
+                // Hierarchy-based downgrade
                 const cardHierarchy = getPlanHierarchyLevel(planKey);
                 const highestActiveLevel = Math.max(
                   ...activeSubs.map(s => getPlanHierarchyLevel(s.plan_type)), 0
                 );
                 const isDowngrade = isUpgradeMode && !isCurrentPlan && highestActiveLevel > cardHierarchy;
 
-                // Prorata calculation using per-sub credit (transfer sub only) + cross-product
+                // Prorata calculation
                 let prorataValue: number | null = null;
                 let creditDisplay: number | null = null;
                 if (isUpgradeMode && !isCurrentPlan && !isDowngrade) {
                   const newPrice = effectiveBilling === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice;
-                  // Credit from current transfer sub
                   const transferCreditCents = Math.min(Math.round(currentPriceCents * (daysRemaining / totalCycleDays)), currentPriceCents);
-                  // Check cross-product (e.g. also has studio sub that overlaps if upgrading to combo)
                   const crossProduct = getCrossProductProrata(planKey, newPrice);
                   let combinedCredit = transferCreditCents;
                   if (crossProduct) {
@@ -721,6 +842,9 @@ export default function CreditsCheckout() {
                   creditDisplay = combinedCredit;
                   prorataValue = Math.max(0, newPrice - combinedCredit);
                 }
+
+                // Apply coupon discount for display
+                const displayPrice = coupon.valid ? coupon.calculateDiscount(price) : price;
 
                 return (
                   <div
@@ -756,12 +880,26 @@ export default function CreditsCheckout() {
 
                     <div className="mt-5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-3xl font-bold text-primary">
-                          {formatPrice(price)}
-                          <span className="text-sm font-normal text-muted-foreground">
-                            /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
-                          </span>
-                        </p>
+                        {coupon.valid && displayPrice !== price ? (
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground line-through">
+                              {formatPrice(price)}
+                            </p>
+                            <p className="text-3xl font-bold text-primary">
+                              {formatPrice(displayPrice)}
+                              <span className="text-sm font-normal text-muted-foreground">
+                                /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
+                              </span>
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-3xl font-bold text-primary">
+                            {formatPrice(price)}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
+                            </span>
+                          </p>
+                        )}
                         {effectiveBilling === 'YEARLY' && (
                           <Badge variant="secondary" className="text-[10px] px-2 py-0.5">
                             Até 12x sem juros
@@ -858,11 +996,13 @@ export default function CreditsCheckout() {
               const isCurrentComboCompleto = isSubActiveForPlan(allSubs, 'combo_completo');
               const comboPrice = billingPeriod === 'monthly' ? TRANSFER_COMBO.monthlyPrice : TRANSFER_COMBO.yearlyPrice;
 
-              // Cycle upgrade: user has combo_completo MONTHLY but viewing YEARLY
+              // Cycle upgrade
               const activeComboSub = allSubs.find(s => s.plan_type === 'combo_completo' && ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status));
               const currentComboCycle = activeComboSub?.billing_cycle || 'MONTHLY';
               const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
               const isCycleUpgrade = isCurrentComboCompleto && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
+
+              const displayComboPrice = coupon.valid ? coupon.calculateDiscount(comboPrice) : comboPrice;
 
               return (
                 <div className={cn(
@@ -885,12 +1025,24 @@ export default function CreditsCheckout() {
                         </Badge>
                       )}
                       <p className="text-lg font-semibold text-foreground">{TRANSFER_COMBO.name}</p>
-                      <p className="text-3xl font-bold text-primary">
-                        {formatPrice(comboPrice)}
-                        <span className="text-sm font-normal text-muted-foreground">
-                          /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                        </span>
-                      </p>
+                      {coupon.valid && displayComboPrice !== comboPrice ? (
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground line-through">{formatPrice(comboPrice)}</p>
+                          <p className="text-3xl font-bold text-primary">
+                            {formatPrice(displayComboPrice)}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                            </span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-3xl font-bold text-primary">
+                          {formatPrice(comboPrice)}
+                          <span className="text-sm font-normal text-muted-foreground">
+                            /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
+                          </span>
+                        </p>
+                      )}
                       {billingPeriod === 'yearly' && (
                         <>
                           <Badge variant="secondary" className="text-[10px] px-2 py-0.5 w-fit">
@@ -953,7 +1105,7 @@ export default function CreditsCheckout() {
               <p>
                 Seu plano será alterado para{' '}
                 <span className="font-semibold text-foreground">
-                  {downgradeDialog ? getPlanDisplayName(downgradeDialog.planType) : ''}
+                  {downgradeDialog ? (dynamicPlanName(downgradeDialog.planType) || getPlanDisplayName(downgradeDialog.planType)) : ''}
                 </span>{' '}
                 no próximo ciclo de cobrança.
               </p>
@@ -1062,6 +1214,72 @@ function BillingToggle({
           {discount}
         </Badge>
       </button>
+    </div>
+  );
+}
+
+function CouponField({
+  couponInput,
+  setCouponInput,
+  coupon,
+  isValidating,
+  onValidate,
+  onClear,
+}: {
+  couponInput: string;
+  setCouponInput: (v: string) => void;
+  coupon: { valid: boolean; code: string; discountType: string; discountValue: number; error?: string };
+  isValidating: boolean;
+  onValidate: () => void;
+  onClear: () => void;
+}) {
+  if (coupon.valid) {
+    return (
+      <div className="flex items-center justify-center gap-2">
+        <div className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2">
+          <Tag className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium text-primary">{coupon.code}</span>
+          <span className="text-xs text-muted-foreground">
+            ({coupon.discountType === 'percentage' ? `${coupon.discountValue}% off` : `R$ ${(coupon.discountValue / 100).toFixed(2)} off`})
+          </span>
+          <button
+            onClick={() => {
+              onClear();
+              setCouponInput('');
+            }}
+            className="ml-1 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center gap-2 max-w-xs">
+        <Input
+          placeholder="Cupom de desconto"
+          value={couponInput}
+          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+          onKeyDown={(e) => e.key === 'Enter' && onValidate()}
+          className="h-9 text-sm"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onValidate}
+          disabled={isValidating || !couponInput.trim()}
+          className="gap-1.5 shrink-0"
+        >
+          {isValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tag className="h-3.5 w-3.5" />}
+          Aplicar
+        </Button>
+      </div>
+      {coupon.error && (
+        <p className="text-xs text-destructive">{coupon.error}</p>
+      )}
     </div>
   );
 }

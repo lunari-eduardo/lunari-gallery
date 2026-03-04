@@ -18,7 +18,8 @@ import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getPlanDisplayName, PLAN_FAMILIES, ALL_PLAN_PRICES } from '@/lib/transferPlans';
+import { getPlanDisplayName, PLAN_FAMILIES } from '@/lib/transferPlans';
+import { useUnifiedPlans } from '@/hooks/useUnifiedPlans';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   ACTIVE: { label: 'Ativa', variant: 'default' },
@@ -39,6 +40,8 @@ export default function SubscriptionManagement() {
     reactivateSubscription,
     isReactivating,
   } = useAsaasSubscription();
+  const { getAllPlanPrices, isLoading: isLoadingPlans } = useUnifiedPlans();
+  const ALL_PLAN_PRICES = getAllPlanPrices();
 
   const formatPrice = (cents: number) =>
     (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -88,6 +91,7 @@ export default function SubscriptionManagement() {
               isCancellingDowngrade={isCancellingDowngrade}
               onReactivate={reactivateSubscription}
               isReactivating={isReactivating}
+              allPlanPrices={ALL_PLAN_PRICES}
             />
           ))}
         </div>
@@ -107,6 +111,7 @@ function SubscriptionCard({
   isCancellingDowngrade,
   onReactivate,
   isReactivating,
+  allPlanPrices,
 }: {
   subscription: AsaasSubscription;
   formatPrice: (cents: number) => string;
@@ -116,6 +121,7 @@ function SubscriptionCard({
   isCancellingDowngrade: boolean;
   onReactivate: (id: string) => Promise<any>;
   isReactivating: boolean;
+  allPlanPrices: Record<string, { monthly: number; yearly: number }>;
 }) {
   const navigate = useNavigate();
   const isCancelled = subscription.status === 'CANCELLED';
@@ -132,7 +138,7 @@ function SubscriptionCard({
   };
 
   const handleEarlyRenewal = () => {
-    const prices = ALL_PLAN_PRICES[subscription.plan_type];
+    const prices = allPlanPrices[subscription.plan_type];
     if (!prices) return;
     const priceCents = subscription.billing_cycle === 'YEARLY' ? prices.yearly : prices.monthly;
     navigate('/credits/checkout/pay', {
