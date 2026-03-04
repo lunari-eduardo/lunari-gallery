@@ -137,9 +137,8 @@ export default function CreditsCheckout() {
   // Dynamic pricing from unified_plans
   const { getPlanPrice, getPlanName: dynamicPlanName, getAllPlanPrices, getPlanIncludes, getTransferPlans, getComboPlans, isLoading: isLoadingPlans } = useUnifiedPlans();
 
-  // Coupon
-  const { coupon, isValidating: isValidatingCoupon, validateCoupon, clearCoupon } = useCouponValidation();
-  const [couponInput, setCouponInput] = useState('');
+
+
 
   // Dynamic plan prices (backward compat)
   const ALL_PLAN_PRICES = getAllPlanPrices();
