@@ -1,55 +1,57 @@
 
 
-## Plano: Unificar PLANS nas Edge Functions compartilhadas
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problema
+### Problema identificado
 
-As 4 Edge Functions de assinatura têm mapas de planos divergentes:
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-| Função | `studio_starter/pro` | `combo_pro_select2k` | Preços corretos | `monthlyPrice` |
-|---|---|---|---|---|
-| `asaas-create-subscription` | Ausentes | OK | Parcialmente | OK |
-| `asaas-upgrade-subscription` | OK | Usa `combo_studio_pro` (nome errado) | Preços diferentes | Sem `monthlyPrice` |
-| `asaas-create-payment` | Ausentes | Usa `combo_studio_pro` | Preços diferentes | Sem campo mensal |
-| `asaas-downgrade-subscription` | OK | OK | OK | OK (campo `monthly`) |
-| `asaas-webhook` | OK | OK | OK | OK |
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-Consequência: deploy do Gallery sobrescreve funções e remove planos Studio, causando erro 400 no Gestão.
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-### Correções (3 arquivos)
+### Solução
 
-**1. `asaas-create-subscription/index.ts` (linhas 13-21)**
-- Adicionar `studio_starter` e `studio_pro` ao mapa PLANS
-- Corrigir nome do `combo_completo` para "Combo Completo"
-- Adicionar comentário de sincronização
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-**2. `asaas-upgrade-subscription/index.ts` (linhas 13-22)**
-- Trocar tipo do PLANS para incluir `monthlyPrice` (necessário para upgrades mensais)
-- Adicionar `studio_starter`, `studio_pro`
-- Corrigir `combo_studio_pro` para `combo_pro_select2k`
-- Alinhar preços com os valores canônicos
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-**3. `asaas-create-payment/index.ts` (linhas 14-21)**
-- Adicionar `monthlyPrice` ao tipo
-- Adicionar `studio_starter`, `studio_pro`
-- Corrigir `combo_studio_pro` para `combo_pro_select2k`
-- Alinhar preços
+**2. Tela de processamento de pagamento (UX aprimorada)**
 
-**Mapa canônico (fonte da verdade):**
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
 ```
-studio_starter:    monthly 1490, yearly 15198
-studio_pro:        monthly 3590, yearly 36618
-transfer_5gb:      monthly 1290, yearly 12384
-transfer_20gb:     monthly 2490, yearly 23904
-transfer_50gb:     monthly 3490, yearly 33504
-transfer_100gb:    monthly 5990, yearly 57504
-combo_pro_select2k: monthly 4490, yearly 45259
-combo_completo:    monthly 6490, yearly 66198
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-`asaas-downgrade-subscription` e `asaas-webhook` ja estao corretos -- nenhuma alteracao necessaria.
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-### Redeploy
+### Arquivos a modificar
 
-Apos editar, fazer deploy das 3 funcoes alteradas.
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
