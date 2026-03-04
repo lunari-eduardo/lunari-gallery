@@ -138,7 +138,7 @@ function SubscriptionCard({
   };
 
   const handleEarlyRenewal = () => {
-    const prices = ALL_PLAN_PRICES[subscription.plan_type];
+    const prices = allPlanPrices[subscription.plan_type];
     if (!prices) return;
     const priceCents = subscription.billing_cycle === 'YEARLY' ? prices.yearly : prices.monthly;
     navigate('/credits/checkout/pay', {
