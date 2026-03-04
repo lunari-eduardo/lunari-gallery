@@ -1,45 +1,55 @@
 
 
-## Plano: Correção de Vulnerabilidades de Segurança
+## Plano: Unificar PLANS nas Edge Functions compartilhadas
 
-### Análise dos 4 Findings
+### Problema
 
-**1. `profiles` — Falso positivo (risco baixo)**
-As policies existentes são RESTRICTIVE e exigem `auth.uid() = user_id` para SELECT/INSERT/UPDATE, mais admin para SELECT all. Usuários anônimos NÃO conseguem ler a tabela. O scanner alertou sobre a ausência de uma policy explícita de deny para `anon`, mas como todas as policies são RESTRICTIVE e exigem `auth.uid()`, o acesso anônimo já é bloqueado implicitamente. Nenhuma ação necessária — marcar como ignorado.
+As 4 Edge Functions de assinatura têm mapas de planos divergentes:
 
-**2. `clientes_transacoes` — Falso positivo (risco baixo)**
-A policy `auth.uid() = user_id` para ALL já isola transações por fotógrafo. Dados financeiros são do próprio usuário, não de terceiros. Nenhuma ação necessária — marcar como ignorado.
+| Função | `studio_starter/pro` | `combo_pro_select2k` | Preços corretos | `monthlyPrice` |
+|---|---|---|---|---|
+| `asaas-create-subscription` | Ausentes | OK | Parcialmente | OK |
+| `asaas-upgrade-subscription` | OK | Usa `combo_studio_pro` (nome errado) | Preços diferentes | Sem `monthlyPrice` |
+| `asaas-create-payment` | Ausentes | Usa `combo_studio_pro` | Preços diferentes | Sem campo mensal |
+| `asaas-downgrade-subscription` | OK | OK | OK | OK (campo `monthly`) |
+| `asaas-webhook` | OK | OK | OK | OK |
 
-**3. `galerias` — Risco real, mas intencional (risco médio)**
-A policy `Public access via token for clients` permite SELECT anônimo quando `public_token IS NOT NULL`. Isso é necessário para o fluxo de cliente acessar a galeria sem login. Porém, expõe campos como `nome_cliente`, `email_cliente`, `telefone_cliente`, `preco_por_foto`.
+Consequência: deploy do Gallery sobrescreve funções e remove planos Studio, causando erro 400 no Gestão.
 
-**Solução**: Criar uma VIEW `galerias_public` que expõe APENAS os campos necessários para o cliente (id, nome_sessao, public_token, status, tipo, configurações visuais). Alterar a policy pública para usar a view. Campos PII e pricing ficam ocultos para acesso anônimo.
+### Correções (3 arquivos)
 
-**Problema**: Alterar a policy de SELECT pública na tabela `galerias` quebraria o fluxo existente do cliente (Edge Functions `gallery-access` e `client-selection` usam service role, não são afetadas). O acesso anônimo via SDK no frontend para carregar a galeria do cliente SIM seria afetado. Preciso verificar exatamente quais campos o `ClientGallery.tsx` precisa do acesso anônimo.
+**1. `asaas-create-subscription/index.ts` (linhas 13-21)**
+- Adicionar `studio_starter` e `studio_pro` ao mapa PLANS
+- Corrigir nome do `combo_completo` para "Combo Completo"
+- Adicionar comentário de sincronização
 
-**Decisão recomendada**: Restringir os campos visíveis na policy pública usando uma view com `security_invoker=on`, mantendo apenas os campos necessários para renderização do cliente (sem PII financeiro). Campos como `email_cliente`, `telefone_cliente`, `preco_por_foto` seriam excluídos da view pública.
+**2. `asaas-upgrade-subscription/index.ts` (linhas 13-22)**
+- Trocar tipo do PLANS para incluir `monthlyPrice` (necessário para upgrades mensais)
+- Adicionar `studio_starter`, `studio_pro`
+- Corrigir `combo_studio_pro` para `combo_pro_select2k`
+- Alinhar preços com os valores canônicos
 
-**4. `system_cache` — Risco CRÍTICO**
-A policy `Service role can manage cache` tem `USING (true)` para ALL. Isso significa que QUALQUER usuário autenticado pode ler as credenciais B2 (accountId, authorization token). Um atacante logado pode listar/deletar todos os arquivos do storage.
+**3. `asaas-create-payment/index.ts` (linhas 14-21)**
+- Adicionar `monthlyPrice` ao tipo
+- Adicionar `studio_starter`, `studio_pro`
+- Corrigir `combo_studio_pro` para `combo_pro_select2k`
+- Alinhar preços
 
-**Solução**: Remover a policy atual e criar uma que bloqueie todo acesso exceto service role. Como o service role bypassa RLS por padrão, a policy correta é simplesmente `USING (false)` para todos — as Edge Functions usam service role e não são afetadas.
+**Mapa canônico (fonte da verdade):**
+```
+studio_starter:    monthly 1490, yearly 15198
+studio_pro:        monthly 3590, yearly 36618
+transfer_5gb:      monthly 1290, yearly 12384
+transfer_20gb:     monthly 2490, yearly 23904
+transfer_50gb:     monthly 3490, yearly 33504
+transfer_100gb:    monthly 5990, yearly 57504
+combo_pro_select2k: monthly 4490, yearly 45259
+combo_completo:    monthly 6490, yearly 66198
+```
 
-### Plano de Implementação
+`asaas-downgrade-subscription` e `asaas-webhook` ja estao corretos -- nenhuma alteracao necessaria.
 
-**Migração SQL única:**
+### Redeploy
 
-1. **system_cache**: Dropar policy `Service role can manage cache` e criar nova com `USING (false)` — bloqueia acesso de qualquer role exceto service role (que bypassa RLS).
+Apos editar, fazer deploy das 3 funcoes alteradas.
 
-2. **galerias**: Criar VIEW `galerias_public` com apenas os campos necessários para o cliente. Dropar policy `Public access via token for clients` da tabela base. Criar policy equivalente na view (ou manter acesso via Edge Functions que já usam service role).
-
-3. **Marcar findings resolvidos/ignorados** via manage_security_finding.
-
-### Arquivos-alvo
-
-- Nova migração SQL (system_cache + galerias view)
-- Possível ajuste em `src/pages/ClientGallery.tsx` se usar acesso anônimo direto à tabela `galerias`
-
-### Risco
-
-- **system_cache**: Zero risco de regressão — Edge Functions usam service role.
-- **galerias view**: Preciso verificar se o frontend faz query anônima direta à tabela `galerias` ou se tudo passa pela Edge Function `gallery-access`. Se passar pela EF, a view não é necessária e basta restringir a policy.
