@@ -396,7 +396,8 @@ export default function CreditsCheckout() {
             prorataValueCents: crossProduct.prorataValueCents,
             subscriptionIdsToCancel: crossProduct.subscriptionIdsToCancel,
             currentPlanName: cancelNames,
-            ...(coupon.valid ? { couponCode: coupon.code } : {}),
+
+
           },
         });
       } else {
