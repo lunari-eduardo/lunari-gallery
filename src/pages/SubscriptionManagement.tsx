@@ -91,6 +91,7 @@ export default function SubscriptionManagement() {
               isCancellingDowngrade={isCancellingDowngrade}
               onReactivate={reactivateSubscription}
               isReactivating={isReactivating}
+              allPlanPrices={ALL_PLAN_PRICES}
             />
           ))}
         </div>
