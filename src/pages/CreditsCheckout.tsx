@@ -981,24 +981,12 @@ export default function CreditsCheckout() {
                         </Badge>
                       )}
                       <p className="text-lg font-semibold text-foreground">{TRANSFER_COMBO.name}</p>
-                      {coupon.valid && displayComboPrice !== comboPrice ? (
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground line-through">{formatPrice(comboPrice)}</p>
-                          <p className="text-3xl font-bold text-primary">
-                            {formatPrice(displayComboPrice)}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                            </span>
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-3xl font-bold text-primary">
+                      <p className="text-3xl font-bold text-primary">
                           {formatPrice(comboPrice)}
                           <span className="text-sm font-normal text-muted-foreground">
                             /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
                           </span>
                         </p>
-                      )}
                       {billingPeriod === 'yearly' && (
                         <>
                           <Badge variant="secondary" className="text-[10px] px-2 py-0.5 w-fit">
