@@ -4,7 +4,7 @@ import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { useAsaasSubscription, AsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { useUnifiedPlans } from '@/hooks/useUnifiedPlans';
-import { useCouponValidation } from '@/hooks/useCouponValidation';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,8 +34,6 @@ import {
   ArrowDown,
   AlertTriangle,
   Loader2,
-  Tag,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -139,9 +137,8 @@ export default function CreditsCheckout() {
   // Dynamic pricing from unified_plans
   const { getPlanPrice, getPlanName: dynamicPlanName, getAllPlanPrices, getPlanIncludes, getTransferPlans, getComboPlans, isLoading: isLoadingPlans } = useUnifiedPlans();
 
-  // Coupon
-  const { coupon, isValidating: isValidatingCoupon, validateCoupon, clearCoupon } = useCouponValidation();
-  const [couponInput, setCouponInput] = useState('');
+
+
 
   // Dynamic plan prices (backward compat)
   const ALL_PLAN_PRICES = getAllPlanPrices();
@@ -212,8 +209,11 @@ export default function CreditsCheckout() {
   const hasActiveTransferSub = !!transferSub && (transferSub.status === 'ACTIVE' || transferSub.status === 'PENDING' || transferSub.status === 'OVERDUE') && activeTab === 'transfer';
   const isUpgradeMode = urlUpgradeMode || hasActiveTransferSub;
 
-  // All active subs for cross-product detection
-  const activeSubs = allSubs.filter(s => s.status === 'ACTIVE' || s.status === 'PENDING' || s.status === 'OVERDUE');
+  // All active subs for cross-product detection (include CANCELLED with future next_due_date)
+  const activeSubs = allSubs.filter(s =>
+    ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) ||
+    (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())
+  );
 
   // For transfer tab, the "current" sub is the transfer sub specifically
   const currentPlanType = activeTab === 'transfer'
@@ -331,7 +331,8 @@ export default function CreditsCheckout() {
           currentSubscriptionId: existingSubForPlan.id,
           subscriptionIdsToCancel: [existingSubForPlan.id],
           currentPlanName: dynamicPlanName(existingSubForPlan.plan_type) || getPlanDisplayName(existingSubForPlan.plan_type) || existingSubForPlan.plan_type,
-          ...(coupon.valid ? { couponCode: coupon.code } : {}),
+
+
         },
       });
       return;
@@ -370,7 +371,8 @@ export default function CreditsCheckout() {
           currentSubscriptionId,
           subscriptionIdsToCancel: allIdsToCancel,
           currentPlanName: cancelNames || dynamicPlanName(currentPlanType) || getPlanDisplayName(currentPlanType) || currentPlanType,
-          ...(coupon.valid ? { couponCode: coupon.code } : {}),
+
+
         },
       });
     } else {
@@ -394,7 +396,8 @@ export default function CreditsCheckout() {
             prorataValueCents: crossProduct.prorataValueCents,
             subscriptionIdsToCancel: crossProduct.subscriptionIdsToCancel,
             currentPlanName: cancelNames,
-            ...(coupon.valid ? { couponCode: coupon.code } : {}),
+
+
           },
         });
       } else {
@@ -405,7 +408,7 @@ export default function CreditsCheckout() {
             planName,
             billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
             priceCents: newPriceCentsForCycle,
-            ...(coupon.valid ? { couponCode: coupon.code } : {}),
+            
           },
         });
       }
@@ -578,15 +581,7 @@ export default function CreditsCheckout() {
               <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} />
             </div>
 
-            {/* Coupon input for subscriptions */}
-            <CouponField
-              couponInput={couponInput}
-              setCouponInput={setCouponInput}
-              coupon={coupon}
-              isValidating={isValidatingCoupon}
-              onValidate={() => validateCoupon(couponInput)}
-              onClear={clearCoupon}
-            />
+
 
             {/* Combo cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -604,8 +599,7 @@ export default function CreditsCheckout() {
                 const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
                 const isCycleUpgrade = isCurrentCombo && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
 
-                // Apply coupon discount for display
-                const displayPrice = coupon.valid ? coupon.calculateDiscount(priceCents) : priceCents;
+                const displayPrice = priceCents;
 
                 return (
                   <div
@@ -648,26 +642,12 @@ export default function CreditsCheckout() {
                       ))}
                     </ul>
                     <div className="mt-6">
-                      {coupon.valid && displayPrice !== priceCents ? (
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground line-through">
-                            {formatPrice(priceCents)}
-                          </p>
-                          <p className="text-2xl font-bold text-primary">
-                            {formatPrice(displayPrice)}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                            </span>
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-2xl font-bold text-primary">
+                      <p className="text-2xl font-bold text-primary">
                           {formatPrice(priceCents)}
                           <span className="text-sm font-normal text-muted-foreground">
                             /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
                           </span>
                         </p>
-                      )}
                     </div>
                     {billingPeriod === 'yearly' && (
                       <p className="text-xs text-primary/80 mt-1">
@@ -795,17 +775,8 @@ export default function CreditsCheckout() {
             </div>
           </section>
 
-          {/* Coupon input for transfer subscriptions */}
-          <section className="container max-w-6xl pb-6 relative z-[1]">
-            <CouponField
-              couponInput={couponInput}
-              setCouponInput={setCouponInput}
-              coupon={coupon}
-              isValidating={isValidatingCoupon}
-              onValidate={() => validateCoupon(couponInput)}
-              onClear={clearCoupon}
-            />
-          </section>
+
+
 
           {/* Transfer plan cards */}
           <section className="container max-w-6xl pb-20 relative z-[1]">
@@ -843,8 +814,7 @@ export default function CreditsCheckout() {
                   prorataValue = Math.max(0, newPrice - combinedCredit);
                 }
 
-                // Apply coupon discount for display
-                const displayPrice = coupon.valid ? coupon.calculateDiscount(price) : price;
+                const displayPrice = price;
 
                 return (
                   <div
@@ -880,26 +850,12 @@ export default function CreditsCheckout() {
 
                     <div className="mt-5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {coupon.valid && displayPrice !== price ? (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground line-through">
-                              {formatPrice(price)}
-                            </p>
-                            <p className="text-3xl font-bold text-primary">
-                              {formatPrice(displayPrice)}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
-                              </span>
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-3xl font-bold text-primary">
+                        <p className="text-3xl font-bold text-primary">
                             {formatPrice(price)}
                             <span className="text-sm font-normal text-muted-foreground">
                               /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
                             </span>
                           </p>
-                        )}
                         {effectiveBilling === 'YEARLY' && (
                           <Badge variant="secondary" className="text-[10px] px-2 py-0.5">
                             Até 12x sem juros
@@ -1002,7 +958,7 @@ export default function CreditsCheckout() {
               const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
               const isCycleUpgrade = isCurrentComboCompleto && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
 
-              const displayComboPrice = coupon.valid ? coupon.calculateDiscount(comboPrice) : comboPrice;
+              
 
               return (
                 <div className={cn(
@@ -1025,24 +981,12 @@ export default function CreditsCheckout() {
                         </Badge>
                       )}
                       <p className="text-lg font-semibold text-foreground">{TRANSFER_COMBO.name}</p>
-                      {coupon.valid && displayComboPrice !== comboPrice ? (
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground line-through">{formatPrice(comboPrice)}</p>
-                          <p className="text-3xl font-bold text-primary">
-                            {formatPrice(displayComboPrice)}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                            </span>
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-3xl font-bold text-primary">
+                      <p className="text-3xl font-bold text-primary">
                           {formatPrice(comboPrice)}
                           <span className="text-sm font-normal text-muted-foreground">
                             /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
                           </span>
                         </p>
-                      )}
                       {billingPeriod === 'yearly' && (
                         <>
                           <Badge variant="secondary" className="text-[10px] px-2 py-0.5 w-fit">
@@ -1218,68 +1162,3 @@ function BillingToggle({
   );
 }
 
-function CouponField({
-  couponInput,
-  setCouponInput,
-  coupon,
-  isValidating,
-  onValidate,
-  onClear,
-}: {
-  couponInput: string;
-  setCouponInput: (v: string) => void;
-  coupon: { valid: boolean; code: string; discountType: string; discountValue: number; error?: string };
-  isValidating: boolean;
-  onValidate: () => void;
-  onClear: () => void;
-}) {
-  if (coupon.valid) {
-    return (
-      <div className="flex items-center justify-center gap-2">
-        <div className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2">
-          <Tag className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-primary">{coupon.code}</span>
-          <span className="text-xs text-muted-foreground">
-            ({coupon.discountType === 'percentage' ? `${coupon.discountValue}% off` : `R$ ${(coupon.discountValue / 100).toFixed(2)} off`})
-          </span>
-          <button
-            onClick={() => {
-              onClear();
-              setCouponInput('');
-            }}
-            className="ml-1 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-center gap-2">
-      <div className="flex items-center gap-2 max-w-xs">
-        <Input
-          placeholder="Cupom de desconto"
-          value={couponInput}
-          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === 'Enter' && onValidate()}
-          className="h-9 text-sm"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onValidate}
-          disabled={isValidating || !couponInput.trim()}
-          className="gap-1.5 shrink-0"
-        >
-          {isValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tag className="h-3.5 w-3.5" />}
-          Aplicar
-        </Button>
-      </div>
-      {coupon.error && (
-        <p className="text-xs text-destructive">{coupon.error}</p>
-      )}
-    </div>
-  );
-}
