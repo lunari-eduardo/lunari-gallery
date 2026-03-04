@@ -111,6 +111,7 @@ function SubscriptionCard({
   isCancellingDowngrade,
   onReactivate,
   isReactivating,
+  allPlanPrices,
 }: {
   subscription: AsaasSubscription;
   formatPrice: (cents: number) => string;
@@ -120,6 +121,7 @@ function SubscriptionCard({
   isCancellingDowngrade: boolean;
   onReactivate: (id: string) => Promise<any>;
   isReactivating: boolean;
+  allPlanPrices: Record<string, { monthly: number; yearly: number }>;
 }) {
   const navigate = useNavigate();
   const isCancelled = subscription.status === 'CANCELLED';
