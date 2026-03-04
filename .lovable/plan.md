@@ -1,57 +1,74 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Plano: Checkout Premium com Wizard por Etapas + Correção de Bloqueios
 
-### Problema identificado
+### Problema atual
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+1. **UX quebrada**: No `CreditsPayment.tsx`, o seletor de parcelamento (Forma de Pagamento) aparece ANTES dos dados pessoais. O formulário `CardCheckoutForm` tem steps internos (`personal` → `card`), mas as parcelas ficam fora dele, no `SubscriptionForm`.
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
-
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+2. **Bug de bloqueio**: `activeSubs` (linha 216 do `CreditsCheckout.tsx`) filtra apenas `ACTIVE | PENDING | OVERDUE`, ignorando assinaturas `CANCELLED` com `next_due_date` futuro. Isso permite que o usuário compre um plano inferior durante período vigente de uma assinatura cancelada.
 
 ### Solução
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+#### 1. Refatorar `CreditsPayment.tsx` — Wizard de 3 Etapas
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+Substituir o fluxo atual por um wizard unificado com step indicator visual (referência: imagem 1):
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```text
+Etapa 1: Dados Pessoais          Etapa 2: Pagamento               Etapa 3: Revisão
+─────────────────────            ──────────────────                ──────────────
+Nome completo                    [Select] PIX / Cartão toggle     Resumo do pedido
+CPF ou CNPJ                      [Assin.] À vista / Parcelado     Campo de cupom
+E-mail (disabled)                  └ Seletor de parcelas          Preço original (riscado)
+Telefone                         Dados do cartão (se cartão)      Preço com desconto
+CEP                              Número, Nome, Val, CVV           Botão "Confirmar pagamento"
+                                                                  
+[Próximo →]                      [← Voltar] [Próximo →]           [← Voltar] [Pagar R$ XX]
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+**Sidebar (desktop)** / **Bottom card (mobile)**: `OrderSummary` com sticky positioning, atualizado em tempo real conforme cupom e parcelas.
+
+Componente `StepIndicator`: círculos numerados 1-2-3 com labels "Dados", "Pagamento", "Revisão", conectados por linhas, step ativo em primary color.
+
+O `CardCheckoutForm` atual (steps `personal` e `card`) será absorvido pelo wizard — os steps internos deixam de existir.
+
+#### 2. Mover cupom para Etapa 3 (Revisão)
+
+Atualmente o cupom está na página de seleção de planos (`CreditsCheckout.tsx`). No novo fluxo:
+- **Remover** `CouponField` do `CreditsCheckout.tsx`
+- **Adicionar** campo de cupom na Etapa 3 do wizard em `CreditsPayment.tsx`
+- Passar `couponCode` no body da Edge Function junto com o pagamento
+- Atualizar `OrderSummary` para exibir desconto aplicado
+
+#### 3. Corrigir `activeSubs` no `CreditsCheckout.tsx`
+
+Linha 216: incluir assinaturas canceladas com período vigente:
+```typescript
+const activeSubs = allSubs.filter(s => 
+  ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) ||
+  (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())
+);
+```
+
+Isso garante que o `highestActiveLevel` (usado para bloquear downgrades na aba Transfer, linha 825) e `getOverlappingSubs` (prorata) considerem corretamente planos cancelados mas ainda vigentes.
+
+#### 4. Select (créditos avulsos) — mesmo wizard
+
+Para compra de créditos avulsos via PIX: Etapa 1 pede só email → Etapa 2 mostra QR code.
+Para compra via Cartão: Etapa 1 dados pessoais → Etapa 2 dados do cartão → Etapa 3 revisão.
 
 ### Arquivos a modificar
 
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/CreditsPayment.tsx` | Reescrever com wizard 3 etapas, step indicator, cupom na etapa 3, sidebar sticky |
+| `src/pages/CreditsCheckout.tsx` | Corrigir `activeSubs` (linha 216). Remover `CouponField` dos cards. Passar sem cupom no state (cupom migra pro payment) |
+| `src/hooks/useCouponValidation.ts` | Sem alteração (já pronto) |
 
-### Fluxo corrigido
+### Regras mantidas
 
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+- Bloqueio de plano inferior/igual funciona via `getPlanHierarchyLevel` + `isSubActiveForPlan` (já considera cancelled vigente)
+- Parcelamento: mínimo R$5/parcela, renovação automática (1x) vs manual (2-12x)
+- Upgrade cross-product: prorata acumulado de múltiplas assinaturas
+- Cycle upgrade: mensal→anual do mesmo plano
 
