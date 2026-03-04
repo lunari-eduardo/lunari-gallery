@@ -4,7 +4,7 @@ import { useCreditPackages, CreditPackage } from '@/hooks/useCreditPackages';
 import { useAsaasSubscription, AsaasSubscription } from '@/hooks/useAsaasSubscription';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { useUnifiedPlans } from '@/hooks/useUnifiedPlans';
-import { useCouponValidation } from '@/hooks/useCouponValidation';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
