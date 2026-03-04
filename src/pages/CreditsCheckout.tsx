@@ -408,7 +408,7 @@ export default function CreditsCheckout() {
             planName,
             billingCycle: selectedCycle as 'MONTHLY' | 'YEARLY',
             priceCents: newPriceCentsForCycle,
-            ...(coupon.valid ? { couponCode: coupon.code } : {}),
+            
           },
         });
       }
