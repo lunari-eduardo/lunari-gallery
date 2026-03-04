@@ -642,26 +642,12 @@ export default function CreditsCheckout() {
                       ))}
                     </ul>
                     <div className="mt-6">
-                      {coupon.valid && displayPrice !== priceCents ? (
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground line-through">
-                            {formatPrice(priceCents)}
-                          </p>
-                          <p className="text-2xl font-bold text-primary">
-                            {formatPrice(displayPrice)}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
-                            </span>
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-2xl font-bold text-primary">
+                      <p className="text-2xl font-bold text-primary">
                           {formatPrice(priceCents)}
                           <span className="text-sm font-normal text-muted-foreground">
                             /{billingPeriod === 'monthly' ? 'mês' : 'ano'}
                           </span>
                         </p>
-                      )}
                     </div>
                     {billingPeriod === 'yearly' && (
                       <p className="text-xs text-primary/80 mt-1">
