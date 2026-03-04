@@ -581,15 +581,7 @@ export default function CreditsCheckout() {
               <BillingToggle billingPeriod={billingPeriod} onChange={setBillingPeriod} />
             </div>
 
-            {/* Coupon input for subscriptions */}
-            <CouponField
-              couponInput={couponInput}
-              setCouponInput={setCouponInput}
-              coupon={coupon}
-              isValidating={isValidatingCoupon}
-              onValidate={() => validateCoupon(couponInput)}
-              onClear={clearCoupon}
-            />
+
 
             {/* Combo cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
