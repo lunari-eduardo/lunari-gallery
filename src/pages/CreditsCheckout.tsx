@@ -814,8 +814,7 @@ export default function CreditsCheckout() {
                   prorataValue = Math.max(0, newPrice - combinedCredit);
                 }
 
-                // Apply coupon discount for display
-                const displayPrice = coupon.valid ? coupon.calculateDiscount(price) : price;
+                const displayPrice = price;
 
                 return (
                   <div
