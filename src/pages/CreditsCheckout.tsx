@@ -331,7 +331,8 @@ export default function CreditsCheckout() {
           currentSubscriptionId: existingSubForPlan.id,
           subscriptionIdsToCancel: [existingSubForPlan.id],
           currentPlanName: dynamicPlanName(existingSubForPlan.plan_type) || getPlanDisplayName(existingSubForPlan.plan_type) || existingSubForPlan.plan_type,
-          ...(coupon.valid ? { couponCode: coupon.code } : {}),
+
+
         },
       });
       return;
