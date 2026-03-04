@@ -711,6 +711,57 @@ export type Database = {
           },
         ]
       }
+      coupons: {
+        Row: {
+          applies_to: string
+          code: string
+          created_at: string
+          current_uses: number
+          description: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          plan_codes: string[] | null
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          applies_to?: string
+          code: string
+          created_at?: string
+          current_uses?: number
+          description?: string | null
+          discount_type?: string
+          discount_value: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan_codes?: string[] | null
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          applies_to?: string
+          code?: string
+          created_at?: string
+          current_uses?: number
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan_codes?: string[] | null
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       credit_ledger: {
         Row: {
           amount: number
