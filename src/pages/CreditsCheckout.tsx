@@ -850,26 +850,12 @@ export default function CreditsCheckout() {
 
                     <div className="mt-5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {coupon.valid && displayPrice !== price ? (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground line-through">
-                              {formatPrice(price)}
-                            </p>
-                            <p className="text-3xl font-bold text-primary">
-                              {formatPrice(displayPrice)}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
-                              </span>
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-3xl font-bold text-primary">
+                        <p className="text-3xl font-bold text-primary">
                             {formatPrice(price)}
                             <span className="text-sm font-normal text-muted-foreground">
                               /{effectiveBilling === 'YEARLY' ? 'ano' : 'mês'}
                             </span>
                           </p>
-                        )}
                         {effectiveBilling === 'YEARLY' && (
                           <Badge variant="secondary" className="text-[10px] px-2 py-0.5">
                             Até 12x sem juros
