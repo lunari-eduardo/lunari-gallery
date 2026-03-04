@@ -18,7 +18,8 @@ import { ArrowLeft, Loader2, CreditCard, CalendarDays, AlertTriangle, ArrowRight
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getPlanDisplayName, PLAN_FAMILIES, ALL_PLAN_PRICES } from '@/lib/transferPlans';
+import { getPlanDisplayName, PLAN_FAMILIES } from '@/lib/transferPlans';
+import { useUnifiedPlans } from '@/hooks/useUnifiedPlans';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   ACTIVE: { label: 'Ativa', variant: 'default' },
