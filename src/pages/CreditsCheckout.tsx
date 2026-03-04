@@ -212,8 +212,11 @@ export default function CreditsCheckout() {
   const hasActiveTransferSub = !!transferSub && (transferSub.status === 'ACTIVE' || transferSub.status === 'PENDING' || transferSub.status === 'OVERDUE') && activeTab === 'transfer';
   const isUpgradeMode = urlUpgradeMode || hasActiveTransferSub;
 
-  // All active subs for cross-product detection
-  const activeSubs = allSubs.filter(s => s.status === 'ACTIVE' || s.status === 'PENDING' || s.status === 'OVERDUE');
+  // All active subs for cross-product detection (include CANCELLED with future next_due_date)
+  const activeSubs = allSubs.filter(s =>
+    ['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status) ||
+    (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date())
+  );
 
   // For transfer tab, the "current" sub is the transfer sub specifically
   const currentPlanType = activeTab === 'transfer'
