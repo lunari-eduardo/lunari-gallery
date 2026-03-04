@@ -371,7 +371,8 @@ export default function CreditsCheckout() {
           currentSubscriptionId,
           subscriptionIdsToCancel: allIdsToCancel,
           currentPlanName: cancelNames || dynamicPlanName(currentPlanType) || getPlanDisplayName(currentPlanType) || currentPlanType,
-          ...(coupon.valid ? { couponCode: coupon.code } : {}),
+
+
         },
       });
     } else {
