@@ -1,57 +1,78 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Plano: Migrar preços para `unified_plans` + Suporte a cupons
 
-### Problema identificado
+### Escopo
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+Três entregáveis:
+1. **Hook `useUnifiedPlans`** — lê `unified_plans` do Supabase, substitui todas as constantes hardcoded
+2. **Refatorar `transferPlans.ts`** — manter funções utilitárias mas alimentar dados do banco
+3. **Hook `useCouponValidation`** + campo de cupom no checkout
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+### Dados confirmados no banco
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+- `unified_plans`: 8 planos ativos, RLS `SELECT` para `public` (anon OK). Transfer_5gb já tem `monthly_price_cents: 1090` (diferente do hardcoded 1290) — confirmando que o admin já editou e o frontend não reflete.
+- `coupons`: tabela existente com `code`, `discount_type`, `discount_value`, `applies_to`, `plan_codes[]`, `max_uses`, `current_uses`, `valid_from`, `valid_until`, `is_active`. RLS SELECT para authenticated (active only).
+- `gallery_credit_packages`: já é lida dinamicamente via `useCreditPackages` — OK.
 
-### Solução
+### 1. Criar `src/hooks/useUnifiedPlans.ts`
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
-
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```typescript
+// Query unified_plans com useQuery, staleTime 5min
+// Exporta:
+//   plans: UnifiedPlan[]
+//   getPlanPrice(code, 'monthly'|'yearly'): number
+//   getPlanName(code): string
+//   getPlanByCode(code): UnifiedPlan | undefined
+//   allPlanPrices: Record<string, {monthly, yearly}>  // backward-compat
+//   isLoading: boolean
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+Fallback: se query falhar, usa valores hardcoded atuais de `transferPlans.ts` (renomeados para `FALLBACK_*`).
 
-### Arquivos a modificar
+### 2. Refatorar `src/lib/transferPlans.ts`
 
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+- Renomear constantes exportadas para `FALLBACK_PLAN_PRICES`, `FALLBACK_PLAN_NAMES`, etc.
+- Manter todas as funções utilitárias (`formatStorageSize`, `getPlanHierarchyLevel`, `isSubActiveForPlan`, `getHighestActivePlan`) — estas não dependem de preços.
+- Funções que dependem de preços (`getPlanDisplayName`) ganham overload que aceita dados dinâmicos.
+- `TRANSFER_STORAGE_LIMITS`, `PLAN_FAMILIES`, `PLAN_INCLUDES` passam a ser computados do banco quando disponíveis.
 
-### Fluxo corrigido
+### 3. Atualizar consumidores (4 arquivos)
 
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
+| Arquivo | Mudança |
+|---|---|
+| `CreditsCheckout.tsx` | Usar `useUnifiedPlans()` em vez de constantes. `TRANSFER_PLANS` e `COMBO_PLANS` computados dos dados do banco. Loading skeleton enquanto carrega. |
+| `Credits.tsx` | Preços dos cards combo (`R$ 44,90`, `R$ 64,90`) vêm do hook em vez de hardcoded. |
+| `SubscriptionManagement.tsx` | `ALL_PLAN_PRICES[plan_type]` → `getPlanPrice(plan_type, cycle)` do hook. |
+| `useAsaasSubscription.ts` | `PLAN_FAMILIES`, `PLAN_INCLUDES` — manter import do transferPlans (dados estáticos de hierarchy/family). |
+
+### 4. Criar `src/hooks/useCouponValidation.ts`
+
+```typescript
+// validateCoupon(code, planCode?, productFamily?): Promise<CouponResult>
+// Faz query na tabela coupons verificando:
+//   is_active, valid_from <= now, valid_until >= now (ou null)
+//   max_uses > current_uses (ou null)
+//   applies_to matches ('all' | 'plan' | 'product_family')
+//   plan_codes contains planCode (se applies_to === 'plan')
+// Retorna: { valid, discountType, discountValue, calculateDiscount(cents) }
 ```
+
+### 5. Campo de cupom no checkout (`CreditsCheckout.tsx`)
+
+- Input "Cupom" antes do botão de assinar (apenas para assinaturas, não avulsos)
+- Ao digitar e clicar "Aplicar": chama `validateCoupon(code, planType, family)`
+- Se válido: mostra preço original riscado + preço com desconto
+- Envia `couponCode` no state para `CreditsPayment.tsx` → body da Edge Function
+
+### Sem alterações
+
+- Edge Functions (já leem do banco)
+- Tabelas/migrações (tabelas já existem)
+- Painel admin (gerenciado no Gestão)
+
+### Riscos
+
+- Nenhum — RLS já permite leitura pública de `unified_plans` e autenticada de `coupons`
+- Fallback hardcoded garante que o app funciona mesmo se a query falhar
 
