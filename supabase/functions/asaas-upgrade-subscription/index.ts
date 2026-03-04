@@ -1,3 +1,4 @@
+// Unified edge function — shared between Gestão & Gallery. Keep PLANS map in sync.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
