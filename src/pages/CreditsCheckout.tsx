@@ -775,17 +775,8 @@ export default function CreditsCheckout() {
             </div>
           </section>
 
-          {/* Coupon input for transfer subscriptions */}
-          <section className="container max-w-6xl pb-6 relative z-[1]">
-            <CouponField
-              couponInput={couponInput}
-              setCouponInput={setCouponInput}
-              coupon={coupon}
-              isValidating={isValidatingCoupon}
-              onValidate={() => validateCoupon(couponInput)}
-              onClear={clearCoupon}
-            />
-          </section>
+
+
 
           {/* Transfer plan cards */}
           <section className="container max-w-6xl pb-20 relative z-[1]">
