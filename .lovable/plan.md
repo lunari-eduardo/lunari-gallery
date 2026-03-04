@@ -1,83 +1,45 @@
 
 
-## Plano: Corrigir estorno de créditos ao excluir foto no upload
+## Plano: Correção de Vulnerabilidades de Segurança
 
-### Problema
+### Análise dos 4 Findings
 
-1. **Estorno no bucket errado**: `handleDeleteUploadedPhoto` (GalleryCreate.tsx:201-216) sempre incrementa `photo_credits` (avulsos), mas o consumo via `consume_photo_credits` debita `credits_subscription` primeiro. Resultado: créditos de assinatura são consumidos mas nunca devolvidos; créditos avulsos inflam artificialmente.
+**1. `profiles` — Falso positivo (risco baixo)**
+As policies existentes são RESTRICTIVE e exigem `auth.uid() = user_id` para SELECT/INSERT/UPDATE, mais admin para SELECT all. Usuários anônimos NÃO conseguem ler a tabela. O scanner alertou sobre a ausência de uma policy explícita de deny para `anon`, mas como todas as policies são RESTRICTIVE e exigem `auth.uid()`, o acesso anônimo já é bloqueado implicitamente. Nenhuma ação necessária — marcar como ignorado.
 
-2. **Cache stale**: `refetchCredits()` é chamado no hook de GalleryCreate, mas o `PhotoUploader` tem sua própria instância de `usePhotoCredits()` com `staleTime: 10s`. O número exibido ("X créditos disponíveis") não atualiza imediatamente. Precisa usar `queryClient.invalidateQueries` para forçar refetch em todas as instâncias.
+**2. `clientes_transacoes` — Falso positivo (risco baixo)**
+A policy `auth.uid() = user_id` para ALL já isola transações por fotógrafo. Dados financeiros são do próprio usuário, não de terceiros. Nenhuma ação necessária — marcar como ignorado.
 
-### Solução
+**3. `galerias` — Risco real, mas intencional (risco médio)**
+A policy `Public access via token for clients` permite SELECT anônimo quando `public_token IS NOT NULL`. Isso é necessário para o fluxo de cliente acessar a galeria sem login. Porém, expõe campos como `nome_cliente`, `email_cliente`, `telefone_cliente`, `preco_por_foto`.
 
-**A) Criar RPC `refund_photo_credit` no banco** (nova migração SQL)
+**Solução**: Criar uma VIEW `galerias_public` que expõe APENAS os campos necessários para o cliente (id, nome_sessao, public_token, status, tipo, configurações visuais). Alterar a policy pública para usar a view. Campos PII e pricing ficam ocultos para acesso anônimo.
 
-```sql
-CREATE OR REPLACE FUNCTION refund_photo_credit(_user_id UUID)
-RETURNS VOID
-LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE
-  sub_balance INTEGER;
-  sub_cap INTEGER;
-BEGIN
-  SELECT COALESCE(credits_subscription, 0)
-  INTO sub_balance
-  FROM photographer_accounts
-  WHERE user_id = _user_id FOR UPDATE;
+**Problema**: Alterar a policy de SELECT pública na tabela `galerias` quebraria o fluxo existente do cliente (Edge Functions `gallery-access` e `client-selection` usam service role, não são afetadas). O acesso anônimo via SDK no frontend para carregar a galeria do cliente SIM seria afetado. Preciso verificar exatamente quais campos o `ClientGallery.tsx` precisa do acesso anônimo.
 
-  -- Determine subscription cap from active combo plan
-  SELECT CASE sa.plan_type
-    WHEN 'combo_pro_select2k' THEN 2000
-    WHEN 'combo_completo' THEN 2000
-    ELSE 0
-  END INTO sub_cap
-  FROM subscriptions_asaas sa
-  WHERE sa.user_id = _user_id
-    AND sa.status IN ('ACTIVE','PENDING','OVERDUE')
-    AND sa.plan_type IN ('combo_pro_select2k','combo_completo')
-  LIMIT 1;
+**Decisão recomendada**: Restringir os campos visíveis na policy pública usando uma view com `security_invoker=on`, mantendo apenas os campos necessários para renderização do cliente (sem PII financeiro). Campos como `email_cliente`, `telefone_cliente`, `preco_por_foto` seriam excluídos da view pública.
 
-  sub_cap := COALESCE(sub_cap, 0);
+**4. `system_cache` — Risco CRÍTICO**
+A policy `Service role can manage cache` tem `USING (true)` para ALL. Isso significa que QUALQUER usuário autenticado pode ler as credenciais B2 (accountId, authorization token). Um atacante logado pode listar/deletar todos os arquivos do storage.
 
-  -- Refund to subscription bucket if below cap, else to purchased
-  IF sub_balance < sub_cap THEN
-    UPDATE photographer_accounts
-    SET credits_subscription = credits_subscription + 1,
-        credits_consumed_total = GREATEST(0, COALESCE(credits_consumed_total,0) - 1),
-        updated_at = NOW()
-    WHERE user_id = _user_id;
-  ELSE
-    UPDATE photographer_accounts
-    SET photo_credits = photo_credits + 1,
-        credits_consumed_total = GREATEST(0, COALESCE(credits_consumed_total,0) - 1),
-        updated_at = NOW()
-    WHERE user_id = _user_id;
-  END IF;
-END;
-$$;
-```
+**Solução**: Remover a policy atual e criar uma que bloqueie todo acesso exceto service role. Como o service role bypassa RLS por padrão, a policy correta é simplesmente `USING (false)` para todos — as Edge Functions usam service role e não são afetadas.
 
-Lógica: se `credits_subscription` está abaixo do teto do plano, o crédito foi originalmente consumido daí — devolve para lá. Caso contrário, devolve para `photo_credits`.
+### Plano de Implementação
 
-**B) Atualizar `handleDeleteUploadedPhoto` em GalleryCreate.tsx**
+**Migração SQL única:**
 
-Substituir o bloco manual de UPDATE (linhas 202-216) por chamada ao RPC:
-```typescript
-await supabase.rpc('refund_photo_credit', { _user_id: user.id });
-```
+1. **system_cache**: Dropar policy `Service role can manage cache` e criar nova com `USING (false)` — bloqueia acesso de qualquer role exceto service role (que bypassa RLS).
 
-**C) Invalidar cache corretamente**
+2. **galerias**: Criar VIEW `galerias_public` com apenas os campos necessários para o cliente. Dropar policy `Public access via token for clients` da tabela base. Criar policy equivalente na view (ou manter acesso via Edge Functions que já usam service role).
 
-Substituir `refetchCredits()` por:
-```typescript
-queryClient.invalidateQueries({ queryKey: ['photo-credits'] });
-```
+3. **Marcar findings resolvidos/ignorados** via manage_security_finding.
 
-Isso força refetch imediato em todas as instâncias (incluindo PhotoUploader).
+### Arquivos-alvo
 
-### Arquivos modificados
+- Nova migração SQL (system_cache + galerias view)
+- Possível ajuste em `src/pages/ClientGallery.tsx` se usar acesso anônimo direto à tabela `galerias`
 
-1. **Nova migração SQL** — criar função `refund_photo_credit`
-2. **`src/pages/GalleryCreate.tsx`** — usar RPC + invalidateQueries
-3. **`src/integrations/supabase/types.ts`** — adicionar tipo da nova RPC
+### Risco
 
+- **system_cache**: Zero risco de regressão — Edge Functions usam service role.
+- **galerias view**: Preciso verificar se o frontend faz query anônima direta à tabela `galerias` ou se tudo passa pela Edge Function `gallery-access`. Se passar pela EF, a view não é necessária e basta restringir a policy.
