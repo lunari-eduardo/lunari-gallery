@@ -958,7 +958,7 @@ export default function CreditsCheckout() {
               const viewingCycle = billingPeriod === 'monthly' ? 'MONTHLY' : 'YEARLY';
               const isCycleUpgrade = isCurrentComboCompleto && currentComboCycle === 'MONTHLY' && viewingCycle === 'YEARLY';
 
-              const displayComboPrice = coupon.valid ? coupon.calculateDiscount(comboPrice) : comboPrice;
+              
 
               return (
                 <div className={cn(
