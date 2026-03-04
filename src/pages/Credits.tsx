@@ -247,7 +247,7 @@ export default function Credits() {
               </ul>
               <div className="pt-2 space-y-3">
                 <p className="text-2xl font-bold text-foreground">
-                  R$ 44,90<span className="text-sm font-normal text-muted-foreground">/mês</span>
+                  {formatPriceBRL(comboProMonthly)}<span className="text-sm font-normal text-muted-foreground">/mês</span>
                 </p>
                 <Button
                   size="sm"
