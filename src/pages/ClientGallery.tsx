@@ -118,7 +118,16 @@ export default function ClientGallery() {
   } | null>(null);
   
   // Payment return detection state
-  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
+  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('payment') === 'success';
+  });
+  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'verifying' | 'confirmed' | 'failed' | null>(
+    () => {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('payment') === 'success' ? 'verifying' : null;
+    }
+  );
   const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
   
   // Password state
@@ -586,20 +595,27 @@ export default function ClientGallery() {
           console.log('✅ Resultado confirmação pagamento:', result);
           
           if (result.status === 'pago' || result.updated) {
-            toast.success('Pagamento confirmado!', {
-              description: 'Sua seleção foi finalizada com sucesso.',
-            });
-            setCurrentStep('confirmed');
-            setIsConfirmed(true);
+            setPaymentReturnStatus('confirmed');
             
             // Clean URL params without reload
             const newUrl = window.location.pathname;
             window.history.replaceState({}, '', newUrl);
+            
+            // Brief delay to show success animation before transitioning
+            setTimeout(() => {
+              setCurrentStep('confirmed');
+              setIsConfirmed(true);
+              setIsProcessingPaymentReturn(false);
+              setPaymentReturnStatus(null);
+              refetchGallery();
+            }, 2500);
+          } else {
+            // Payment not yet confirmed - show retry option
+            setPaymentReturnStatus('failed');
           }
         } catch (error) {
           console.error('❌ Erro ao confirmar pagamento:', error);
-        } finally {
-          setIsProcessingPaymentReturn(false);
+          setPaymentReturnStatus('failed');
         }
       };
       
@@ -884,8 +900,102 @@ export default function ClientGallery() {
     );
   }
 
+  // Payment return verification screen (shown when returning from InfinitePay/MercadoPago)
+  if (isProcessingPaymentReturn && paymentReturnStatus) {
+    const verifyBgMode = galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+    const studioLogo = galleryResponse?.studioSettings?.studio_logo_url;
+    const studioName = galleryResponse?.studioSettings?.studio_name;
+    
+    return (
+      <div 
+        className={cn(
+          "min-h-screen flex flex-col items-center justify-center p-4",
+          verifyBgMode === 'dark' ? 'bg-[#1a1a1a] text-white' : 'bg-[#FAFAF8] text-[#2C2C2C]'
+        )}
+        style={themeStyles}
+      >
+        <div className="max-w-sm w-full text-center space-y-8">
+          {/* Studio logo */}
+          {studioLogo && (
+            <img 
+              src={studioLogo} 
+              alt={studioName || 'Studio'} 
+              className="h-12 mx-auto object-contain opacity-60"
+            />
+          )}
+
+          {paymentReturnStatus === 'verifying' && (
+            <>
+              <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-primary/10 animate-pulse">
+                <Clock className="h-8 w-8 text-primary animate-spin" style={{ animationDuration: '2s' }} />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-semibold">Confirmando seu pagamento...</h1>
+                <p className={cn("text-sm", verifyBgMode === 'dark' ? 'text-white/60' : 'text-[#8A8078]')}>
+                  Estamos verificando a transação. Isso leva apenas alguns segundos.
+                </p>
+              </div>
+            </>
+          )}
+
+          {paymentReturnStatus === 'confirmed' && (
+            <>
+              <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-green-100 dark:bg-green-900/30">
+                <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-semibold">Pagamento confirmado!</h1>
+                <p className={cn("text-sm", verifyBgMode === 'dark' ? 'text-white/60' : 'text-[#8A8078]')}>
+                  Sua seleção foi finalizada com sucesso.
+                </p>
+              </div>
+            </>
+          )}
+
+          {paymentReturnStatus === 'failed' && (
+            <>
+              <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">
+                <AlertCircle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-semibold">Verificação em andamento</h1>
+                <p className={cn("text-sm", verifyBgMode === 'dark' ? 'text-white/60' : 'text-[#8A8078]')}>
+                  Ainda não recebemos a confirmação do pagamento. Isso pode levar alguns minutos.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <Button
+                  onClick={() => {
+                    setPaymentReturnStatus('verifying');
+                    setIsProcessingPaymentReturn(false); // reset to re-trigger useEffect
+                  }}
+                  className="w-full"
+                  variant="terracotta"
+                >
+                  Verificar novamente
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsProcessingPaymentReturn(false);
+                    setPaymentReturnStatus(null);
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, '', newUrl);
+                  }}
+                  variant="ghost"
+                  className="w-full"
+                >
+                  Voltar para a galeria
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Pending payment screen - gallery awaiting payment (aguardando_pagamento)
-  if (galleryResponse?.pendingPayment) {
+  if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn) {
     const pendingPaymentMethod = galleryResponse.paymentMethod;
     const pendingPixDados = galleryResponse.pixDados;
     const pendingCheckoutUrl = galleryResponse.checkoutUrl;
