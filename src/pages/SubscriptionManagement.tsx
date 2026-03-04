@@ -40,6 +40,8 @@ export default function SubscriptionManagement() {
     reactivateSubscription,
     isReactivating,
   } = useAsaasSubscription();
+  const { getAllPlanPrices, isLoading: isLoadingPlans } = useUnifiedPlans();
+  const ALL_PLAN_PRICES = getAllPlanPrices();
 
   const formatPrice = (cents: number) =>
     (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
