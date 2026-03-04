@@ -22,6 +22,11 @@ export default function Credits() {
   const { photoCredits, creditsPurchased, creditsSubscription, isLoading: isLoadingCredits } = usePhotoCredits();
   const { purchases } = useCreditPackages();
   const { storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, hasFreeStorageOnly, planName, isLoading: isLoadingTransfer } = useTransferStorage();
+  const { getPlanPrice } = useUnifiedPlans();
+
+  const comboProMonthly = getPlanPrice('combo_pro_select2k', 'monthly');
+  const comboFullMonthly = getPlanPrice('combo_completo', 'monthly');
+  const formatPriceBRL = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <div className="space-y-10">
