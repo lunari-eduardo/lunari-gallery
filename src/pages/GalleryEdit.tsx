@@ -542,6 +542,13 @@ export default function GalleryEdit() {
                 galleryId={gallery.id}
                 activeFolderId={activeFolderId}
                 onActiveFolderChange={setActiveFolderId}
+                photos={photos.map(p => ({
+                  id: p.id,
+                  pastaId: p.pastaId,
+                  thumbnailUrl: getPhotoUrl(p, gallery, 'thumbnail'),
+                  originalFilename: p.originalFilename,
+                }))}
+                showCoverSelect
               />
 
               {/* Photo List - filtered by active folder */}
