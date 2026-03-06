@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { supabase } from '@/integrations/supabase/client';
 
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
