@@ -8,6 +8,7 @@ export interface GalleryFolderRow {
   user_id: string;
   nome: string;
   ordem: number;
+  cover_photo_id: string | null;
   created_at: string;
   updated_at: string;
 }
