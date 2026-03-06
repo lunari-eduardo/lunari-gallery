@@ -1572,9 +1572,10 @@ export default function ClientGallery() {
           <p className="text-muted-foreground mb-8 text-sm">{localPhotos.length} fotos</p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl w-full">
-            {galleryFolders.map((folder: { id: string; nome: string; ordem: number }) => {
+            {galleryFolders.map((folder: { id: string; nome: string; ordem: number; cover_photo_id?: string | null }) => {
               const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
-              const thumb = folderPhotos[0];
+              const coverPhoto = folder.cover_photo_id ? localPhotos.find(p => p.id === folder.cover_photo_id) : null;
+              const thumb = coverPhoto || folderPhotos[0];
               const folderSelectedCount = folderPhotos.filter(p => p.isSelected).length;
               return (
                 <button
