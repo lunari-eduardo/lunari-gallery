@@ -42,6 +42,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { cn } from '@/lib/utils';
 
 // Polling interval for pending payments (30 seconds)
 const PAYMENT_POLL_INTERVAL = 30000;
