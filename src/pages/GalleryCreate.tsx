@@ -566,6 +566,29 @@ export default function GalleryCreate() {
       });
       if (result?.id) {
         setSupabaseGalleryId(result.id);
+        
+        // Auto-create default folder with session name
+        try {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (currentUser) {
+            const folderName = sessionName?.trim() || 'Todas as fotos';
+            const { data: folder } = await supabase
+              .from('galeria_pastas')
+              .insert({
+                galeria_id: result.id,
+                user_id: currentUser.id,
+                nome: folderName,
+                ordem: 0,
+              })
+              .select()
+              .single();
+            if (folder) {
+              setActiveFolderId(folder.id);
+            }
+          }
+        } catch (err) {
+          console.error('Error creating default folder:', err);
+        }
       }
     } catch (error) {
       console.error('Error creating gallery:', error);

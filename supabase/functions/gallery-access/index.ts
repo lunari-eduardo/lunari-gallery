@@ -88,7 +88,7 @@ serve(async (req) => {
       // Fetch folders
       const { data: folders } = await supabase
         .from("galeria_pastas")
-        .select("id, nome, ordem")
+        .select("id, nome, ordem, cover_photo_id")
         .eq("galeria_id", gallery.id)
         .order("ordem");
 
@@ -471,7 +471,7 @@ serve(async (req) => {
     // 5b. Fetch folders for the gallery
     const { data: folders } = await supabase
       .from("galeria_pastas")
-      .select("id, nome, ordem")
+      .select("id, nome, ordem, cover_photo_id")
       .eq("galeria_id", gallery.id)
       .order("ordem");
 

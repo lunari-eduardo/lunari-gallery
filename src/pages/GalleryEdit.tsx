@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { supabase } from '@/integrations/supabase/client';
 
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
@@ -136,6 +137,56 @@ export default function GalleryEdit() {
     queryClient.invalidateQueries({ queryKey: ['galerias'] });
     queryClient.invalidateQueries({ queryKey: ['galeria-fotos', id] });
   };
+
+  // Migrate orphan photos (pasta_id = null) to first folder
+  useEffect(() => {
+    if (!id || !photos.length) return;
+    const orphans = photos.filter(p => !p.pastaId);
+    if (orphans.length === 0) return;
+
+    const migrateOrphans = async () => {
+      // Find or create a default folder
+      const { data: existingFolders } = await supabase
+        .from('galeria_pastas')
+        .select('id')
+        .eq('galeria_id', id)
+        .order('ordem')
+        .limit(1);
+
+      let targetFolderId = existingFolders?.[0]?.id;
+
+      if (!targetFolderId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: newFolder } = await supabase
+          .from('galeria_pastas')
+          .insert({
+            galeria_id: id,
+            user_id: user.id,
+            nome: gallery?.nomeSessao || 'Todas as fotos',
+            ordem: 0,
+          })
+          .select()
+          .single();
+        targetFolderId = newFolder?.id;
+      }
+
+      if (!targetFolderId) return;
+
+      // Batch update orphans
+      const orphanIds = orphans.map(p => p.id);
+      await supabase
+        .from('galeria_fotos')
+        .update({ pasta_id: targetFolderId })
+        .in('id', orphanIds);
+
+      // Refresh photos
+      queryClient.invalidateQueries({ queryKey: ['galeria-fotos', id] });
+      console.log(`📁 Migrated ${orphanIds.length} orphan photos to folder ${targetFolderId}`);
+    };
+
+    migrateOrphans();
+  }, [id, photos, gallery?.nomeSessao, queryClient]);
 
   // Handle client selection
   const handleClientSelect = (client: Client | null) => {
@@ -542,6 +593,13 @@ export default function GalleryEdit() {
                 galleryId={gallery.id}
                 activeFolderId={activeFolderId}
                 onActiveFolderChange={setActiveFolderId}
+                photos={photos.map(p => ({
+                  id: p.id,
+                  pastaId: p.pastaId,
+                  thumbnailUrl: getPhotoUrl(p, gallery, 'thumbnail'),
+                  originalFilename: p.originalFilename,
+                }))}
+                showCoverSelect
               />
 
               {/* Photo List - filtered by active folder */}

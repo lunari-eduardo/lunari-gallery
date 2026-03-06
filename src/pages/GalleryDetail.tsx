@@ -42,6 +42,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { cn } from '@/lib/utils';
 
 // Polling interval for pending payments (30 seconds)
 const PAYMENT_POLL_INTERVAL = 30000;
@@ -55,6 +56,7 @@ export default function GalleryDetail() {
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
   const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
+  const [activeDetailFolderId, setActiveDetailFolderId] = useState<string | null>(null);
   
   // Get settings for email templates
   const { settings } = useSettings();
@@ -609,9 +611,46 @@ export default function GalleryDetail() {
         </TabsList>
 
         <TabsContent value="photos" className="space-y-4">
-          {transformedPhotos.length > 0 ? (
+          {/* Folder filter tabs */}
+          {galleryFolders.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setActiveDetailFolderId(null)}
+                className={cn(
+                  'shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
+                  activeDetailFolderId === null
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:bg-muted'
+                )}
+              >
+                Todas ({transformedPhotos.length})
+              </button>
+              {galleryFolders.map((folder: any) => {
+                const count = transformedPhotos.filter(p => p.folderId === folder.id).length;
+                return (
+                  <button
+                    key={folder.id}
+                    onClick={() => setActiveDetailFolderId(folder.id)}
+                    className={cn(
+                      'shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
+                      activeDetailFolderId === folder.id
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    {folder.nome} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {(() => {
+            const filteredPhotos = activeDetailFolderId
+              ? transformedPhotos.filter(p => p.folderId === activeDetailFolderId)
+              : transformedPhotos;
+            return filteredPhotos.length > 0 ? (
             <MasonryGrid>
-              {transformedPhotos.map((photo, index) => (
+              {filteredPhotos.map((photo, index) => (
                 <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                   <PhotoCard
                     photo={photo}
@@ -619,7 +658,7 @@ export default function GalleryDetail() {
                     allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
                     disabled
                     onSelect={() => {}}
-                    onViewFullscreen={() => setLightboxIndex(index)}
+                    onViewFullscreen={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
                   />
                 </MasonryItem>
               ))}
@@ -628,10 +667,11 @@ export default function GalleryDetail() {
             <div className="text-center py-16 lunari-card">
               <Image className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">
-                Nenhuma foto adicionada ainda
+                {activeDetailFolderId ? 'Nenhuma foto nesta pasta' : 'Nenhuma foto adicionada ainda'}
               </p>
             </div>
-          )}
+          );
+          })()}
         </TabsContent>
 
         <TabsContent value="selection" className="space-y-6">
