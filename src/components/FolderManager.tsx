@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, FolderOpen, Check, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, FolderOpen, Check, X, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,10 @@ interface FolderManagerProps {
   activeFolderId: string | null;
   onActiveFolderChange: (folderId: string | null) => void;
   onFoldersChange?: (folders: GalleryFolderRow[]) => void;
+  /** Photos in gallery (used for cover photo selection) */
+  photos?: Array<{ id: string; pastaId?: string | null; thumbnailUrl?: string; originalFilename?: string }>;
+  /** Show cover photo selector */
+  showCoverSelect?: boolean;
 }
 
 export function FolderManager({
@@ -17,14 +21,17 @@ export function FolderManager({
   activeFolderId,
   onActiveFolderChange,
   onFoldersChange,
+  photos = [],
+  showCoverSelect = false,
 }: FolderManagerProps) {
-  const { folders, fetchFolders, createFolder, updateFolder, deleteFolder, reorderFolders } =
+  const { folders, fetchFolders, createFolder, updateFolder, deleteFolder, reorderFolders, setCoverPhoto } =
     useGalleryFolders(galleryId);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [showCoverPicker, setShowCoverPicker] = useState<string | null>(null);
 
   useEffect(() => {
     if (galleryId) fetchFolders();
@@ -39,7 +46,6 @@ export function FolderManager({
     if (folders.length > 0 && activeFolderId === null) {
       onActiveFolderChange(folders[0].id);
     }
-    // If active folder was deleted, select first available
     if (folders.length > 0 && activeFolderId && !folders.find(f => f.id === activeFolderId)) {
       onActiveFolderChange(folders[0].id);
     }
@@ -51,7 +57,6 @@ export function FolderManager({
     if (folder) {
       setNewName('');
       setIsAdding(false);
-      // Auto-select newly created folder
       onActiveFolderChange(folder.id);
     }
   };
@@ -74,6 +79,11 @@ export function FolderManager({
     const reordered = [...folders];
     [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
     reorderFolders(reordered);
+  };
+
+  const handleSetCover = async (folderId: string, photoId: string | null) => {
+    await setCoverPhoto(folderId, photoId);
+    setShowCoverPicker(null);
   };
 
   return (
@@ -115,79 +125,128 @@ export function FolderManager({
         </div>
       )}
 
-      {/* Folder tabs - only show when folders exist */}
+      {/* Folder tabs */}
       {folders.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {folders.map((folder, index) => (
-            <div key={folder.id} className="group relative flex items-center">
-              {editingId === folder.id ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    autoFocus
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleRename(folder.id);
-                      if (e.key === 'Escape') setEditingId(null);
-                    }}
-                    className="h-8 w-32 text-sm"
-                  />
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRename(folder.id)}>
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingId(null)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onActiveFolderChange(folder.id)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border',
-                    activeFolderId === folder.id
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                  )}
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  {folder.nome}
-                </button>
-              )}
+          {folders.map((folder, index) => {
+            const coverPhoto = photos.find(p => p.id === folder.cover_photo_id);
+            return (
+              <div key={folder.id} className="group relative flex items-center">
+                {editingId === folder.id ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      autoFocus
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRename(folder.id);
+                        if (e.key === 'Escape') setEditingId(null);
+                      }}
+                      className="h-8 w-32 text-sm"
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRename(folder.id)}>
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onActiveFolderChange(folder.id)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border',
+                      activeFolderId === folder.id
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                    )}
+                  >
+                    {coverPhoto?.thumbnailUrl ? (
+                      <img src={coverPhoto.thumbnailUrl} alt="" className="h-4 w-4 rounded object-cover" />
+                    ) : (
+                      <FolderOpen className="h-3.5 w-3.5" />
+                    )}
+                    {folder.nome}
+                  </button>
+                )}
 
-              {/* Actions on hover */}
-              {editingId !== folder.id && (
-                <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
-                  <button
-                    type="button"
-                    onClick={() => { setEditingId(folder.id); setEditingName(folder.nome); }}
-                    className="p-1 rounded hover:bg-muted text-muted-foreground"
-                    title="Renomear"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  {index > 0 && (
-                    <button type="button" onClick={() => handleMoveUp(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para cima">
-                      <ChevronUp className="h-3 w-3" />
+                {/* Actions on hover */}
+                {editingId !== folder.id && (
+                  <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingId(folder.id); setEditingName(folder.nome); }}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground"
+                      title="Renomear"
+                    >
+                      <Pencil className="h-3 w-3" />
                     </button>
-                  )}
-                  {index < folders.length - 1 && (
-                    <button type="button" onClick={() => handleMoveDown(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para baixo">
-                      <ChevronDown className="h-3 w-3" />
+                    {showCoverSelect && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCoverPicker(showCoverPicker === folder.id ? null : folder.id)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground"
+                        title="Definir capa"
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                      </button>
+                    )}
+                    {index > 0 && (
+                      <button type="button" onClick={() => handleMoveUp(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para cima">
+                        <ChevronUp className="h-3 w-3" />
+                      </button>
+                    )}
+                    {index < folders.length - 1 && (
+                      <button type="button" onClick={() => handleMoveDown(index)} className="p-1 rounded hover:bg-muted text-muted-foreground" title="Mover para baixo">
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => deleteFolder(folder.id)}
+                      className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                      title="Excluir pasta"
+                    >
+                      <Trash2 className="h-3 w-3" />
                     </button>
-                  )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Cover photo picker */}
+      {showCoverPicker && (
+        <div className="border border-border rounded-lg p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">Selecione a capa da pasta</p>
+          <div className="grid grid-cols-6 gap-1.5 max-h-32 overflow-y-auto">
+            {photos
+              .filter(p => p.pastaId === showCoverPicker)
+              .map(photo => {
+                const isCurrentCover = folders.find(f => f.id === showCoverPicker)?.cover_photo_id === photo.id;
+                return (
                   <button
+                    key={photo.id}
                     type="button"
-                    onClick={() => deleteFolder(folder.id)}
-                    className="p-1 rounded hover:bg-destructive/10 text-destructive"
-                    title="Excluir pasta"
+                    onClick={() => handleSetCover(showCoverPicker, isCurrentCover ? null : photo.id)}
+                    className={cn(
+                      'relative aspect-square rounded overflow-hidden border-2 transition-colors',
+                      isCurrentCover ? 'border-primary' : 'border-transparent hover:border-primary/50'
+                    )}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <img src={photo.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                    {isCurrentCover && (
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                        <Check className="h-4 w-4 text-primary-foreground drop-shadow" />
+                      </div>
+                    )}
                   </button>
-                </div>
-              )}
-            </div>
-          ))}
+                );
+              })}
+          </div>
         </div>
       )}
 
