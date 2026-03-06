@@ -104,6 +104,22 @@ export function useGalleryFolders(galleryId: string | null) {
     );
   }, []);
 
+  const setCoverPhoto = useCallback(async (folderId: string, photoId: string | null) => {
+    const { error } = await supabase
+      .from('galeria_pastas')
+      .update({ cover_photo_id: photoId, updated_at: new Date().toISOString() })
+      .eq('id', folderId);
+
+    if (error) {
+      console.error('Error setting cover photo:', error);
+      toast.error('Erro ao definir capa');
+      return;
+    }
+
+    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, cover_photo_id: photoId } : f));
+    toast.success('Capa da pasta atualizada');
+  }, []);
+
   return {
     folders,
     isLoading,
@@ -112,5 +128,6 @@ export function useGalleryFolders(galleryId: string | null) {
     updateFolder,
     deleteFolder,
     reorderFolders,
+    setCoverPhoto,
   };
 }
