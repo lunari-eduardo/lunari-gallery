@@ -1369,6 +1369,7 @@ export type Database = {
       }
       galeria_pastas: {
         Row: {
+          cover_photo_id: string | null
           created_at: string
           galeria_id: string
           id: string
@@ -1378,6 +1379,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cover_photo_id?: string | null
           created_at?: string
           galeria_id: string
           id?: string
@@ -1387,6 +1389,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cover_photo_id?: string | null
           created_at?: string
           galeria_id?: string
           id?: string
@@ -1396,6 +1399,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "galeria_pastas_cover_photo_id_fkey"
+            columns: ["cover_photo_id"]
+            isOneToOne: false
+            referencedRelation: "galeria_fotos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "galeria_pastas_galeria_id_fkey"
             columns: ["galeria_id"]

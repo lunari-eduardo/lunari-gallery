@@ -1,0 +1,1 @@
+ALTER TABLE galeria_pastas ADD COLUMN IF NOT EXISTS cover_photo_id uuid REFERENCES galeria_fotos(id) ON DELETE SET NULL;
