@@ -220,7 +220,7 @@ export default function Home() {
         {/* Section 3 & 4 row */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
           {/* Status Overview */}
-          <div className={`${cardClass} lg:col-span-2`}>
+          <div className="lg:col-span-2" style={glassStyle}>
             <h3 className="text-sm font-semibold text-foreground mb-4">Status das galerias</h3>
             {statusData.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma galeria criada</p>
