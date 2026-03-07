@@ -510,6 +510,34 @@ export default function GalleryEdit() {
                 </div>
               </div>
 
+              {/* Discount Presets - only for users without Gestão integration */}
+              {!hasGestaoIntegration && settings.discountPresets && settings.discountPresets.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Template de Desconto (opcional)</Label>
+                  <Select
+                    onValueChange={(presetId) => {
+                      const preset = settings.discountPresets.find(p => p.id === presetId);
+                      if (preset && preset.packages.length > 0) {
+                        // Use the first tier's price as the extra photo price
+                        setValorFotoExtra(preset.packages[0].pricePerPhoto);
+                        toast.success(`Template "${preset.name}" aplicado`);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar template de desconto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {settings.discountPresets.map((preset) => (
+                        <SelectItem key={preset.id} value={preset.id}>
+                          {preset.name} ({preset.packages.length} faixa{preset.packages.length !== 1 ? 's' : ''})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Save button removed - now in header */}
             </CardContent>
           </Card>
