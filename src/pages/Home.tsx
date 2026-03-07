@@ -252,7 +252,7 @@ export default function Home() {
           </div>
 
           {/* Attention Required */}
-          <div className={`${cardClass} lg:col-span-3 overflow-hidden`}>
+          <div className="lg:col-span-3 overflow-hidden" style={glassStyle}>
             <div className="flex items-center gap-2 mb-4">
               <AlertCircle className="h-4 w-4 text-amber-500" />
               <h3 className="text-sm font-semibold text-foreground">Aguardando ação</h3>
