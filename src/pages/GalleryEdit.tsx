@@ -389,12 +389,27 @@ export default function GalleryEdit() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="nomePacote">Pacote (opcional)</Label>
-                  <Input
-                    id="nomePacote"
-                    value={nomePacote}
-                    onChange={(e) => setNomePacote(e.target.value)}
-                    placeholder="Ex: Premium"
-                  />
+                  {hasGestaoIntegration && gestaoPackages.length > 0 ? (
+                    <PackageSelect
+                      packages={gestaoPackages}
+                      selectedPackage={nomePacote}
+                      onSelect={(name, pkg) => {
+                        setNomePacote(name);
+                        if (pkg) {
+                          if (pkg.fotosIncluidas) setFotosIncluidas(pkg.fotosIncluidas);
+                          if (pkg.valorFotoExtra) setValorFotoExtra(pkg.valorFotoExtra);
+                        }
+                      }}
+                      placeholder="Selecionar pacote..."
+                    />
+                  ) : (
+                    <Input
+                      id="nomePacote"
+                      value={nomePacote}
+                      onChange={(e) => setNomePacote(e.target.value)}
+                      placeholder="Ex: Premium"
+                    />
+                  )}
                 </div>
               </div>
 
