@@ -1051,15 +1051,24 @@ export default function ClientGallery() {
       );
     }
 
-    // InfinitePay/MercadoPago - show redirect to checkout
-    if (pendingCheckoutUrl) {
+    // InfinitePay/MercadoPago - show payment pending screen with auto-polling
+    if (pendingCheckoutUrl || pendingPaymentMethod === 'infinitepay' || pendingPaymentMethod === 'mercadopago') {
       return (
-        <PaymentRedirect
+        <PaymentPendingScreen
+          cobrancaId={galleryResponse.cobrancaId}
+          sessionId={sessionId || undefined}
           checkoutUrl={pendingCheckoutUrl}
-          provedor={pendingPaymentMethod || 'pagamento'}
           valorTotal={pendingValorTotal}
+          provedor={pendingPaymentMethod || 'pagamento'}
+          studioName={galleryResponse.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
           themeStyles={themeStyles}
           backgroundMode={pendingBgMode}
+          onPaymentConfirmed={() => {
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
+          }}
         />
       );
     }
