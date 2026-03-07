@@ -38,11 +38,11 @@ function formatCurrency(value: number): string {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  rascunho: { label: 'Criadas', color: 'hsl(220, 10%, 70%)' },
-  enviado: { label: 'Enviadas', color: 'hsl(210, 70%, 55%)' },
-  selecao_iniciada: { label: 'Em seleção', color: 'hsl(40, 85%, 55%)' },
-  selecao_completa: { label: 'Concluídas', color: 'hsl(145, 55%, 45%)' },
-  expirado: { label: 'Expiradas', color: 'hsl(0, 65%, 55%)' },
+  rascunho: { label: 'Criadas', color: '#C9CED6' },
+  enviado: { label: 'Enviadas', color: '#4A90E2' },
+  selecao_iniciada: { label: 'Em seleção', color: '#F28C52' },
+  selecao_completa: { label: 'Concluídas', color: '#4CAF7A' },
+  expirado: { label: 'Expiradas', color: '#F26B6B' },
 };
 
 function getStatusBadge(status: string) {
