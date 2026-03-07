@@ -1,45 +1,57 @@
 
 
-# Correção: Upload de fotos não funciona ao trocar/criar pastas no GalleryEdit
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-## Causa Raiz
+### Problema identificado
 
-O `UploadPipeline` é criado uma vez (lazy init) com o `folderId` fixo no construtor. Quando o fotógrafo troca de pasta ou cria uma nova pasta, o `folderId` prop do `PhotoUploader` muda, mas o pipeline existente mantém o `folderId` antigo (possivelmente `null`).
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-O efeito de reset (linha ~133 do PhotoUploader) tenta destruir o pipeline quando `folderId` muda, mas **só funciona se o pipeline não estiver ativo**. E o `getPipeline()` verifica `if (!pipelineRef.current)` — ou seja, se o pipeline já existe, ele é reutilizado com o folderId desatualizado.
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-Resultado: fotos são enviadas com `pasta_id = null` ou com o ID da pasta anterior, nunca aparecendo na pasta correta.
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-## Correção
+### Solução
 
-### 1. `PhotoUploader.tsx` — Forçar recriação do pipeline ao mudar folderId
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-Alterar o efeito de reset do pipeline para **sempre** destruir e recriar quando `folderId` mudar (se não houver upload ativo):
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-```typescript
-useEffect(() => {
-  if (pipelineRef.current) {
-    if (!pipelineRef.current.isActive) {
-      pipelineRef.current.destroy();
-      pipelineRef.current = null;
-    }
-  }
-}, [folderId]);
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-Isso já existe, mas o problema é que `getPipeline` também precisa reagir. A solução real é **remover o `if (!pipelineRef.current)` guard** e sempre recriar o pipeline quando `getPipeline` é chamado com um folderId diferente do atual. Ou, mais simples: destruir o pipeline no efeito acima E limpar os items quando não há upload ativo.
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-Mudança específica no `getPipeline`:
-- Verificar se `pipelineRef.current` existe mas tem um `folderId` diferente do atual → destruir e recriar.
+### Arquivos a modificar
 
-### 2. `UploadPipeline` — Expor folderId para comparação
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
 
-Adicionar um getter público `get folderId()` no `UploadPipeline` para que o `PhotoUploader` possa comparar o folderId atual do pipeline com o novo.
+### Fluxo corrigido
 
-### Resumo das mudanças:
-
-| Arquivo | Mudança |
-|---|---|
-| `src/lib/uploadPipeline.ts` | Adicionar getter `folderId` público |
-| `src/components/PhotoUploader.tsx` | No `getPipeline`, verificar se folderId mudou e recriar pipeline. No efeito de reset, garantir destruição. |
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
