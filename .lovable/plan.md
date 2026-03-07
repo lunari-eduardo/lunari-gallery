@@ -1,57 +1,76 @@
 
+Objetivo: corrigir definitivamente o fluxo de upload na edição de galeria (sem reload aparente e sem sumir foto), cobrindo frontend + ciclo de sessão + permissões.
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+Diagnóstico consolidado (com evidências):
+1) O upload não chega no backend
+- Edge logs de `r2-upload`: sem execuções no momento da falha.
+- Tabela `galeria_fotos` da galeria testada não recebe novos registros após a tentativa.
+- Conclusão: quebra ocorre antes da chamada da function.
 
-### Problema identificado
+2) O que acontece ao clicar “Abrir”
+- Session replay mostra:
+  - `input[type=file]` recebe `C:\fakepath\...jpg`;
+  - logo após, a tela entra em `Carregando galeria...`;
+  - depois ocorre navegação/reload da mesma URL.
+- Isso confirma perda de estado de tela durante o início do upload.
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+3) Causa raiz mais provável (fluxo atual)
+- `PhotoUploader.addFiles()` chama `supabase.auth.refreshSession()` antes de iniciar o pipeline.
+- Durante esse refresh, hooks de auth/clientes reexecutam e `GalleryEdit` cai no loading global (`isSupabaseLoading || isClientsLoading`), desmontando o uploader no momento crítico.
+- Como o uploader desmonta, o pipeline não chega a disparar envio real.
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+4) Permissões/RLS
+- Policies de `galeria_fotos` e `galeria_pastas` estão coerentes para owner (`auth.uid() = user_id`).
+- Não há sinal de bloqueio por RLS no caso reportado (não há tentativa de insert chegando ao banco).
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+Plano de correção (implementação):
+1) Remover o gatilho de instabilidade no início do upload
+- Arquivo: `src/components/PhotoUploader.tsx`
+- Remover `await supabase.auth.refreshSession()` do `addFiles`.
+- O pipeline já busca sessão no momento necessário; evitar refresh forçado antes do enqueue.
 
-### Solução
+2) Impedir desmontagem do uploader por loading transitório
+- Arquivo: `src/pages/GalleryEdit.tsx`
+- Ajustar gate de loading para não bloquear a página inteira em refetch:
+  - carregar tela cheia apenas quando não há dados iniciais ainda;
+  - em refetch, manter conteúdo renderizado.
+- Exemplo de regra:
+  - `isInitialLoading = (isSupabaseLoading && !gallery) || (isClientsLoading && clients.length === 0)`
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+3) Estabilizar hook de clientes para não “piscar loading” a cada refresh de sessão
+- Arquivo: `src/hooks/useGalleryClients.ts`
+- Trocar dependência de `user` por `user?.id` (evita refetch por mudança de referência do objeto user).
+- Não forçar `setIsLoading(true)` quando já há lista carregada (usar loading inicial vs refetch silencioso).
+- Opcional recomendado: migrar para `useAuthContext` (evitar listeners duplicados de auth).
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+4) Hardening de UX e diagnóstico (curto prazo)
+- Manter logs temporários no `PhotoUploader`:
+  - arquivos recebidos/validados;
+  - início efetivo do `pipeline.add`.
+- Mostrar toast explícito se `addFiles` falhar por exceção inesperada.
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+5) Revisão final do fluxo de permissões
+- Confirmar que `folderId` enviado pertence à `galleryId` e ao usuário (já validado no backend).
+- Confirmar que nenhum fallback de pasta nula está escondendo foto em outra aba/pasta.
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
+Validação pós-correção (obrigatória):
+1) Editar galeria existente com pasta selecionada:
+- selecionar JPG → deve aparecer item na fila imediatamente;
+- deve ocorrer request para `functions/v1/r2-upload`;
+- deve criar linha em `galeria_fotos` com `pasta_id` correto.
 
-**3. Evitar re-render do PaymentRedirect no retorno**
+2) Repetir envio em sequência (2-3 vezes):
+- não pode entrar em “Carregando galeria...” de forma bloqueante;
+- uploader não pode desmontar.
 
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
+3) Criar nova pasta e enviar nela:
+- novas fotos devem entrar diretamente na pasta nova.
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+4) Verificação de regressão:
+- exclusão de fotos continua funcionando;
+- créditos e contagem total continuam corretos.
 
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
-
+Resultado esperado:
+- clicar “Abrir” não dispara reset/reload do fluxo;
+- upload inicia imediatamente e persiste;
+- fotos reaparecem na pasta correta após envio.
