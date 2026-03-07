@@ -240,18 +240,19 @@ Deno.serve(async (req: Request) => {
       foundBy
     });
 
-    // Helper function to update payment to paid
+    // Helper function to update payment to paid (idempotent)
     const updateToPaid = async () => {
       console.log('💳 Atualizando pagamento para PAGO');
       
-      // 1. Update cobranca status
-      const { error: updateCobrancaError } = await supabase
+      // 1. Update cobranca status - ONLY if still pending (idempotent guard)
+      const { error: updateCobrancaError, count } = await supabase
         .from('cobrancas')
         .update({
           status: 'pago',
           data_pagamento: new Date().toISOString(),
         })
-        .eq('id', cobranca.id);
+        .eq('id', cobranca.id)
+        .neq('status', 'pago');
 
       if (updateCobrancaError) {
         console.error('❌ Erro ao atualizar cobrança:', updateCobrancaError);
