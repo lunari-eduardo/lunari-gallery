@@ -215,8 +215,11 @@ export default function GalleryEdit() {
     }
   };
 
-  // Loading state
-  if (isSupabaseLoading || isClientsLoading) {
+  // Loading state — only block on initial load when no data exists yet.
+  // Transient refetches (e.g. after auth token refresh) must NOT unmount
+  // the page, otherwise active uploads get destroyed.
+  const isInitialLoading = (isSupabaseLoading && !gallery) || (isClientsLoading && clients.length === 0);
+  if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="flex flex-col items-center gap-4">

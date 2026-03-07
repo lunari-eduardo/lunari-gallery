@@ -45,7 +45,8 @@ export function useGalleryClients(): UseGalleryClientsReturn {
   const fetchClients = useCallback(async () => {
     if (!user) return;
     
-    setIsLoading(true);
+    // Only show loading spinner on initial fetch, not on refetches
+    if (clients.length === 0) setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('clientes')
