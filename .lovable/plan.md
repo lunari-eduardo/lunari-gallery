@@ -1,37 +1,57 @@
 
 
-## Glassmorphism Dashboard Upgrade
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Changes to `src/pages/Home.tsx`
+### Problema identificado
 
-**1. Background** — Replace flat `bg-[hsl(220,15%,97%)]` with a warm radial gradient background using inline style:
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+
+### Solução
+
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
 ```
-background: linear-gradient(135deg, #fdf6f0 0%, #f3ece4 30%, #eef1f5 70%, #f6f7f9 100%)
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
-Plus a subtle radial glow from top-left using `radial-gradient(ellipse at 10% 10%, rgba(242,140,82,0.08) 0%, transparent 60%)`.
 
-**2. Card class** — Replace current `cardClass`:
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
 ```
-From: 'bg-white rounded-2xl shadow-sm border border-border/30 p-6'
-To: inline style with:
-  - background: rgba(255,255,255,0.65)
-  - backdropFilter: blur(12px)
-  - border: 1px solid rgba(255,255,255,0.35)
-  - boxShadow: 0 8px 30px rgba(0,0,0,0.05)
-  - borderRadius: 16px
-  - padding: 24px
-```
-Keep Tailwind class `rounded-2xl p-6` and add the glass styles via a shared style object to avoid repetition.
-
-**3. Chart colors** — Update `STATUS_MAP` colors:
-- `rascunho` (Criadas): `#C9CED6` (neutral gray)
-- `enviado` (Enviadas): `#4A90E2` (soft blue)
-- `selecao_iniciada` (Em seleção): `#F28C52` (Lunari orange)
-- `selecao_completa` (Concluídas): `#4CAF7A` (soft green)
-- `expirado` (Expiradas): `#F26B6B` (soft red)
-
-**4. No other logic changes** — All data hooks, queries, metrics computations, and table remain identical. Only visual styling is updated.
-
-### File
-- `src/pages/Home.tsx` only
 

@@ -38,11 +38,11 @@ function formatCurrency(value: number): string {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  rascunho: { label: 'Criadas', color: 'hsl(220, 10%, 70%)' },
-  enviado: { label: 'Enviadas', color: 'hsl(210, 70%, 55%)' },
-  selecao_iniciada: { label: 'Em seleção', color: 'hsl(40, 85%, 55%)' },
-  selecao_completa: { label: 'Concluídas', color: 'hsl(145, 55%, 45%)' },
-  expirado: { label: 'Expiradas', color: 'hsl(0, 65%, 55%)' },
+  rascunho: { label: 'Criadas', color: '#C9CED6' },
+  enviado: { label: 'Enviadas', color: '#4A90E2' },
+  selecao_iniciada: { label: 'Em seleção', color: '#F28C52' },
+  selecao_completa: { label: 'Concluídas', color: '#4CAF7A' },
+  expirado: { label: 'Expiradas', color: '#F26B6B' },
 };
 
 function getStatusBadge(status: string) {
@@ -128,15 +128,35 @@ export default function Home() {
       .slice(0, 6);
   }, [galleries]);
 
-  const cardClass = 'bg-white rounded-2xl shadow-sm border border-border/30 p-6';
+  const glassStyle: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.65)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255,255,255,0.35)',
+    boxShadow: '0 8px 30px rgba(0,0,0,0.05)',
+    borderRadius: 16,
+    padding: 24,
+  };
 
   return (
-    <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen bg-[hsl(220,15%,97%)]">
-      <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8">
+    <div
+      className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen"
+      style={{
+        background: 'linear-gradient(135deg, #fdf6f0 0%, #f3ece4 30%, #eef1f5 70%, #f6f7f9 100%)',
+      }}
+    >
+      {/* Subtle radial glow */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background: 'radial-gradient(ellipse at 10% 10%, rgba(242,140,82,0.08) 0%, transparent 60%)',
+        }}
+      />
+      <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8 relative z-10">
         {/* Section 1 — Account Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
           {/* Credits Card */}
-          <div className={cardClass}>
+          <div style={glassStyle}>
             <div className="flex items-center gap-2 mb-4">
               <CreditCard className="h-5 w-5 text-muted-foreground" />
               <h3 className="text-sm font-medium text-muted-foreground">Créditos de galerias</h3>
@@ -154,7 +174,7 @@ export default function Home() {
           </div>
 
           {/* Storage Card */}
-          <div className={cardClass}>
+          <div style={glassStyle}>
             <div className="flex items-center gap-2 mb-4">
               <HardDrive className="h-5 w-5 text-muted-foreground" />
               <h3 className="text-sm font-medium text-muted-foreground">Armazenamento</h3>
@@ -186,7 +206,7 @@ export default function Home() {
             { icon: CheckCircle2, label: 'Seleções concluídas', value: metrics.completed, sub: 'clientes finalizaram' },
             { icon: DollarSign, label: 'Vendas extras', value: formatCurrency(metrics.extras), sub: 'fotos adicionais este mês' },
           ].map((m, i) => (
-            <div key={i} className={cardClass}>
+            <div key={i} style={glassStyle}>
               <div className="flex items-center gap-2 mb-3">
                 <m.icon className="h-4 w-4 text-muted-foreground" />
                 <span className="text-xs font-medium text-muted-foreground">{m.label}</span>
@@ -200,7 +220,7 @@ export default function Home() {
         {/* Section 3 & 4 row */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
           {/* Status Overview */}
-          <div className={`${cardClass} lg:col-span-2`}>
+          <div className="lg:col-span-2" style={glassStyle}>
             <h3 className="text-sm font-semibold text-foreground mb-4">Status das galerias</h3>
             {statusData.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma galeria criada</p>
@@ -232,7 +252,7 @@ export default function Home() {
           </div>
 
           {/* Attention Required */}
-          <div className={`${cardClass} lg:col-span-3 overflow-hidden`}>
+          <div className="lg:col-span-3 overflow-hidden" style={glassStyle}>
             <div className="flex items-center gap-2 mb-4">
               <AlertCircle className="h-4 w-4 text-amber-500" />
               <h3 className="text-sm font-semibold text-foreground">Aguardando ação</h3>
@@ -287,7 +307,7 @@ export default function Home() {
         </div>
 
         {/* Section 5 — Recent Activity */}
-        <div className={cardClass}>
+        <div style={glassStyle}>
           <div className="flex items-center gap-2 mb-4">
             <Activity className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">Atividades recentes</h3>
