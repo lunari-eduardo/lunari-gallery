@@ -307,7 +307,7 @@ export default function Home() {
         </div>
 
         {/* Section 5 — Recent Activity */}
-        <div className={cardClass}>
+        <div style={glassStyle}>
           <div className="flex items-center gap-2 mb-4">
             <Activity className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">Atividades recentes</h3>
