@@ -198,10 +198,13 @@ Deno.serve(async (req: Request) => {
       cobrancaError = result.error;
       foundBy = result.foundBy;
     } else if (sessionId) {
+      // Select most recent cobrança for this session
       const { data, error } = await supabase
         .from('cobrancas')
         .select('*')
         .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       cobranca = data;
       cobrancaError = error;
