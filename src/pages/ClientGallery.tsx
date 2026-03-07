@@ -611,8 +611,47 @@ export default function ClientGallery() {
               refetchGallery();
             }, 2500);
           } else {
-            // Payment not yet confirmed - show retry option
+            // Payment not yet confirmed - start auto-polling
             setPaymentReturnStatus('failed');
+            
+            // Auto-retry every 30s for up to 10min
+            const startTime = Date.now();
+            const retryInterval = setInterval(async () => {
+              if (Date.now() - startTime > 10 * 60 * 1000) {
+                clearInterval(retryInterval);
+                return;
+              }
+              try {
+                const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    sessionId: sessionId,
+                    orderNsu: orderNsu,
+                    forceUpdate: false,
+                  }),
+                });
+                const retryResult = await retryResponse.json();
+                if (retryResult.status === 'pago' || retryResult.updated) {
+                  clearInterval(retryInterval);
+                  setPaymentReturnStatus('confirmed');
+                  const newUrl = window.location.pathname;
+                  window.history.replaceState({}, '', newUrl);
+                  setTimeout(() => {
+                    setCurrentStep('confirmed');
+                    setIsConfirmed(true);
+                    setIsProcessingPaymentReturn(false);
+                    setPaymentReturnStatus(null);
+                    refetchGallery();
+                  }, 2500);
+                }
+              } catch (e) {
+                console.error('[Auto-retry] Error:', e);
+              }
+            }, 30000);
+            
+            // Store cleanup ref
+            return () => clearInterval(retryInterval);
           }
         } catch (error) {
           console.error('❌ Erro ao confirmar pagamento:', error);
