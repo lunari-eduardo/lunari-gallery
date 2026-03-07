@@ -147,9 +147,13 @@ export function PhotoUploader({
 
           completedResults.current = [];
 
-          // Clear done items after delay
+          // Clear done items after delay and destroy pipeline for fresh state
           setTimeout(() => {
             setItems(prev => prev.filter(i => i.status !== 'done'));
+            if (pipelineRef.current && !pipelineRef.current.isActive) {
+              pipelineRef.current.destroy();
+              pipelineRef.current = null;
+            }
           }, 2000);
         },
       });
