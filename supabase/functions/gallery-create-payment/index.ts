@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface RequestBody {
@@ -10,6 +10,7 @@ interface RequestBody {
   valorTotal: number;
   extraCount: number;
   descricao?: string;
+  provider?: string; // optional: force specific provider
 }
 
 interface PaymentResponse {
@@ -21,7 +22,6 @@ interface PaymentResponse {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -29,13 +29,11 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, valorTotal, extraCount, descricao } = body;
+    const { galleryId, valorTotal, extraCount, descricao, provider } = body;
 
-    // Validate required fields
     if (!galleryId) {
       return new Response(
         JSON.stringify({ success: false, error: 'galleryId é obrigatório' }),
@@ -53,7 +51,7 @@ Deno.serve(async (req) => {
     // 1. Fetch gallery data
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, user_id, cliente_id, session_id, nome_sessao')
+      .select('id, user_id, cliente_id, session_id, nome_sessao, public_token')
       .eq('id', galleryId)
       .single();
 
@@ -65,42 +63,54 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Discover active payment provider for this photographer
-    const { data: integracao, error: integracaoError } = await supabase
-      .from('usuarios_integracoes')
-      .select('provedor, dados_extras, access_token')
-      .eq('user_id', gallery.user_id)
-      .eq('status', 'ativo')
-      .in('provedor', ['mercadopago', 'infinitepay'])
-      .maybeSingle();
+    // 2. Discover active payment provider
+    let provedor = provider;
+    
+    if (provedor) {
+      // Verify the requested provider is active
+      const { data: integracao } = await supabase
+        .from('usuarios_integracoes')
+        .select('provedor, dados_extras, access_token')
+        .eq('user_id', gallery.user_id)
+        .eq('status', 'ativo')
+        .eq('provedor', provedor)
+        .maybeSingle();
+      
+      if (!integracao) {
+        return new Response(
+          JSON.stringify({ success: false, error: `Provedor ${provedor} não está ativo`, code: 'PROVIDER_INACTIVE' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      // Auto-detect active provider (prefer default)
+      const { data: integracoes } = await supabase
+        .from('usuarios_integracoes')
+        .select('provedor, dados_extras, access_token, is_default')
+        .eq('user_id', gallery.user_id)
+        .eq('status', 'ativo')
+        .in('provedor', ['mercadopago', 'infinitepay']);
 
-    if (integracaoError) {
-      console.error('Integration fetch error:', integracaoError);
+      if (!integracoes || integracoes.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Nenhum provedor de pagamento configurado', code: 'NO_PROVIDER' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const defaultInteg = integracoes.find(i => i.is_default) || integracoes[0];
+      provedor = defaultInteg.provedor;
     }
 
-    if (!integracao) {
-      console.log(`No payment provider configured for user ${gallery.user_id}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Nenhum provedor de pagamento configurado',
-          code: 'NO_PROVIDER'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log(`📱 Payment provider: ${provedor} for gallery ${galleryId}`);
 
-    console.log(`📱 Payment provider: ${integracao.provedor} for user ${gallery.user_id}`);
-
-    // 3. Normalize session_id to TEXT format (workflow-*) if available
+    // 3. Normalize session_id to TEXT format
     let sessionIdTexto: string | null = null;
     
     if (gallery.session_id) {
-      // Check if it's already in workflow format
       if (gallery.session_id.startsWith('workflow-') || gallery.session_id.startsWith('session_')) {
         sessionIdTexto = gallery.session_id;
       } else {
-        // Try to find the text session_id from clientes_sessoes
         const { data: sessao } = await supabase
           .from('clientes_sessoes')
           .select('session_id')
@@ -115,57 +125,64 @@ Deno.serve(async (req) => {
     const cobrancaDescricao = descricao || 
       `${extraCount} foto${extraCount !== 1 ? 's' : ''} extra${extraCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
 
-    // 5. Call the appropriate Edge Function based on provider
-    const functionName = integracao.provedor === 'infinitepay' 
+    // 5. Build the complete payload for the create-link function
+    const functionName = provedor === 'infinitepay' 
       ? 'infinitepay-create-link' 
       : 'mercadopago-create-link';
 
-    console.log(`📞 Calling ${functionName} with:`, {
+    // Build redirect URL for payment return
+    const redirectUrl = gallery.public_token 
+      ? `https://gallery.lunarihub.com/g/${gallery.public_token}?payment=success`
+      : undefined;
+
+    const payloadBody: Record<string, unknown> = {
       clienteId: gallery.cliente_id,
       sessionId: sessionIdTexto,
       valor: valorTotal,
       descricao: cobrancaDescricao,
+      userId: gallery.user_id,
+      galeriaId: gallery.id,
+      qtdFotos: extraCount,
+      galleryToken: gallery.public_token,
+    };
+
+    if (redirectUrl) {
+      payloadBody.redirectUrl = redirectUrl;
+    }
+
+    console.log(`📞 Calling ${functionName} with:`, payloadBody);
+
+    // Use direct fetch for internal function call (per contract)
+    const fnUrl = `${supabaseUrl}/functions/v1/${functionName}`;
+    const fnResponse = await fetch(fnUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify(payloadBody),
     });
 
-    const { data: paymentData, error: paymentError } = await supabase.functions.invoke(functionName, {
-      body: {
-        clienteId: gallery.cliente_id,
-        sessionId: sessionIdTexto,
-        valor: valorTotal,
-        descricao: cobrancaDescricao,
-      }
-    });
+    const paymentData = await fnResponse.json();
 
-    if (paymentError) {
-      console.error(`${functionName} error:`, paymentError);
+    if (!fnResponse.ok || !paymentData?.success) {
+      console.error(`${functionName} error:`, paymentData);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Erro ao criar cobrança: ${paymentError.message}`,
+          error: paymentData?.error || 'Erro ao criar link de pagamento',
           code: 'PAYMENT_CREATE_ERROR'
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!paymentData?.success) {
-      console.error(`${functionName} returned error:`, paymentData);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: paymentData?.error || 'Erro ao criar link de pagamento',
-          code: 'PAYMENT_FAILED'
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 6. Extract checkout URL (different response formats)
-    const checkoutUrl = integracao.provedor === 'infinitepay'
+    // 6. Extract checkout URL
+    const checkoutUrl = provedor === 'infinitepay'
       ? paymentData.checkoutUrl
       : paymentData.paymentLink;
 
-    const cobrancaId = integracao.provedor === 'infinitepay'
+    const cobrancaId = provedor === 'infinitepay'
       ? paymentData.cobrancaId
       : paymentData.cobranca?.id;
 
@@ -178,13 +195,13 @@ Deno.serve(async (req) => {
       })
       .eq('id', galleryId);
 
-    console.log(`✅ Payment created: ${cobrancaId} via ${integracao.provedor}`);
+    console.log(`✅ Payment created: ${cobrancaId} via ${provedor}`);
 
     const response: PaymentResponse = {
       success: true,
       checkoutUrl,
       cobrancaId,
-      provedor: integracao.provedor,
+      provedor,
     };
 
     return new Response(

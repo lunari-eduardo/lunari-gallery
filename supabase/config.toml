@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.asaas-downgrade-subscription]
 verify_jwt = false
+
+[functions.confirm-payment-manual]
+verify_jwt = false

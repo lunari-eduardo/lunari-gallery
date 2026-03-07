@@ -21,6 +21,7 @@ import { SelectionConfirmation } from '@/components/SelectionConfirmation';
 import { PasswordScreen } from '@/components/PasswordScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
+import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
 import { DiscountProgressBar } from '@/components/DiscountProgressBar';
@@ -610,8 +611,47 @@ export default function ClientGallery() {
               refetchGallery();
             }, 2500);
           } else {
-            // Payment not yet confirmed - show retry option
+            // Payment not yet confirmed - start auto-polling
             setPaymentReturnStatus('failed');
+            
+            // Auto-retry every 30s for up to 10min
+            const startTime = Date.now();
+            const retryInterval = setInterval(async () => {
+              if (Date.now() - startTime > 10 * 60 * 1000) {
+                clearInterval(retryInterval);
+                return;
+              }
+              try {
+                const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    sessionId: sessionId,
+                    orderNsu: orderNsu,
+                    forceUpdate: false,
+                  }),
+                });
+                const retryResult = await retryResponse.json();
+                if (retryResult.status === 'pago' || retryResult.updated) {
+                  clearInterval(retryInterval);
+                  setPaymentReturnStatus('confirmed');
+                  const newUrl = window.location.pathname;
+                  window.history.replaceState({}, '', newUrl);
+                  setTimeout(() => {
+                    setCurrentStep('confirmed');
+                    setIsConfirmed(true);
+                    setIsProcessingPaymentReturn(false);
+                    setPaymentReturnStatus(null);
+                    refetchGallery();
+                  }, 2500);
+                }
+              } catch (e) {
+                console.error('[Auto-retry] Error:', e);
+              }
+            }, 30000);
+            
+            // Store cleanup ref
+            return () => clearInterval(retryInterval);
           }
         } catch (error) {
           console.error('❌ Erro ao confirmar pagamento:', error);
@@ -1050,15 +1090,24 @@ export default function ClientGallery() {
       );
     }
 
-    // InfinitePay/MercadoPago - show redirect to checkout
-    if (pendingCheckoutUrl) {
+    // InfinitePay/MercadoPago - show payment pending screen with auto-polling
+    if (pendingCheckoutUrl || pendingPaymentMethod === 'infinitepay' || pendingPaymentMethod === 'mercadopago') {
       return (
-        <PaymentRedirect
+        <PaymentPendingScreen
+          cobrancaId={galleryResponse.cobrancaId}
+          sessionId={sessionId || undefined}
           checkoutUrl={pendingCheckoutUrl}
-          provedor={pendingPaymentMethod || 'pagamento'}
           valorTotal={pendingValorTotal}
+          provedor={pendingPaymentMethod || 'pagamento'}
+          studioName={galleryResponse.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
           themeStyles={themeStyles}
           backgroundMode={pendingBgMode}
+          onPaymentConfirmed={() => {
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
+          }}
         />
       );
     }
