@@ -361,7 +361,10 @@ export function PhotoUploader({
         accept="image/jpeg,image/png,image/webp"
         multiple
         className="hidden"
-        onChange={(e) => e.target.files && addFiles(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files);
+          e.target.value = '';
+        }}
       />
 
       {/* Upload List */}
