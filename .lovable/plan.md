@@ -1,57 +1,90 @@
 
+Objetivo: fazer uma varredura completa e corrigir de forma definitiva o fluxo de reinserção de fotos em pastas na edição de galeria.
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+Diagnóstico (varredura completa já feita):
+1) Fluxo frontend (GalleryEdit → FolderManager → PhotoUploader → UploadPipeline):
+- O `addFiles()` está sendo chamado (há log de refresh de sessão), mas não há requests para `functions/v1/r2-upload` nas tentativas.
+- Isso prova que a falha acontece ANTES da chamada backend.
 
-### Problema identificado
+2) Fluxo de rede/edge:
+- Snapshot de rede mostra apenas GET de `galeria_fotos` (sem POST de upload).
+- Edge logs de `r2-upload` não mostram execução no momento da falha.
+- Portanto não é bloqueio de RLS/permissão no insert para esse caso específico.
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+3) Banco/permissões:
+- `galeria_pastas` e `galeria_fotos` com owner correto.
+- FK `galeria_fotos.pasta_id -> galeria_pastas.id` está válida.
+- RLS atual não é o gargalo dessa falha (upload nem chega no backend).
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+Do I know what the issue is?
+Sim. O problema principal é um “no-op silencioso” no frontend:
+- validação de tipo está rígida demais (`isValidImageType` só aceita alguns MIME estritos);
+- quando todos os arquivos são rejeitados, o código continua o fluxo (refresh + pipeline com array vazio), sem erro técnico claro;
+- resultado: usuário “envia”, não aparece nada na pasta, e parece que pastas não aceitam reinserção.
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+Plano de correção (implementação):
+1) Fortalecer validação de arquivos (frontend)
+- Arquivo: `src/lib/imageCompression.ts`
+- Ajustar `isValidImageType` para aceitar:
+  - MIME comuns: `image/jpeg`, `image/jpg`, `image/pjpeg`, `image/png`, `image/webp`
+  - fallback por extensão (`.jpg`, `.jpeg`, `.png`, `.webp`) quando `file.type` vier vazio/inconsistente.
+- Isso elimina rejeição indevida de JPG válidos.
 
-### Solução
+2) Eliminar no-op silencioso no uploader
+- Arquivo: `src/components/PhotoUploader.tsx`
+- Em `addFiles()`:
+  - se `validFiles.length === 0`, retornar imediatamente com toast explícito:
+    “Nenhuma imagem válida selecionada. Formatos aceitos: JPG/JPEG, PNG, WEBP”.
+  - incluir log de diagnóstico com `name/type/size` dos arquivos rejeitados (temporário, para fechar esse bug).
+- Atualizar `accept` do input para incluir extensões também:
+  - `accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"`
+- Resultado: quando houver rejeição, o usuário verá o motivo claro e não haverá falsa impressão de envio.
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+3) Blindagem de pasta no backend (consistência e segurança)
+- Arquivo: `supabase/functions/r2-upload/index.ts`
+- Antes do insert, validar que `folderId` (quando enviado):
+  - existe,
+  - pertence à mesma `galeria_id`,
+  - pertence ao mesmo `user_id`.
+- Se inválido, retornar 400 com erro claro (`INVALID_FOLDER_CONTEXT`).
+- Evita upload “sucesso” com pasta inconsistente em cenários de corrida/troca rápida de pasta.
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+4) Observabilidade do fluxo (para encerrar loop de tentativas)
+- Arquivo: `src/components/PhotoUploader.tsx`
+- Adicionar logs pontuais:
+  - quantidade total recebida,
+  - quantidade validada,
+  - motivo de rejeição por arquivo,
+  - `folderId` ativo no momento do envio.
+- Mantidos temporariamente até confirmar estabilidade.
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+5) Revisão do warning de ref em GalleryEdit
+- Arquivos: `src/pages/GalleryEdit.tsx` e usos de `PhotoUploader`
+- Fazer varredura por passagem de `ref` indireta/spread para `PhotoUploader`.
+- Corrigir origem do warning (não é a causa raiz do upload, mas polui debug e mascara sinais reais).
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
+Validação pós-correção (obrigatória):
+1) Editar galeria existente → pasta A:
+- subir JPG novo,
+- confirmar POST para `r2-upload`,
+- confirmar linha criada em `galeria_fotos` com `pasta_id = pasta A`.
 
-**3. Evitar re-render do PaymentRedirect no retorno**
+2) Criar pasta nova na edição → selecionar essa pasta:
+- subir 2 imagens,
+- confirmar ambas com `pasta_id` da pasta nova.
 
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
+3) Reenviar arquivo com MIME inconsistente (ou type vazio):
+- confirmar fallback por extensão e upload funcionando.
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+4) Testar erro real:
+- enviar arquivo inválido (ex.: PDF),
+- confirmar toast explícito e nenhum falso “envio”.
 
-### Arquivos a modificar
+5) Validar cliente:
+- pasta/álbum continua mostrando novas fotos corretamente via `folder_id/pasta_id`.
 
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
-
+Resultado esperado:
+- reinserção volta a funcionar na edição,
+- novas fotos entram na pasta selecionada,
+- falhas de tipo não ficam silenciosas,
+- fluxo fica auditável e previsível.
