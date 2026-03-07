@@ -1,66 +1,57 @@
 
 
-## Melhoria do Layout de Pastas (Visualização do Cliente)
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Estado Atual (linhas 1594-1661 de ClientGallery.tsx)
-- Header com logo pequeno em `h-12` dentro de um `header` com `border-b`
-- Titulo da galeria em `text-3xl/4xl` seguido de contagem de fotos
-- Grid de cards em `grid-cols-2 sm:grid-cols-3` com `aspect-[3/4]`, `rounded-xl`, gradiente e texto sobreposto
-- Sem texto explicativo ("Escolha um album")
-- Hover: `scale-105` na imagem, `shadow-lg` no container
+### Problema identificado
 
-### Alteracoes Propostas
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-**1. Header**
-- Reduzir padding vertical (`p-4` para `py-3`)
-- Remover `border-b` para visual mais limpo
-- Manter logo centralizado, aumentar levemente para `h-14`
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-**2. Secao de titulo**
-- Adicionar mais espaco entre logo e titulo (`mb-2` para `mb-1`)
-- Manter tipografia forte para nome da sessao
-- Adicionar texto explicativo abaixo da contagem: "Escolha um album para visualizar" em `text-muted-foreground text-sm`
-- Aumentar `mb-8` para `mb-10` para mais respiro
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-**3. Cards das pastas (mudanca principal)**
-- Mudar proporcion de `aspect-[3/4]` para `aspect-[4/5]` (mais fotografico)
-- Grid: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` com `gap-5` (maior)
-- Container: `max-w-4xl` (mais largo)
-- Remover `rounded-xl` e `border` → usar `rounded-lg` sutil e sem borda visivel
-- Hover: reduzir scale de `1.05` para `1.03`, adicionar `duration-700` para transicao mais suave
-- Gradiente: mais sutil, `from-black/60 via-black/10 to-transparent`
-- Tipografia interna: nome da pasta em `text-base font-semibold` com `tracking-wide`, contagem em `text-white/60 text-xs`
-- Mais padding interno (`p-4` em vez de `p-3`)
-- Adicionar `cursor-pointer` explicito
-- Sombra no hover: `shadow-xl` com transicao suave
+### Solução
 
-**4. Responsividade**
-- Mobile (< sm): 1 coluna, cards maiores
-- Tablet (sm): 2 colunas
-- Desktop (lg): 3 colunas
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-### Arquivo modificado
-- `src/pages/ClientGallery.tsx` — bloco entre linhas 1596-1661
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-### Resumo visual esperado
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```
+
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
 
 ```text
-┌─────────────────────────────┐
-│         [ LOGO ]            │  ← header limpo, sem borda
-│                             │
-│          TESTE              │  ← titulo grande, fonte da sessao
-│         9 fotos             │
-│  Escolha um álbum para      │
-│       visualizar            │
-│                             │
-│  ┌──────────┐ ┌──────────┐  │
-│  │          │ │          │  │
-│  │  (foto)  │ │  (foto)  │  │  ← aspect 4:5
-│  │          │ │          │  │
-│  │ Externas │ │ Estúdio  │  │  ← texto sobre gradiente
-│  │ 5 fotos  │ │ 4 fotos  │  │
-│  └──────────┘ └──────────┘  │
-│                             │
-└─────────────────────────────┘
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
 ```
 
