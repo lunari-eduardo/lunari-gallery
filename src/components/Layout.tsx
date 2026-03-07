@@ -32,12 +32,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { LayoutDashboard } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 const navigation = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Galerias', href: '/galleries/select', icon: Images, matchPrefix: '/galleries' },
   { name: 'Clientes', href: '/clients', icon: Users },
   { name: 'Nova Galeria', href: '__popover__', icon: ImagePlus },
