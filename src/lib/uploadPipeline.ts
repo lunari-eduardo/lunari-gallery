@@ -173,6 +173,10 @@ export class UploadPipeline {
     return this.queue;
   }
 
+  get folderId(): string | null | undefined {
+    return this.opts.folderId;
+  }
+
   get isActive(): boolean {
     return this.queue.some(i =>
       i.status === 'queued' ||
