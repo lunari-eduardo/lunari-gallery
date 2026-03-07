@@ -1,57 +1,60 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Dashboard Page for Lunari Gallery Select
 
-### Problema identificado
+### Overview
+Create a new `src/pages/Home.tsx` page that serves as the main dashboard, replacing the current `Index.tsx` redirect. The page will display account resources, monthly metrics, gallery status distribution, galleries requiring attention, and recent activity.
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+### Data Sources (existing hooks/queries)
+- **Credits**: `useGalleryCredits()` — returns `credits`, `galleriesPublished`, `canPublish`, `isAdmin`
+- **Storage**: `useTransferStorage()` — returns `storageUsedBytes`, `storageLimitBytes`, `storageUsedPercent`, `planName`, `hasTransferPlan`
+- **Galleries**: `useSupabaseGalleries()` — returns all galleries with status, dates, client info
+- **Recent activity**: query `galeria_acoes` table directly
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+### Routing Changes
+- `src/App.tsx`: Add route `/dashboard` pointing to `Home` with Layout
+- `src/pages/Index.tsx`: Change redirect from `/galleries/select` to `/dashboard`
+- `src/components/Layout.tsx`: Add "Dashboard" as first nav item pointing to `/dashboard`
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+### Page Structure
 
-### Solução
+**Background**: `bg-[#F6F7F9]` applied via the page wrapper (cards remain white).
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**Section 1 — Account Resources** (2-column grid)
+- **Card 1: Gallery Credits** — Large credit number from `useGalleryCredits()`, "créditos disponíveis" label, "Seus créditos não expiram" note, CTA button "Comprar créditos" → navigates to `/credits`
+- **Card 2: Storage** — Plan name from `useTransferStorage()`, progress bar showing `storageUsedPercent`, formatted sizes, buttons "Ver planos" → `/subscription`, "Gerenciar assinatura" link
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**Section 2 — Monthly Metrics** (4-column grid)
+- Computed from `useSupabaseGalleries()` filtering by `createdAt` in current month:
+  - Galerias criadas (count where tipo='selecao' created this month)
+  - Galerias enviadas (status 'enviado' or later, sent this month)
+  - Seleções concluídas (status 'selecao_completa' this month)
+  - Vendas extras (sum of `valorExtras` from galleries finalized this month)
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+**Section 3 — Gallery Status Overview** (donut chart)
+- Use `recharts` PieChart (already installed) with status distribution from all galleries
+- Color-coded: Criadas (gray), Enviadas (blue), Em seleção (amber), Concluídas (green), Expiradas (red)
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
+**Section 4 — Galleries Requiring Attention** (table)
+- Filter galleries where: status is 'sent' (client hasn't started), status is 'selection_started' with deadline approaching (< 3 days), or selection is incomplete
+- Show: Cliente, Sessão, Status badge, Seleção progress, Prazo
+- "Abrir galeria" button per row
 
-**3. Evitar re-render do PaymentRedirect no retorno**
+**Section 5 — Recent Activity** (vertical timeline)
+- Query `galeria_acoes` table (last 10 actions), joined with gallery name
+- Display as simple list with icon, description, timestamp
 
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
+### Visual Style
+- Cards: `bg-white rounded-2xl shadow-sm border border-border/30 p-6`
+- Large numbers: `text-4xl font-bold`
+- Secondary text: `text-sm text-muted-foreground`
+- Gap between cards: `gap-5`
+- Page max-width: `max-w-[1100px] mx-auto`
+- CTA buttons: `variant="terracotta"` (existing)
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+### Files
+- **Create**: `src/pages/Home.tsx`
+- **Edit**: `src/pages/Index.tsx` (redirect to `/dashboard`)
+- **Edit**: `src/App.tsx` (add `/dashboard` route)
+- **Edit**: `src/components/Layout.tsx` (add Dashboard nav item)
 
