@@ -56,6 +56,9 @@ export default function GalleryEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasGestaoIntegration } = useAuthContext();
+  const { packages: gestaoPackages, isLoading: isLoadingPackages } = useGestaoPackages();
+  const { settings } = useSettings();
   
   const { 
     getGallery,
