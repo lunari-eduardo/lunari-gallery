@@ -45,7 +45,8 @@ export function useGalleryClients(): UseGalleryClientsReturn {
   const fetchClients = useCallback(async () => {
     if (!user) return;
     
-    setIsLoading(true);
+    // Only show loading spinner on initial fetch, not on refetches
+    if (clients.length === 0) setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('clientes')
@@ -61,11 +62,11 @@ export function useGalleryClients(): UseGalleryClientsReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [user, mapRowToClient]);
+  }, [user?.id, mapRowToClient, clients.length]);
 
   useEffect(() => {
     fetchClients();
-  }, [fetchClients]);
+  }, [user?.id]);
 
   // Create a new client
   const createClient = useCallback(async (data: CreateClientData): Promise<Client> => {

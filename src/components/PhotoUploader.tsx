@@ -234,11 +234,8 @@ export function PhotoUploader({
       validFiles = fitFiles;
     }
 
-    // Refresh session before starting
-    if (!isUploading) {
-      console.log('[PhotoUploader] Refreshing session token before pipeline...');
-      await supabase.auth.refreshSession();
-    }
+    // Session is fetched lazily inside the pipeline when needed — no refresh here
+    // to avoid triggering auth state changes that unmount parent components.
 
     const pipeline = getPipeline();
     const newItems = pipeline.add(validFiles);
