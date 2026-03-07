@@ -174,7 +174,7 @@ export default function Home() {
           </div>
 
           {/* Storage Card */}
-          <div className={cardClass}>
+          <div style={glassStyle}>
             <div className="flex items-center gap-2 mb-4">
               <HardDrive className="h-5 w-5 text-muted-foreground" />
               <h3 className="text-sm font-medium text-muted-foreground">Armazenamento</h3>
