@@ -1,49 +1,57 @@
 
 
-# Dropdown de Pacotes e Templates de Desconto na Edição de Galeria
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-## Contexto
-Atualmente, o `GalleryEdit` usa campos `Input` simples para "Pacote" e "Valor Foto Extra". O `GalleryCreate` já tem a lógica condicional com `PackageSelect` + `useGestaoPackages` para usuários com integração Gestão. Precisamos replicar esse padrão no `GalleryEdit`, adicionando também suporte a templates de desconto para usuários sem integração.
+### Problema identificado
 
-## Plano
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-### 1. `src/pages/GalleryEdit.tsx` — Adicionar dropdown de pacotes e templates
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-**Imports novos:**
-- `useAuthContext` (para `hasGestaoIntegration`)
-- `useGestaoPackages` (para listar pacotes da tabela `pacotes`)
-- `useSettings` (para `discountPresets` — templates de desconto salvos)
-- `PackageSelect` (componente dropdown já existente)
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-**Lógica condicional no campo "Pacote (opcional)":**
-- Se `hasGestaoIntegration && gestaoPackages.length > 0`: renderizar `PackageSelect` (dropdown searchable com pacotes do Gestão)
-  - Ao selecionar pacote: preencher automaticamente `fotosIncluidas` e `valorFotoExtra` a partir do pacote
-- Senão: manter `Input` de texto livre (comportamento atual)
+### Solução
 
-**Lógica condicional no campo "Valor Foto Extra (R$)":**
-- Se `hasGestaoIntegration` e pacote selecionado tiver `valorFotoExtra`: mostrar valor preenchido automaticamente (editável)
-- Comportamento atual mantido para edição manual
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-**Templates de desconto (usuários sem integração):**
-- Abaixo dos campos de preço, se o usuário tiver `discountPresets` salvos (via `useSettings`), exibir um `Select` dropdown para carregar um template de desconto
-- Ao selecionar template: preencher `valorFotoExtra` com o primeiro tier do template
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-### 2. Mudanças específicas no código
+**2. Tela de processamento de pagamento (UX aprimorada)**
 
-No início do componente `GalleryEdit`:
-```typescript
-const { hasGestaoIntegration } = useAuthContext();
-const { packages: gestaoPackages, isLoading: isLoadingPackages } = useGestaoPackages();
-const { settings } = useSettings();
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-No bloco do campo "Pacote (opcional)" (linhas ~383-391):
-- Substituir `Input` por lógica condicional idêntica à do `GalleryCreate` (linhas 1107-1119)
-- `onSelect` do `PackageSelect` atualiza `nomePacote`, `fotosIncluidas` e `valorFotoExtra`
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-### Arquivos modificados
+### Arquivos a modificar
 
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/GalleryEdit.tsx` | Importar hooks/componentes, adicionar lógica condicional para pacotes e templates |
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 

@@ -24,21 +24,25 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
+import { PackageSelect } from '@/components/PackageSelect';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { useGestaoPackages } from '@/hooks/useGestaoPackages';
+import { useSettings } from '@/hooks/useSettings';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { supabase } from '@/integrations/supabase/client';
-
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -52,6 +56,9 @@ export default function GalleryEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasGestaoIntegration } = useAuthContext();
+  const { packages: gestaoPackages, isLoading: isLoadingPackages } = useGestaoPackages();
+  const { settings } = useSettings();
   
   const { 
     getGallery,
@@ -382,12 +389,27 @@ export default function GalleryEdit() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="nomePacote">Pacote (opcional)</Label>
-                  <Input
-                    id="nomePacote"
-                    value={nomePacote}
-                    onChange={(e) => setNomePacote(e.target.value)}
-                    placeholder="Ex: Premium"
-                  />
+                  {hasGestaoIntegration && gestaoPackages.length > 0 ? (
+                    <PackageSelect
+                      packages={gestaoPackages}
+                      selectedPackage={nomePacote}
+                      onSelect={(name, pkg) => {
+                        setNomePacote(name);
+                        if (pkg) {
+                          if (pkg.fotosIncluidas) setFotosIncluidas(pkg.fotosIncluidas);
+                          if (pkg.valorFotoExtra) setValorFotoExtra(pkg.valorFotoExtra);
+                        }
+                      }}
+                      placeholder="Selecionar pacote..."
+                    />
+                  ) : (
+                    <Input
+                      id="nomePacote"
+                      value={nomePacote}
+                      onChange={(e) => setNomePacote(e.target.value)}
+                      placeholder="Ex: Premium"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -487,6 +509,34 @@ export default function GalleryEdit() {
                   />
                 </div>
               </div>
+
+              {/* Discount Presets - only for users without Gestão integration */}
+              {!hasGestaoIntegration && settings.discountPresets && settings.discountPresets.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Template de Desconto (opcional)</Label>
+                  <Select
+                    onValueChange={(presetId) => {
+                      const preset = settings.discountPresets.find(p => p.id === presetId);
+                      if (preset && preset.packages.length > 0) {
+                        // Use the first tier's price as the extra photo price
+                        setValorFotoExtra(preset.packages[0].pricePerPhoto);
+                        toast.success(`Template "${preset.name}" aplicado`);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar template de desconto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {settings.discountPresets.map((preset) => (
+                        <SelectItem key={preset.id} value={preset.id}>
+                          {preset.name} ({preset.packages.length} faixa{preset.packages.length !== 1 ? 's' : ''})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Save button removed - now in header */}
             </CardContent>
