@@ -73,11 +73,16 @@ export function PhotoUploader({
 
   const { photoCredits, isAdmin, canUpload, refetch: refetchCredits } = usePhotoCredits();
 
-  // Lazy-init pipeline (recreate if folderId changed)
+  // Lazy-init pipeline (recreate if destroyed or folderId changed)
   const getPipeline = useCallback(() => {
-    if (pipelineRef.current && pipelineRef.current.folderId !== folderId && !pipelineRef.current.isActive) {
-      pipelineRef.current.destroy();
-      pipelineRef.current = null;
+    if (pipelineRef.current) {
+      const shouldRecreate =
+        pipelineRef.current.isDestroyed ||
+        (pipelineRef.current.folderId !== folderId && !pipelineRef.current.isActive);
+      if (shouldRecreate) {
+        pipelineRef.current.destroy();
+        pipelineRef.current = null;
+      }
     }
     if (!pipelineRef.current) {
       pipelineRef.current = new UploadPipeline({
