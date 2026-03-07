@@ -152,7 +152,7 @@ export default function Home() {
           background: 'radial-gradient(ellipse at 10% 10%, rgba(242,140,82,0.08) 0%, transparent 60%)',
         }}
       />
-      <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8">
+      <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8 relative z-10">
         {/* Section 1 — Account Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
           {/* Credits Card */}
