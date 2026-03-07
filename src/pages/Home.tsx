@@ -156,7 +156,7 @@ export default function Home() {
         {/* Section 1 — Account Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
           {/* Credits Card */}
-          <div className={cardClass}>
+          <div style={glassStyle}>
             <div className="flex items-center gap-2 mb-4">
               <CreditCard className="h-5 w-5 text-muted-foreground" />
               <h3 className="text-sm font-medium text-muted-foreground">Créditos de galerias</h3>
