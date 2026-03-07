@@ -28,6 +28,7 @@ import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 import DeliverDetail from "./pages/DeliverDetail";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,11 @@ const App = () => (
               <Route path="/" element={
                 <ProtectedRoute>
                   <Layout><Index /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <Layout><Home /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/galleries" element={
