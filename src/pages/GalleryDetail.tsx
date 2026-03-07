@@ -831,6 +831,8 @@ export default function GalleryDetail() {
                     checkoutUrl={cobrancaData?.ip_checkout_url}
                     sessionId={supabaseGallery.sessionId || undefined}
                     cobrancaId={cobrancaData?.id}
+                    galleryId={supabaseGallery.id}
+                    extraCount={selectedPhotos.length - supabaseGallery.fotosIncluidas}
                     variant="compact"
                     onStatusUpdated={() => {
                       queryClient.invalidateQueries({ queryKey: ['galerias'] });
