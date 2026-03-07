@@ -1603,11 +1603,11 @@ export default function ClientGallery() {
         style={themeStyles}
       >
         {galleryResponse?.studioSettings?.studio_logo_url && (
-          <header className="flex items-center justify-center py-3">
+          <header className="flex items-center justify-center py-5">
             <img 
               src={galleryResponse.studioSettings.studio_logo_url} 
               alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-              className="h-14 max-w-[200px] object-contain"
+              className="h-16 sm:h-20 md:h-24 max-w-[320px] object-contain"
             />
           </header>
         )}
