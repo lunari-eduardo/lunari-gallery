@@ -1603,24 +1603,25 @@ export default function ClientGallery() {
         style={themeStyles}
       >
         {galleryResponse?.studioSettings?.studio_logo_url && (
-          <header className="flex items-center justify-center p-4 border-b border-border/50">
+          <header className="flex items-center justify-center py-3">
             <img 
               src={galleryResponse.studioSettings.studio_logo_url} 
               alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-              className="h-12 max-w-[180px] object-contain"
+              className="h-14 max-w-[200px] object-contain"
             />
           </header>
         )}
-        <main className="flex-1 flex flex-col items-center p-6">
+        <main className="flex-1 flex flex-col items-center px-5 py-6">
           <h2 
-            className="text-3xl sm:text-4xl font-normal mb-2 text-center"
+            className="text-3xl sm:text-4xl font-normal mb-1 text-center tracking-tight"
             style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
           >
             {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
           </h2>
-          <p className="text-muted-foreground mb-8 text-sm">{localPhotos.length} fotos</p>
+          <p className="text-muted-foreground text-sm">{localPhotos.length} fotos</p>
+          <p className="text-muted-foreground text-sm mt-1 mb-10">Escolha um álbum para visualizar</p>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-4xl w-full">
             {galleryFolders.map((folder: { id: string; nome: string; ordem: number; cover_photo_id?: string | null }) => {
               const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
               const coverPhoto = folder.cover_photo_id ? localPhotos.find(p => p.id === folder.cover_photo_id) : null;
@@ -1633,21 +1634,21 @@ export default function ClientGallery() {
                     setActiveFolderId(folder.id);
                     setFolderViewMode('grid');
                   }}
-                  className="group relative aspect-[3/4] rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 transition-all hover:shadow-lg"
+                  className="group relative aspect-[4/5] rounded-lg overflow-hidden cursor-pointer transition-shadow duration-700 hover:shadow-xl"
                 >
                   {thumb ? (
                     <img
                       src={thumb.thumbnailUrl}
                       alt={folder.nome}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
                     />
                   ) : (
                     <div className="absolute inset-0 bg-muted" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
-                    <p className="text-white font-medium text-sm sm:text-base leading-tight">{folder.nome}</p>
-                    <p className="text-white/70 text-xs mt-0.5">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
+                    <p className="text-white font-semibold text-base tracking-wide leading-tight">{folder.nome}</p>
+                    <p className="text-white/60 text-xs mt-1">
                       {folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''}
                       {folderSelectedCount > 0 && ` · ${folderSelectedCount} selecionada${folderSelectedCount !== 1 ? 's' : ''}`}
                     </p>
