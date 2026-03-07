@@ -24,21 +24,25 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
+import { PackageSelect } from '@/components/PackageSelect';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { useGestaoPackages } from '@/hooks/useGestaoPackages';
+import { useSettings } from '@/hooks/useSettings';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { supabase } from '@/integrations/supabase/client';
-
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11);
