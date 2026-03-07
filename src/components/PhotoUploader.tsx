@@ -185,6 +185,20 @@ export function PhotoUploader({
     const fileArray = Array.from(files);
     let validFiles = fileArray.filter(isValidImageType);
 
+    // Log diagnostic info for debugging
+    const rejected = fileArray.filter(f => !isValidImageType(f));
+    if (rejected.length > 0) {
+      console.warn('[PhotoUploader] Arquivos rejeitados:', rejected.map(f => ({
+        name: f.name, type: f.type, size: f.size,
+      })));
+    }
+    console.log(`[PhotoUploader] addFiles: total=${fileArray.length}, valid=${validFiles.length}, folderId=${folderId}`);
+
+    if (validFiles.length === 0) {
+      toast.error('Nenhuma imagem válida selecionada. Formatos aceitos: JPG/JPEG, PNG, WEBP');
+      return;
+    }
+
     if (validFiles.length !== fileArray.length) {
       toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
     }
@@ -362,7 +376,7 @@ export function PhotoUploader({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
         multiple
         className="hidden"
         onChange={(e) => {

@@ -277,8 +277,17 @@ export async function getImageDimensions(
  * Validate if a file is a supported image type
  */
 export function isValidImageType(file: File): boolean {
-  const validTypes = ["image/jpeg", "image/png", "image/webp"];
-  return validTypes.includes(file.type);
+  const validMimes = [
+    "image/jpeg", "image/jpg", "image/pjpeg",
+    "image/png", "image/webp",
+  ];
+  if (file.type && validMimes.includes(file.type.toLowerCase())) {
+    return true;
+  }
+  // Fallback: check by extension when MIME is empty or unexpected
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const validExtensions = ["jpg", "jpeg", "png", "webp"];
+  return !!ext && validExtensions.includes(ext);
 }
 
 /**

@@ -223,7 +223,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── 4. Idempotency check ─────────────────────────────────────────────────
+    // ── 3b. Verify folder ownership (if folderId provided) ───────────────────
+    if (folderId) {
+      const { data: folder, error: folderError } = await supabase
+        .from("galeria_pastas")
+        .select("id")
+        .eq("id", folderId)
+        .eq("galeria_id", galleryId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (folderError || !folder) {
+        console.error(`[${requestId}] Invalid folder context: folderId=${folderId}, galleryId=${galleryId}`, folderError);
+        return new Response(
+          JSON.stringify({ error: "Pasta inválida para esta galeria", code: "INVALID_FOLDER_CONTEXT" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      console.log(`[${requestId}] Folder verified: ${folderId}`);
+    }
     if (uploadKey) {
       const { data: existing } = await supabase
         .from("galeria_fotos")
