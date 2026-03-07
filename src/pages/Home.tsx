@@ -128,10 +128,30 @@ export default function Home() {
       .slice(0, 6);
   }, [galleries]);
 
-  const cardClass = 'bg-white rounded-2xl shadow-sm border border-border/30 p-6';
+  const glassStyle: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.65)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255,255,255,0.35)',
+    boxShadow: '0 8px 30px rgba(0,0,0,0.05)',
+    borderRadius: 16,
+    padding: 24,
+  };
 
   return (
-    <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen bg-[hsl(220,15%,97%)]">
+    <div
+      className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen"
+      style={{
+        background: 'linear-gradient(135deg, #fdf6f0 0%, #f3ece4 30%, #eef1f5 70%, #f6f7f9 100%)',
+      }}
+    >
+      {/* Subtle radial glow */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background: 'radial-gradient(ellipse at 10% 10%, rgba(242,140,82,0.08) 0%, transparent 60%)',
+        }}
+      />
       <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8">
         {/* Section 1 — Account Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
