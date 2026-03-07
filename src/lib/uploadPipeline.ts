@@ -186,6 +186,10 @@ export class UploadPipeline {
     );
   }
 
+  get isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
   // ── Internal scheduling ──────────────────────────────────────────────────
 
   private tick() {

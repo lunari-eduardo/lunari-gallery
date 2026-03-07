@@ -1,81 +1,57 @@
 
 
-# Fix: Upload Pipeline Not Processing Files in GalleryEdit
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-## Root Cause
+### Problema identificado
 
-The `UploadPipeline` has a `destroyed` flag that, once set to `true`, causes `tick()` to silently return. The `getPipeline()` function only checks if `pipelineRef.current` is `null` or has a mismatched `folderId` — it does NOT check if the pipeline is destroyed. So a destroyed pipeline with matching `folderId` gets reused, and all subsequent `add()` calls silently fail (items are queued but `tick()` exits immediately).
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-This happens when:
-- The `useEffect([folderId])` cleanup destroys the pipeline but a race condition leaves a stale ref
-- Or after `onPipelineComplete`, the old pipeline is reused on subsequent uploads
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-## Changes
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-### 1. `src/lib/uploadPipeline.ts` — Expose `isDestroyed` getter
+### Solução
 
-Add a public getter so the consumer can check if a pipeline instance has been destroyed:
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-```typescript
-get isDestroyed(): boolean {
-  return this.destroyed;
-}
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-### 2. `src/components/PhotoUploader.tsx` — Fix `getPipeline` to check destroyed state
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-Update the `getPipeline` callback to also check if the existing pipeline is destroyed:
+### Arquivos a modificar
 
-```typescript
-const getPipeline = useCallback(() => {
-  // If pipeline exists but is destroyed or folderId changed, recreate
-  if (pipelineRef.current) {
-    const shouldRecreate = 
-      pipelineRef.current.isDestroyed ||
-      (pipelineRef.current.folderId !== folderId && !pipelineRef.current.isActive);
-    if (shouldRecreate) {
-      pipelineRef.current.destroy();
-      pipelineRef.current = null;
-    }
-  }
-  if (!pipelineRef.current) {
-    pipelineRef.current = new UploadPipeline({...});
-  }
-  return pipelineRef.current;
-}, [...deps]);
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
 ```
-
-### 3. `src/components/PhotoUploader.tsx` — Reset file input after selection
-
-Add `e.target.value = ''` after calling `addFiles` so the same files can be re-selected:
-
-```typescript
-onChange={(e) => {
-  if (e.target.files) addFiles(e.target.files);
-  e.target.value = '';
-}}
-```
-
-### 4. `src/components/PhotoUploader.tsx` — Clean up pipeline after completion
-
-In `onPipelineComplete`, after finalizing (clearing done items), destroy the pipeline and null the ref so the next upload creates a fresh instance:
-
-```typescript
-// After clearing done items
-setTimeout(() => {
-  setItems(prev => prev.filter(i => i.status !== 'done'));
-  // Destroy completed pipeline to ensure fresh state next time
-  if (pipelineRef.current && !pipelineRef.current.isActive) {
-    pipelineRef.current.destroy();
-    pipelineRef.current = null;
-  }
-}, 2000);
-```
-
-## Files Modified
-
-| File | Change |
-|---|---|
-| `src/lib/uploadPipeline.ts` | Add `isDestroyed` getter |
-| `src/components/PhotoUploader.tsx` | Fix `getPipeline` destroyed check, reset file input, cleanup after completion |
 

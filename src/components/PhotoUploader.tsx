@@ -73,11 +73,16 @@ export function PhotoUploader({
 
   const { photoCredits, isAdmin, canUpload, refetch: refetchCredits } = usePhotoCredits();
 
-  // Lazy-init pipeline (recreate if folderId changed)
+  // Lazy-init pipeline (recreate if destroyed or folderId changed)
   const getPipeline = useCallback(() => {
-    if (pipelineRef.current && pipelineRef.current.folderId !== folderId && !pipelineRef.current.isActive) {
-      pipelineRef.current.destroy();
-      pipelineRef.current = null;
+    if (pipelineRef.current) {
+      const shouldRecreate =
+        pipelineRef.current.isDestroyed ||
+        (pipelineRef.current.folderId !== folderId && !pipelineRef.current.isActive);
+      if (shouldRecreate) {
+        pipelineRef.current.destroy();
+        pipelineRef.current = null;
+      }
     }
     if (!pipelineRef.current) {
       pipelineRef.current = new UploadPipeline({
@@ -142,9 +147,13 @@ export function PhotoUploader({
 
           completedResults.current = [];
 
-          // Clear done items after delay
+          // Clear done items after delay and destroy pipeline for fresh state
           setTimeout(() => {
             setItems(prev => prev.filter(i => i.status !== 'done'));
+            if (pipelineRef.current && !pipelineRef.current.isActive) {
+              pipelineRef.current.destroy();
+              pipelineRef.current = null;
+            }
           }, 2000);
         },
       });
@@ -356,7 +365,10 @@ export function PhotoUploader({
         accept="image/jpeg,image/png,image/webp"
         multiple
         className="hidden"
-        onChange={(e) => e.target.files && addFiles(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files);
+          e.target.value = '';
+        }}
       />
 
       {/* Upload List */}
