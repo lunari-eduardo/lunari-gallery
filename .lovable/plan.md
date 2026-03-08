@@ -1,57 +1,54 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Reescrever o Background Orbital 3D do Dashboard
 
-### Problema identificado
+### O que muda
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+Substituir completamente a cena 3D atual (que parece um "átomo científico" com anéis girando juntos) por um **campo orbital premium** com sensação de profundidade espacial real.
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+### Arquitetura da nova cena (`src/pages/Home.tsx`)
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+**4 Anéis orbitais** — cada um em plano diferente, velocidade diferente, direção alternada:
 
-### Solução
+| Anel | Orientação | Período | Direção | Espessura (tube) | Opacidade (light/dark) |
+|------|-----------|---------|---------|-------------------|----------------------|
+| 1 | rotateX(65°) | 36s | horário | 0.025 | 0.35 / 0.12 |
+| 2 | rotateY(45°) | 48s | anti-horário | 0.015 | 0.20 / 0.08 |
+| 3 | rotateX(-40°) | 60s | horário | 0.020 | 0.25 / 0.10 |
+| 4 | rotateZ(30°) | 72s | anti-horário | 0.012 | 0.12 / 0.06 |
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**Cor base dos anéis:** `rgba(242, 140, 82)` (copper/amber Lunari) com variações sutis por anel.
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**2 Esferas orbitantes** (reduzidas de 3 para 2):
+- Esfera 1 no Anel 1 — offset 0°
+- Esfera 2 no Anel 3 — offset 180°
+- Glow amber sutil, tamanho pequeno (~0.08), opacidade mais alta que os anéis
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+**Rotação:** Cada anel gira apenas no seu eixo principal (um único eixo por anel), velocidade convertida de período em segundos para `(2π / período) * delta`. Direções alternadas via sinal positivo/negativo.
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
+**Sem rotação global do grupo** — cada anel é independente, eliminando o efeito "bola girando".
 
-**3. Evitar re-render do PaymentRedirect no retorno**
+### Gradiente de fundo
 
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
+- **Dark:** `#1A0F0A` base com gradiente warm (alinhado ao pedido)
+- **Light:** mantém `#fefaf6 → #f8ece0` (já ajustado)
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+### Glow zones
 
-### Arquivos a modificar
+- Top-left: radial amber glow
+- Bottom-right: radial copper glow
+- Opacidades maiores no dark mode para criar ambiente warm
 
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+### Mudanças técnicas
 
-### Fluxo corrigido
+1. **Reescrever `RING_CONFIGS`** — novas rotações iniciais, velocidades baseadas em período, direções alternadas, espessuras variáveis
+2. **Reescrever `TorusRing`** — rotação em eixo único por anel (não X+Y simultaneamente), usar tube radius do config
+3. **Reduzir `SPHERE_CONFIGS` para 2** — offsets em 0 e π, velocidades sincronizadas com o anel pai
+4. **Remover rotação global** do `OrbitalScene` group
+5. **Atualizar `OrbitalScene`** — Esfera 1 em Ring 0, Esfera 2 em Ring 2, sem esferas nos outros
+6. **Ajustar gradiente dark** para `#1A0F0A`
+7. **Reposicionar glow zones** — top-left e bottom-right conforme spec
 
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+### Arquivo
+- `src/pages/Home.tsx` (linhas 64–237 — seção 3D + background)
 
