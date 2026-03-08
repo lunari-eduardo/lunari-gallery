@@ -90,7 +90,7 @@ function TorusRing({ index, isDark, children }: { index: number; isDark: boolean
     ref.current.rotation.y += cfg.speedY * delta;
   });
 
-  const opacity = isDark ? 0.10 + index * 0.04 : 0.1 + index * 0.03;
+  const opacity = isDark ? 0.10 + index * 0.04 : 0.25 + index * 0.06;
 
   return (
     <group ref={ref} rotation={cfg.rotation}>
