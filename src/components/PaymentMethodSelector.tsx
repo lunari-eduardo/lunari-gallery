@@ -3,8 +3,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PaymentIntegration, PixManualData, InfinitePayData } from '@/hooks/usePaymentIntegration';
-import { pixLogo, infinitepayLogo, mercadopagoLogo } from '@/assets/payment-logos';
+import { PaymentIntegration, PixManualData, InfinitePayData, AsaasData } from '@/hooks/usePaymentIntegration';
+import { pixLogo, infinitepayLogo, mercadopagoLogo, asaasLogo } from '@/assets/payment-logos';
 
 interface PaymentMethodSelectorProps {
   integrations: PaymentIntegration[];
@@ -36,8 +36,36 @@ export function PaymentMethodSelector({
       pix_manual: pixLogo,
       infinitepay: infinitepayLogo,
       mercadopago: mercadopagoLogo,
+      asaas: asaasLogo,
     };
     return logos[provedor];
+  };
+
+  const getProviderInfo = (integration: PaymentIntegration) => {
+    switch (integration.provedor) {
+      case 'pix_manual':
+        return {
+          name: 'PIX Manual',
+          detail: (integration.dadosExtras as PixManualData)?.nomeTitular || 'Chave configurada',
+        };
+      case 'infinitepay':
+        return {
+          name: 'InfinitePay',
+          detail: `@${(integration.dadosExtras as InfinitePayData)?.handle || 'handle'}`,
+        };
+      case 'mercadopago':
+        return {
+          name: 'Mercado Pago',
+          detail: 'Checkout automático',
+        };
+      case 'asaas':
+        return {
+          name: 'Asaas',
+          detail: (integration.dadosExtras as AsaasData)?.environment === 'production' ? 'Produção' : 'Sandbox',
+        };
+      default:
+        return { name: integration.provedor, detail: '' };
+    }
   };
 
   return (
@@ -50,9 +78,7 @@ export function PaymentMethodSelector({
         className="flex flex-col gap-2"
       >
         {integrations.map((integration) => {
-          const isPixManual = integration.provedor === 'pix_manual';
-          const isInfinitePay = integration.provedor === 'infinitepay';
-          const isMercadoPago = integration.provedor === 'mercadopago';
+          const info = getProviderInfo(integration);
           
           return (
             <div key={integration.id}>
@@ -70,47 +96,13 @@ export function PaymentMethodSelector({
                     : "border-border hover:border-primary/30"
                 )}
               >
-                {isPixManual && (
-                  <>
-                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
-                      <img src={getProviderLogo('pix_manual')} alt="PIX" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">PIX Manual</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {(integration.dadosExtras as PixManualData)?.nomeTitular || 'Chave configurada'}
-                      </p>
-                    </div>
-                  </>
-                )}
-                
-                {isInfinitePay && (
-                  <>
-                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
-                      <img src={getProviderLogo('infinitepay')} alt="InfinitePay" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">InfinitePay</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        @{(integration.dadosExtras as InfinitePayData)?.handle || 'handle'}
-                      </p>
-                    </div>
-                  </>
-                )}
-                
-                {isMercadoPago && (
-                  <>
-                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
-                      <img src={getProviderLogo('mercadopago')} alt="Mercado Pago" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">Mercado Pago</p>
-                      <p className="text-xs text-muted-foreground">
-                        Checkout automático
-                      </p>
-                    </div>
-                  </>
-                )}
+                <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center p-1">
+                  <img src={getProviderLogo(integration.provedor)} alt={info.name} className="h-full w-full object-contain" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{info.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{info.detail}</p>
+                </div>
                 
                 {integration.isDefault && (
                   <Badge variant="secondary" className="text-xs shrink-0">

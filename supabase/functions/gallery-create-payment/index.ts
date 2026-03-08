@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
         .select('provedor, dados_extras, access_token, is_default')
         .eq('user_id', gallery.user_id)
         .eq('status', 'ativo')
-        .in('provedor', ['mercadopago', 'infinitepay']);
+        .in('provedor', ['mercadopago', 'infinitepay', 'asaas']);
 
       if (!integracoes || integracoes.length === 0) {
         return new Response(
@@ -126,9 +126,14 @@ Deno.serve(async (req) => {
       `${extraCount} foto${extraCount !== 1 ? 's' : ''} extra${extraCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
 
     // 5. Build the complete payload for the create-link function
-    const functionName = provedor === 'infinitepay' 
-      ? 'infinitepay-create-link' 
-      : 'mercadopago-create-link';
+    let functionName: string;
+    if (provedor === 'infinitepay') {
+      functionName = 'infinitepay-create-link';
+    } else if (provedor === 'asaas') {
+      functionName = 'asaas-gallery-payment';
+    } else {
+      functionName = 'mercadopago-create-link';
+    }
 
     // Build redirect URL for payment return
     const redirectUrl = gallery.public_token 
@@ -178,13 +183,19 @@ Deno.serve(async (req) => {
     }
 
     // 6. Extract checkout URL
-    const checkoutUrl = provedor === 'infinitepay'
-      ? paymentData.checkoutUrl
-      : paymentData.paymentLink;
+    let checkoutUrl: string | undefined;
+    let cobrancaId: string | undefined;
 
-    const cobrancaId = provedor === 'infinitepay'
-      ? paymentData.cobrancaId
-      : paymentData.cobranca?.id;
+    if (provedor === 'infinitepay') {
+      checkoutUrl = paymentData.checkoutUrl;
+      cobrancaId = paymentData.cobrancaId;
+    } else if (provedor === 'asaas') {
+      checkoutUrl = paymentData.checkoutUrl;
+      cobrancaId = paymentData.cobrancaId || paymentData.asaasPaymentId;
+    } else {
+      checkoutUrl = paymentData.paymentLink;
+      cobrancaId = paymentData.cobranca?.id;
+    }
 
     // 7. Update gallery with payment info
     await supabase

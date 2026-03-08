@@ -74,3 +74,9 @@ verify_jwt = false
 
 [functions.confirm-payment-manual]
 verify_jwt = false
+
+[functions.asaas-gallery-payment]
+verify_jwt = false
+
+[functions.asaas-gallery-webhook]
+verify_jwt = false
