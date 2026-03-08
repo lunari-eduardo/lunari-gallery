@@ -66,13 +66,13 @@ const COPPER = '#F28C52';
 
 const RING_CONFIGS = [
   // Ring 1 — tilted horizontal, clockwise, 36s period
-  { initialRotation: [65 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 36, direction: 1, tube: 0.025, opacityLight: 0.35, opacityDark: 0.12 },
-  // Ring 2 — tilted vertical, counter-clockwise, 48s period
-  { initialRotation: [0, 45 * Math.PI / 180, 0] as [number, number, number], axis: 'x' as const, period: 48, direction: -1, tube: 0.015, opacityLight: 0.20, opacityDark: 0.08 },
-  // Ring 3 — opposite tilt, clockwise, 60s period
-  { initialRotation: [-40 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 60, direction: 1, tube: 0.020, opacityLight: 0.25, opacityDark: 0.10 },
-  // Ring 4 — diagonal tilt, counter-clockwise, 72s period
-  { initialRotation: [0, 0, 30 * Math.PI / 180] as [number, number, number], axis: 'x' as const, period: 72, direction: -1, tube: 0.012, opacityLight: 0.12, opacityDark: 0.06 },
+  { initialRotation: [65 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 72, direction: 1, tube: 0.025, opacityLight: 0.35, opacityDark: 0.12 },
+  // Ring 2 — tilted vertical, counter-clockwise, 96s period
+  { initialRotation: [0, 45 * Math.PI / 180, 0] as [number, number, number], axis: 'x' as const, period: 96, direction: -1, tube: 0.015, opacityLight: 0.20, opacityDark: 0.08 },
+  // Ring 3 — opposite tilt, clockwise, 120s period
+  { initialRotation: [-40 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 120, direction: 1, tube: 0.020, opacityLight: 0.25, opacityDark: 0.10 },
+  // Ring 4 — diagonal tilt, counter-clockwise, 144s period
+  { initialRotation: [0, 0, 30 * Math.PI / 180] as [number, number, number], axis: 'x' as const, period: 144, direction: -1, tube: 0.012, opacityLight: 0.12, opacityDark: 0.06 },
 ];
 
 const SPHERE_CONFIGS = [
@@ -172,7 +172,7 @@ function DashboardBackground() {
         className="absolute inset-0 transition-colors duration-700"
         style={{
           background: isDark
-            ? 'linear-gradient(135deg, #1A0F0A 0%, #251408 50%, #1A0F0A 100%)'
+            ? 'linear-gradient(135deg, #0D0A08 0%, #141010 50%, #0D0A08 100%)'
             : 'linear-gradient(135deg, #fefaf6 0%, #f8ece0 50%, #fefaf6 100%)',
         }}
       />
@@ -196,7 +196,7 @@ function DashboardBackground() {
         className="absolute rounded-full"
         style={{
           width: '45vw', height: '45vw',
-          background: 'radial-gradient(circle, hsl(24 70% 63% / 0.15), transparent 70%)',
+          background: 'radial-gradient(circle, hsl(24 40% 45% / 0.15), transparent 70%)',
           top: '5%', left: '10%',
           filter: 'blur(90px)',
           opacity: isDark ? 0.12 : 0.10,
@@ -206,7 +206,7 @@ function DashboardBackground() {
         className="absolute rounded-full"
         style={{
           width: '40vw', height: '40vw',
-          background: 'radial-gradient(circle, hsl(20 55% 44% / 0.18), transparent 70%)',
+          background: 'radial-gradient(circle, hsl(20 30% 35% / 0.18), transparent 70%)',
           bottom: '5%', right: '10%',
           filter: 'blur(100px)',
           opacity: isDark ? 0.10 : 0.08,
