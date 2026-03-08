@@ -1,32 +1,57 @@
 
 
-## Add 3D Orbital Background to Dashboard
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Overview
-Replace the current animated blob background in `DashboardBackground` with a Three.js 3D orbital scene using `@react-three/fiber` and `@react-three/drei`. The scene will feature 4 torus rings and 3 orbiting spheres in terra-cotta tones, layered behind the existing gradient, glow zones, and noise overlay.
+### Problema identificado
 
-### Dependencies to Install
-- `three@>=0.133`
-- `@react-three/fiber@^8.18`
-- `@react-three/drei@^9.122.0`
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-### Changes to `src/pages/Home.tsx`
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-**Replace the `DashboardBackground` component** with a layered structure:
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-1. **Base gradient div** (unchanged) — `linear-gradient(135deg, #fdf0e6, #f5dcc4, #fdf0e6)` light / `#0a0608, #1a0f08, #0d0705` dark
-2. **3D Canvas** — `<Canvas>` from R3F, positioned absolute inset-0, transparent background (`gl={{ alpha: true }}`):
-   - 4 `<Torus>` rings at radius 6.0 with varied inclinations (rotations on X/Z), slowly rotating on Y axis at ~0.032 rad/s via `useFrame`
-   - Ring colors: `#c2956a`, `#d2691e`, `#cd853f`, `#b8652a` — `MeshBasicMaterial` with opacity 0.10-0.22 (light) / lower in dark
-   - 3 `<Sphere>` meshes orbiting along the torus paths using sine/cosine position updates in `useFrame`
-   - Camera: `position={[0, 0, 12]}`, `fov={50}`
-   - Respect `prefers-reduced-motion`: skip rotation updates if reduced motion is preferred
-3. **3 radial glow zones** — `radial-gradient` divs with terra-cotta colors, blur 80-100px, opacity 0.04-0.08
-4. **SVG noise overlay** — `feTurbulence fractalNoise baseFrequency=0.65`, opacity 0.02
+### Solução
 
-The 3D scene component (`OrbitalScene`) will be a separate function within the file containing the torus/sphere meshes and `useFrame` logic.
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-### Files
-- **Edit**: `src/pages/Home.tsx` — replace `DashboardBackground` function only; all dashboard data logic unchanged
-- **No other files modified** — edge functions, Layout, other pages untouched
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```
+
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGalleryCredits } from '@/hooks/useGalleryCredits';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
@@ -24,6 +24,8 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { differenceInDays, format, startOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Canvas, useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -59,57 +61,156 @@ function getStatusBadge(status: string) {
   );
 }
 
-/* ─── Background with animated blobs + noise ─── */
+/* ─── 3D Orbital Scene ─── */
+const RING_CONFIGS = [
+  { color: '#c2956a', opacity: 0.18, rotX: 0.3, rotZ: 0.1 },
+  { color: '#d2691e', opacity: 0.14, rotX: -0.5, rotZ: 0.4 },
+  { color: '#cd853f', opacity: 0.10, rotX: 0.7, rotZ: -0.3 },
+  { color: '#b8652a', opacity: 0.22, rotX: -0.2, rotZ: 0.6 },
+];
+
+const SPHERE_CONFIGS = [
+  { ringIndex: 0, speed: 0.4, offset: 0, color: '#c2956a', size: 0.08 },
+  { ringIndex: 1, speed: 0.3, offset: 2.1, color: '#d2691e', size: 0.06 },
+  { ringIndex: 3, speed: 0.35, offset: 4.2, color: '#b8652a', size: 0.07 },
+];
+
+function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opacity: number; rotX: number; rotZ: number; isDark: boolean }) {
+  const ref = useRef<THREE.Mesh>(null!);
+  const finalOpacity = isDark ? opacity * 0.5 : opacity;
+
+  useFrame((_, delta) => {
+    ref.current.rotation.y += 0.032 * delta;
+  });
+
+  return (
+    <mesh ref={ref} rotation={[rotX, 0, rotZ]}>
+      <torusGeometry args={[6.0, 0.015, 16, 100]} />
+      <meshBasicMaterial color={color} transparent opacity={finalOpacity} />
+    </mesh>
+  );
+}
+
+function OrbitingSphere({ ringIndex, speed, offset, color, size, isDark }: { ringIndex: number; speed: number; offset: number; color: string; size: number; isDark: boolean }) {
+  const ref = useRef<THREE.Mesh>(null!);
+  const ring = RING_CONFIGS[ringIndex];
+  const timeRef = useRef(offset);
+
+  useFrame((_, delta) => {
+    timeRef.current += delta * speed;
+    const angle = timeRef.current;
+    const r = 6.0;
+    // Position on the torus path, applying the ring's inclination
+    const x = r * Math.cos(angle);
+    const y = r * Math.sin(angle) * Math.sin(ring.rotX) + r * Math.cos(angle) * Math.sin(ring.rotZ) * 0.3;
+    const z = r * Math.sin(angle) * Math.cos(ring.rotX) * 0.5;
+    ref.current.position.set(x, y, z);
+  });
+
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[size, 16, 16]} />
+      <meshBasicMaterial color={color} transparent opacity={isDark ? 0.4 : 0.7} />
+    </mesh>
+  );
+}
+
+function OrbitalScene({ isDark }: { isDark: boolean }) {
+  return (
+    <>
+      {RING_CONFIGS.map((cfg, i) => (
+        <TorusRing key={i} {...cfg} isDark={isDark} />
+      ))}
+      {SPHERE_CONFIGS.map((cfg, i) => (
+        <OrbitingSphere key={i} {...cfg} isDark={isDark} />
+      ))}
+    </>
+  );
+}
+
+/* ─── Background with 3D orbits + glow + noise ─── */
 function DashboardBackground() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains('dark'));
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  // Check reduced motion preference
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   return (
     <div className="fixed inset-0 -z-10 pointer-events-none">
       {/* Base gradient */}
       <div
         className="absolute inset-0"
         style={{
-          background:
-            'linear-gradient(135deg, hsl(30 40% 95%) 0%, hsl(28 35% 88%) 50%, hsl(30 40% 95%) 100%)',
+          background: isDark
+            ? 'linear-gradient(135deg, #0a0608 0%, #1a0f08 50%, #0d0705 100%)'
+            : 'linear-gradient(135deg, #fdf0e6 0%, #f5dcc4 50%, #fdf0e6 100%)',
         }}
       />
-      <div className="dark:block hidden absolute inset-0" style={{
-        background: 'linear-gradient(135deg, hsl(20 15% 6%) 0%, hsl(16 20% 8%) 50%, hsl(20 12% 5%) 100%)',
-      }} />
 
-      {/* Animated radial blobs */}
+      {/* 3D Canvas */}
+      {!reducedMotion && (
+        <div className="absolute inset-0">
+          <Canvas
+            camera={{ position: [0, 0, 12], fov: 50 }}
+            gl={{ alpha: true, antialias: true }}
+            style={{ background: 'transparent' }}
+            dpr={[1, 1.5]}
+          >
+            <OrbitalScene isDark={isDark} />
+          </Canvas>
+        </div>
+      )}
+
+      {/* Radial glow zones */}
       <div
-        className="absolute w-[600px] h-[600px] rounded-full opacity-[0.07] dark:opacity-[0.04]"
+        className="absolute rounded-full"
         style={{
-          background: 'radial-gradient(circle, hsl(19 49% 45%), transparent 70%)',
-          top: '-10%',
-          left: '-5%',
-          animation: 'float 6s ease-in-out infinite',
+          width: '600px', height: '600px',
+          background: 'radial-gradient(circle, rgba(194,149,106,0.08), transparent 70%)',
+          top: '-10%', left: '-5%',
+          filter: 'blur(80px)',
         }}
       />
       <div
-        className="absolute w-[500px] h-[500px] rounded-full opacity-[0.05] dark:opacity-[0.03]"
+        className="absolute rounded-full"
         style={{
-          background: 'radial-gradient(circle, hsl(24 35% 59%), transparent 70%)',
-          bottom: '5%',
-          right: '-8%',
-          animation: 'float-delayed 8s ease-in-out infinite',
+          width: '500px', height: '500px',
+          background: 'radial-gradient(circle, rgba(210,105,30,0.06), transparent 70%)',
+          bottom: '5%', right: '-8%',
+          filter: 'blur(100px)',
         }}
       />
       <div
-        className="absolute w-[400px] h-[400px] rounded-full opacity-[0.04] dark:opacity-[0.02]"
+        className="absolute rounded-full"
         style={{
-          background: 'radial-gradient(circle, hsl(28 38% 70%), transparent 70%)',
-          top: '40%',
-          left: '50%',
-          animation: 'float 7s ease-in-out infinite 1s',
+          width: '400px', height: '400px',
+          background: 'radial-gradient(circle, rgba(205,133,63,0.04), transparent 70%)',
+          top: '40%', left: '50%',
+          filter: 'blur(90px)',
         }}
       />
 
       {/* Noise overlay */}
       <svg className="absolute inset-0 w-full h-full opacity-[0.02]">
-        <filter id="noise">
+        <filter id="dashboard-noise">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
         </filter>
-        <rect width="100%" height="100%" filter="url(#noise)" />
+        <rect width="100%" height="100%" filter="url(#dashboard-noise)" />
       </svg>
     </div>
   );
