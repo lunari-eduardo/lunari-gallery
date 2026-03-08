@@ -253,6 +253,7 @@ export function PaymentSettings() {
   const pixIntegration = data?.allIntegrations.find(i => i.provedor === 'pix_manual');
   const ipIntegration = data?.allIntegrations.find(i => i.provedor === 'infinitepay');
   const mpIntegration = data?.allIntegrations.find(i => i.provedor === 'mercadopago');
+  const asaasIntegration = data?.allIntegrations.find(i => i.provedor === 'asaas');
 
   return (
     <div className="space-y-6">
