@@ -61,42 +61,45 @@ function getStatusBadge(status: string) {
   );
 }
 
-/* ─── 3D Orbital Scene — Death Globe ─── */
-const TERRA_COTA = ['#c2956a', '#d2691e', '#cd853f', '#b8652a', '#a0522d', '#d4a574', '#e8c4a0', '#e0b48c'];
+/* ─── 3D Orbital Scene — Premium Orbital Field ─── */
+const COPPER = '#F28C52';
 
 const RING_CONFIGS = [
-  // Diagonal 1 — gira em X+ e Y+
-  { color: TERRA_COTA[0], rotation: [Math.PI / 4, 0, 0] as [number, number, number], speedX: 0.004, speedY: 0.006 },
-  // Diagonal 2 (oposta) — gira em X- e Y-
-  { color: TERRA_COTA[1], rotation: [-Math.PI / 4, 0, Math.PI / 2] as [number, number, number], speedX: -0.005, speedY: -0.004 },
-  // Vertical — gira apenas no eixo Y
-  { color: TERRA_COTA[2], rotation: [Math.PI / 2, 0, 0] as [number, number, number], speedX: 0.0, speedY: 0.005 },
-  // Horizontal — gira apenas no eixo X
-  { color: TERRA_COTA[3], rotation: [0, 0, Math.PI / 2] as [number, number, number], speedX: 0.005, speedY: 0.0 },
+  // Ring 1 — tilted horizontal, clockwise, 36s period
+  { initialRotation: [65 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 36, direction: 1, tube: 0.025, opacityLight: 0.35, opacityDark: 0.12 },
+  // Ring 2 — tilted vertical, counter-clockwise, 48s period
+  { initialRotation: [0, 45 * Math.PI / 180, 0] as [number, number, number], axis: 'x' as const, period: 48, direction: -1, tube: 0.015, opacityLight: 0.20, opacityDark: 0.08 },
+  // Ring 3 — opposite tilt, clockwise, 60s period
+  { initialRotation: [-40 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 60, direction: 1, tube: 0.020, opacityLight: 0.25, opacityDark: 0.10 },
+  // Ring 4 — diagonal tilt, counter-clockwise, 72s period
+  { initialRotation: [0, 0, 30 * Math.PI / 180] as [number, number, number], axis: 'x' as const, period: 72, direction: -1, tube: 0.012, opacityLight: 0.12, opacityDark: 0.06 },
 ];
 
 const SPHERE_CONFIGS = [
-  { speed: 0.024, offset: 0, size: 0.06 },
-  { speed: 0.020, offset: Math.PI, size: 0.048 },
-  { speed: 0.016, offset: 1.2, size: 0.072 },
+  { ringIndex: 0, offset: 0, size: 0.08 },
+  { ringIndex: 2, offset: Math.PI, size: 0.08 },
 ];
 
 function TorusRing({ index, isDark, children }: { index: number; isDark: boolean; children?: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null!);
   const cfg = RING_CONFIGS[index];
+  const speed = (2 * Math.PI / cfg.period) * cfg.direction;
 
   useFrame((_, delta) => {
-    ref.current.rotation.x += cfg.speedX * delta;
-    ref.current.rotation.y += cfg.speedY * delta;
+    if (cfg.axis === 'y') {
+      ref.current.rotation.y += speed * delta;
+    } else {
+      ref.current.rotation.x += speed * delta;
+    }
   });
 
-  const opacity = isDark ? 0.10 + index * 0.04 : 0.25 + index * 0.06;
+  const opacity = isDark ? cfg.opacityDark : cfg.opacityLight;
 
   return (
-    <group ref={ref} rotation={cfg.rotation}>
+    <group ref={ref} rotation={cfg.initialRotation}>
       <mesh>
-        <torusGeometry args={[6.0, 0.018, 16, 120]} />
-        <meshBasicMaterial color={cfg.color} transparent opacity={opacity} />
+        <torusGeometry args={[6.0, cfg.tube, 16, 120]} />
+        <meshBasicMaterial color={COPPER} transparent opacity={opacity} />
       </mesh>
       {children}
     </group>
@@ -106,41 +109,35 @@ function TorusRing({ index, isDark, children }: { index: number; isDark: boolean
 function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
   const ref = useRef<THREE.Mesh>(null!);
   const cfg = SPHERE_CONFIGS[index];
+  const ringCfg = RING_CONFIGS[cfg.ringIndex];
+  const orbitSpeed = (2 * Math.PI / ringCfg.period) * ringCfg.direction;
   const timeRef = useRef(cfg.offset);
 
   useFrame((_, delta) => {
-    timeRef.current += delta * cfg.speed;
+    timeRef.current += delta * orbitSpeed;
     const angle = timeRef.current;
     ref.current.position.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
   });
 
-  const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.5 + (index % 3) * 0.12;
-  const color = TERRA_COTA[index % 8];
+  const opacity = isDark ? 0.25 : 0.6;
 
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[cfg.size, 16, 16]} />
-      <meshBasicMaterial color={color} transparent opacity={opacity} />
+      <meshBasicMaterial color={COPPER} transparent opacity={opacity} />
     </mesh>
   );
 }
 
 function OrbitalScene({ isDark }: { isDark: boolean }) {
-  const groupRef = useRef<THREE.Group>(null!);
-
-  useFrame((_, delta) => {
-    groupRef.current.rotation.y += 0.001 * delta;
-  });
-
   return (
-    <group ref={groupRef}>
+    <group>
       <TorusRing index={0} isDark={isDark}>
         <OrbitingSphere index={0} isDark={isDark} />
-        <OrbitingSphere index={1} isDark={isDark} />
       </TorusRing>
       <TorusRing index={1} isDark={isDark} />
       <TorusRing index={2} isDark={isDark}>
-        <OrbitingSphere index={2} isDark={isDark} />
+        <OrbitingSphere index={1} isDark={isDark} />
       </TorusRing>
       <TorusRing index={3} isDark={isDark} />
     </group>
@@ -175,7 +172,7 @@ function DashboardBackground() {
         className="absolute inset-0 transition-colors duration-700"
         style={{
           background: isDark
-            ? 'linear-gradient(135deg, #0a0608 0%, #1a0f08 50%, #0d0705 100%)'
+            ? 'linear-gradient(135deg, #1A0F0A 0%, #251408 50%, #1A0F0A 100%)'
             : 'linear-gradient(135deg, #fefaf6 0%, #f8ece0 50%, #fefaf6 100%)',
         }}
       />
@@ -194,35 +191,25 @@ function DashboardBackground() {
         </div>
       )}
 
-      {/* Glow zones */}
+      {/* Glow zones — top-left and bottom-right */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: '45vw', height: '45vw',
+          background: 'radial-gradient(circle, hsl(24 70% 63% / 0.15), transparent 70%)',
+          top: '5%', left: '10%',
+          filter: 'blur(90px)',
+          opacity: isDark ? 0.12 : 0.10,
+        }}
+      />
       <div
         className="absolute rounded-full"
         style={{
           width: '40vw', height: '40vw',
-          background: 'radial-gradient(circle, hsl(24 35% 59% / 0.12), transparent 70%)',
-          top: '10%', left: '30%',
-          filter: 'blur(80px)',
-          opacity: isDark ? 0.05 : 0.10,
-        }}
-      />
-      <div
-        className="absolute rounded-full"
-        style={{
-          width: '35vw', height: '35vw',
-          background: 'radial-gradient(circle, hsl(20 50% 44% / 0.15), transparent 70%)',
-          top: '45%', right: '20%',
+          background: 'radial-gradient(circle, hsl(20 55% 44% / 0.18), transparent 70%)',
+          bottom: '5%', right: '10%',
           filter: 'blur(100px)',
-          opacity: isDark ? 0.04 : 0.09,
-        }}
-      />
-      <div
-        className="absolute rounded-full"
-        style={{
-          width: '30vw', height: '30vw',
-          background: 'radial-gradient(circle, hsl(24 70% 42% / 0.12), transparent 70%)',
-          bottom: '5%', left: '15%',
-          filter: 'blur(90px)',
-          opacity: isDark ? 0.05 : 0.08,
+          opacity: isDark ? 0.10 : 0.08,
         }}
       />
 
