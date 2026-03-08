@@ -1,57 +1,57 @@
 
 
-## Diagnóstico: Por que o Background 3D Não Aparece
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Causa Raiz
-O Canvas 3D está renderizando corretamente, mas está **completamente escondido** por camadas opacas acima dele:
+### Problema identificado
 
-1. **`body`** no `index.css` (linha 177): `@apply bg-background` → fundo sólido `hsl(30 40% 96%)` (bege opaco no light) / `hsl(20 15% 6%)` (marrom opaco no dark)
-2. **`Layout.tsx`** (linha 61): `<div className="min-h-screen bg-background">` → outro fundo sólido opaco
-3. O `DashboardBackground` está em `fixed inset-0 -z-10` — ou seja, **por trás** dessas camadas opacas
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-```text
-Camada visual (de cima para baixo):
-┌─────────────────────────────┐
-│  Cards / Conteúdo (z-10)    │  ← visível
-│  Layout bg-background       │  ← OPACO, bloqueia tudo abaixo
-│  body bg-background         │  ← OPACO, bloqueia tudo abaixo  
-│  DashboardBackground (-z-10)│  ← Canvas 3D ESCONDIDO
-└─────────────────────────────┘
-```
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
 ### Solução
 
-**Arquivo: `src/pages/Home.tsx`**
-- Mover o `DashboardBackground` para **dentro** do fluxo do componente (não `fixed -z-10`), usando `absolute inset-0` dentro de um container relativo
-- Ou melhor: tornar o background o primeiro elemento **com z-index positivo** acima do layout
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-**Arquivo: `src/components/Layout.tsx`**
-- Tornar o `bg-background` do wrapper do Layout **transparente** quando a rota for `/dashboard`, para que o background 3D do Home apareça
-- Alternativa mais limpa: aceitar uma prop `transparentBg` ou usar uma classe condicional
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-**Abordagem escolhida (mais limpa):**
+**2. Tela de processamento de pagamento (UX aprimorada)**
 
-1. **`Layout.tsx`**: Detectar a rota `/dashboard` e remover `bg-background` do wrapper, substituindo por `bg-transparent`
-2. **`Home.tsx`**: Mudar o `DashboardBackground` de `fixed inset-0 -z-10` para `fixed inset-0 z-0` e garantir que o conteúdo esteja em `z-10` (que já está)
-3. **`index.css`**: O `body bg-background` continua, mas o Canvas com `z-0` e o conteúdo com `z-10` resolve — desde que o Layout wrapper não tenha fundo opaco
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
 
-### Mudanças Específicas
+**3. Evitar re-render do PaymentRedirect no retorno**
 
-**`src/components/Layout.tsx`** (linha 61):
-```tsx
-// De:
-<div className="min-h-screen bg-background">
-// Para:
-<div className={cn("min-h-screen", location.pathname === '/dashboard' ? '' : 'bg-background')}>
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-**`src/pages/Home.tsx`** (linha 166):
-```tsx
-// De:
-<div className="fixed inset-0 -z-10 pointer-events-none">
-// Para:
-<div className="fixed inset-0 z-0 pointer-events-none">
-```
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-Essas duas mudanças fazem o Canvas 3D aparecer no dashboard sem afetar nenhuma outra página.
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
