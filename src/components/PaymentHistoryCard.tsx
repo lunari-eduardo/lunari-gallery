@@ -72,7 +72,7 @@ export function PaymentHistoryCard({
           {cobrancas.map((cobranca) => (
             <div 
               key={cobranca.id} 
-              className="p-3 rounded-lg border border-border/50 bg-background space-y-2"
+              className="p-3 rounded-lg border border-border/50 bg-card backdrop-blur-sm space-y-2"
             >
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
