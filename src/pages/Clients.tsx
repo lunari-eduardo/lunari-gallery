@@ -131,7 +131,7 @@ export default function Clients() {
         <Input
           placeholder="Buscar por nome ou email..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-10"
         />
       </div>
