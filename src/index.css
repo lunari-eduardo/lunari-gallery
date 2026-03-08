@@ -10,10 +10,10 @@
     --background: 30 40% 96%;
     --foreground: 20 20% 12%;
 
-    --card: 30 30% 98%;
+    --card: 30 30% 98% / 0.6;
     --card-foreground: 20 20% 12%;
 
-    --popover: 30 30% 98%;
+    --popover: 30 30% 98% / 0.7;
     --popover-foreground: 20 20% 12%;
 
     --primary: 19 49% 45%;
