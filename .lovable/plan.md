@@ -1,44 +1,57 @@
 
 
-## Corrigir Rotação dos Anéis Orbitais do Dashboard
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problema
-Os 4 anéis têm velocidades e sentidos de rotação muito parecidos, criando um movimento desordenado e visualmente confuso. Todos giram com `speedX` e `speedY` entre 0.003 e 0.005 — praticamente iguais.
+### Problema identificado
+
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
 ### Solução
-Cada anel deve girar em um **sentido claramente diferente** conforme solicitado:
 
-| Anel | Orientação Inicial | Sentido de Rotação |
-|------|---------------------|-------------------|
-| 0 | Diagonal (45°) | X+ / Y+ |
-| 1 | Diagonal oposta (-45°) | X- / Y- |
-| 2 | Vertical (90°) | Apenas Y+ |
-| 3 | Horizontal (0°) | Apenas X+ |
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-### Mudança em `src/pages/Home.tsx`
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-**`RING_CONFIGS`** (linha 67-72):
-```ts
-const RING_CONFIGS = [
-  // Diagonal 1 — gira em X+ e Y+
-  { color: TERRA_COTA[0], rotation: [Math.PI / 4, 0, 0], speedX: 0.004, speedY: 0.006 },
-  // Diagonal 2 (oposta) — gira em X- e Y-
-  { color: TERRA_COTA[1], rotation: [-Math.PI / 4, 0, Math.PI / 2], speedX: -0.005, speedY: -0.004 },
-  // Vertical — gira apenas no eixo Y
-  { color: TERRA_COTA[2], rotation: [Math.PI / 2, 0, 0], speedX: 0.0, speedY: 0.005 },
-  // Horizontal — gira apenas no eixo X
-  { color: TERRA_COTA[3], rotation: [0, 0, Math.PI / 2], speedX: 0.005, speedY: 0.0 },
-];
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-Também **remover a rotação global do grupo** (`OrbitalScene` linhas 127-130) que adiciona rotação extra sobre tudo, bagunçando os sentidos individuais. Substituir por rotação Y muito lenta (0.001) só para dar vida, sem interferir nos sentidos dos anéis.
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-```ts
-useFrame((_, delta) => {
-  groupRef.current.rotation.y += 0.001 * delta;
-});
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
 ```
-
-### Arquivo modificado
-- `src/pages/Home.tsx` — linhas 67-72 (RING_CONFIGS) e 127-130 (OrbitalScene useFrame)
 
