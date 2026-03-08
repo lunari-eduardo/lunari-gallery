@@ -736,7 +736,7 @@ export default function GalleryEdit() {
 
           {/* Reactivate Card - Only if applicable */}
           {canReactivate && (
-            <Card>
+            <Card className="glass">
               <CardHeader>
                 <CardTitle>Reativar Galeria</CardTitle>
                 <CardDescription>
