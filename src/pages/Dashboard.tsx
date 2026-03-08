@@ -216,6 +216,14 @@ export default function Dashboard() {
   const selectGalleries = useMemo(() => allGalleries.filter(g => g.tipo !== 'entrega'), [allGalleries]);
   const deliverGalleries = useMemo(() => allGalleries.filter(g => g.tipo === 'entrega'), [allGalleries]);
 
+  const PAGE_SIZE = 20;
+  const [selectPage, setSelectPage] = useState(1);
+  const [deliverPage, setDeliverPage] = useState(1);
+
+  // Reset page on filter/search change
+  useEffect(() => { setSelectPage(1); }, [search, selectStatusFilter]);
+  useEffect(() => { setDeliverPage(1); }, [search, deliverStatusFilter]);
+
   const filteredSelectGalleries = selectGalleries.filter((gallery) => {
     const matchesSearch =
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
@@ -233,6 +241,12 @@ export default function Dashboard() {
     if (deliverStatusFilter === 'expired') return matchesSearch && gallery.status === 'expired';
     return matchesSearch;
   });
+
+  const totalSelectPages = Math.ceil(filteredSelectGalleries.length / PAGE_SIZE);
+  const paginatedSelectGalleries = filteredSelectGalleries.slice((selectPage - 1) * PAGE_SIZE, selectPage * PAGE_SIZE);
+
+  const totalDeliverPages = Math.ceil(filteredDeliverGalleries.length / PAGE_SIZE);
+  const paginatedDeliverGalleries = filteredDeliverGalleries.slice((deliverPage - 1) * PAGE_SIZE, deliverPage * PAGE_SIZE);
 
   const selectStats = {
     total: selectGalleries.length,
