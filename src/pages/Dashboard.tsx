@@ -389,18 +389,47 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredSelectGalleries.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {filteredSelectGalleries.map((gallery) => (
-                <GalleryCard
-                  key={gallery.id}
-                  gallery={gallery}
-                  thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
-                  onClick={() => navigate(`/gallery/${gallery.id}`)}
-                  onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
-                  onShare={() => setShareGalleryId(gallery.id)}
-                  onDelete={() => setDeleteGalleryId(gallery.id)}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3">
+                {paginatedSelectGalleries.map((gallery) => (
+                  <GalleryCard
+                    key={gallery.id}
+                    gallery={gallery}
+                    thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
+                    onClick={() => navigate(`/gallery/${gallery.id}`)}
+                    onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
+                    onShare={() => setShareGalleryId(gallery.id)}
+                    onDelete={() => setDeleteGalleryId(gallery.id)}
+                  />
+                ))}
+              </div>
+              {totalSelectPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectPage(p => Math.max(1, p - 1))}
+                    disabled={selectPage === 1}
+                    className="gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    {selectPage} de {totalSelectPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectPage(p => Math.min(totalSelectPages, p + 1))}
+                    disabled={selectPage === totalSelectPages}
+                    className="gap-1"
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-16">
