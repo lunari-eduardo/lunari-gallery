@@ -63,21 +63,21 @@ function getStatusBadge(status: string) {
 
 /* ─── 3D Orbital Scene ─── */
 const RING_CONFIGS = [
-  { color: '#c2956a', opacity: 0.18, rotX: 0.3, rotZ: 0.1 },
-  { color: '#d2691e', opacity: 0.14, rotX: -0.5, rotZ: 0.4 },
-  { color: '#cd853f', opacity: 0.10, rotX: 0.7, rotZ: -0.3 },
-  { color: '#b8652a', opacity: 0.22, rotX: -0.2, rotZ: 0.6 },
+  { color: '#c2956a', opacity: 0.35, rotX: 0.4, rotZ: 0.2 },
+  { color: '#d2691e', opacity: 0.28, rotX: -0.6, rotZ: 0.5 },
+  { color: '#cd853f', opacity: 0.25, rotX: 0.8, rotZ: -0.4 },
+  { color: '#b8652a', opacity: 0.40, rotX: -0.3, rotZ: 0.7 },
 ];
 
 const SPHERE_CONFIGS = [
-  { ringIndex: 0, speed: 0.4, offset: 0, color: '#c2956a', size: 0.08 },
-  { ringIndex: 1, speed: 0.3, offset: 2.1, color: '#d2691e', size: 0.06 },
-  { ringIndex: 3, speed: 0.35, offset: 4.2, color: '#b8652a', size: 0.07 },
+  { ringIndex: 0, speed: 0.4, offset: 0, color: '#c2956a', size: 0.14 },
+  { ringIndex: 1, speed: 0.3, offset: 2.1, color: '#d2691e', size: 0.12 },
+  { ringIndex: 3, speed: 0.35, offset: 4.2, color: '#b8652a', size: 0.16 },
 ];
 
 function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opacity: number; rotX: number; rotZ: number; isDark: boolean }) {
   const ref = useRef<THREE.Mesh>(null!);
-  const finalOpacity = isDark ? opacity * 0.5 : opacity;
+  const finalOpacity = isDark ? opacity * 0.7 : opacity;
 
   useFrame((_, delta) => {
     ref.current.rotation.y += 0.032 * delta;
@@ -85,7 +85,7 @@ function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opac
 
   return (
     <mesh ref={ref} rotation={[rotX, 0, rotZ]}>
-      <torusGeometry args={[6.0, 0.015, 16, 100]} />
+      <torusGeometry args={[6.0, 0.035, 16, 100]} />
       <meshBasicMaterial color={color} transparent opacity={finalOpacity} />
     </mesh>
   );
@@ -110,7 +110,7 @@ function OrbitingSphere({ ringIndex, speed, offset, color, size, isDark }: { rin
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[size, 16, 16]} />
-      <meshBasicMaterial color={color} transparent opacity={isDark ? 0.4 : 0.7} />
+      <meshBasicMaterial color={color} transparent opacity={isDark ? 0.6 : 0.9} />
     </mesh>
   );
 }
@@ -166,7 +166,7 @@ function DashboardBackground() {
       {!reducedMotion && (
         <div className="absolute inset-0">
           <Canvas
-            camera={{ position: [0, 0, 12], fov: 50 }}
+            camera={{ position: [0, 0, 14], fov: 50 }}
             gl={{ alpha: true, antialias: true }}
             style={{ background: 'transparent' }}
             dpr={[1, 1.5]}
