@@ -2,7 +2,7 @@ export function InternalBackground() {
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
       {/* Spheres wrapper — dimmed in dark mode to avoid excessive brightness */}
-      <div className="absolute inset-0 opacity-100 dark:opacity-40">
+      <div className="absolute inset-0 opacity-100 dark:opacity-25">
         {/* Right sphere (larger) */}
         <div
           className="absolute eclipse-float"
