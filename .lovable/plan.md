@@ -1,57 +1,57 @@
 
 
-## Configuração de Taxas de Antecipação do Asaas
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Situação atual
-A interface já tem um toggle de "Taxa de antecipação" com um único campo percentual (`taxaAntecipacaoPercentual`). A `AsaasData` no hook tem `taxaAntecipacao: boolean` e `taxaAntecipacaoPercentual: number`.
+### Problema identificado
 
-### O que muda
-Substituir o campo único por dois campos separados e adicionar função utilitária de cálculo.
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-### Alterações
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-#### 1. `src/hooks/usePaymentIntegration.ts` — Atualizar `AsaasData`
-- Remover `taxaAntecipacaoPercentual: number`
-- Adicionar:
-  - `taxaAntecipacaoCreditoAvista: number` — taxa mensal para crédito 1x
-  - `taxaAntecipacaoCreditoParcelado: number` — taxa mensal para crédito parcelado
-- Atualizar defaults em `updateAsaasSettings` e `saveAsaas`
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-#### 2. `src/lib/anticipationUtils.ts` — NOVO arquivo de cálculo
-```typescript
-export function calcularAntecipacao(
-  valorTotal: number,
-  parcelas: number,
-  taxaMensal: number // ex: 1.25 para 1.25%
-): { valorLiquido: number; totalTaxa: number; detalheParcelas: Array<{ parcela: number; meses: number; taxa: number; liquido: number }> }
+### Solução
+
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
 ```
-Lógica:
-- `valor_parcela = valorTotal / parcelas`
-- Para cada parcela i (1..n): `taxa_total = taxaMensal * i`, `liquido = valor_parcela * (1 - taxa_total/100)`
-- Soma dos líquidos = `valorLiquido`
-- Para crédito à vista (1x): mesma fórmula com parcelas=1
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```
 
-#### 3. `src/components/settings/PaymentSettings.tsx` — UI
-- Substituir o campo único "Percentual de antecipação" por dois campos:
-  - "Taxa mensal — Crédito à vista (%)" 
-  - "Taxa mensal — Crédito parcelado (%)"
-- Adicionar simulador inline: ao preencher os campos, mostrar exemplo de cálculo (R$ 1000, 3x = valor líquido X)
-- Atualizar states: `asaasTaxaAntecipacaoPercentual` → `asaasTaxaAvista` + `asaasTaxaParcelado`
-- Atualizar handlers `handleSaveAsaas` e `handleSaveAsaasSettings`
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-#### 4. `supabase/functions/asaas-gallery-payment/index.ts` — Aplicar cálculo
-- Quando `taxaAntecipacao === true`:
-  - Para billingType `CREDIT_CARD` com 1 parcela: aplicar `taxaAntecipacaoCreditoAvista`
-  - Para `CREDIT_CARD` com >1 parcela: aplicar `taxaAntecipacaoCreditoParcelado`
-  - Calcular valor final usando a mesma fórmula de antecipação
-  - O valor cobrado ao cliente = `valorTotal + (valorTotal - valorLiquido)` → ou seja, o custo da antecipação é adicionado ao valor
-- **Não** exibir detalhamento no checkout (conforme regra)
+### Arquivos a modificar
 
-#### 5. Edge functions existentes — Segurança
-- `infinitepay-create-link` e `mercadopago-create-link`: **sem alteração**
-- `gallery-create-payment` e `confirm-selection`: **sem alteração** (já roteiam para asaas-gallery-payment)
-- `asaas-gallery-webhook`: **sem alteração**
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
 
-### Compatibilidade
-- Dados existentes com `taxaAntecipacaoPercentual` serão migrados: se existir valor antigo, será usado como fallback para ambos os campos até o usuário reconfigurare
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 

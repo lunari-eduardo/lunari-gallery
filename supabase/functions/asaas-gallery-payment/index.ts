@@ -82,6 +82,8 @@ Deno.serve(async (req) => {
       absorverTaxa?: boolean;
       taxaAntecipacao?: boolean;
       taxaAntecipacaoPercentual?: number;
+      taxaAntecipacaoCreditoAvista?: number;
+      taxaAntecipacaoCreditoParcelado?: number;
     };
 
     const asaasBaseUrl = settings.environment === 'production'
@@ -193,14 +195,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Create payment in Asaas
+    // 3. Calculate anticipation fee if applicable
+    let valorFinal = valor;
+    let anticipationCost = 0;
+
+    if (finalBillingType === 'CREDIT_CARD' && settings.taxaAntecipacao) {
+      const installments = body.installmentCount && body.installmentCount > 1 ? body.installmentCount : 1;
+      // Use new dual-field rates; fallback to old single field for backward compat
+      const taxaMensal = installments === 1
+        ? (settings.taxaAntecipacaoCreditoAvista ?? settings.taxaAntecipacaoPercentual ?? 0)
+        : (settings.taxaAntecipacaoCreditoParcelado ?? settings.taxaAntecipacaoPercentual ?? 0);
+
+      if (taxaMensal > 0) {
+        // Calculate anticipation cost using the same formula as frontend
+        const valorParcela = valor / installments;
+        let valorLiquido = 0;
+        for (let i = 1; i <= installments; i++) {
+          const taxaTotal = taxaMensal * i;
+          valorLiquido += valorParcela * (1 - taxaTotal / 100);
+        }
+        anticipationCost = Math.round((valor - valorLiquido) * 100) / 100;
+        valorFinal = Math.round((valor + anticipationCost) * 100) / 100;
+        console.log(`📊 Antecipação: taxa=${taxaMensal}%/mês, parcelas=${installments}, custo=R$${anticipationCost}, valor final=R$${valorFinal}`);
+      }
+    }
+
+    // 4. Create payment in Asaas
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 3); // 3 days from now
 
     const paymentBody: Record<string, unknown> = {
       customer: asaasCustomerId,
       billingType: finalBillingType,
-      value: valor,
+      value: valorFinal,
       dueDate: dueDate.toISOString().split('T')[0],
       description: descricao || 'Pagamento galeria de fotos',
       externalReference: galeriaId || undefined,
@@ -216,7 +243,7 @@ Deno.serve(async (req) => {
     if (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) {
       const maxParcelas = settings.maxParcelas || 12;
       paymentBody.installmentCount = Math.min(body.installmentCount, maxParcelas);
-      paymentBody.installmentValue = valor / (paymentBody.installmentCount as number);
+      paymentBody.installmentValue = valorFinal / (paymentBody.installmentCount as number);
     }
 
     // Credit card data for transparent checkout
@@ -319,6 +346,9 @@ Deno.serve(async (req) => {
       billingType: finalBillingType,
       status: paymentData.status,
       checkoutUrl,
+      valorOriginal: valor,
+      valorCobrado: valorFinal,
+      custoAntecipacao: anticipationCost,
     };
 
     if (finalBillingType === 'PIX' && pixData) {

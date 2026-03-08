@@ -33,7 +33,10 @@ export interface AsaasData {
   maxParcelas: number;
   absorverTaxa: boolean;
   taxaAntecipacao: boolean;
-  taxaAntecipacaoPercentual: number;
+  /** @deprecated Use taxaAntecipacaoCreditoAvista / taxaAntecipacaoCreditoParcelado */
+  taxaAntecipacaoPercentual?: number;
+  taxaAntecipacaoCreditoAvista: number;
+  taxaAntecipacaoCreditoParcelado: number;
 }
 
 export interface PaymentIntegration {
@@ -333,7 +336,8 @@ export function usePaymentIntegration() {
         maxParcelas: 12,
         absorverTaxa: false,
         taxaAntecipacao: false,
-        taxaAntecipacaoPercentual: 0,
+        taxaAntecipacaoCreditoAvista: 0,
+        taxaAntecipacaoCreditoParcelado: 0,
       };
       const newSettings = { ...currentSettings, ...settings };
 
