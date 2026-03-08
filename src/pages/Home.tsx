@@ -65,20 +65,20 @@ function getStatusBadge(status: string) {
 const TERRA_COTA = ['#c2956a', '#d2691e', '#cd853f', '#b8652a', '#a0522d', '#d4a574', '#e8c4a0', '#e0b48c'];
 
 const RING_CONFIGS = [
-  { color: TERRA_COTA[0], rotation: [Math.PI / 2, 0, 0] as [number, number, number], speed: 0.024 },
-  { color: TERRA_COTA[1], rotation: [0, 0, 0] as [number, number, number], speed: 0.02 },
-  { color: TERRA_COTA[2], rotation: [Math.PI / 4, Math.PI / 4, 0] as [number, number, number], speed: 0.016 },
-  { color: TERRA_COTA[3], rotation: [-Math.PI / 4, Math.PI / 4, 0] as [number, number, number], speed: 0.028 },
+  { color: TERRA_COTA[0], rotation: [Math.PI / 2, 0, 0] as [number, number, number], speed: 0.014 },
+  { color: TERRA_COTA[1], rotation: [0, 0, 0] as [number, number, number], speed: 0.012 },
+  { color: TERRA_COTA[2], rotation: [Math.PI / 4, Math.PI / 4, 0] as [number, number, number], speed: 0.010 },
+  { color: TERRA_COTA[3], rotation: [-Math.PI / 4, Math.PI / 4, 0] as [number, number, number], speed: 0.016 },
 ];
 
 const SPHERE_CONFIGS = [
-  { ringIndex: 0, speed: 0.096, offset: 0, size: 0.06 },
-  { ringIndex: 0, speed: 0.08, offset: Math.PI, size: 0.048 },
-  { ringIndex: 2, speed: 0.064, offset: 1.2, size: 0.072 },
+  { speed: 0.048, offset: 0, size: 0.06 },
+  { speed: 0.04, offset: Math.PI, size: 0.048 },
+  { speed: 0.032, offset: 1.2, size: 0.072 },
 ];
 
-function TorusRing({ index, isDark }: { index: number; isDark: boolean }) {
-  const ref = useRef<THREE.Mesh>(null!);
+function TorusRing({ index, isDark, children }: { index: number; isDark: boolean; children?: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null!);
   const cfg = RING_CONFIGS[index];
 
   useFrame((_, delta) => {
@@ -88,27 +88,25 @@ function TorusRing({ index, isDark }: { index: number; isDark: boolean }) {
   const opacity = isDark ? 0.10 + index * 0.04 : 0.1 + index * 0.03;
 
   return (
-    <mesh ref={ref} rotation={cfg.rotation}>
-      <torusGeometry args={[6.0, 0.012, 16, 120]} />
-      <meshBasicMaterial color={cfg.color} transparent opacity={opacity} />
-    </mesh>
+    <group ref={ref} rotation={cfg.rotation}>
+      <mesh>
+        <torusGeometry args={[6.0, 0.012, 16, 120]} />
+        <meshBasicMaterial color={cfg.color} transparent opacity={opacity} />
+      </mesh>
+      {children}
+    </group>
   );
 }
 
 function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
   const ref = useRef<THREE.Mesh>(null!);
   const cfg = SPHERE_CONFIGS[index];
-  const ring = RING_CONFIGS[cfg.ringIndex];
   const timeRef = useRef(cfg.offset);
-  const quat = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(...ring.rotation)), [ring.rotation]);
-  const localPos = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, delta) => {
     timeRef.current += delta * cfg.speed;
     const angle = timeRef.current;
-    localPos.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
-    localPos.applyQuaternion(quat);
-    ref.current.position.copy(localPos);
+    ref.current.position.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
   });
 
   const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.3 + (index % 3) * 0.1;
@@ -126,17 +124,20 @@ function OrbitalScene({ isDark }: { isDark: boolean }) {
   const groupRef = useRef<THREE.Group>(null!);
 
   useFrame((_, delta) => {
-    groupRef.current.rotation.y += 0.032 * delta;
+    groupRef.current.rotation.y += 0.018 * delta;
   });
 
   return (
     <group ref={groupRef}>
-      {RING_CONFIGS.map((_, i) => (
-        <TorusRing key={i} index={i} isDark={isDark} />
-      ))}
-      {SPHERE_CONFIGS.map((_, i) => (
-        <OrbitingSphere key={i} index={i} isDark={isDark} />
-      ))}
+      <TorusRing index={0} isDark={isDark}>
+        <OrbitingSphere index={0} isDark={isDark} />
+        <OrbitingSphere index={1} isDark={isDark} />
+      </TorusRing>
+      <TorusRing index={1} isDark={isDark} />
+      <TorusRing index={2} isDark={isDark}>
+        <OrbitingSphere index={2} isDark={isDark} />
+      </TorusRing>
+      <TorusRing index={3} isDark={isDark} />
     </group>
   );
 }
