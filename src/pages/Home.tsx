@@ -70,9 +70,9 @@ const RING_CONFIGS = [
 ];
 
 const SPHERE_CONFIGS = [
-  { ringIndex: 0, speed: 0.4, offset: 0, color: '#c2956a', size: 0.08 },
-  { ringIndex: 1, speed: 0.3, offset: 2.1, color: '#d2691e', size: 0.06 },
-  { ringIndex: 3, speed: 0.35, offset: 4.2, color: '#b8652a', size: 0.07 },
+  { ringIndex: 0, speed: 0.4, offset: 0, color: '#c2956a', size: 0.14 },
+  { ringIndex: 1, speed: 0.3, offset: 2.1, color: '#d2691e', size: 0.12 },
+  { ringIndex: 3, speed: 0.35, offset: 4.2, color: '#b8652a', size: 0.16 },
 ];
 
 function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opacity: number; rotX: number; rotZ: number; isDark: boolean }) {
