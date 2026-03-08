@@ -85,7 +85,7 @@ function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opac
 
   return (
     <mesh ref={ref} rotation={[rotX, 0, rotZ]}>
-      <torusGeometry args={[6.0, 0.015, 16, 100]} />
+      <torusGeometry args={[6.0, 0.035, 16, 100]} />
       <meshBasicMaterial color={color} transparent opacity={finalOpacity} />
     </mesh>
   );
