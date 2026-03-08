@@ -1,57 +1,35 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Ajustar eclipse: duas esferas + centro mais claro + movimento vertical
 
-### Problema identificado
+### Problema
+- Apenas uma esfera centralizada
+- Centro do radial muito escuro (`rgba(60, 30, 15, 0.55)`)
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+### Mudanças em `src/components/InternalBackground.tsx`
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+**Duas esferas com posições distintas:**
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+1. **Esfera direita (maior):** posição `top: 20%, right: -5%`, tamanho `50vw` (max 800px)
+2. **Esfera esquerda (menor):** posição `top: 40%, left: -5%`, tamanho `35vw` (max 550px)
 
-### Solução
+**Centro mais claro** — substituir o centro escuro por tons âmbar médios:
+- `rgba(60, 30, 15, 0.55)` → `rgba(172, 94, 58, 0.35)`
+- Manter a transição para âmbar claro e transparente
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
-
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+**Movimento vertical (sobe/desce):** Adicionar novo keyframe `eclipse-float` no CSS:
+```css
+@keyframes eclipse-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-30px); }
+}
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
+- Esfera direita: 25s
+- Esfera esquerda: 35s (delay -15s para dessincronizar)
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+Cada esfera terá seu glow próprio ao redor.
 
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+### Arquivos
+- `src/components/InternalBackground.tsx` — reescrever com 2 esferas
+- `src/index.css` — adicionar keyframe `eclipse-float`
 
