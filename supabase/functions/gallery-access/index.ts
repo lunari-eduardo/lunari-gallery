@@ -226,12 +226,62 @@ serve(async (req) => {
 
       console.log("⏳ Gallery awaiting payment:", gallery.id, "method:", paymentMethod);
 
+      // For Asaas transparent checkout: return settings so frontend can render inline checkout
+      let asaasCheckoutData = null;
+      const resolvedMethod = paymentMethod || pendingProvedor || 'pix_manual';
+      if (resolvedMethod === 'asaas') {
+        const { data: asaasInteg } = await supabase
+          .from("usuarios_integracoes")
+          .select("dados_extras")
+          .eq("user_id", gallery.user_id)
+          .eq("provedor", "asaas")
+          .eq("status", "ativo")
+          .maybeSingle();
+
+        if (asaasInteg?.dados_extras) {
+          const s = asaasInteg.dados_extras as Record<string, unknown>;
+          // Normalize session_id
+          let sessionIdTexto = gallery.session_id;
+          if (sessionIdTexto && !sessionIdTexto.startsWith('workflow-') && !sessionIdTexto.startsWith('session_')) {
+            const { data: sess } = await supabase
+              .from("clientes_sessoes")
+              .select("session_id")
+              .or(`id.eq.${sessionIdTexto},session_id.eq.${sessionIdTexto}`)
+              .maybeSingle();
+            sessionIdTexto = sess?.session_id || sessionIdTexto;
+          }
+
+          const extrasCount = gallery.fotos_selecionadas ? Math.max(0, (gallery.fotos_selecionadas || 0) - (gallery.fotos_incluidas || 0)) : 0;
+          asaasCheckoutData = {
+            galeriaId: gallery.id,
+            userId: gallery.user_id,
+            valorTotal: pendingValor || gallery.valor_extras || 0,
+            descricao: `${extrasCount} foto${extrasCount !== 1 ? 's' : ''} extra${extrasCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`,
+            qtdFotos: extrasCount,
+            clienteId: gallery.cliente_id,
+            sessionId: sessionIdTexto,
+            galleryToken: gallery.public_token,
+            enabledMethods: {
+              pix: s.habilitarPix !== false,
+              creditCard: s.habilitarCartao !== false,
+              boleto: s.habilitarBoleto === true,
+            },
+            maxParcelas: (s.maxParcelas as number) || 12,
+            absorverTaxa: s.absorverTaxa || false,
+            taxaAntecipacao: s.taxaAntecipacao || false,
+            taxaAntecipacaoPercentual: s.taxaAntecipacaoPercentual,
+            taxaAntecipacaoCreditoAvista: s.taxaAntecipacaoCreditoAvista,
+            taxaAntecipacaoCreditoParcelado: s.taxaAntecipacaoCreditoParcelado,
+          };
+        }
+      }
+
       return new Response(
         JSON.stringify({
           pendingPayment: true,
           galleryId: gallery.id,
           sessionName: gallery.nome_sessao,
-          paymentMethod: paymentMethod || pendingProvedor || 'pix_manual',
+          paymentMethod: resolvedMethod,
           pixDados: pixDados,
           checkoutUrl: pendingCheckoutUrl,
           cobrancaId: pendingCobrancaId,
@@ -239,6 +289,7 @@ serve(async (req) => {
           studioSettings: settings || null,
           theme: themeData,
           clientMode,
+          asaasCheckoutData,
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',

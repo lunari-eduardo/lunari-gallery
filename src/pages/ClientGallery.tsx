@@ -23,6 +23,7 @@ import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
+import { AsaasCheckout, AsaasCheckoutData } from '@/components/AsaasCheckout';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
 import { DiscountProgressBar } from '@/components/DiscountProgressBar';
 import { DownloadModal } from '@/components/DownloadModal';
@@ -117,6 +118,9 @@ export default function ClientGallery() {
     tipoChave?: string;
     valorTotal: number;
   } | null>(null);
+
+  // Asaas transparent checkout state
+  const [asaasCheckoutData, setAsaasCheckoutData] = useState<AsaasCheckoutData | null>(null);
   
   // Payment return detection state
   const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(() => {
@@ -470,6 +474,16 @@ export default function ClientGallery() {
         return;
       }
       
+      // Asaas transparent checkout - show inline payment form
+      if (data.requiresPayment && data.transparentCheckout && data.asaasCheckoutData) {
+        setAsaasCheckoutData(data.asaasCheckoutData as AsaasCheckoutData);
+        setCurrentStep('payment');
+        toast.success('Seleção confirmada!', {
+          description: 'Escolha a forma de pagamento.',
+        });
+        return;
+      }
+
       // Checkout externo (InfinitePay/MercadoPago) - redirect BEFORE confirming
       if (data.requiresPayment && data.checkoutUrl) {
         // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
@@ -1090,6 +1104,24 @@ export default function ClientGallery() {
       );
     }
 
+    // Asaas transparent checkout - show inline payment form
+    if (pendingPaymentMethod === 'asaas' && galleryResponse.asaasCheckoutData) {
+      return (
+        <AsaasCheckout
+          data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+          studioName={galleryResponse.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+          onPaymentConfirmed={() => {
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
+          }}
+          themeStyles={themeStyles}
+          backgroundMode={pendingBgMode}
+        />
+      );
+    }
+
     // InfinitePay/MercadoPago - show payment pending screen with auto-polling
     if (pendingCheckoutUrl || pendingPaymentMethod === 'infinitepay' || pendingPaymentMethod === 'mercadopago') {
       return (
@@ -1572,6 +1604,29 @@ export default function ClientGallery() {
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
         onPaymentConfirmed={handlePixFinalizePayment}
         isConfirming={isConfirmingPixPayment}
+        themeStyles={themeStyles}
+        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+      />
+    );
+  }
+
+  // Render Asaas Transparent Checkout
+  if (currentStep === 'payment' && asaasCheckoutData) {
+    return (
+      <AsaasCheckout
+        data={asaasCheckoutData}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+        onPaymentConfirmed={() => {
+          setAsaasCheckoutData(null);
+          setCurrentStep('confirmed');
+          setIsConfirmed(true);
+          refetchGallery();
+        }}
+        onCancel={() => {
+          setAsaasCheckoutData(null);
+          setCurrentStep('confirmation');
+        }}
         themeStyles={themeStyles}
         backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
       />
