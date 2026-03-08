@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
         .select('provedor, dados_extras, access_token, is_default')
         .eq('user_id', gallery.user_id)
         .eq('status', 'ativo')
-        .in('provedor', ['mercadopago', 'infinitepay']);
+        .in('provedor', ['mercadopago', 'infinitepay', 'asaas']);
 
       if (!integracoes || integracoes.length === 0) {
         return new Response(
