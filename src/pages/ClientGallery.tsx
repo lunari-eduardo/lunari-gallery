@@ -1104,6 +1104,24 @@ export default function ClientGallery() {
       );
     }
 
+    // Asaas transparent checkout - show inline payment form
+    if (pendingPaymentMethod === 'asaas' && galleryResponse.asaasCheckoutData) {
+      return (
+        <AsaasCheckout
+          data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+          studioName={galleryResponse.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+          onPaymentConfirmed={() => {
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
+          }}
+          themeStyles={themeStyles}
+          backgroundMode={pendingBgMode}
+        />
+      );
+    }
+
     // InfinitePay/MercadoPago - show payment pending screen with auto-polling
     if (pendingCheckoutUrl || pendingPaymentMethod === 'infinitepay' || pendingPaymentMethod === 'mercadopago') {
       return (
