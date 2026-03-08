@@ -1,62 +1,57 @@
 
 
-## Melhorar efeito glassmorphism no modo light
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problema
-Fundo e cards têm luminosidade muito similar, criando uma "superfície única" sem separação de camadas. O efeito vidro não aparece.
+### Problema identificado
 
-### Mudanças
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-**1. `src/index.css` — Glass tokens light mode (linhas 61-64)**
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-Aumentar transparência dos cards e adicionar sombra com elevação:
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-```css
---glass-bg: 0 0% 100% / 0.55;
---glass-border: 0 0% 100% / 0.60;
---glass-shadow: 0 8px 25px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
+### Solução
+
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-**2. `src/index.css` — Classe `.glass` (linhas 189-194)**
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-Adicionar gradiente interno para simular refração de vidro no light mode:
+### Arquivos a modificar
 
-```css
-.glass {
-  @apply backdrop-blur-xl rounded-2xl border transition-all duration-300;
-  background: linear-gradient(180deg, hsl(0 0% 100% / 0.75), hsl(0 0% 100% / 0.45));
-  border-color: hsl(var(--glass-border));
-  box-shadow: var(--glass-shadow);
-}
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
 ```
-
-Mover o gradiente para funcionar apenas no light mode (dark mantém o token `--glass-bg` original). Usar seletor `:root:not(.dark)` ou aplicar via variável CSS.
-
-**3. `src/pages/Home.tsx` — Gradiente base light (linha 176)**
-
-Substituir gradiente uniforme por base + pontos de luz:
-
-```
-background: #F6EFE9;
-+ radial-gradient(circle at 20% 10%, rgba(242,140,82,0.12), transparent 40%)
-+ radial-gradient(circle at 80% 90%, rgba(255,200,150,0.10), transparent 45%)
-```
-
-Isso cria profundidade no fundo, fazendo os cards translúcidos se destacarem.
-
-**4. `src/pages/Home.tsx` — STATUS_MAP cores (linhas 43-49)**
-
-Reduzir saturação das cores do gráfico para tons mais pastel no light mode:
-
-| Status | Atual | Novo |
-|--------|-------|------|
-| Criadas | `#C9CED6` | `#C9CED6` (ok) |
-| Enviadas | `#4A90E2` | `#7EB0E8` |
-| Em seleção | `#F28C52` | `#F2A878` |
-| Concluídas | `#4CAF7A` | `#7EC9A0` |
-| Expiradas | `#F26B6B` | `#E89090` |
-
-### Arquivos
-- `src/index.css` (tokens glass + classe .glass)
-- `src/pages/Home.tsx` (gradiente light + cores gráfico)
 

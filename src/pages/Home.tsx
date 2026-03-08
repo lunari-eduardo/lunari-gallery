@@ -41,10 +41,10 @@ function formatCurrency(value: number): string {
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   rascunho: { label: 'Criadas', color: '#C9CED6' },
-  enviado: { label: 'Enviadas', color: '#4A90E2' },
-  selecao_iniciada: { label: 'Em seleção', color: '#F28C52' },
-  selecao_completa: { label: 'Concluídas', color: '#4CAF7A' },
-  expirado: { label: 'Expiradas', color: '#F26B6B' },
+  enviado: { label: 'Enviadas', color: '#7EB0E8' },
+  selecao_iniciada: { label: 'Em seleção', color: '#F2A878' },
+  selecao_completa: { label: 'Concluídas', color: '#7EC9A0' },
+  expirado: { label: 'Expiradas', color: '#E89090' },
 };
 
 function getStatusBadge(status: string) {
@@ -173,7 +173,7 @@ function DashboardBackground() {
         style={{
           background: isDark
             ? 'linear-gradient(135deg, #0D0A08 0%, #141010 50%, #0D0A08 100%)'
-            : 'linear-gradient(135deg, #fefaf6 0%, #f8ece0 50%, #fefaf6 100%)',
+            : 'radial-gradient(circle at 20% 10%, rgba(242,140,82,0.12), transparent 40%), radial-gradient(circle at 80% 90%, rgba(255,200,150,0.10), transparent 45%), linear-gradient(135deg, #F6EFE9 0%, #F6EFE9 100%)',
         }}
       />
 

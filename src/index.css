@@ -58,9 +58,9 @@
     --terra-900: 10 45% 20%;
 
     /* Glass tokens */
-    --glass-bg: 30 30% 98% / 0.30;
-    --glass-border: 30 30% 85% / 0.40;
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    --glass-bg: 0 0% 100% / 0.55;
+    --glass-border: 0 0% 100% / 0.60;
+    --glass-shadow: 0 8px 25px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
     --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
 
     /* Legacy tokens kept for compatibility */
@@ -191,6 +191,10 @@
     background: hsl(var(--glass-bg));
     border-color: hsl(var(--glass-border));
     box-shadow: var(--glass-shadow);
+  }
+
+  :root:not(.dark) .glass {
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.75), hsl(0 0% 100% / 0.45));
   }
 
   .glass:hover {
