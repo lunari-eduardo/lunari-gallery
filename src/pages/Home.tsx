@@ -110,7 +110,7 @@ function OrbitingSphere({ ringIndex, speed, offset, color, size, isDark }: { rin
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[size, 16, 16]} />
-      <meshBasicMaterial color={color} transparent opacity={isDark ? 0.4 : 0.7} />
+      <meshBasicMaterial color={color} transparent opacity={isDark ? 0.6 : 0.9} />
     </mesh>
   );
 }
