@@ -1,57 +1,26 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Corrigir Dropdowns Transparentes
 
-### Problema identificado
-
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
-
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
-
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+### Problema
+O `SelectContent` usa `bg-popover` que tem opacidade 0.42 no modo claro, mas **não tem `backdrop-blur`** — diferente do `DropdownMenuContent` e `PopoverContent` que já têm `backdrop-blur-xl`. Isso faz o dropdown do Select ficar transparente e ilegível.
 
 ### Solução
+Adicionar `backdrop-blur-xl` e `border-border/50` ao `SelectContent` em `src/components/ui/select.tsx`, alinhando com o padrão já usado nos outros componentes de overlay (Dropdown, Popover).
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+### Alteração
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**`src/components/ui/select.tsx`** — linha 69, adicionar `backdrop-blur-xl border-border/50` à className do `SelectPrimitive.Content`:
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+Antes:
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+"relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md ..."
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
+Depois:
 ```
+"relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-border/50 bg-popover text-popover-foreground shadow-md backdrop-blur-xl ..."
+```
+
+Apenas 1 arquivo, 1 linha alterada.
 
