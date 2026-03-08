@@ -1,57 +1,43 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Substituir glows radiais por aurora gradient no dashboard
 
-### Problema identificado
+### O que muda
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+Trocar as duas "glow zones" (divs radiais estáticas) por um aurora gradient animado bege-âmbar que se move suavemente pelo fundo, criando mais profundidade para o efeito vidro.
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+### Mudanças em `src/pages/Home.tsx`
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+**1. Base gradient (linha 170-178)**
+- Light: fundo branco puro `#FFFFFF` (não mais cream) para maximizar contraste com cards glass
+- Dark: manter gradiente escuro atual
 
-### Solução
+**2. Substituir glow zones (linhas 194-214) por aurora**
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+Criar um `div` absoluto com `background` composto por múltiplos gradientes lineares em ângulos diferentes, com animação CSS `@keyframes aurora` que rotaciona e translada suavemente (~20s cycle):
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+Light mode:
+- linear-gradient(120deg, rgba(242,170,100,0.15), transparent 50%)
+- linear-gradient(240deg, rgba(255,200,140,0.12), transparent 50%)  
+- linear-gradient(0deg, rgba(230,180,130,0.08), transparent 60%)
+- filter: blur(60px), animation: aurora 20s ease infinite
+
+Dark mode:
+- Mesmos gradientes com opacidade ~0.04-0.06
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+**3. Adicionar keyframes aurora em `src/index.css`**
 
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
+```css
+@keyframes aurora {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(2%, -3%) rotate(2deg); }
+  66% { transform: translate(-2%, 2%) rotate(-1deg); }
+}
 ```
+
+### Arquivos
+- `src/pages/Home.tsx` — substituir glow zones por aurora div
+- `src/index.css` — adicionar keyframes `aurora`
 
