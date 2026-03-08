@@ -46,6 +46,8 @@ export function PaymentSettings() {
   const [showPixForm, setShowPixForm] = useState(false);
   const [showIpForm, setShowIpForm] = useState(false);
   const [showMpSettings, setShowMpSettings] = useState(false);
+  const [showAsaasForm, setShowAsaasForm] = useState(false);
+  const [showAsaasSettings, setShowAsaasSettings] = useState(false);
   
   // PIX Manual fields
   const [chavePix, setChavePix] = useState('');
