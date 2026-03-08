@@ -148,7 +148,7 @@ export default function Clients() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredClients.length === 0 ? (
+            {paginatedClients.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-12">
                   <User className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -156,7 +156,7 @@ export default function Clients() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredClients.map((client) => (
+              paginatedClients.map((client) => (
                 <TableRow key={client.id}>
                   <TableCell>
                     <div>
@@ -204,6 +204,35 @@ export default function Clients() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-muted-foreground">
+            Página {currentPage} de {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Próxima
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       <ClientModal
