@@ -371,3 +371,24 @@
     50% { transform: translateY(-12px); }
   }
 }
+
+@keyframes blob-drift-1 {
+  0%   { top: -10%; right: -10%; }
+  100% { top: 20%;  right: 30%;  }
+}
+
+@keyframes blob-drift-2 {
+  0%   { bottom: -5%; left: -10%; }
+  100% { bottom: 30%; left: 25%;  }
+}
+
+@keyframes blob-drift-3 {
+  0%   { bottom: -10%; right: -5%; }
+  100% { bottom: 25%;  right: 35%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blob-drift-1, .blob-drift-2, .blob-drift-3 {
+    animation: none !important;
+  }
+}
