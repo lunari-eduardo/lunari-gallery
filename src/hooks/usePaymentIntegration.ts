@@ -33,7 +33,10 @@ export interface AsaasData {
   maxParcelas: number;
   absorverTaxa: boolean;
   taxaAntecipacao: boolean;
-  taxaAntecipacaoPercentual: number;
+  /** @deprecated Use taxaAntecipacaoCreditoAvista / taxaAntecipacaoCreditoParcelado */
+  taxaAntecipacaoPercentual?: number;
+  taxaAntecipacaoCreditoAvista: number;
+  taxaAntecipacaoCreditoParcelado: number;
 }
 
 export interface PaymentIntegration {
