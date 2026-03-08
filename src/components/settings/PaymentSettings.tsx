@@ -299,6 +299,7 @@ export function PaymentSettings() {
                       {integration.provedor === 'pix_manual' && (integration.dadosExtras as PixManualData)?.nomeTitular}
                       {integration.provedor === 'infinitepay' && `@${(integration.dadosExtras as InfinitePayData)?.handle}`}
                       {integration.provedor === 'mercadopago' && integration.mpUserId && `ID: ${integration.mpUserId}`}
+                      {integration.provedor === 'asaas' && ((integration.dadosExtras as AsaasData)?.environment === 'production' ? 'Produção' : 'Sandbox')}
                     </p>
                   </div>
                 </div>
