@@ -365,7 +365,7 @@ export default function GalleryEdit() {
         {/* Left Column - Info & Deadline */}
         <div className="space-y-6">
           {/* Basic Info Card */}
-          <Card>
+          <Card className="glass">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Image className="h-5 w-5" />
