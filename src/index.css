@@ -391,8 +391,19 @@
   100% { bottom: 25%;  right: 35%; }
 }
 
+@keyframes aurora {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(2%, -3%) rotate(2deg); }
+  66% { transform: translate(-2%, 2%) rotate(-1deg); }
+}
+
+.aurora-animate {
+  animation: aurora 20s ease infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .blob-drift-1, .blob-drift-2, .blob-drift-3 {
+  .blob-drift-1, .blob-drift-2, .blob-drift-3,
+  .aurora-animate {
     animation: none !important;
   }
 }
