@@ -1,57 +1,33 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Corrigir color banding nos gradientes radiais
 
-### Problema identificado
+### Problema
+Os gradientes radiais com poucos color stops e transições suaves em áreas grandes criam "faixas" visíveis (color banding) — especialmente em fundos escuros com cores de baixa opacidade onde há apenas 8 bits de precisão por canal.
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+### Solução: Dithering via ruído + mais color stops
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+**1. `src/components/InternalBackground.tsx`**
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+- **Mais color stops intermediários** nos gradientes para suavizar as transições (de 5 stops para ~8-10 stops com incrementos menores de opacidade)
+- **Aumentar o blur** levemente (18→22px, 16→20px) para difundir ainda mais as bandas
+- **Adicionar um overlay de dithering** usando um SVG `feTurbulence` de alta frequência com blend mode — isso quebra as bandas visualmente. Aumentar a opacidade do ruído existente de `0.03` para `0.045` e reduzir `baseFrequency` para `0.65` para um grão mais natural
 
-### Solução
+**2. Detalhes dos gradientes refinados**
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
-
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+Cada gradiente terá stops mais granulares, por exemplo para a esfera direita:
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+rgba(172, 94, 58, 0.35) 0%,
+rgba(183, 107, 59, 0.38) 12%,
+rgba(194, 120, 60, 0.4) 22%,
+rgba(194, 130, 70, 0.33) 32%,
+rgba(194, 140, 80, 0.25) 42%,
+rgba(194, 140, 80, 0.17) 50%,
+rgba(194, 140, 80, 0.1) 58%,
+rgba(194, 140, 80, 0.04) 65%,
+transparent 75%
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+### Arquivos
+- `src/components/InternalBackground.tsx` — gradientes com mais stops + blur maior + ruído ajustado
 
