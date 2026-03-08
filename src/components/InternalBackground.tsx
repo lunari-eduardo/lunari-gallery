@@ -1,38 +1,14 @@
+import internalBg from '@/assets/internal-bg.png';
+
 export function InternalBackground() {
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
-      {/* Blob 1 — top-right drifting toward center */}
-      <div
-        className="absolute rounded-full dark:opacity-[0.05]"
-        style={{
-          width: '40vw',
-          height: '40vw',
-          background: 'radial-gradient(circle, hsl(var(--primary) / 0.18) 0%, transparent 70%)',
-          filter: 'blur(90px)',
-          animation: 'blob-drift-1 30s ease-in-out infinite alternate',
-        }}
-      />
-      {/* Blob 2 — bottom-left drifting toward center */}
-      <div
-        className="absolute rounded-full dark:opacity-[0.05]"
-        style={{
-          width: '45vw',
-          height: '45vw',
-          background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
-          filter: 'blur(100px)',
-          animation: 'blob-drift-2 30s ease-in-out infinite alternate',
-        }}
-      />
-      {/* Blob 3 — bottom-right drifting toward center */}
-      <div
-        className="absolute rounded-full dark:opacity-[0.05]"
-        style={{
-          width: '35vw',
-          height: '35vw',
-          background: 'radial-gradient(circle, hsl(var(--primary) / 0.16) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-          animation: 'blob-drift-3 30s ease-in-out infinite alternate',
-        }}
+      {/* Wave background image */}
+      <img
+        src={internalBg}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 w-full h-full object-cover opacity-[0.35] dark:opacity-[0.08] dark:mix-blend-screen"
       />
       {/* Noise overlay */}
       <svg className="absolute inset-0 w-full h-full opacity-[0.02]">
