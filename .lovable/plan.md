@@ -1,57 +1,60 @@
 
+## Diagnóstico: Galeria Redirecionou Direto para Conclusão
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+### Análise do Problema
 
-### Problema identificado
+**Backend OK**: A Edge Function `confirm-selection` está retornando os dados corretos:
+```json
+{
+  "requiresPayment": true,
+  "transparentCheckout": true,
+  "asaasCheckoutData": { ... },
+  "provedor": "asaas"
+}
+```
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+**Database OK**: A galeria está no estado correto:
+- `status_selecao`: `"aguardando_pagamento"` ✓
+- `status_pagamento`: `"pendente"` ✓
+- `finalized_at`: `null` ✓
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+**Problema Identificado**: Cache do navegador com versão antiga do frontend.
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+### Causa
+
+O checkout transparente do Asaas foi implementado no código, mas o navegador do usuário pode ter carregado uma versão anterior do JavaScript que não incluía o tratamento para `transparentCheckout`. Quando a condição da linha 478 não existe ou falha:
+
+```tsx
+// Esta condição não existia na versão anterior
+if (data.requiresPayment && data.transparentCheckout && data.asaasCheckoutData) {
+  // Mostrar checkout Asaas
+}
+```
+
+O fluxo "cai" para o caso padrão (linha 502):
+```tsx
+// No payment required - go directly to confirmed
+setIsConfirmed(true);
+setCurrentStep('confirmed');
+```
 
 ### Solução
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**1. Forçar atualização do cache do navegador**
+- Ctrl+F5 (Windows) ou Cmd+Shift+R (Mac) para hard refresh
+- Ou limpar cache do navegador
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**2. Verificar novamente**
+- Tentar confirmar a seleção novamente
+- Agora deve aparecer o checkout transparente do Asaas com abas PIX/Cartão
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+### Verificação
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
+O código atual implementa corretamente:
+- Detecção da resposta `transparentCheckout` 
+- Componente `AsaasCheckout` com PIX e Cartão
+- Estado `asaasCheckoutData` para controlar a exibição
+- Render condicional na linha 1614-1633
 
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
-
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+A próxima tentativa deve funcionar normalmente com o checkout inline.
 
