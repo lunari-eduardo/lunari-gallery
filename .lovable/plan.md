@@ -1,57 +1,56 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Dashboard Glassmorphism Refactor
 
-### Problema identificado
+This plan covers updating the CSS design tokens and the `.glass` utility class in `src/index.css`, then refactoring `src/pages/Home.tsx` to use the new glass system. The scope is limited to the **dashboard page and global CSS tokens only** — Layout, other pages, and edge functions remain untouched.
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+### Phase 1: Update CSS Tokens (`src/index.css`)
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+**Light mode `:root`** — Replace current tokens with the new terra-cota palette:
+- `--background: 30 40% 96%`, `--foreground: 20 20% 12%`
+- `--card: 30 30% 98%`, `--primary: 19 49% 45%`, `--primary-foreground: 30 30% 98%`
+- `--secondary: 30 20% 92%`, `--muted: 30 15% 90%`, `--border: 30 30% 80%`
+- Add full `--terra-50` through `--terra-900` scale
+- Add glass tokens: `--glass-bg`, `--glass-border`, `--glass-shadow`, `--glass-hover-shadow`
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+**Dark mode `.dark`** — Update with specified dark values:
+- `--background: 20 15% 6%`, `--foreground: 30 15% 95%`
+- `--card: 20 12% 10%`, `--border: 20 15% 20%`
+- Dark glass tokens with reduced opacities
 
-### Solução
-
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
-
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+**New `.glass` utility class** in `@layer components`:
+```css
+.glass {
+  @apply backdrop-blur-xl rounded-2xl border transition-all duration-300;
+  background: hsl(var(--glass-bg));
+  border-color: hsl(var(--glass-border));
+  box-shadow: var(--glass-shadow);
+}
+.glass:hover {
+  box-shadow: var(--glass-hover-shadow);
+}
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+**Custom scrollbar** styles added globally.
 
-### Arquivos a modificar
+### Phase 2: Refactor Dashboard (`src/pages/Home.tsx`)
 
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+- Remove inline `glassStyle` object — replace all `style={glassStyle}` with `className="glass p-6"`
+- Replace inline background gradient with a dedicated background component using:
+  - Base gradient: `linear-gradient(135deg, #fdf0e6 0%, #f5dcc4 50%, #fdf0e6 100%)`
+  - 2-3 animated radial blobs (terra-cota tones, low opacity, CSS `@keyframes float`)
+  - SVG noise overlay at `opacity: 0.02`
+- Update icon containers to use `rounded-xl bg-primary/10` style
+- Add hover `-translate-y-1` on metric cards
+- Keep all data logic, hooks, queries, and table structure identical
 
-### Fluxo corrigido
+### Files Modified
+1. `src/index.css` — tokens, glass class, scrollbar, noise/float keyframes
+2. `src/pages/Home.tsx` — visual refactor only, no logic changes
 
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+### What stays unchanged
+- `src/components/Layout.tsx` — no changes (header/nav glass treatment deferred to later)
+- All edge functions (infinitepay, webhooks) — untouched
+- All other pages — untouched
+- All data hooks and Supabase queries — untouched
 
