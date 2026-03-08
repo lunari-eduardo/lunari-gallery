@@ -189,11 +189,46 @@ export function PaymentSettings() {
     setShowMpSettings(false);
   };
 
+  const handleSaveAsaas = async () => {
+    if (!asaasApiKey.trim()) return;
+    
+    await saveAsaas.mutateAsync({
+      apiKey: asaasApiKey.trim(),
+      settings: {
+        environment: asaasEnvironment,
+        habilitarPix: asaasHabilitarPix,
+        habilitarCartao: asaasHabilitarCartao,
+        habilitarBoleto: asaasHabilitarBoleto,
+        maxParcelas: parseInt(asaasMaxParcelas),
+        absorverTaxa: asaasAbsorverTaxa,
+        taxaAntecipacao: asaasTaxaAntecipacao,
+        taxaAntecipacaoPercentual: parseFloat(asaasTaxaAntecipacaoPercentual) || 0,
+      },
+      setAsDefault: !data?.hasPayment,
+    });
+    setShowAsaasForm(false);
+  };
+
+  const handleSaveAsaasSettings = async () => {
+    await updateAsaasSettings.mutateAsync({
+      environment: asaasEnvironment,
+      habilitarPix: asaasHabilitarPix,
+      habilitarCartao: asaasHabilitarCartao,
+      habilitarBoleto: asaasHabilitarBoleto,
+      maxParcelas: parseInt(asaasMaxParcelas),
+      absorverTaxa: asaasAbsorverTaxa,
+      taxaAntecipacao: asaasTaxaAntecipacao,
+      taxaAntecipacaoPercentual: parseFloat(asaasTaxaAntecipacaoPercentual) || 0,
+    });
+    setShowAsaasSettings(false);
+  };
+
   const getProviderLogo = (provedor: PaymentProvider) => {
-    const logos = {
+    const logos: Record<string, string> = {
       pix_manual: pixLogo,
       infinitepay: infinitepayLogo,
       mercadopago: mercadopagoLogo,
+      asaas: asaasLogo,
     };
     return (
       <img 
