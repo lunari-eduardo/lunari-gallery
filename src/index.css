@@ -10,10 +10,10 @@
     --background: 30 40% 96%;
     --foreground: 20 20% 12%;
 
-    --card: 30 30% 98%;
+    --card: 30 30% 98% / 0.6;
     --card-foreground: 20 20% 12%;
 
-    --popover: 30 30% 98%;
+    --popover: 30 30% 98% / 0.7;
     --popover-foreground: 20 20% 12%;
 
     --primary: 19 49% 45%;
@@ -58,7 +58,7 @@
     --terra-900: 10 45% 20%;
 
     /* Glass tokens */
-    --glass-bg: 30 30% 98% / 0.55;
+    --glass-bg: 30 30% 98% / 0.45;
     --glass-border: 30 30% 85% / 0.40;
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
     --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
