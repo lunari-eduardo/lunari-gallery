@@ -323,6 +323,7 @@ export function PaymentSettings() {
                       if (integration.provedor === 'pix_manual') setShowPixForm(true);
                       if (integration.provedor === 'infinitepay') setShowIpForm(true);
                       if (integration.provedor === 'mercadopago') setShowMpSettings(true);
+                      if (integration.provedor === 'asaas') setShowAsaasSettings(true);
                     }}
                   >
                     <Edit2 className="h-4 w-4" />
