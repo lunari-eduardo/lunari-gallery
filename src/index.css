@@ -397,6 +397,16 @@
   66% { transform: translate(-2%, 2%) rotate(-1deg); }
 }
 
+@keyframes eclipse-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3%, -2%) scale(1.02); }
+  66% { transform: translate(-2%, 3%) scale(0.98); }
+}
+
+.eclipse-drift {
+  animation: eclipse-drift 30s ease infinite;
+}
+
 .aurora-animate {
   animation: aurora 20s ease infinite;
 }
