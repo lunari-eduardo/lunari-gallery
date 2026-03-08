@@ -183,13 +183,19 @@ Deno.serve(async (req) => {
     }
 
     // 6. Extract checkout URL
-    const checkoutUrl = provedor === 'infinitepay'
-      ? paymentData.checkoutUrl
-      : paymentData.paymentLink;
+    let checkoutUrl: string | undefined;
+    let cobrancaId: string | undefined;
 
-    const cobrancaId = provedor === 'infinitepay'
-      ? paymentData.cobrancaId
-      : paymentData.cobranca?.id;
+    if (provedor === 'infinitepay') {
+      checkoutUrl = paymentData.checkoutUrl;
+      cobrancaId = paymentData.cobrancaId;
+    } else if (provedor === 'asaas') {
+      checkoutUrl = paymentData.checkoutUrl;
+      cobrancaId = paymentData.cobrancaId || paymentData.asaasPaymentId;
+    } else {
+      checkoutUrl = paymentData.paymentLink;
+      cobrancaId = paymentData.cobranca?.id;
+    }
 
     // 7. Update gallery with payment info
     await supabase
