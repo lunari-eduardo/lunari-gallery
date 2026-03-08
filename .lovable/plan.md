@@ -1,57 +1,28 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Barra fixa inferior com botão Salvar
 
-### Problema identificado
-
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
-
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
-
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+### Problema
+O botão "Salvar Configurações" fica no final da página, exigindo scroll até o fim para salvar. UX ruim em páginas longas como Pagamentos.
 
 ### Solução
+Substituir o bloco do botão por uma barra fixa (`fixed bottom-0`) que aparece na parte inferior da tela. A barra terá fundo com glassmorphism (`backdrop-blur`) e sombra superior para separação visual.
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+Adicionamos `pb-20` ao container principal para evitar que a barra sobreponha o conteúdo.
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+### Alteração em `src/pages/Settings.tsx`
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
-
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+1. Remover o `<div className="flex justify-end">` com o botão (linhas 52-58)
+2. Adicionar barra fixa fora do container principal:
+   ```tsx
+   <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/80 backdrop-blur-lg">
+     <div className="max-w-4xl mx-auto px-4 py-3 flex justify-end">
+       <Button variant="terracotta" size="lg" onClick={handleSave}>
+         <Save className="h-4 w-4 mr-2" />
+         Salvar Configurações
+       </Button>
+     </div>
+   </div>
+   ```
+3. Adicionar `pb-20` ao container principal para espaço da barra
 
