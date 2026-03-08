@@ -92,7 +92,7 @@
     --background: 20 15% 6%;
     --foreground: 30 15% 95%;
 
-    --card: 20 12% 10%;
+    --card: 20 12% 10% / 0.4;
     --card-foreground: 30 15% 95%;
 
     --popover: 20 12% 10%;
@@ -136,8 +136,8 @@
     --terra-800: 12 50% 26%;
     --terra-900: 10 45% 20%;
 
-    --glass-bg: 0 0% 100% / 0.06;
-    --glass-border: 0 0% 100% / 0.08;
+    --glass-bg: 0 0% 100% / 0.03;
+    --glass-border: 0 0% 100% / 0.05;
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
 
