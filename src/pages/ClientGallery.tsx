@@ -1713,7 +1713,7 @@ export default function ClientGallery() {
 
       {/* Folder navigation bar */}
       {hasFolders && activeFolderId && (
-        <div className="sticky top-[60px] z-30 bg-background/95 backdrop-blur border-b border-border/30 px-3 py-2">
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border/30 px-3 py-2">
           <div className="flex items-center gap-2 overflow-x-auto">
             <button
               onClick={() => {
