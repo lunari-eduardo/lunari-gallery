@@ -33,6 +33,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { LayoutDashboard } from 'lucide-react';
+import { InternalBackground } from './InternalBackground';
 
 interface LayoutProps {
   children: ReactNode;
