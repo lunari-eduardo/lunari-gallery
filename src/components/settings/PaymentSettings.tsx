@@ -285,14 +285,19 @@ export function PaymentSettings() {
       )}
 
       {/* Mercado Pago OAuth */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Mercado Pago</CardTitle>
-          <CardDescription>
-            Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="lunari-card p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <CreditCard className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">Mercado Pago</h2>
+            <p className="text-sm text-muted-foreground">
+              Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
+            </p>
+          </div>
+        </div>
+
           {showMpSettings && mpIntegration ? (
             <div className="space-y-6">
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
@@ -476,8 +481,7 @@ export function PaymentSettings() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <Separator />
 
