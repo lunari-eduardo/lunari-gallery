@@ -92,7 +92,7 @@
     --background: 20 15% 6%;
     --foreground: 30 15% 95%;
 
-    --card: 20 12% 10%;
+    --card: 20 12% 10% / 0.4;
     --card-foreground: 30 15% 95%;
 
     --popover: 20 12% 10%;
