@@ -222,7 +222,7 @@ function DashboardBackground() {
           background: 'radial-gradient(circle, hsl(24 70% 42% / 0.12), transparent 70%)',
           bottom: '5%', left: '15%',
           filter: 'blur(90px)',
-          opacity: isDark ? 0.05 : 0.06,
+          opacity: isDark ? 0.05 : 0.08,
         }}
       />
 
