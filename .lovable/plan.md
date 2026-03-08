@@ -1,57 +1,54 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Background Animado para Páginas Internas
 
-### Problema identificado
+### O que será feito
+Criar um componente `InternalBackground` com 3 blobs radiais terra-cota que se movimentam lentamente (ciclo de 30s) entre posições nos cantos/laterais da tela. Esse componente ficará fixo atrás do conteúdo em todas as páginas exceto `/dashboard` (que já tem o 3D).
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+### Posições dos blobs (baseado na imagem de referência)
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+Analisando as marcações vermelhas (posição inicial) e verdes (posição final):
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+| Blob | Posição A (vermelho) | Posição B (verde) |
+|------|---------------------|-------------------|
+| 1 | Canto superior direito | Centro direito → centro |
+| 2 | Canto inferior esquerdo | Centro esquerdo → centro |
+| 3 | Canto inferior direito | Centro inferior |
 
-### Solução
+### Detalhes técnicos
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**Novo arquivo: `src/components/InternalBackground.tsx`**
+- 3 divs com `position: fixed`, `border-radius: 50%`, gradiente radial terra-cota
+- Tamanho: ~35-45vw cada
+- Opacidade: 0.06-0.10 (light) / 0.04-0.06 (dark)
+- Blur: 80-100px
+- Animação CSS `@keyframes` com `animation-duration: 30s`, `infinite`, `alternate`, `ease-in-out`
+- `pointer-events: none`, `z-index: 0`
+- Overlay de ruído SVG (2% opacity)
+- Respeita `prefers-reduced-motion`
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**Modificar: `src/components/Layout.tsx`**
+- Importar e renderizar `<InternalBackground />` quando a rota **não** for `/dashboard`
+- Remover `bg-background` das páginas internas (já condicional para dashboard, expandir para todas)
+- O background do body em `index.css` serve como fallback
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+**Modificar: `src/index.css`**
+- Adicionar 3 keyframes para os blobs (`blob-drift-1`, `blob-drift-2`, `blob-drift-3`)
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+### Keyframes (movimentos lentos e curvos)
+```css
+@keyframes blob-drift-1 {
+  0%   { top: -10%; right: -10%; }
+  100% { top: 20%;  right: 30%;  }
+}
+@keyframes blob-drift-2 {
+  0%   { bottom: -5%; left: -10%; }
+  100% { bottom: 30%; left: 25%;  }
+}
+@keyframes blob-drift-3 {
+  0%   { bottom: -10%; right: -5%; }
+  100% { bottom: 25%;  right: 35%; }
+}
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
-
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+Todos com `animation: blob-drift-N 30s ease-in-out infinite alternate`.
 
