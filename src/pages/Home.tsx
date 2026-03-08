@@ -125,7 +125,8 @@ function OrbitalScene({ isDark }: { isDark: boolean }) {
   const groupRef = useRef<THREE.Group>(null!);
 
   useFrame((_, delta) => {
-    groupRef.current.rotation.y += 0.018 * delta;
+    groupRef.current.rotation.x += 0.006 * delta;
+    groupRef.current.rotation.y += 0.008 * delta;
   });
 
   return (
