@@ -82,7 +82,8 @@ function TorusRing({ index, isDark, children }: { index: number; isDark: boolean
   const cfg = RING_CONFIGS[index];
 
   useFrame((_, delta) => {
-    ref.current.rotation.y += cfg.speed * delta;
+    ref.current.rotation.x += cfg.speedX * delta;
+    ref.current.rotation.y += cfg.speedY * delta;
   });
 
   const opacity = isDark ? 0.10 + index * 0.04 : 0.1 + index * 0.03;
