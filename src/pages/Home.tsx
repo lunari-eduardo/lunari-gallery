@@ -63,10 +63,10 @@ function getStatusBadge(status: string) {
 
 /* ─── 3D Orbital Scene ─── */
 const RING_CONFIGS = [
-  { color: '#c2956a', opacity: 0.18, rotX: 0.3, rotZ: 0.1 },
-  { color: '#d2691e', opacity: 0.14, rotX: -0.5, rotZ: 0.4 },
-  { color: '#cd853f', opacity: 0.10, rotX: 0.7, rotZ: -0.3 },
-  { color: '#b8652a', opacity: 0.22, rotX: -0.2, rotZ: 0.6 },
+  { color: '#c2956a', opacity: 0.35, rotX: 0.4, rotZ: 0.2 },
+  { color: '#d2691e', opacity: 0.28, rotX: -0.6, rotZ: 0.5 },
+  { color: '#cd853f', opacity: 0.25, rotX: 0.8, rotZ: -0.4 },
+  { color: '#b8652a', opacity: 0.40, rotX: -0.3, rotZ: 0.7 },
 ];
 
 const SPHERE_CONFIGS = [
