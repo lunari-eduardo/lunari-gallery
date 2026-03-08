@@ -65,10 +65,14 @@ function getStatusBadge(status: string) {
 const TERRA_COTA = ['#c2956a', '#d2691e', '#cd853f', '#b8652a', '#a0522d', '#d4a574', '#e8c4a0', '#e0b48c'];
 
 const RING_CONFIGS = [
-  { color: TERRA_COTA[0], rotation: [0, 0, 0] as [number, number, number], speedX: 0.003, speedY: 0.005 },
-  { color: TERRA_COTA[1], rotation: [Math.PI / 2, 0, 0] as [number, number, number], speedX: 0.005, speedY: 0.003 },
-  { color: TERRA_COTA[2], rotation: [Math.PI / 3, 0, Math.PI / 3] as [number, number, number], speedX: 0.004, speedY: 0.004 },
-  { color: TERRA_COTA[3], rotation: [-Math.PI / 3, 0, -Math.PI / 3] as [number, number, number], speedX: 0.004, speedY: -0.004 },
+  // Diagonal 1 — gira em X+ e Y+
+  { color: TERRA_COTA[0], rotation: [Math.PI / 4, 0, 0] as [number, number, number], speedX: 0.004, speedY: 0.006 },
+  // Diagonal 2 (oposta) — gira em X- e Y-
+  { color: TERRA_COTA[1], rotation: [-Math.PI / 4, 0, Math.PI / 2] as [number, number, number], speedX: -0.005, speedY: -0.004 },
+  // Vertical — gira apenas no eixo Y
+  { color: TERRA_COTA[2], rotation: [Math.PI / 2, 0, 0] as [number, number, number], speedX: 0.0, speedY: 0.005 },
+  // Horizontal — gira apenas no eixo X
+  { color: TERRA_COTA[3], rotation: [0, 0, Math.PI / 2] as [number, number, number], speedX: 0.005, speedY: 0.0 },
 ];
 
 const SPHERE_CONFIGS = [
