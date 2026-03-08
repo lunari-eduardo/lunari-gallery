@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
             .select('provedor, dados_extras')
             .eq('user_id', gallery.user_id)
             .eq('status', 'ativo')
-            .in('provedor', ['mercadopago', 'infinitepay', 'pix_manual'])
+            .in('provedor', ['mercadopago', 'infinitepay', 'pix_manual', 'asaas'])
             .limit(1)
             .maybeSingle();
           integracao = anyActive;
