@@ -474,6 +474,16 @@ export default function ClientGallery() {
         return;
       }
       
+      // Asaas transparent checkout - show inline payment form
+      if (data.requiresPayment && data.transparentCheckout && data.asaasCheckoutData) {
+        setAsaasCheckoutData(data.asaasCheckoutData as AsaasCheckoutData);
+        setCurrentStep('payment');
+        toast.success('Seleção confirmada!', {
+          description: 'Escolha a forma de pagamento.',
+        });
+        return;
+      }
+
       // Checkout externo (InfinitePay/MercadoPago) - redirect BEFORE confirming
       if (data.requiresPayment && data.checkoutUrl) {
         // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
