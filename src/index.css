@@ -403,8 +403,22 @@
   66% { transform: translate(-2%, 3%) scale(0.98); }
 }
 
+@keyframes eclipse-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-30px); }
+}
+
 .eclipse-drift {
   animation: eclipse-drift 30s ease infinite;
+}
+
+.eclipse-float {
+  animation: eclipse-float 25s ease-in-out infinite;
+}
+
+.eclipse-float-delayed {
+  animation: eclipse-float 35s ease-in-out infinite;
+  animation-delay: -15s;
 }
 
 .aurora-animate {
