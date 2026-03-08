@@ -623,7 +623,7 @@ export default function GalleryEdit() {
         {/* Right Column - Photos & Actions */}
         <div className="space-y-6">
           {/* Photos Card */}
-          <Card>
+          <Card className="glass">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Image className="h-5 w-5" />
