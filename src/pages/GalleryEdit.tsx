@@ -365,7 +365,7 @@ export default function GalleryEdit() {
         {/* Left Column - Info & Deadline */}
         <div className="space-y-6">
           {/* Basic Info Card */}
-          <Card>
+          <Card className="glass">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Image className="h-5 w-5" />
@@ -543,7 +543,7 @@ export default function GalleryEdit() {
           </Card>
 
           {/* Deadline Card */}
-          <Card>
+          <Card className="glass">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CalendarIcon className="h-5 w-5" />
@@ -623,7 +623,7 @@ export default function GalleryEdit() {
         {/* Right Column - Photos & Actions */}
         <div className="space-y-6">
           {/* Photos Card */}
-          <Card>
+          <Card className="glass">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Image className="h-5 w-5" />
@@ -736,7 +736,7 @@ export default function GalleryEdit() {
 
           {/* Reactivate Card - Only if applicable */}
           {canReactivate && (
-            <Card>
+            <Card className="glass">
               <CardHeader>
                 <CardTitle>Reativar Galeria</CardTitle>
                 <CardDescription>
