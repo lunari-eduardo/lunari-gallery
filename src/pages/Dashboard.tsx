@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -216,6 +216,14 @@ export default function Dashboard() {
   const selectGalleries = useMemo(() => allGalleries.filter(g => g.tipo !== 'entrega'), [allGalleries]);
   const deliverGalleries = useMemo(() => allGalleries.filter(g => g.tipo === 'entrega'), [allGalleries]);
 
+  const PAGE_SIZE = 20;
+  const [selectPage, setSelectPage] = useState(1);
+  const [deliverPage, setDeliverPage] = useState(1);
+
+  // Reset page on filter/search change
+  useEffect(() => { setSelectPage(1); }, [search, selectStatusFilter]);
+  useEffect(() => { setDeliverPage(1); }, [search, deliverStatusFilter]);
+
   const filteredSelectGalleries = selectGalleries.filter((gallery) => {
     const matchesSearch =
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
@@ -233,6 +241,12 @@ export default function Dashboard() {
     if (deliverStatusFilter === 'expired') return matchesSearch && gallery.status === 'expired';
     return matchesSearch;
   });
+
+  const totalSelectPages = Math.ceil(filteredSelectGalleries.length / PAGE_SIZE);
+  const paginatedSelectGalleries = filteredSelectGalleries.slice((selectPage - 1) * PAGE_SIZE, selectPage * PAGE_SIZE);
+
+  const totalDeliverPages = Math.ceil(filteredDeliverGalleries.length / PAGE_SIZE);
+  const paginatedDeliverGalleries = filteredDeliverGalleries.slice((deliverPage - 1) * PAGE_SIZE, deliverPage * PAGE_SIZE);
 
   const selectStats = {
     total: selectGalleries.length,
@@ -375,18 +389,47 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredSelectGalleries.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {filteredSelectGalleries.map((gallery) => (
-                <GalleryCard
-                  key={gallery.id}
-                  gallery={gallery}
-                  thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
-                  onClick={() => navigate(`/gallery/${gallery.id}`)}
-                  onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
-                  onShare={() => setShareGalleryId(gallery.id)}
-                  onDelete={() => setDeleteGalleryId(gallery.id)}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3">
+                {paginatedSelectGalleries.map((gallery) => (
+                  <GalleryCard
+                    key={gallery.id}
+                    gallery={gallery}
+                    thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
+                    onClick={() => navigate(`/gallery/${gallery.id}`)}
+                    onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
+                    onShare={() => setShareGalleryId(gallery.id)}
+                    onDelete={() => setDeleteGalleryId(gallery.id)}
+                  />
+                ))}
+              </div>
+              {totalSelectPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectPage(p => Math.max(1, p - 1))}
+                    disabled={selectPage === 1}
+                    className="gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    {selectPage} de {totalSelectPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectPage(p => Math.min(totalSelectPages, p + 1))}
+                    disabled={selectPage === totalSelectPages}
+                    className="gap-1"
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-16">
@@ -453,18 +496,47 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredDeliverGalleries.length > 0 ? (
-            <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredDeliverGalleries.map((gallery) => (
-                <DeliverGalleryCard
-                  key={gallery.id}
-                  gallery={gallery}
-                  totalPhotos={gallery.totalFotos}
-                  onClick={() => navigate(`/deliver/${gallery.id}`)}
-                  onEdit={() => navigate(`/deliver/${gallery.id}`)}
-                  onShare={() => setShareGalleryId(gallery.id)}
-                  onDelete={() => setDeleteGalleryId(gallery.id)}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {paginatedDeliverGalleries.map((gallery) => (
+                  <DeliverGalleryCard
+                    key={gallery.id}
+                    gallery={gallery}
+                    totalPhotos={gallery.totalFotos}
+                    onClick={() => navigate(`/deliver/${gallery.id}`)}
+                    onEdit={() => navigate(`/deliver/${gallery.id}`)}
+                    onShare={() => setShareGalleryId(gallery.id)}
+                    onDelete={() => setDeleteGalleryId(gallery.id)}
+                  />
+                ))}
+              </div>
+              {totalDeliverPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeliverPage(p => Math.max(1, p - 1))}
+                    disabled={deliverPage === 1}
+                    className="gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    {deliverPage} de {totalDeliverPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeliverPage(p => Math.min(totalDeliverPages, p + 1))}
+                    disabled={deliverPage === totalDeliverPages}
+                    className="gap-1"
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-16">

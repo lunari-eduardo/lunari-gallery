@@ -1,38 +1,57 @@
 
 
-## Adicionar paginação de 20 galerias por página
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problema
-Todas as galerias são listadas de uma vez, sem limite. Precisamos mostrar apenas 20 por página com paginação.
+### Problema identificado
 
-### Mudanças
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-**1. `src/pages/Dashboard.tsx`**
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-- Adicionar estado `currentPage` (resetado ao mudar filtro/busca/tab)
-- Aplicar `.slice()` nas listas filtradas: `(page-1)*20` até `page*20`
-- Renderizar componente de paginação abaixo da lista (tanto na tab Select quanto Transfer)
-- Usar os componentes `Pagination` já existentes em `src/components/ui/pagination.tsx`
-- Stats continuam baseados no total (sem paginação)
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-**2. Lógica de paginação**
+### Solução
 
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
 ```
-const PAGE_SIZE = 20;
-const [selectPage, setSelectPage] = useState(1);
-const [deliverPage, setDeliverPage] = useState(1);
-
-// Reset page on filter/search change
-useEffect(() => { setSelectPage(1); }, [search, selectStatusFilter]);
-useEffect(() => { setDeliverPage(1); }, [search, deliverStatusFilter]);
-
-const paginatedSelect = filteredSelectGalleries.slice((selectPage-1)*PAGE_SIZE, selectPage*PAGE_SIZE);
-const totalSelectPages = Math.ceil(filteredSelectGalleries.length / PAGE_SIZE);
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-- Renderizar `Pagination` com Previous/Next e números de página (máx 5 visíveis com ellipsis)
-- Esconder paginação quando totalPages <= 1
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-### Arquivos
-- `src/pages/Dashboard.tsx` (único arquivo alterado)
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
