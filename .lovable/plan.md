@@ -1,57 +1,41 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Diagnóstico e Correção dos Anéis 3D Orbitais
 
-### Problema identificado
+### Problema Identificado
+Os anéis e esferas estão renderizando, mas são **praticamente invisíveis** por dois motivos:
+1. **Tubo do torus muito fino**: `0.015` de raio — quase imperceptível
+2. **Esferas minúsculas**: `0.06-0.08` de raio
+3. **Opacidades muito baixas** no dark mode (multiplicadas por 0.5)
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+Comparando com a imagem de referência (image-479), os anéis devem ser linhas finas porém **claramente visíveis**, como fios dourados cruzando a tela.
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+### Correções em `src/pages/Home.tsx`
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+**Torus rings:**
+- Aumentar tube radius de `0.015` → `0.035` (linhas finas mas visíveis)
+- Aumentar opacidades: light `0.25-0.45`, dark `0.15-0.30`
+- Ajustar inclinações para criar o efeito "globo da morte" da referência com cruzamentos mais dramáticos
 
-### Solução
+**Esferas orbitantes:**
+- Aumentar tamanho de `0.06-0.08` → `0.12-0.18`
+- Aumentar opacidade: light `0.9`, dark `0.6`
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**Camera:**
+- Afastar levemente para `position={[0, 0, 14]}` para enquadrar melhor os anéis grandes
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+**Configs atualizados:**
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+RING_CONFIGS:
+  { color: '#c2956a', opacity: 0.35, rotX: 0.4, rotZ: 0.2 }
+  { color: '#d2691e', opacity: 0.28, rotX: -0.6, rotZ: 0.5 }
+  { color: '#cd853f', opacity: 0.25, rotX: 0.8, rotZ: -0.4 }
+  { color: '#b8652a', opacity: 0.40, rotX: -0.3, rotZ: 0.7 }
+
+SPHERE_CONFIGS:
+  sizes: 0.14, 0.12, 0.16
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+### Arquivo
+- `src/pages/Home.tsx` — apenas os configs e geometria, sem alteração de lógica
 
