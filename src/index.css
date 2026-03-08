@@ -188,7 +188,7 @@
   /* ========== Glass System ========== */
   .glass {
     @apply backdrop-blur-xl rounded-2xl border transition-all duration-300;
-    background: hsl(var(--glass-bg));
+    background: hsl(var(--glass-bg)) !important;
     border-color: hsl(var(--glass-border));
     box-shadow: var(--glass-shadow);
   }
