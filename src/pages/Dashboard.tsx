@@ -496,18 +496,47 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
             </div>
           ) : filteredDeliverGalleries.length > 0 ? (
-            <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredDeliverGalleries.map((gallery) => (
-                <DeliverGalleryCard
-                  key={gallery.id}
-                  gallery={gallery}
-                  totalPhotos={gallery.totalFotos}
-                  onClick={() => navigate(`/deliver/${gallery.id}`)}
-                  onEdit={() => navigate(`/deliver/${gallery.id}`)}
-                  onShare={() => setShareGalleryId(gallery.id)}
-                  onDelete={() => setDeleteGalleryId(gallery.id)}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {paginatedDeliverGalleries.map((gallery) => (
+                  <DeliverGalleryCard
+                    key={gallery.id}
+                    gallery={gallery}
+                    totalPhotos={gallery.totalFotos}
+                    onClick={() => navigate(`/deliver/${gallery.id}`)}
+                    onEdit={() => navigate(`/deliver/${gallery.id}`)}
+                    onShare={() => setShareGalleryId(gallery.id)}
+                    onDelete={() => setDeleteGalleryId(gallery.id)}
+                  />
+                ))}
+              </div>
+              {totalDeliverPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeliverPage(p => Math.max(1, p - 1))}
+                    disabled={deliverPage === 1}
+                    className="gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    {deliverPage} de {totalDeliverPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeliverPage(p => Math.min(totalDeliverPages, p + 1))}
+                    disabled={deliverPage === totalDeliverPages}
+                    className="gap-1"
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-16">
