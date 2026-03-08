@@ -61,70 +61,83 @@ function getStatusBadge(status: string) {
   );
 }
 
-/* ─── 3D Orbital Scene ─── */
+/* ─── 3D Orbital Scene — Death Globe ─── */
+const TERRA_COTA = ['#c2956a', '#d2691e', '#cd853f', '#b8652a', '#a0522d', '#d4a574', '#e8c4a0', '#e0b48c'];
+
 const RING_CONFIGS = [
-  { color: '#c2956a', opacity: 0.35, rotX: 0.4, rotZ: 0.2 },
-  { color: '#d2691e', opacity: 0.28, rotX: -0.6, rotZ: 0.5 },
-  { color: '#cd853f', opacity: 0.25, rotX: 0.8, rotZ: -0.4 },
-  { color: '#b8652a', opacity: 0.40, rotX: -0.3, rotZ: 0.7 },
+  { color: TERRA_COTA[0], rotation: [Math.PI / 2, 0, 0] as [number, number, number], speed: 0.024 },
+  { color: TERRA_COTA[1], rotation: [0, 0, 0] as [number, number, number], speed: 0.02 },
+  { color: TERRA_COTA[2], rotation: [Math.PI / 4, Math.PI / 4, 0] as [number, number, number], speed: 0.016 },
+  { color: TERRA_COTA[3], rotation: [-Math.PI / 4, Math.PI / 4, 0] as [number, number, number], speed: 0.028 },
 ];
 
 const SPHERE_CONFIGS = [
-  { ringIndex: 0, speed: 0.4, offset: 0, color: '#c2956a', size: 0.14 },
-  { ringIndex: 1, speed: 0.3, offset: 2.1, color: '#d2691e', size: 0.12 },
-  { ringIndex: 3, speed: 0.35, offset: 4.2, color: '#b8652a', size: 0.16 },
+  { ringIndex: 0, speed: 0.096, offset: 0, size: 0.06 },
+  { ringIndex: 0, speed: 0.08, offset: Math.PI, size: 0.048 },
+  { ringIndex: 2, speed: 0.064, offset: 1.2, size: 0.072 },
 ];
 
-function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opacity: number; rotX: number; rotZ: number; isDark: boolean }) {
+function TorusRing({ index, isDark }: { index: number; isDark: boolean }) {
   const ref = useRef<THREE.Mesh>(null!);
-  const finalOpacity = isDark ? opacity * 0.7 : opacity;
+  const cfg = RING_CONFIGS[index];
 
   useFrame((_, delta) => {
-    ref.current.rotation.y += 0.032 * delta;
+    ref.current.rotation.y += cfg.speed * delta;
   });
 
+  const opacity = isDark ? 0.10 + index * 0.04 : 0.1 + index * 0.03;
+
   return (
-    <mesh ref={ref} rotation={[rotX, 0, rotZ]}>
-      <torusGeometry args={[6.0, 0.035, 16, 100]} />
-      <meshBasicMaterial color={color} transparent opacity={finalOpacity} />
+    <mesh ref={ref} rotation={cfg.rotation}>
+      <torusGeometry args={[6.0, 0.012, 16, 120]} />
+      <meshBasicMaterial color={cfg.color} transparent opacity={opacity} />
     </mesh>
   );
 }
 
-function OrbitingSphere({ ringIndex, speed, offset, color, size, isDark }: { ringIndex: number; speed: number; offset: number; color: string; size: number; isDark: boolean }) {
+function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
   const ref = useRef<THREE.Mesh>(null!);
-  const ring = RING_CONFIGS[ringIndex];
-  const timeRef = useRef(offset);
+  const cfg = SPHERE_CONFIGS[index];
+  const ring = RING_CONFIGS[cfg.ringIndex];
+  const timeRef = useRef(cfg.offset);
+  const quat = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(...ring.rotation)), [ring.rotation]);
+  const localPos = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, delta) => {
-    timeRef.current += delta * speed;
+    timeRef.current += delta * cfg.speed;
     const angle = timeRef.current;
-    const r = 6.0;
-    // Position on the torus path, applying the ring's inclination
-    const x = r * Math.cos(angle);
-    const y = r * Math.sin(angle) * Math.sin(ring.rotX) + r * Math.cos(angle) * Math.sin(ring.rotZ) * 0.3;
-    const z = r * Math.sin(angle) * Math.cos(ring.rotX) * 0.5;
-    ref.current.position.set(x, y, z);
+    localPos.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
+    localPos.applyQuaternion(quat);
+    ref.current.position.copy(localPos);
   });
+
+  const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.3 + (index % 3) * 0.1;
+  const color = TERRA_COTA[index % 8];
 
   return (
     <mesh ref={ref}>
-      <sphereGeometry args={[size, 16, 16]} />
-      <meshBasicMaterial color={color} transparent opacity={isDark ? 0.6 : 0.9} />
+      <sphereGeometry args={[cfg.size, 16, 16]} />
+      <meshBasicMaterial color={color} transparent opacity={opacity} />
     </mesh>
   );
 }
 
 function OrbitalScene({ isDark }: { isDark: boolean }) {
+  const groupRef = useRef<THREE.Group>(null!);
+
+  useFrame((_, delta) => {
+    groupRef.current.rotation.y += 0.032 * delta;
+  });
+
   return (
-    <>
-      {RING_CONFIGS.map((cfg, i) => (
-        <TorusRing key={i} {...cfg} isDark={isDark} />
+    <group ref={groupRef}>
+      {RING_CONFIGS.map((_, i) => (
+        <TorusRing key={i} index={i} isDark={isDark} />
       ))}
-      {SPHERE_CONFIGS.map((cfg, i) => (
-        <OrbitingSphere key={i} {...cfg} isDark={isDark} />
+      {SPHERE_CONFIGS.map((_, i) => (
+        <OrbitingSphere key={i} index={i} isDark={isDark} />
       ))}
-    </>
+    </group>
   );
 }
 
@@ -140,7 +153,6 @@ function DashboardBackground() {
     return () => observer.disconnect();
   }, []);
 
-  // Check reduced motion preference
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -154,7 +166,7 @@ function DashboardBackground() {
     <div className="fixed inset-0 -z-10 pointer-events-none">
       {/* Base gradient */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-colors duration-700"
         style={{
           background: isDark
             ? 'linear-gradient(135deg, #0a0608 0%, #1a0f08 50%, #0d0705 100%)'
@@ -166,7 +178,7 @@ function DashboardBackground() {
       {!reducedMotion && (
         <div className="absolute inset-0">
           <Canvas
-            camera={{ position: [0, 0, 14], fov: 50 }}
+            camera={{ position: [0, 0, 10], fov: 60 }}
             gl={{ alpha: true, antialias: true }}
             style={{ background: 'transparent' }}
             dpr={[1, 1.5]}
@@ -176,32 +188,35 @@ function DashboardBackground() {
         </div>
       )}
 
-      {/* Radial glow zones */}
+      {/* Glow zones */}
       <div
         className="absolute rounded-full"
         style={{
-          width: '600px', height: '600px',
-          background: 'radial-gradient(circle, rgba(194,149,106,0.08), transparent 70%)',
-          top: '-10%', left: '-5%',
+          width: '40vw', height: '40vw',
+          background: 'radial-gradient(circle, hsl(24 35% 59% / 0.12), transparent 70%)',
+          top: '10%', left: '30%',
           filter: 'blur(80px)',
+          opacity: isDark ? 0.05 : 0.08,
         }}
       />
       <div
         className="absolute rounded-full"
         style={{
-          width: '500px', height: '500px',
-          background: 'radial-gradient(circle, rgba(210,105,30,0.06), transparent 70%)',
-          bottom: '5%', right: '-8%',
+          width: '35vw', height: '35vw',
+          background: 'radial-gradient(circle, hsl(20 50% 44% / 0.15), transparent 70%)',
+          top: '45%', right: '20%',
           filter: 'blur(100px)',
+          opacity: isDark ? 0.04 : 0.07,
         }}
       />
       <div
         className="absolute rounded-full"
         style={{
-          width: '400px', height: '400px',
-          background: 'radial-gradient(circle, rgba(205,133,63,0.04), transparent 70%)',
-          top: '40%', left: '50%',
+          width: '30vw', height: '30vw',
+          background: 'radial-gradient(circle, hsl(24 70% 42% / 0.12), transparent 70%)',
+          bottom: '5%', left: '15%',
           filter: 'blur(90px)',
+          opacity: isDark ? 0.05 : 0.06,
         }}
       />
 
