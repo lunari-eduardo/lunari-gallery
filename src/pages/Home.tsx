@@ -172,7 +172,7 @@ function DashboardBackground() {
         className="absolute inset-0 transition-colors duration-700"
         style={{
           background: isDark
-            ? 'linear-gradient(135deg, #1A0F0A 0%, #251408 50%, #1A0F0A 100%)'
+            ? 'linear-gradient(135deg, #0D0A08 0%, #141010 50%, #0D0A08 100%)'
             : 'linear-gradient(135deg, #fefaf6 0%, #f8ece0 50%, #fefaf6 100%)',
         }}
       />
