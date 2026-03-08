@@ -1,57 +1,39 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Problema: Efeito Glass Invisível no Modo Claro
 
-### Problema identificado
-
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
-
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
-
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+### Causa
+No modo claro, o `--background` é `30 40% 96%` (quase branco) e o `--glass-bg` é `0 0% 100% / 0.25` (branco a 25% de opacidade). Branco sobre fundo quase branco = aparência sólida. O header usa `bg-background/95` — praticamente opaco.
 
 ### Solução
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**1. `src/index.css` — tokens light mode:**
+- `--glass-bg`: de `0 0% 100% / 0.25` → `0 0% 100% / 0.45` (mais translúcido mas ainda legível)
+- `--glass-border`: de `0 0% 100% / 0.18` → `0 0% 100% / 0.35`
+- `--background`: de `30 40% 96%` → `30 40% 96%` (manter, mas reduzir opacidade onde usado)
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**2. `src/components/Layout.tsx` — header:**
+- Trocar `bg-background/95 ... bg-background/60` por classes glass: `bg-white/40 backdrop-blur-xl` (light) que permitem ver os blobs atrás
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+**3. `src/index.css` — classe `.glass` light mode:**
+- Aumentar opacidade do glass-bg para compensar legibilidade mantendo transparência visual
+- Alternativa melhor: usar `--glass-bg: 30 30% 98% / 0.55` — tom levemente cream em vez de branco puro, dando identidade sem parecer sólido
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
+### Mudanças concretas
 
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+**`src/index.css`** (`:root` / light):
+```css
+--glass-bg: 30 30% 98% / 0.55;
+--glass-border: 30 30% 85% / 0.40;
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
+**`src/components/Layout.tsx`** (header):
+```tsx
+// de:
+bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60
+// para:
+backdrop-blur-xl bg-white/40 dark:bg-background/60 border-b border-border/30
 ```
+
+Isso mantém legibilidade dos cards mas permite que os blobs terra-cota brilhem por trás, criando o efeito vidro real.
 
