@@ -63,6 +63,18 @@ export function PaymentSettings() {
   const [mpMaxParcelas, setMpMaxParcelas] = useState('12');
   const [mpAbsorverTaxa, setMpAbsorverTaxa] = useState(false);
 
+  // Asaas fields
+  const [asaasApiKey, setAsaasApiKey] = useState('');
+  const [asaasShowKey, setAsaasShowKey] = useState(false);
+  const [asaasEnvironment, setAsaasEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [asaasHabilitarPix, setAsaasHabilitarPix] = useState(true);
+  const [asaasHabilitarCartao, setAsaasHabilitarCartao] = useState(true);
+  const [asaasHabilitarBoleto, setAsaasHabilitarBoleto] = useState(false);
+  const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
+  const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
+  const [asaasTaxaAntecipacao, setAsaasTaxaAntecipacao] = useState(false);
+  const [asaasTaxaAntecipacaoPercentual, setAsaasTaxaAntecipacaoPercentual] = useState('0');
+
   // Ref to prevent duplicate OAuth callback processing
   const hasProcessedCallback = useRef(false);
   const connectMercadoPagoRef = useRef(connectMercadoPago);
