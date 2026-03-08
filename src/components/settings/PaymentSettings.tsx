@@ -483,17 +483,20 @@ export function PaymentSettings() {
           )}
       </div>
 
-      <Separator />
-
       {/* Add PIX Manual */}
-      <Card>
-        <CardHeader>
-          <CardTitle>PIX Manual</CardTitle>
-          <CardDescription>
-            Receba pagamentos via PIX com confirmação manual
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="lunari-card p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <QrCode className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">PIX Manual</h2>
+            <p className="text-sm text-muted-foreground">
+              Receba pagamentos via PIX com confirmação manual
+            </p>
+          </div>
+        </div>
+
           {showPixForm ? (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
@@ -591,20 +594,22 @@ export function PaymentSettings() {
               Configurar PIX
             </Button>
           )}
-        </CardContent>
-      </Card>
-
-      <Separator />
+      </div>
 
       {/* Add InfinitePay */}
-      <Card>
-        <CardHeader>
-          <CardTitle>InfinitePay</CardTitle>
-          <CardDescription>
-            Receba pagamentos com confirmação automática via checkout
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="lunari-card p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Zap className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">InfinitePay</h2>
+            <p className="text-sm text-muted-foreground">
+              Receba pagamentos com confirmação automática via checkout
+            </p>
+          </div>
+        </div>
+
           {showIpForm ? (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
@@ -692,7 +697,6 @@ export function PaymentSettings() {
                 </Button>
               </div>
 
-              {/* InfinitePay fee warning */}
               {ipIntegration.status === 'ativo' && (
                 <div className="space-y-3">
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
@@ -716,8 +720,7 @@ export function PaymentSettings() {
               Configurar InfinitePay
             </Button>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }
