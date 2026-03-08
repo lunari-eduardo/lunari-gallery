@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Link2, RefreshCw, HelpCircle } from 'lucide-react';
+import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Link2, RefreshCw, HelpCircle, QrCode, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { 
   usePaymentIntegration, 
   PixManualData, 
@@ -195,17 +193,20 @@ export function PaymentSettings() {
     <div className="space-y-6">
       {/* Active Payment Methods */}
       {data?.allActiveIntegrations && data.allActiveIntegrations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Métodos de Pagamento Ativos
-            </CardTitle>
-            <CardDescription>
-              Selecione qual será o método padrão para novas galerias
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="lunari-card p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CreditCard className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-medium">Métodos de Pagamento Ativos</h2>
+              <p className="text-sm text-muted-foreground">
+                Selecione qual será o método padrão para novas galerias
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
             {data.allActiveIntegrations.map((integration) => (
               <div
                 key={integration.id}
@@ -279,19 +280,24 @@ export function PaymentSettings() {
                 </p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Mercado Pago OAuth */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Mercado Pago</CardTitle>
-          <CardDescription>
-            Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="lunari-card p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <CreditCard className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">Mercado Pago</h2>
+            <p className="text-sm text-muted-foreground">
+              Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
+            </p>
+          </div>
+        </div>
+
           {showMpSettings && mpIntegration ? (
             <div className="space-y-6">
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
@@ -475,20 +481,22 @@ export function PaymentSettings() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      <Separator />
+      </div>
 
       {/* Add PIX Manual */}
-      <Card>
-        <CardHeader>
-          <CardTitle>PIX Manual</CardTitle>
-          <CardDescription>
-            Receba pagamentos via PIX com confirmação manual
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="lunari-card p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <QrCode className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">PIX Manual</h2>
+            <p className="text-sm text-muted-foreground">
+              Receba pagamentos via PIX com confirmação manual
+            </p>
+          </div>
+        </div>
+
           {showPixForm ? (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
@@ -586,20 +594,22 @@ export function PaymentSettings() {
               Configurar PIX
             </Button>
           )}
-        </CardContent>
-      </Card>
-
-      <Separator />
+      </div>
 
       {/* Add InfinitePay */}
-      <Card>
-        <CardHeader>
-          <CardTitle>InfinitePay</CardTitle>
-          <CardDescription>
-            Receba pagamentos com confirmação automática via checkout
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="lunari-card p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Zap className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">InfinitePay</h2>
+            <p className="text-sm text-muted-foreground">
+              Receba pagamentos com confirmação automática via checkout
+            </p>
+          </div>
+        </div>
+
           {showIpForm ? (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
@@ -687,7 +697,6 @@ export function PaymentSettings() {
                 </Button>
               </div>
 
-              {/* InfinitePay fee warning */}
               {ipIntegration.status === 'ativo' && (
                 <div className="space-y-3">
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
@@ -711,8 +720,7 @@ export function PaymentSettings() {
               Configurar InfinitePay
             </Button>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

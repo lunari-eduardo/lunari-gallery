@@ -1,46 +1,57 @@
 
 
-## Padronizar Design da aba Pagamentos
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problema
-A aba **Pagamentos** usa o componente `<Card>` (com `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`) que gera um visual diferente das abas **Geral** e **Personalização**, que usam `lunari-card` (alias para `.glass`) com headings simples e ícones.
+### Problema identificado
+
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
 ### Solução
-Substituir todos os `<Card>` em `PaymentSettings.tsx` pelo padrão `lunari-card` usado nas demais abas, com header usando ícone + título + descrição em `div`, sem os sub-componentes do Card.
 
-### Alterações
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-**`src/components/settings/PaymentSettings.tsx`** — Refatorar 4 blocos de Card:
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-1. **Card "Métodos de Pagamento Ativos"** (linhas 198-284): Trocar `<Card>/<CardHeader>/<CardTitle>/<CardDescription>/<CardContent>` por `<div className="lunari-card p-6 space-y-4">` com header ícone+texto como nas outras abas.
+**2. Tela de processamento de pagamento (UX aprimorada)**
 
-2. **Card "Mercado Pago"** (linhas 287-479): Mesmo padrão — `lunari-card p-6 space-y-4` com heading simples.
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
 
-3. **Card "PIX Manual"** (linhas 484-590): Mesmo padrão.
+**3. Evitar re-render do PaymentRedirect no retorno**
 
-4. **Card "InfinitePay"** (linhas 595-715): Mesmo padrão.
-
-Também remover os `<Separator />` (linhas 481, 592) pois o espaçamento entre `lunari-card` já cria separação visual natural, assim como nas outras abas.
-
-Remover imports não utilizados: `Card`, `CardContent`, `CardDescription`, `CardHeader`, `CardTitle`, `Separator`.
-
-### Padrão visual alvo (mesmo das outras abas)
-```text
-<div className="lunari-card p-6 space-y-4">
-  <div className="flex items-center gap-3">
-    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-      <Icon className="h-5 w-5 text-primary" />
-    </div>
-    <div>
-      <h2 className="font-medium">Título</h2>
-      <p className="text-sm text-muted-foreground">Descrição</p>
-    </div>
-  </div>
-  {/* conteúdo */}
-</div>
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-### Segurança
-- Nenhuma alteração em lógica, mutations, edge functions ou fluxo OAuth
-- Edge functions de InfinitePay e Mercado Pago permanecem intactas
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
