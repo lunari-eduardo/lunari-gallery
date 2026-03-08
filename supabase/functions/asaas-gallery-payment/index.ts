@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
     if (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) {
       const maxParcelas = settings.maxParcelas || 12;
       paymentBody.installmentCount = Math.min(body.installmentCount, maxParcelas);
-      paymentBody.installmentValue = valor / (paymentBody.installmentCount as number);
+      paymentBody.installmentValue = valorFinal / (paymentBody.installmentCount as number);
     }
 
     // Credit card data for transparent checkout
