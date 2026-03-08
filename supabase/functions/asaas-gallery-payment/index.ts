@@ -346,6 +346,9 @@ Deno.serve(async (req) => {
       billingType: finalBillingType,
       status: paymentData.status,
       checkoutUrl,
+      valorOriginal: valor,
+      valorCobrado: valorFinal,
+      custoAntecipacao: anticipationCost,
     };
 
     if (finalBillingType === 'PIX' && pixData) {
