@@ -8,7 +8,9 @@ import {
   Images,
   KeyRound,
   User,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,17 +34,31 @@ import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { Client, ClientGalleryStatus } from '@/types/gallery';
 import { toast } from 'sonner';
 
+const PAGE_SIZE = 20;
+
 export default function Clients() {
   const navigate = useNavigate();
   const { clients, isLoading, createClient, updateClient } = useGalleryClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredClients.length / PAGE_SIZE);
+  const paginatedClients = filteredClients.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
 
   const handleSaveClient = async (clientData: ClientFormData) => {
     try {
@@ -115,7 +131,7 @@ export default function Clients() {
         <Input
           placeholder="Buscar por nome ou email..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-10"
         />
       </div>
@@ -132,7 +148,7 @@ export default function Clients() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredClients.length === 0 ? (
+            {paginatedClients.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-12">
                   <User className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -140,7 +156,7 @@ export default function Clients() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredClients.map((client) => (
+              paginatedClients.map((client) => (
                 <TableRow key={client.id}>
                   <TableCell>
                     <div>
@@ -188,6 +204,35 @@ export default function Clients() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-muted-foreground">
+            Página {currentPage} de {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Próxima
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       <ClientModal
