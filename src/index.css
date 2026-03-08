@@ -413,7 +413,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .blob-drift-1, .blob-drift-2, .blob-drift-3,
-  .aurora-animate {
+  .aurora-animate, .eclipse-drift {
     animation: none !important;
   }
 }
