@@ -397,13 +397,23 @@
   66% { transform: translate(-2%, 2%) rotate(-1deg); }
 }
 
+@keyframes eclipse-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3%, -2%) scale(1.02); }
+  66% { transform: translate(-2%, 3%) scale(0.98); }
+}
+
+.eclipse-drift {
+  animation: eclipse-drift 30s ease infinite;
+}
+
 .aurora-animate {
   animation: aurora 20s ease infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .blob-drift-1, .blob-drift-2, .blob-drift-3,
-  .aurora-animate {
+  .aurora-animate, .eclipse-drift {
     animation: none !important;
   }
 }
