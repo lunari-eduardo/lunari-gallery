@@ -193,6 +193,10 @@
     box-shadow: var(--glass-shadow);
   }
 
+  :root:not(.dark) .glass {
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.75), hsl(0 0% 100% / 0.45));
+  }
+
   .glass:hover {
     box-shadow: var(--glass-hover-shadow);
   }
