@@ -166,7 +166,7 @@ function DashboardBackground() {
       {!reducedMotion && (
         <div className="absolute inset-0">
           <Canvas
-            camera={{ position: [0, 0, 12], fov: 50 }}
+            camera={{ position: [0, 0, 14], fov: 50 }}
             gl={{ alpha: true, antialias: true }}
             style={{ background: 'transparent' }}
             dpr={[1, 1.5]}
