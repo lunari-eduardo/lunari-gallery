@@ -176,7 +176,7 @@ function DashboardBackground() {
         style={{
           background: isDark
             ? 'linear-gradient(135deg, #0a0608 0%, #1a0f08 50%, #0d0705 100%)'
-            : 'linear-gradient(135deg, #fdf0e6 0%, #f5dcc4 50%, #fdf0e6 100%)',
+            : 'linear-gradient(135deg, #fefaf6 0%, #f8ece0 50%, #fefaf6 100%)',
         }}
       />
 
