@@ -927,28 +927,23 @@ export function PaymentSettings() {
                 </div>
 
                 {/* Anticipation fee */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Taxa de antecipação</Label>
-                      <p className="text-sm text-muted-foreground">Adicionar taxa quando crédito for escolhido</p>
+                      <Label>Antecipação de recebíveis</Label>
+                      <p className="text-sm text-muted-foreground">Repassar custo de antecipação ao cliente no cartão</p>
                     </div>
                     <Switch checked={asaasTaxaAntecipacao} onCheckedChange={setAsaasTaxaAntecipacao} />
                   </div>
                   
                   {asaasTaxaAntecipacao && (
-                    <div className="space-y-2">
-                      <Label>Percentual de antecipação (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={asaasTaxaAntecipacaoPercentual}
-                        onChange={(e) => setAsaasTaxaAntecipacaoPercentual(e.target.value)}
-                        placeholder="Ex: 2.49"
-                      />
-                    </div>
+                    <AnticipationConfig
+                      taxaAvista={asaasTaxaAvista}
+                      setTaxaAvista={setAsaasTaxaAvista}
+                      taxaParcelado={asaasTaxaParcelado}
+                      setTaxaParcelado={setAsaasTaxaParcelado}
+                      maxParcelas={parseInt(asaasMaxParcelas)}
+                    />
                   )}
                 </div>
               </div>
