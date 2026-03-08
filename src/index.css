@@ -58,7 +58,7 @@
     --terra-900: 10 45% 20%;
 
     /* Glass tokens */
-    --glass-bg: 30 30% 98% / 0.55;
+    --glass-bg: 30 30% 98% / 0.45;
     --glass-border: 30 30% 85% / 0.40;
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
     --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);

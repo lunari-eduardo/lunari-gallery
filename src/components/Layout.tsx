@@ -59,7 +59,7 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       {location.pathname !== '/dashboard' && <InternalBackground />}
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/30 backdrop-blur-xl bg-white/40 dark:bg-background/60">
