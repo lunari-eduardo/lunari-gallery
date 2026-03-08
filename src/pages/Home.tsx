@@ -66,13 +66,13 @@ const COPPER = '#F28C52';
 
 const RING_CONFIGS = [
   // Ring 1 — tilted horizontal, clockwise, 36s period
-  { initialRotation: [65 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 36, direction: 1, tube: 0.025, opacityLight: 0.35, opacityDark: 0.12 },
-  // Ring 2 — tilted vertical, counter-clockwise, 48s period
-  { initialRotation: [0, 45 * Math.PI / 180, 0] as [number, number, number], axis: 'x' as const, period: 48, direction: -1, tube: 0.015, opacityLight: 0.20, opacityDark: 0.08 },
-  // Ring 3 — opposite tilt, clockwise, 60s period
-  { initialRotation: [-40 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 60, direction: 1, tube: 0.020, opacityLight: 0.25, opacityDark: 0.10 },
-  // Ring 4 — diagonal tilt, counter-clockwise, 72s period
-  { initialRotation: [0, 0, 30 * Math.PI / 180] as [number, number, number], axis: 'x' as const, period: 72, direction: -1, tube: 0.012, opacityLight: 0.12, opacityDark: 0.06 },
+  { initialRotation: [65 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 72, direction: 1, tube: 0.025, opacityLight: 0.35, opacityDark: 0.12 },
+  // Ring 2 — tilted vertical, counter-clockwise, 96s period
+  { initialRotation: [0, 45 * Math.PI / 180, 0] as [number, number, number], axis: 'x' as const, period: 96, direction: -1, tube: 0.015, opacityLight: 0.20, opacityDark: 0.08 },
+  // Ring 3 — opposite tilt, clockwise, 120s period
+  { initialRotation: [-40 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 120, direction: 1, tube: 0.020, opacityLight: 0.25, opacityDark: 0.10 },
+  // Ring 4 — diagonal tilt, counter-clockwise, 144s period
+  { initialRotation: [0, 0, 30 * Math.PI / 180] as [number, number, number], axis: 'x' as const, period: 144, direction: -1, tube: 0.012, opacityLight: 0.12, opacityDark: 0.06 },
 ];
 
 const SPHERE_CONFIGS = [
