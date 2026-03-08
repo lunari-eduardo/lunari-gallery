@@ -91,7 +91,7 @@ function TorusRing({ index, isDark, children }: { index: number; isDark: boolean
   return (
     <group ref={ref} rotation={cfg.rotation}>
       <mesh>
-        <torusGeometry args={[6.0, 0.018, 16, 120]} />
+        <torusGeometry args={[6.0, 0.035, 16, 120]} />
         <meshBasicMaterial color={cfg.color} transparent opacity={opacity} />
       </mesh>
       {children}
