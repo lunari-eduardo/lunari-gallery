@@ -32,6 +32,8 @@ export function PaymentSettings() {
     isLoading, 
     savePixManual, 
     saveInfinitePay, 
+    saveAsaas,
+    updateAsaasSettings,
     setAsDefault,
     deactivate,
     connectMercadoPago,
