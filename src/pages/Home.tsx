@@ -114,7 +114,7 @@ function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
     ref.current.position.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
   });
 
-  const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.3 + (index % 3) * 0.1;
+  const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.5 + (index % 3) * 0.12;
   const color = TERRA_COTA[index % 8];
 
   return (
