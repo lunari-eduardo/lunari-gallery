@@ -1,57 +1,52 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Substituir fundo de imagem por eclipse âmbar animado em todo o sistema
 
-### Problema identificado
+### Contexto
+A imagem de referência mostra um efeito de "eclipse" — uma esfera âmbar concentrada com borda brilhante e centro escuro, sobre fundo claro difuso. Vamos recriar esse efeito com CSS puro (radial-gradient) e animação lenta.
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
+### Mudanças
 
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
+**1. `src/components/InternalBackground.tsx` — Reescrever completamente**
 
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+Remover a imagem PNG e substituir por um efeito eclipse CSS:
 
-### Solução
+- Um `radial-gradient` grande e concentrado posicionado no centro-esquerdo (~35% 45%) que simula a esfera do eclipse:
+  - Centro escuro (`rgba(80,40,20,0.6)`)
+  - Borda brilhante âmbar (`rgba(194,120,60,0.4)` a ~40%)
+  - Fade para transparente (~60%)
+- Um segundo radial menor como "glow" ao redor da borda
+- `filter: blur(20px)` para suavizar mas manter concentrado
+- Animação lenta CSS de ~30s que move o eclipse suavemente (translate + rotate leve) — reutilizar/adaptar o keyframe `aurora` existente ou criar um `eclipse-drift`
+- Light: opacidade ~0.8-1.0 nos gradientes para ficar evidente
+- Dark: opacidade reduzida ~0.15-0.2
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+**2. `src/index.css` — Adicionar keyframe `eclipse-drift`**
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```css
+@keyframes eclipse-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3%, -2%) scale(1.02); }
+  66% { transform: translate(-2%, 3%) scale(0.98); }
+}
 ```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+Animação de 30s, ease, infinite — movimento muito sutil para parecer orgânico.
 
-### Arquivos a modificar
+**3. `src/components/Layout.tsx`**
 
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+- Manter o `<InternalBackground />` sendo renderizado em todas as páginas exceto `/dashboard` (sem mudança de lógica, apenas o componente interno muda)
 
-### Fluxo corrigido
+### Detalhes técnicos
 
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+O efeito eclipse será construído com camadas de `radial-gradient`:
+- Camada 1: Centro escuro-quente → borda âmbar brilhante → transparente (simula a esfera)
+- Camada 2: Glow difuso âmbar ao redor (blur maior)
+- Camada 3: Ruído SVG mantido (2% opacidade)
+
+Posição levemente off-center (como na referência) para parecer natural. O `blur` baixo (15-20px) mantém o efeito concentrado, não difuso como um degradê genérico.
+
+### Arquivos
+- `src/components/InternalBackground.tsx` — reescrever (remover imagem, criar eclipse CSS)
+- `src/index.css` — adicionar keyframe `eclipse-drift`
 
