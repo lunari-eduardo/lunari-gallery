@@ -74,7 +74,8 @@ export function PaymentSettings() {
   const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
   const [asaasTaxaAntecipacao, setAsaasTaxaAntecipacao] = useState(false);
-  const [asaasTaxaAntecipacaoPercentual, setAsaasTaxaAntecipacaoPercentual] = useState('0');
+  const [asaasTaxaAvista, setAsaasTaxaAvista] = useState('0');
+  const [asaasTaxaParcelado, setAsaasTaxaParcelado] = useState('0');
 
   // Ref to prevent duplicate OAuth callback processing
   const hasProcessedCallback = useRef(false);
