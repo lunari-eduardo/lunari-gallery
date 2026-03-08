@@ -49,13 +49,15 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button variant="terracotta" size="lg" onClick={handleSave}>
-          <Save className="h-4 w-4 mr-2" />
-          Salvar Configurações
-        </Button>
-      </div>
     </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/80 backdrop-blur-lg">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex justify-end">
+          <Button variant="terracotta" size="lg" onClick={handleSave}>
+            <Save className="h-4 w-4 mr-2" />
+            Salvar Configurações
+          </Button>
+        </div>
+      </div>
   );
 }
