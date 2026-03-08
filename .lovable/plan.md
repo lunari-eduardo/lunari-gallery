@@ -1,24 +1,57 @@
 
 
-## Ajustar movimento vertical alternado + ruído sobre os radiais
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Mudanças em `src/components/InternalBackground.tsx`
+### Problema identificado
 
-1. **Movimento alternado**: A esfera esquerda sobe enquanto a direita desce e vice-versa. A esfera esquerda já usa `eclipse-float-delayed` (com delay -15s), mas o movimento precisa ser mais amplo e claramente alternado. Inverter a direção de uma delas usando um keyframe separado (`eclipse-float-reverse`: `translateY(0) → translateY(30px)` em vez de `-30px`).
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-2. **Ruído SVG por cima**: Mover o bloco de ruído SVG para **depois** das esferas (já está, mas garantir `z-index` acima) e aumentar levemente a opacidade de `0.02` para `0.03` para ficar mais perceptível.
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-### Mudanças em `src/index.css`
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-Adicionar keyframe reverso:
-```css
-@keyframes eclipse-float-reverse {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(30px); }
-}
+### Solução
+
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-### Arquivos
-- `src/components/InternalBackground.tsx` — esfera direita usa `eclipse-float`, esfera esquerda usa `eclipse-float-reverse`; ruído com opacidade `0.03`
-- `src/index.css` — adicionar `eclipse-float-reverse` keyframe e classe
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 

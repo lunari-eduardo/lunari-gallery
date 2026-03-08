@@ -48,7 +48,7 @@ export function InternalBackground() {
 
       {/* Left sphere (smaller) */}
       <div
-        className="absolute eclipse-float-delayed"
+      className="absolute eclipse-float-reverse"
         style={{
           top: '40%',
           left: '-5%',
@@ -71,7 +71,7 @@ export function InternalBackground() {
       />
       {/* Left sphere glow */}
       <div
-        className="absolute eclipse-float-delayed"
+      className="absolute eclipse-float-reverse"
         style={{
           top: '35%',
           left: '-10%',
@@ -94,7 +94,7 @@ export function InternalBackground() {
       {/* Dark mode dimmer */}
       <div className="absolute inset-0 bg-background/80 dark:block hidden" />
       {/* Noise overlay */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.02]">
+      <svg className="absolute inset-0 w-full h-full opacity-[0.03]" style={{ zIndex: 1 }}>
         <filter id="internal-noise">
           <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch" />
         </filter>

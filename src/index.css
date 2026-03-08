@@ -421,6 +421,15 @@
   animation-delay: -15s;
 }
 
+@keyframes eclipse-float-reverse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(30px); }
+}
+
+.eclipse-float-reverse {
+  animation: eclipse-float-reverse 35s ease-in-out infinite;
+}
+
 .aurora-animate {
   animation: aurora 20s ease infinite;
 }
