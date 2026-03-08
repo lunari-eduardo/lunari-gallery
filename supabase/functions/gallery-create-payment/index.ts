@@ -126,9 +126,14 @@ Deno.serve(async (req) => {
       `${extraCount} foto${extraCount !== 1 ? 's' : ''} extra${extraCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
 
     // 5. Build the complete payload for the create-link function
-    const functionName = provedor === 'infinitepay' 
-      ? 'infinitepay-create-link' 
-      : 'mercadopago-create-link';
+    let functionName: string;
+    if (provedor === 'infinitepay') {
+      functionName = 'infinitepay-create-link';
+    } else if (provedor === 'asaas') {
+      functionName = 'asaas-gallery-payment';
+    } else {
+      functionName = 'mercadopago-create-link';
+    }
 
     // Build redirect URL for payment return
     const redirectUrl = gallery.public_token 
