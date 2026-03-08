@@ -191,25 +191,18 @@ function DashboardBackground() {
         </div>
       )}
 
-      {/* Glow zones — top-left and bottom-right */}
+      {/* Aurora gradient */}
       <div
-        className="absolute rounded-full"
+        className="absolute inset-[-20%] aurora-animate"
         style={{
-          width: '45vw', height: '45vw',
-          background: 'radial-gradient(circle, hsl(24 40% 45% / 0.15), transparent 70%)',
-          top: '5%', left: '10%',
-          filter: 'blur(90px)',
-          opacity: isDark ? 0.12 : 0.10,
-        }}
-      />
-      <div
-        className="absolute rounded-full"
-        style={{
-          width: '40vw', height: '40vw',
-          background: 'radial-gradient(circle, hsl(20 30% 35% / 0.18), transparent 70%)',
-          bottom: '5%', right: '10%',
-          filter: 'blur(100px)',
-          opacity: isDark ? 0.10 : 0.08,
+          background: isDark
+            ? `linear-gradient(120deg, rgba(242,170,100,0.05), transparent 50%),
+               linear-gradient(240deg, rgba(255,200,140,0.04), transparent 50%),
+               linear-gradient(0deg, rgba(230,180,130,0.03), transparent 60%)`
+            : `linear-gradient(120deg, rgba(242,170,100,0.15), transparent 50%),
+               linear-gradient(240deg, rgba(255,200,140,0.12), transparent 50%),
+               linear-gradient(0deg, rgba(230,180,130,0.08), transparent 60%)`,
+          filter: 'blur(60px)',
         }}
       />
 
