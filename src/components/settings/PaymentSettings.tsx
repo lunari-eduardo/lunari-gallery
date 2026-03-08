@@ -224,7 +224,8 @@ export function PaymentSettings() {
       maxParcelas: parseInt(asaasMaxParcelas),
       absorverTaxa: asaasAbsorverTaxa,
       taxaAntecipacao: asaasTaxaAntecipacao,
-      taxaAntecipacaoPercentual: parseFloat(asaasTaxaAntecipacaoPercentual) || 0,
+      taxaAntecipacaoCreditoAvista: parseFloat(asaasTaxaAvista) || 0,
+      taxaAntecipacaoCreditoParcelado: parseFloat(asaasTaxaParcelado) || 0,
     });
     setShowAsaasSettings(false);
   };
