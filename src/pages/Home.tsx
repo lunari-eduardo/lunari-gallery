@@ -163,7 +163,7 @@ function DashboardBackground() {
   }, []);
 
   return (
-    <div className="fixed inset-0 -z-10 pointer-events-none">
+    <div className="fixed inset-0 z-0 pointer-events-none">
       {/* Base gradient */}
       <div
         className="absolute inset-0 transition-colors duration-700"
