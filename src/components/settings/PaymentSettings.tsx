@@ -193,17 +193,20 @@ export function PaymentSettings() {
     <div className="space-y-6">
       {/* Active Payment Methods */}
       {data?.allActiveIntegrations && data.allActiveIntegrations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Métodos de Pagamento Ativos
-            </CardTitle>
-            <CardDescription>
-              Selecione qual será o método padrão para novas galerias
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="lunari-card p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CreditCard className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-medium">Métodos de Pagamento Ativos</h2>
+              <p className="text-sm text-muted-foreground">
+                Selecione qual será o método padrão para novas galerias
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
             {data.allActiveIntegrations.map((integration) => (
               <div
                 key={integration.id}
@@ -277,8 +280,8 @@ export function PaymentSettings() {
                 </p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Mercado Pago OAuth */}
