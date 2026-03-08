@@ -634,6 +634,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Asaas transparent checkout - return data for frontend to create charge
+    const asaasCheckoutData = (paymentResponse as Record<string, unknown> | null)?.__asaasCheckoutData;
+    if (paymentResponse?.provedor === 'asaas' && asaasCheckoutData) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          selectedCount,
+          extraCount: extrasCount,
+          valorUnitario,
+          valorTotal,
+          message: 'Seleção confirmada com sucesso',
+          requiresPayment: true,
+          provedor: 'asaas',
+          transparentCheckout: true,
+          asaasCheckoutData,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
