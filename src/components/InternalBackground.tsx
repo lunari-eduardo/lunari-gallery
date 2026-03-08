@@ -71,7 +71,7 @@ export function InternalBackground() {
       />
       {/* Left sphere glow */}
       <div
-        className="absolute eclipse-float-delayed"
+      className="absolute eclipse-float-reverse"
         style={{
           top: '35%',
           left: '-10%',
