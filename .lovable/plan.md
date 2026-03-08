@@ -1,55 +1,57 @@
 
 
-## Ajuste do Death Globe — 4 Anéis Simétricos, Rotação Dual-Axis, Mais Lento
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problema Atual
-- Os anéis giram apenas no eixo Y (`rotation.y += speed * delta`), resultando em movimento unidirecional e não simétrico como na imagem de referência.
-- As velocidades ainda estão rápidas demais.
-- A rotação global do grupo também é só no eixo Y.
+### Problema identificado
 
-### Referência Visual
-Na imagem, os 4 anéis cruzam-se simetricamente formando um globo esférico, com rotação lenta e elegante em múltiplos eixos.
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-### Mudanças em `src/pages/Home.tsx`
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-**1. Rotações iniciais dos 4 anéis** — distribuir simetricamente em 3D:
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+
+### Solução
+
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+
+**2. Tela de processamento de pagamento (UX aprimorada)**
+
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
 ```
-Anel 0: [0, 0, 0]                    — plano XY (horizontal)
-Anel 1: [Math.PI/2, 0, 0]            — plano XZ (vertical frontal)
-Anel 2: [Math.PI/3, 0, Math.PI/3]    — inclinado 60°
-Anel 3: [-Math.PI/3, 0, -Math.PI/3]  — inclinado -60° (espelho do 2)
-```
-
-**2. Rotação dual-axis em cada anel** — girar em X e Y simultaneamente com velocidades diferentes para movimento orgânico:
-```tsx
-useFrame((_, delta) => {
-  ref.current.rotation.x += cfg.speedX * delta;
-  ref.current.rotation.y += cfg.speedY * delta;
-});
-```
-Velocidades muito lentas (metade das atuais):
-| Anel | speedX | speedY |
-|------|--------|--------|
-| 0    | 0.003  | 0.005  |
-| 1    | 0.005  | 0.003  |
-| 2    | 0.004  | 0.004  |
-| 3    | 0.004  | -0.004 |
-
-**3. Rotação global do grupo** — dual-axis também, mais lenta:
-```tsx
-groupRef.current.rotation.x += 0.006 * delta;
-groupRef.current.rotation.y += 0.008 * delta;
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
 ```
 
-**4. Velocidade das esferas** — reduzir pela metade:
-```
-Esfera 0: speed 0.024
-Esfera 1: speed 0.020
-Esfera 2: speed 0.016
-```
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
 
-**5. Espessura dos anéis** — aumentar levemente para `0.018` para ficarem mais visíveis como na referência.
+### Arquivos a modificar
 
-### Arquivo modificado
-- `src/pages/Home.tsx` — linhas 67-142 (configs + componentes 3D)
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
