@@ -48,7 +48,7 @@ export function InternalBackground() {
 
       {/* Left sphere (smaller) */}
       <div
-        className="absolute eclipse-float-delayed"
+      className="absolute eclipse-float-reverse"
         style={{
           top: '40%',
           left: '-5%',
