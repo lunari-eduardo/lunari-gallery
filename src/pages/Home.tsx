@@ -199,10 +199,10 @@ function DashboardBackground() {
             ? `linear-gradient(120deg, rgba(242,170,100,0.05), transparent 50%),
                linear-gradient(240deg, rgba(255,200,140,0.04), transparent 50%),
                linear-gradient(0deg, rgba(230,180,130,0.03), transparent 60%)`
-            : `linear-gradient(120deg, rgba(242,170,100,0.15), transparent 50%),
-               linear-gradient(240deg, rgba(255,200,140,0.12), transparent 50%),
-               linear-gradient(0deg, rgba(230,180,130,0.08), transparent 60%)`,
-          filter: 'blur(60px)',
+            : `linear-gradient(120deg, rgba(172,94,58,0.25), transparent 50%),
+               linear-gradient(240deg, rgba(194,149,106,0.20), transparent 50%),
+               linear-gradient(0deg, rgba(172,94,58,0.15), transparent 60%)`,
+          filter: isDark ? 'blur(60px)' : 'blur(40px)',
         }}
       />
 
