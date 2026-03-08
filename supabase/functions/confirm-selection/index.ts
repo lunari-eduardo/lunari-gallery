@@ -341,11 +341,16 @@ Deno.serve(async (req) => {
 
         // Continue to confirm gallery - PIX Manual doesn't block
       }
-      // Handle InfinitePay/MercadoPago checkout
-      else if (integracao && (integracao.provedor === 'infinitepay' || integracao.provedor === 'mercadopago')) {
-        const functionName = integracao.provedor === 'infinitepay'
-          ? 'infinitepay-create-link'
-          : 'mercadopago-create-link';
+      // Handle InfinitePay/MercadoPago/Asaas checkout
+      else if (integracao && (integracao.provedor === 'infinitepay' || integracao.provedor === 'mercadopago' || integracao.provedor === 'asaas')) {
+        let functionName: string;
+        if (integracao.provedor === 'infinitepay') {
+          functionName = 'infinitepay-create-link';
+        } else if (integracao.provedor === 'asaas') {
+          functionName = 'asaas-gallery-payment';
+        } else {
+          functionName = 'mercadopago-create-link';
+        }
 
         // Normalize session_id to text format
         let sessionIdTexto = gallery.session_id;
