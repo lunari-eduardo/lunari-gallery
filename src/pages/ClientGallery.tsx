@@ -118,6 +118,9 @@ export default function ClientGallery() {
     tipoChave?: string;
     valorTotal: number;
   } | null>(null);
+
+  // Asaas transparent checkout state
+  const [asaasCheckoutData, setAsaasCheckoutData] = useState<AsaasCheckoutData | null>(null);
   
   // Payment return detection state
   const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(() => {
