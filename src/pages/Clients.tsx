@@ -34,17 +34,31 @@ import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { Client, ClientGalleryStatus } from '@/types/gallery';
 import { toast } from 'sonner';
 
+const PAGE_SIZE = 20;
+
 export default function Clients() {
   const navigate = useNavigate();
   const { clients, isLoading, createClient, updateClient } = useGalleryClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredClients.length / PAGE_SIZE);
+  const paginatedClients = filteredClients.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
 
   const handleSaveClient = async (clientData: ClientFormData) => {
     try {
