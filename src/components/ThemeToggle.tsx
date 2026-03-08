@@ -1,39 +1,33 @@
 import { Moon, Sun, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
+const cycleOrder = ['light', 'dark', 'system'] as const;
+const labels: Record<string, string> = { light: 'Claro', dark: 'Escuro', system: 'Sistema' };
 
 export function ThemeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
+
+  const handleCycle = () => {
+    const currentIndex = cycleOrder.indexOf(theme as any);
+    const next = cycleOrder[(currentIndex + 1) % cycleOrder.length];
+    setTheme(next);
+  };
+
+  const Icon = theme === 'dark' ? Moon : theme === 'system' ? Monitor : Sun;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" onClick={handleCycle} className="relative">
+          <Icon className="h-5 w-5 transition-all" />
           <span className="sr-only">Alternar tema</span>
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme('light')} className="gap-2">
-          <Sun className="h-4 w-4" />
-          Claro
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')} className="gap-2">
-          <Moon className="h-4 w-4" />
-          Escuro
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')} className="gap-2">
-          <Monitor className="h-4 w-4" />
-          Sistema
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <p>{labels[theme] || 'Claro'}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }
