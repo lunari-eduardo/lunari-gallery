@@ -134,6 +134,19 @@ export function PaymentSettings() {
         setMpMaxParcelas(String(mpData.maxParcelas ?? 12));
         setMpAbsorverTaxa(mpData.absorverTaxa ?? false);
       }
+
+      const asaasIntegration = data.allIntegrations.find(i => i.provedor === 'asaas');
+      if (asaasIntegration?.dadosExtras) {
+        const asData = asaasIntegration.dadosExtras as AsaasData;
+        setAsaasEnvironment(asData.environment || 'sandbox');
+        setAsaasHabilitarPix(asData.habilitarPix ?? true);
+        setAsaasHabilitarCartao(asData.habilitarCartao ?? true);
+        setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
+        setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
+        setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
+        setAsaasTaxaAntecipacao(asData.taxaAntecipacao ?? false);
+        setAsaasTaxaAntecipacaoPercentual(String(asData.taxaAntecipacaoPercentual ?? 0));
+      }
     }
   }, [data?.allIntegrations]);
 
