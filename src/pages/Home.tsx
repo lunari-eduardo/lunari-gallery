@@ -77,7 +77,7 @@ const SPHERE_CONFIGS = [
 
 function TorusRing({ color, opacity, rotX, rotZ, isDark }: { color: string; opacity: number; rotX: number; rotZ: number; isDark: boolean }) {
   const ref = useRef<THREE.Mesh>(null!);
-  const finalOpacity = isDark ? opacity * 0.5 : opacity;
+  const finalOpacity = isDark ? opacity * 0.7 : opacity;
 
   useFrame((_, delta) => {
     ref.current.rotation.y += 0.032 * delta;
