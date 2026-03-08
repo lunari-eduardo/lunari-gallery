@@ -507,6 +507,7 @@ Deno.serve(async (req) => {
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+        } // End of else block for InfinitePay/MercadoPago
       } else {
         // No payment provider configured but payment was required
         console.error('❌ CRITICAL: No payment provider configured for user but payment required');
