@@ -6,139 +6,161 @@
 
 @layer base {
   :root {
-    /* Lunari Brand Colors - Warm Terracotta & Soft Green */
-    --background: 0 0% 100%;
-    --foreground: 25 20% 15%;
+    /* Premium Glassmorphism — Terra-cota palette */
+    --background: 30 40% 96%;
+    --foreground: 20 20% 12%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 25 20% 15%;
+    --card: 30 30% 98%;
+    --card-foreground: 20 20% 12%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 25 20% 15%;
+    --popover: 30 30% 98%;
+    --popover-foreground: 20 20% 12%;
 
-    /* Terracotta Primary */
-    --primary: 18 55% 55%;
-    --primary-foreground: 30 25% 98%;
-    --primary-hover: 18 55% 48%;
-    --primary-glow: 18 55% 70%;
+    --primary: 19 49% 45%;
+    --primary-foreground: 30 30% 98%;
+    --primary-hover: 24 35% 59%;
+    --primary-glow: 19 49% 60%;
 
-    /* Neutral Gray Secondary */
-    --secondary: 220 10% 50%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 30 20% 92%;
+    --secondary-foreground: 20 15% 25%;
 
-    /* Warm Neutrals */
-    --muted: 220 10% 95%;
-    --muted-foreground: 25 10% 45%;
+    --muted: 30 15% 90%;
+    --muted-foreground: 20 10% 45%;
 
-    --accent: 25 60% 95%;
-    --accent-foreground: 25 50% 35%;
+    --accent: 19 49% 45%;
+    --accent-foreground: 30 30% 98%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 25 20% 15%;
+    --warning-foreground: 20 20% 12%;
 
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    --border: 220 10% 90%;
-    --input: 220 10% 90%;
-    --ring: 18 55% 55%;
+    --border: 30 30% 80%;
+    --input: 30 30% 80%;
+    --ring: 19 49% 45%;
 
-    --radius: 0.75rem;
+    --radius: 0.625rem;
 
-    /* Custom Lunari tokens */
-    --terracotta: 18 55% 55%;
-    --terracotta-light: 18 45% 85%;
+    /* Terra-cota scale */
+    --terra-50: 30 40% 95%;
+    --terra-100: 28 38% 88%;
+    --terra-200: 26 35% 78%;
+    --terra-300: 24 35% 68%;
+    --terra-400: 24 35% 59%;
+    --terra-500: 19 49% 45%;
+    --terra-600: 16 55% 40%;
+    --terra-700: 14 52% 33%;
+    --terra-800: 12 50% 26%;
+    --terra-900: 10 45% 20%;
+
+    /* Glass tokens */
+    --glass-bg: 0 0% 100% / 0.25;
+    --glass-border: 0 0% 100% / 0.18;
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
+
+    /* Legacy tokens kept for compatibility */
+    --terracotta: 19 49% 45%;
+    --terracotta-light: 28 38% 88%;
     --sage: 220 10% 50%;
     --sage-light: 220 10% 92%;
-    --cream: 40 30% 95%;
+    --cream: 30 40% 95%;
     --warm-gray: 30 10% 60%;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(18 55% 55%), hsl(18 55% 48%));
-    --gradient-hero: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 10% 95%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 10% 97%) 100%);
-    
     /* Shadows */
-    --shadow-sm: 0 1px 2px hsl(25 20% 15% / 0.03);
-    --shadow-md: 0 3px 8px hsl(25 20% 15% / 0.04);
-    --shadow-lg: 0 6px 16px hsl(25 20% 15% / 0.06);
-    --shadow-glow: 0 0 30px hsl(18 55% 55% / 0.15);
+    --shadow-sm: 0 1px 2px hsl(20 20% 12% / 0.03);
+    --shadow-md: 0 3px 8px hsl(20 20% 12% / 0.04);
+    --shadow-lg: 0 6px 16px hsl(20 20% 12% / 0.06);
+    --shadow-glow: 0 0 30px hsl(19 49% 45% / 0.15);
 
     /* Sidebar */
-    --sidebar-background: 0 0% 99%;
-    --sidebar-foreground: 25 20% 15%;
-    --sidebar-primary: 18 55% 55%;
-    --sidebar-primary-foreground: 30 25% 98%;
-    --sidebar-accent: 220 10% 95%;
-    --sidebar-accent-foreground: 25 20% 15%;
-    --sidebar-border: 220 10% 90%;
-    --sidebar-ring: 18 55% 55%;
+    --sidebar-background: 30 30% 98%;
+    --sidebar-foreground: 20 20% 12%;
+    --sidebar-primary: 19 49% 45%;
+    --sidebar-primary-foreground: 30 30% 98%;
+    --sidebar-accent: 30 20% 92%;
+    --sidebar-accent-foreground: 20 20% 12%;
+    --sidebar-border: 30 30% 80%;
+    --sidebar-ring: 19 49% 45%;
   }
 
   .dark {
-    --background: 0 0% 8%;
-    --foreground: 0 0% 95%;
+    --background: 20 15% 6%;
+    --foreground: 30 15% 95%;
 
-    --card: 0 0% 11%;
-    --card-foreground: 0 0% 95%;
+    --card: 20 12% 10%;
+    --card-foreground: 30 15% 95%;
 
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 20 12% 10%;
+    --popover-foreground: 30 15% 95%;
 
-    --primary: 18 55% 60%;
-    --primary-foreground: 0 0% 8%;
-    --primary-hover: 18 55% 65%;
-    --primary-glow: 18 55% 45%;
+    --primary: 19 49% 45%;
+    --primary-foreground: 30 15% 95%;
+    --primary-hover: 24 35% 59%;
+    --primary-glow: 19 49% 35%;
 
-    --secondary: 220 10% 45%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 20 10% 15%;
+    --secondary-foreground: 30 15% 85%;
 
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 20 10% 15%;
+    --muted-foreground: 30 10% 55%;
 
-    --accent: 25 40% 18%;
-    --accent-foreground: 25 50% 75%;
+    --accent: 19 49% 45%;
+    --accent-foreground: 30 15% 95%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 25 15% 10%;
+    --warning-foreground: 20 15% 10%;
 
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 18 55% 60%;
+    --border: 20 15% 20%;
+    --input: 20 15% 20%;
+    --ring: 19 49% 45%;
 
-    --terracotta: 18 55% 60%;
-    --terracotta-light: 18 40% 25%;
+    --terra-50: 20 15% 12%;
+    --terra-100: 20 12% 16%;
+    --terra-200: 20 15% 22%;
+    --terra-300: 22 20% 30%;
+    --terra-400: 24 35% 45%;
+    --terra-500: 19 49% 45%;
+    --terra-600: 16 55% 40%;
+    --terra-700: 14 52% 33%;
+    --terra-800: 12 50% 26%;
+    --terra-900: 10 45% 20%;
+
+    --glass-bg: 0 0% 100% / 0.02;
+    --glass-border: 0 0% 100% / 0.08;
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
+
+    --terracotta: 19 49% 50%;
+    --terracotta-light: 20 15% 22%;
     --sage: 220 10% 45%;
     --sage-light: 220 10% 20%;
-    --cream: 0 0% 14%;
+    --cream: 20 12% 14%;
     --warm-gray: 0 0% 50%;
-
-    --gradient-primary: linear-gradient(135deg, hsl(18 55% 60%), hsl(18 55% 50%));
-    --gradient-hero: linear-gradient(180deg, hsl(0 0% 8%) 0%, hsl(0 0% 6%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 11%) 0%, hsl(0 0% 9%) 100%);
 
     --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.2);
     --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.3);
     --shadow-lg: 0 8px 24px hsl(0 0% 0% / 0.4);
-    --shadow-glow: 0 0 30px hsl(18 55% 60% / 0.2);
+    --shadow-glow: 0 0 30px hsl(19 49% 50% / 0.2);
 
-    --sidebar-background: 0 0% 10%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 18 55% 60%;
-    --sidebar-primary-foreground: 0 0% 8%;
-    --sidebar-accent: 0 0% 16%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 18 55% 60%;
+    --sidebar-background: 20 12% 8%;
+    --sidebar-foreground: 30 15% 95%;
+    --sidebar-primary: 19 49% 45%;
+    --sidebar-primary-foreground: 30 15% 95%;
+    --sidebar-accent: 20 10% 15%;
+    --sidebar-accent-foreground: 30 15% 95%;
+    --sidebar-border: 20 15% 20%;
+    --sidebar-ring: 19 49% 45%;
   }
 }
 
@@ -163,27 +185,34 @@
 }
 
 @layer components {
-  .lunari-card {
-    @apply bg-card rounded-lg border border-border/50 shadow-sm transition-all duration-200;
-    background: var(--gradient-card);
+  /* ========== Glass System ========== */
+  .glass {
+    @apply backdrop-blur-xl rounded-2xl border transition-all duration-300;
+    background: hsl(var(--glass-bg));
+    border-color: hsl(var(--glass-border));
+    box-shadow: var(--glass-shadow);
   }
 
-  .lunari-card:hover {
-    @apply shadow-sm border-border;
+  .glass:hover {
+    box-shadow: var(--glass-hover-shadow);
+  }
+
+  /* ========== Legacy Lunari classes ========== */
+  .lunari-card {
+    @apply glass;
   }
 
   .lunari-button-primary {
-    @apply bg-primary text-primary-foreground rounded-lg px-4 py-2 font-medium transition-all duration-200;
-    background: var(--gradient-primary);
+    @apply bg-primary text-primary-foreground rounded-xl px-4 py-2 font-medium transition-all duration-300 shadow-lg;
   }
 
   .lunari-button-primary:hover {
-    @apply opacity-90 shadow-lg;
+    background: hsl(var(--terra-400));
     box-shadow: var(--shadow-glow);
   }
 
   .lunari-input {
-    @apply bg-background border border-input rounded-lg px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all duration-200;
+    @apply bg-background border border-input rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all duration-300;
   }
 
   .masonry-container {
@@ -210,8 +239,6 @@
       padding: 0 4rem;
     }
   }
-
-  /* masonry styles handled by JS in MasonryGrid.tsx */
 
   .status-badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium;
@@ -287,6 +314,21 @@
   }
 }
 
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(24 35% 59% / 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(24 35% 59% / 0.5);
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -317,5 +359,15 @@
   @keyframes scaleIn {
     from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+
+  @keyframes float-delayed {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-12px); }
   }
 }
