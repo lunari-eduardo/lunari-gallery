@@ -343,11 +343,75 @@ Deno.serve(async (req) => {
       }
       // Handle InfinitePay/MercadoPago/Asaas checkout
       else if (integracao && (integracao.provedor === 'infinitepay' || integracao.provedor === 'mercadopago' || integracao.provedor === 'asaas')) {
+        
+        // ——— ASAAS TRANSPARENT CHECKOUT: return data to frontend, don't create charge yet ———
+        if (integracao.provedor === 'asaas') {
+          const asaasSettings = (integracao.dados_extras || {}) as {
+            habilitarPix?: boolean;
+            habilitarCartao?: boolean;
+            habilitarBoleto?: boolean;
+            maxParcelas?: number;
+            absorverTaxa?: boolean;
+            taxaAntecipacao?: boolean;
+            taxaAntecipacaoPercentual?: number;
+            taxaAntecipacaoCreditoAvista?: number;
+            taxaAntecipacaoCreditoParcelado?: number;
+          };
+
+          // Normalize session_id to text format
+          let sessionIdTexto = gallery.session_id;
+          if (sessionIdTexto && !sessionIdTexto.startsWith('workflow-') && !sessionIdTexto.startsWith('session_')) {
+            const { data: sessao } = await supabase
+              .from('clientes_sessoes')
+              .select('session_id')
+              .or(`id.eq.${sessionIdTexto},session_id.eq.${sessionIdTexto}`)
+              .maybeSingle();
+            sessionIdTexto = sessao?.session_id || sessionIdTexto;
+          }
+
+          const descricao = `${extrasACobrar} foto${extrasACobrar !== 1 ? 's' : ''} extra${extrasACobrar !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
+
+          // Mark gallery as awaiting payment (status is set below in the common update)
+          statusPagamento = 'pendente';
+          paymentResponse = {
+            provedor: 'asaas',
+          };
+
+          // Store checkout data for the response — charge created by frontend
+          const asaasCheckoutData = {
+            galeriaId: galleryId,
+            userId: gallery.user_id,
+            valorTotal,
+            descricao,
+            qtdFotos: extrasACobrar,
+            clienteId: gallery.cliente_id,
+            sessionId: sessionIdTexto,
+            galleryToken: gallery.public_token,
+            enabledMethods: {
+              pix: asaasSettings.habilitarPix !== false,
+              creditCard: asaasSettings.habilitarCartao !== false,
+              boleto: asaasSettings.habilitarBoleto === true,
+            },
+            maxParcelas: asaasSettings.maxParcelas || 12,
+            absorverTaxa: asaasSettings.absorverTaxa || false,
+            taxaAntecipacao: asaasSettings.taxaAntecipacao || false,
+            taxaAntecipacaoPercentual: asaasSettings.taxaAntecipacaoPercentual,
+            taxaAntecipacaoCreditoAvista: asaasSettings.taxaAntecipacaoCreditoAvista,
+            taxaAntecipacaoCreditoParcelado: asaasSettings.taxaAntecipacaoCreditoParcelado,
+          };
+
+          console.log(`💳 Asaas transparent checkout prepared for gallery ${galleryId}, R$ ${valorTotal}`);
+
+          // We'll still continue to the gallery update section, but override the final response
+          // Store the data so we can return it at the end
+          (paymentResponse as Record<string, unknown>).__asaasCheckoutData = asaasCheckoutData;
+          // Skip the external payment creation — continue to gallery update
+        }
+        // ——— InfinitePay / MercadoPago: external checkout ———
+        else {
         let functionName: string;
         if (integracao.provedor === 'infinitepay') {
           functionName = 'infinitepay-create-link';
-        } else if (integracao.provedor === 'asaas') {
-          functionName = 'asaas-gallery-payment';
         } else {
           functionName = 'mercadopago-create-link';
         }
