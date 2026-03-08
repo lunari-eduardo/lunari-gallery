@@ -23,6 +23,7 @@ import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
+import { AsaasCheckout, AsaasCheckoutData } from '@/components/AsaasCheckout';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
 import { DiscountProgressBar } from '@/components/DiscountProgressBar';
 import { DownloadModal } from '@/components/DownloadModal';
