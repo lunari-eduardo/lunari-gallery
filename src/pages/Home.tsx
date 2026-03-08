@@ -196,7 +196,7 @@ function DashboardBackground() {
         className="absolute rounded-full"
         style={{
           width: '45vw', height: '45vw',
-          background: 'radial-gradient(circle, hsl(24 70% 63% / 0.15), transparent 70%)',
+          background: 'radial-gradient(circle, hsl(24 40% 45% / 0.15), transparent 70%)',
           top: '5%', left: '10%',
           filter: 'blur(90px)',
           opacity: isDark ? 0.12 : 0.10,
@@ -206,7 +206,7 @@ function DashboardBackground() {
         className="absolute rounded-full"
         style={{
           width: '40vw', height: '40vw',
-          background: 'radial-gradient(circle, hsl(20 55% 44% / 0.18), transparent 70%)',
+          background: 'radial-gradient(circle, hsl(20 30% 35% / 0.18), transparent 70%)',
           bottom: '5%', right: '10%',
           filter: 'blur(100px)',
           opacity: isDark ? 0.10 : 0.08,
