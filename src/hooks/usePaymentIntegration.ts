@@ -336,7 +336,8 @@ export function usePaymentIntegration() {
         maxParcelas: 12,
         absorverTaxa: false,
         taxaAntecipacao: false,
-        taxaAntecipacaoPercentual: 0,
+        taxaAntecipacaoCreditoAvista: 0,
+        taxaAntecipacaoCreditoParcelado: 0,
       };
       const newSettings = { ...currentSettings, ...settings };
 
