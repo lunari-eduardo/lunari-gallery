@@ -103,8 +103,6 @@ export function InternalBackground() {
         }}
       />
 
-      {/* Dark mode dimmer */}
-      <div className="absolute inset-0 bg-background/80 dark:block hidden" />
       {/* Noise/dithering overlay */}
       <svg className="absolute inset-0 w-full h-full opacity-[0.045]" style={{ zIndex: 1 }}>
         <filter id="internal-noise">
