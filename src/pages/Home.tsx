@@ -90,7 +90,7 @@ function TorusRing({ index, isDark, children }: { index: number; isDark: boolean
     ref.current.rotation.y += cfg.speedY * delta;
   });
 
-  const opacity = isDark ? 0.10 + index * 0.04 : 0.1 + index * 0.03;
+  const opacity = isDark ? 0.10 + index * 0.04 : 0.25 + index * 0.06;
 
   return (
     <group ref={ref} rotation={cfg.rotation}>
@@ -114,7 +114,7 @@ function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
     ref.current.position.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
   });
 
-  const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.3 + (index % 3) * 0.1;
+  const opacity = isDark ? 0.4 + (index % 3) * 0.1 : 0.5 + (index % 3) * 0.12;
   const color = TERRA_COTA[index % 8];
 
   return (
@@ -176,7 +176,7 @@ function DashboardBackground() {
         style={{
           background: isDark
             ? 'linear-gradient(135deg, #0a0608 0%, #1a0f08 50%, #0d0705 100%)'
-            : 'linear-gradient(135deg, #fdf0e6 0%, #f5dcc4 50%, #fdf0e6 100%)',
+            : 'linear-gradient(135deg, #fefaf6 0%, #f8ece0 50%, #fefaf6 100%)',
         }}
       />
 
@@ -202,7 +202,7 @@ function DashboardBackground() {
           background: 'radial-gradient(circle, hsl(24 35% 59% / 0.12), transparent 70%)',
           top: '10%', left: '30%',
           filter: 'blur(80px)',
-          opacity: isDark ? 0.05 : 0.08,
+          opacity: isDark ? 0.05 : 0.10,
         }}
       />
       <div
@@ -212,7 +212,7 @@ function DashboardBackground() {
           background: 'radial-gradient(circle, hsl(20 50% 44% / 0.15), transparent 70%)',
           top: '45%', right: '20%',
           filter: 'blur(100px)',
-          opacity: isDark ? 0.04 : 0.07,
+          opacity: isDark ? 0.04 : 0.09,
         }}
       />
       <div
@@ -222,7 +222,7 @@ function DashboardBackground() {
           background: 'radial-gradient(circle, hsl(24 70% 42% / 0.12), transparent 70%)',
           bottom: '5%', left: '15%',
           filter: 'blur(90px)',
-          opacity: isDark ? 0.05 : 0.06,
+          opacity: isDark ? 0.05 : 0.08,
         }}
       />
 

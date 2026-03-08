@@ -1,34 +1,57 @@
 
 
-## Corrigir Contraste do Dashboard Light Mode
+## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
 
-### Problemas Identificados
+### Problema identificado
 
-1. **Fundo muito bege/escuro** — o gradiente base usa `#fdf0e6 → #f5dcc4 → #fdf0e6`, que é bege saturado demais. Precisa ser mais claro/branco para os anéis se destacarem.
-2. **Anéis e esferas muito apagados** — opacidade dos anéis no light mode começa em `0.1` e sobe `+0.03` por anel (max ~0.19). Esferas começam em `0.3`. Precisam ser mais visíveis.
-3. **Cards não parecem translúcidos** — mesmo com `--card: 0.38`, o fundo bege saturado por baixo faz tudo parecer sólido. Com fundo mais claro, a translucidez vai aparecer.
-4. **Header inconsistente** — no dashboard o fundo é o gradiente bege; nas internas é o `InternalBackground`. O header usa `bg-white/40` em ambos, mas o contraste muda por causa do fundo diferente. Nenhuma mudança necessária no header — o problema é o fundo bege.
+Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
 
-### Mudanças
+1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
+2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
 
-**`src/pages/Home.tsx`**
+O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
 
-1. **Gradiente base light** — clarear significativamente:
-   - De: `#fdf0e6 → #f5dcc4 → #fdf0e6`
-   - Para: `#fefaf6 → #f8ece0 → #fefaf6` (quase branco com toque cream)
+### Solução
 
-2. **Opacidade dos anéis light** — aumentar contraste:
-   - De: `0.1 + index * 0.03` (range 0.10–0.19)
-   - Para: `0.25 + index * 0.06` (range 0.25–0.43)
+**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
 
-3. **Opacidade das esferas light** — aumentar:
-   - De: `0.3 + (index % 3) * 0.1`
-   - Para: `0.5 + (index % 3) * 0.12`
+No `ClientGallery.tsx`, quando `?payment=success` está na URL:
+- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
+- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
+- Se confirmado → mostrar tela de sucesso (confirmed)
+- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
 
-4. **Glow zones light** — aumentar levemente opacidade para dar profundidade sem escurecer demais:
-   - De: `0.08, 0.07, 0.06`
-   - Para: `0.10, 0.09, 0.08`
+**2. Tela de processamento de pagamento (UX aprimorada)**
 
-### Arquivos
-- `src/pages/Home.tsx` (linhas 93, 117, 179, 205, 215, 225)
+Criar um estado visual intermediário com:
+- Logo do estúdio
+- Spinner + mensagem "Confirmando seu pagamento..."
+- Animação de sucesso quando confirmado
+- Transição suave para tela de confirmação
+
+**3. Evitar re-render do PaymentRedirect no retorno**
+
+Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+```
+if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
+```
+
+Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
+
+### Arquivos a modificar
+
+- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
+- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
+
+### Fluxo corrigido
+
+```text
+Cliente paga no InfinitePay
+  → InfinitePay redireciona para /g/TOKEN?payment=success
+  → Gallery detecta ?payment=success
+  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
+  → check-payment-status confirma
+  → Transição para tela de sucesso
+  → Limpa URL params
+```
 
