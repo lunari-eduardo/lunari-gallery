@@ -1,57 +1,36 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Correção: Esferas Orbitando Fora dos Anéis
 
-### Problema identificado
-
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
-
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
-
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
+### Causa Raiz
+As esferas calculam posição usando o quaternion da rotação **inicial** do anel, mas cada anel também gira continuamente (`rotation.y += speed * delta`). A esfera não acompanha essa rotação adicional, então rapidamente sai da linha do torus.
 
 ### Solução
+Tornar as esferas **filhas** do mesh do anel correspondente. Assim, a rotação do anel se aplica automaticamente às esferas — sem necessidade de quaternion manual.
 
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
+### Mudanças em `src/pages/Home.tsx`
 
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
+**1. Refatorar `TorusRing`** para aceitar esferas como children:
+- Receber e renderizar `children` dentro do `<mesh>` (ou `<group>` wrapper)
 
-**2. Tela de processamento de pagamento (UX aprimorada)**
+**2. Refatorar `OrbitingSphere`** — simplificar posicionamento:
+- Remover quaternion e `localPos.applyQuaternion`
+- Posição local no plano do torus: `[cos(angle) * 6, sin(angle) * 6, 0]`
+- Como é filho do ring, a rotação do anel é herdada automaticamente
 
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
+**3. Refatorar `OrbitalScene`** — aninhar esferas dentro dos anéis:
+```tsx
+<TorusRing index={0}>
+  <OrbitingSphere index={0} />
+  <OrbitingSphere index={1} />
+</TorusRing>
+<TorusRing index={2}>
+  <OrbitingSphere index={2} />
+</TorusRing>
 ```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
 
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
-
-```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
-```
+**4. Velocidades mais lentas e suaves:**
+- Velocidades dos anéis: reduzir ~40% (0.024→0.014, etc.)
+- Velocidades das esferas: reduzir ~50% (0.096→0.048, etc.)
+- Rotação global do grupo: 0.032→0.018
 
