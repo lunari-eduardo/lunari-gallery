@@ -103,7 +103,7 @@ export interface GalleryPhoto {
 
 export interface GalleryAction {
   id: string;
-  type: 'created' | 'sent' | 'client_started' | 'client_confirmed' | 'selection_reopened' | 'expired';
+  type: 'created' | 'sent' | 'client_started' | 'client_confirmed' | 'selection_reopened' | 'expired' | 'selection_started' | 'payment_informed' | 'payment_confirmed';
   timestamp: Date;
   description: string;
 }
