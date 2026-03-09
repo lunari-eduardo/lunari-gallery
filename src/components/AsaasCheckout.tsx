@@ -384,7 +384,7 @@ export function AsaasCheckout({
           creditCardHolderInfo: {
             name: cardName,
             cpfCnpj: cardCpfCnpj.replace(/\D/g, ''),
-            email: '',
+            email: cardEmail,
             phone: cardPhone.replace(/\D/g, ''),
             postalCode: cardCep.replace(/\D/g, ''),
             addressNumber: 'S/N',
