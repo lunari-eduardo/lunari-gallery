@@ -220,6 +220,7 @@ export function PaymentSettings() {
         habilitarBoleto: asaasHabilitarBoleto,
         maxParcelas: parseInt(asaasMaxParcelas),
         absorverTaxa: asaasAbsorverTaxa,
+        incluirTaxaAntecipacao: asaasIncluirAntecipacao,
       },
       setAsDefault: !data?.hasPayment,
     });
