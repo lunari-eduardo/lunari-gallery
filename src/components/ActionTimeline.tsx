@@ -6,7 +6,10 @@ import {
   MousePointer, 
   CheckCircle, 
   RotateCcw, 
-  Clock 
+  Clock,
+  CreditCard,
+  Play,
+  Eye
 } from 'lucide-react';
 import { GalleryAction } from '@/types/gallery';
 import { cn } from '@/lib/utils';
@@ -18,10 +21,13 @@ interface ActionTimelineProps {
 const actionConfig: Record<GalleryAction['type'], { icon: React.ElementType; color: string }> = {
   created: { icon: Circle, color: 'text-muted-foreground' },
   sent: { icon: Send, color: 'text-blue-500' },
-  client_started: { icon: MousePointer, color: 'text-amber-500' },
+  client_started: { icon: Eye, color: 'text-amber-500' },
   client_confirmed: { icon: CheckCircle, color: 'text-green-500' },
   selection_reopened: { icon: RotateCcw, color: 'text-primary' },
   expired: { icon: Clock, color: 'text-destructive' },
+  selection_started: { icon: MousePointer, color: 'text-orange-500' },
+  payment_informed: { icon: CreditCard, color: 'text-yellow-600' },
+  payment_confirmed: { icon: CheckCircle, color: 'text-emerald-600' },
 };
 
 export function ActionTimeline({ actions }: ActionTimelineProps) {

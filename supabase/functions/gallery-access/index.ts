@@ -555,6 +555,17 @@ serve(async (req) => {
             updated_at: new Date().toISOString()
           }).eq('session_id', gallery.session_id);
         }
+
+        // Log expiration event
+        const { data: existingExpired } = await supabase
+          .from('galeria_acoes').select('id')
+          .eq('galeria_id', gallery.id).eq('tipo', 'expirada').maybeSingle();
+        if (!existingExpired) {
+          await supabase.from('galeria_acoes').insert({
+            galeria_id: gallery.id, tipo: 'expirada',
+            descricao: 'Prazo da galeria expirou', user_id: null,
+          });
+        }
       }
 
       // Fetch studio settings for branding on expiration screen

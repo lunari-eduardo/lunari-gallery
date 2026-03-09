@@ -280,11 +280,18 @@ export default function GalleryDetail() {
       'cliente_acessou': 'client_started',
       'cliente_confirmou': 'client_confirmed',
       'selecao_reaberta': 'selection_reopened',
-      'pagamento_confirmado': 'client_confirmed',
+      'pagamento_confirmado': 'payment_confirmed',
+      'pagamento_informado': 'payment_informed',
+      'selecao_iniciada': 'selection_started',
+      'expirada': 'expired',
     };
     
     // Filter relevant action types for main timeline
-    const relevantTypes = ['criada', 'enviada', 'cliente_acessou', 'cliente_confirmou', 'selecao_reaberta', 'pagamento_confirmado'];
+    const relevantTypes = [
+      'criada', 'enviada', 'cliente_acessou', 'cliente_confirmou', 
+      'selecao_reaberta', 'pagamento_confirmado', 'pagamento_informado',
+      'selecao_iniciada', 'expirada',
+    ];
     
     return galleryActions
       .filter((action: { tipo: string }) => relevantTypes.includes(action.tipo))

@@ -215,8 +215,15 @@ Deno.serve(async (req) => {
         .update({ status: 'selecao_iniciada', updated_at: new Date().toISOString() })
         .eq('id', galleryId);
       
+      // Log selection started event
+      await supabase.from('galeria_acoes').insert({
+        galeria_id: galleryId,
+        tipo: 'selecao_iniciada',
+        descricao: 'Cliente iniciou a seleção de fotos',
+        user_id: null,
+      });
+      
       // Update session status if linked
-      // Note: gallery.session_id is the workflow string 'session_id' column
       if (gallery.session_id) {
         await supabase
           .from('clientes_sessoes')
