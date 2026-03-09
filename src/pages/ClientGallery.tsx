@@ -1842,6 +1842,7 @@ export default function ClientGallery() {
         regrasCongeladas={regrasCongeladas}
         totalExtras={totalExtrasAcumuladas}
         extraPhotoPrice={gallery.extraPhotoPrice}
+        selectedCount={selectedCount}
         saleSettings={gallery.saleSettings}
         includedPhotos={gallery.includedPhotos}
       />
