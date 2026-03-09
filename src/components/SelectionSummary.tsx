@@ -54,16 +54,16 @@ export function SelectionSummary({
   const displayUnitPrice = valorUnitario;
   const displayTotal = valorACobrar;
 
-  // Discount analysis for inline tier display
+  // Discount analysis uses current selection extras (not billing totalExtras)
   const discountAnalysis = useDiscountAnalysis({
     regrasCongeladas,
-    totalExtras: totalExtras,
+    totalExtras: currentExtras,
     extraPhotoPrice,
     saleSettings,
     includedPhotos,
   });
 
-  const showDiscountTiers = discountAnalysis && selectedCount >= includedPhotos;
+  const showDiscountTiers = discountAnalysis && currentExtras > 0;
 
   // Bottom bar variant for client gallery
   if (variant === 'bottom-bar') {
