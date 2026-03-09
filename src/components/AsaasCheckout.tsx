@@ -14,6 +14,18 @@ const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 const POLL_INTERVAL = 15_000;
 const POLL_MAX = 10 * 60 * 1000;
 
+export interface AccountFees {
+  creditCard: {
+    operationValue: number;
+    detachedMonthlyFeeValue: number;
+    installmentMonthlyFeeValue: number;
+    tiers: Array<{ min: number; max: number; percentageFee: number }>;
+  };
+  pix: {
+    fixedFeeValue: number;
+  };
+}
+
 export interface AsaasCheckoutData {
   galeriaId: string;
   userId: string;
@@ -26,7 +38,8 @@ export interface AsaasCheckoutData {
   enabledMethods: { pix: boolean; creditCard: boolean; boleto?: boolean };
   maxParcelas: number;
   absorverTaxa: boolean;
-  taxaAntecipacao: boolean;
+  // Legacy fields (kept for backward compat but ignored when accountFees is available)
+  taxaAntecipacao?: boolean;
   taxaAntecipacaoPercentual?: number;
   taxaAntecipacaoCreditoAvista?: number;
   taxaAntecipacaoCreditoParcelado?: number;
