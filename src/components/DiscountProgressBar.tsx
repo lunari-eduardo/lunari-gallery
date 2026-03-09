@@ -32,9 +32,6 @@ export function DiscountProgressBar({
   saleSettings,
   includedPhotos = 0,
 }: DiscountProgressBarProps) {
-  // Hide bar until client reaches the minimum package quantity
-  if (selectedCount < includedPhotos) return null;
-
   const analysis = useMemo(() => {
     let regras = regrasCongeladas;
     if (!regras && saleSettings?.pricingModel === 'packages' && saleSettings?.discountPackages?.length) {
