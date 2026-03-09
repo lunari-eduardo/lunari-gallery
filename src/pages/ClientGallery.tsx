@@ -25,7 +25,7 @@ import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { AsaasCheckout, AsaasCheckoutData } from '@/components/AsaasCheckout';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
-import { DiscountProgressBar } from '@/components/DiscountProgressBar';
+
 import { DownloadModal } from '@/components/DownloadModal';
 import { getPhotoUrl, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { supabase } from '@/integrations/supabase/client';
