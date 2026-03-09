@@ -445,34 +445,76 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Section 5 — Recent Activity */}
+          {/* Section 5 — Atividades recentes: galerias ativas + feed */}
           <div className="glass p-6">
             <div className="flex items-center gap-2 mb-4">
               <Activity className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Atividades recentes</h3>
             </div>
-            {recentActions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma atividade recente</p>
-            ) : (
-              <div className="space-y-3">
-                {recentActions.map((action: any) => {
-                  const gallery = action.galerias;
-                  const galleryLabel = gallery?.nome_sessao || gallery?.cliente_nome || 'Galeria';
-                  return (
-                    <div key={action.id} className="flex items-start gap-3">
-                      <div className="mt-1 w-2 h-2 rounded-full bg-primary/60 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground">
-                          {action.descricao || action.tipo} — <span className="text-muted-foreground">{galleryLabel}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(action.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
-                        </p>
+
+            {/* Galerias ativas (enviadas + em seleção) */}
+            {activeGalleries.length > 0 && (
+              <div className="mb-5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Galerias ativas</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {activeGalleries.map(g => {
+                    const daysLeft = g.prazoSelecao ? differenceInDays(g.prazoSelecao, new Date()) : null;
+                    return (
+                      <div
+                        key={g.id}
+                        className="flex items-center gap-3 p-3 rounded-xl border border-border/40 bg-background/30 hover:bg-background/50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/gallery/${g.id}`)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{g.clienteNome || '—'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{g.nomeSessao || '—'}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground">{g.fotosSelecionadas}/{g.fotosIncluidas}</span>
+                          {getStatusBadge(g.status)}
+                        </div>
+                        {daysLeft !== null && (
+                          <span className={`text-xs font-medium flex-shrink-0 ${daysLeft <= 1 ? 'text-destructive' : daysLeft <= 3 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                            {daysLeft <= 0 ? 'Expirado' : `${daysLeft}d`}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+            )}
+
+            {/* Feed de ações */}
+            {recentActions.length > 0 && (
+              <div>
+                {activeGalleries.length > 0 && (
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Histórico</p>
+                )}
+                <div className="space-y-3">
+                  {recentActions.map((action: any) => {
+                    const gallery = action.galerias;
+                    const galleryLabel = gallery?.nome_sessao || gallery?.cliente_nome || 'Galeria';
+                    return (
+                      <div key={action.id} className="flex items-start gap-3">
+                        <div className="mt-1 w-2 h-2 rounded-full bg-primary/60 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground">
+                            {action.descricao || action.tipo} — <span className="text-muted-foreground">{galleryLabel}</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(action.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeGalleries.length === 0 && recentActions.length === 0 && (
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma atividade recente</p>
             )}
           </div>
         </div>
