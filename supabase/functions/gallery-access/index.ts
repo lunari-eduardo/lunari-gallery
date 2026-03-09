@@ -299,8 +299,157 @@ serve(async (req) => {
       );
     }
 
-    // 3b. Check if gallery is finalized (show preview of selected photos)
+    // 3b. AUTO-RECOVERY: If gallery was marked as finalized BUT payment is still pending,
+    // treat it as pending payment (not finalized) so the client can complete checkout
     const isFinalized = gallery.status_selecao === 'selecao_completa' || gallery.finalized_at;
+    const galleryConfigForRecovery = gallery.configuracoes as Record<string, unknown> | null;
+    const saleSettingsForRecovery = galleryConfigForRecovery?.saleSettings as Record<string, unknown> | null;
+    const saleModeFinalCheck = saleSettingsForRecovery?.mode as string | undefined;
+    const paymentStatusFinalCheck = gallery.status_pagamento;
+    
+    const needsPaymentRecovery = isFinalized && 
+      saleModeFinalCheck === 'sale_with_payment' && 
+      (paymentStatusFinalCheck === 'pendente' || paymentStatusFinalCheck === 'aguardando_confirmacao') &&
+      !gallery.finalized_at; // Only recover if finalized_at is NOT set (payment was never completed)
+    
+    if (needsPaymentRecovery) {
+      console.log("🔄 AUTO-RECOVERY: Gallery marked as selecao_completa but payment is still pending. Redirecting to payment flow.");
+      
+      // Re-route to the pending payment handler by overriding status_selecao temporarily
+      // We reuse the exact same logic from section 3a (aguardando_pagamento)
+      const { data: recoverySettings } = await supabase
+        .from("gallery_settings")
+        .select("studio_name, studio_logo_url, favicon_url")
+        .eq("user_id", gallery.user_id)
+        .single();
+
+      const recoveryConfig = gallery.configuracoes as Record<string, unknown> | null;
+      const recoveryThemeId = (recoveryConfig?.themeId as string) || undefined;
+      const recoveryClientMode = (recoveryConfig?.clientMode as 'light' | 'dark') || 'light';
+      
+      let recoveryThemeData = null;
+      if (recoveryThemeId) {
+        const { data: theme } = await supabase
+          .from("gallery_themes")
+          .select("*")
+          .eq("id", recoveryThemeId)
+          .maybeSingle();
+        if (theme) {
+          recoveryThemeData = {
+            id: theme.id, name: theme.name,
+            backgroundMode: theme.background_mode || 'light',
+            primaryColor: theme.primary_color, accentColor: theme.accent_color,
+            emphasisColor: theme.emphasis_color,
+          };
+        }
+      }
+      if (!recoveryThemeData) {
+        recoveryThemeData = { id: 'system', name: 'Sistema', backgroundMode: recoveryClientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+      }
+
+      const recoveryPaymentMethod = (saleSettingsForRecovery?.paymentMethod as string) || undefined;
+      const recoveryPixDados = recoveryConfig?.pixDados as Record<string, unknown> | null;
+
+      let recoveryCheckoutUrl: string | null = null;
+      let recoveryProvedor: string | null = null;
+      let recoveryCobrancaId: string | null = null;
+      let recoveryValor: number | null = null;
+
+      if (recoveryPaymentMethod !== 'pix_manual') {
+        const { data: pendingCobranca } = await supabase
+          .from("cobrancas")
+          .select("id, ip_checkout_url, mp_payment_link, provedor, valor, status")
+          .eq("galeria_id", gallery.id)
+          .eq("status", "pendente")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (pendingCobranca) {
+          recoveryCheckoutUrl = pendingCobranca.ip_checkout_url || pendingCobranca.mp_payment_link;
+          recoveryProvedor = pendingCobranca.provedor;
+          recoveryCobrancaId = pendingCobranca.id;
+          recoveryValor = pendingCobranca.valor;
+        }
+      }
+
+      // For Asaas transparent checkout
+      let recoveryAsaasData = null;
+      const resolvedRecoveryMethod = recoveryPaymentMethod || recoveryProvedor || 'pix_manual';
+      if (resolvedRecoveryMethod === 'asaas') {
+        const { data: asaasInteg } = await supabase
+          .from("usuarios_integracoes")
+          .select("dados_extras")
+          .eq("user_id", gallery.user_id)
+          .eq("provedor", "asaas")
+          .eq("status", "ativo")
+          .maybeSingle();
+
+        if (asaasInteg?.dados_extras) {
+          const s = asaasInteg.dados_extras as Record<string, unknown>;
+          let sessionIdTexto = gallery.session_id;
+          if (sessionIdTexto && !sessionIdTexto.startsWith('workflow-') && !sessionIdTexto.startsWith('session_')) {
+            const { data: sess } = await supabase
+              .from("clientes_sessoes")
+              .select("session_id")
+              .or(`id.eq.${sessionIdTexto},session_id.eq.${sessionIdTexto}`)
+              .maybeSingle();
+            sessionIdTexto = sess?.session_id || sessionIdTexto;
+          }
+
+          const extrasCount = gallery.fotos_selecionadas ? Math.max(0, (gallery.fotos_selecionadas || 0) - (gallery.fotos_incluidas || 0)) : 0;
+          recoveryAsaasData = {
+            galeriaId: gallery.id,
+            userId: gallery.user_id,
+            valorTotal: recoveryValor || gallery.valor_extras || 0,
+            descricao: `${extrasCount} foto${extrasCount !== 1 ? 's' : ''} extra${extrasCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`,
+            qtdFotos: extrasCount,
+            clienteId: gallery.cliente_id,
+            sessionId: sessionIdTexto,
+            galleryToken: gallery.public_token,
+            enabledMethods: {
+              pix: s.habilitarPix !== false,
+              creditCard: s.habilitarCartao !== false,
+              boleto: s.habilitarBoleto === true,
+            },
+            maxParcelas: (s.maxParcelas as number) || 12,
+            absorverTaxa: s.absorverTaxa || false,
+            taxaAntecipacao: s.taxaAntecipacao || false,
+            taxaAntecipacaoPercentual: s.taxaAntecipacaoPercentual,
+            taxaAntecipacaoCreditoAvista: s.taxaAntecipacaoCreditoAvista,
+            taxaAntecipacaoCreditoParcelado: s.taxaAntecipacaoCreditoParcelado,
+          };
+        }
+      }
+
+      // Also fix the gallery status back to aguardando_pagamento for consistency
+      await supabase.from('galerias').update({
+        status_selecao: 'aguardando_pagamento',
+        updated_at: new Date().toISOString(),
+      }).eq('id', gallery.id);
+
+      return new Response(
+        JSON.stringify({
+          pendingPayment: true,
+          galleryId: gallery.id,
+          sessionName: gallery.nome_sessao,
+          paymentMethod: resolvedRecoveryMethod,
+          pixDados: recoveryPixDados,
+          checkoutUrl: recoveryCheckoutUrl,
+          cobrancaId: recoveryCobrancaId,
+          valorTotal: recoveryValor || gallery.valor_extras || 0,
+          studioSettings: recoverySettings || null,
+          theme: recoveryThemeData,
+          clientMode: recoveryClientMode,
+          asaasCheckoutData: recoveryAsaasData,
+          settings: {
+            sessionFont: recoveryConfig?.sessionFont || undefined,
+            titleCaseMode: recoveryConfig?.titleCaseMode || 'normal',
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     if (isFinalized) {
       // Fetch studio settings for logo on finalized screen
