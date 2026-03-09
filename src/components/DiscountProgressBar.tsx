@@ -9,13 +9,12 @@ import {
   buildRegrasFromDiscountPackages 
 } from '@/lib/pricingUtils';
 import { DiscountPackage } from '@/types/gallery';
-import { Sparkles, ChevronRight } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
-interface DiscountProgressBarProps {
+interface DiscountAnalysisInput {
   regrasCongeladas: RegrasCongeladas | null | undefined;
   totalExtras: number;
   extraPhotoPrice: number;
-  selectedCount?: number;
   saleSettings?: {
     pricingModel?: string;
     discountPackages?: DiscountPackage[];
@@ -24,15 +23,26 @@ interface DiscountProgressBarProps {
   includedPhotos?: number;
 }
 
-export function DiscountProgressBar({
+export interface DiscountAnalysis {
+  faixas: FaixaPreco[];
+  faixaAtual: FaixaPreco | null;
+  currentPrice: number;
+  currentDiscount: number;
+  nextFaixa: FaixaPreco | null;
+  nextDiscount: number | null;
+  photosToNext: number;
+  basePrice: number;
+  atMaxTier: boolean;
+}
+
+export function useDiscountAnalysis({
   regrasCongeladas,
   totalExtras,
   extraPhotoPrice,
-  selectedCount = 0,
   saleSettings,
   includedPhotos = 0,
-}: DiscountProgressBarProps) {
-  const analysis = useMemo(() => {
+}: DiscountAnalysisInput): DiscountAnalysis | null {
+  return useMemo(() => {
     let regras = regrasCongeladas;
     if (!regras && saleSettings?.pricingModel === 'packages' && saleSettings?.discountPackages?.length) {
       regras = buildRegrasFromDiscountPackages(
@@ -79,78 +89,82 @@ export function DiscountProgressBar({
       atMaxTier,
     };
   }, [regrasCongeladas, totalExtras, extraPhotoPrice, saleSettings, includedPhotos]);
+}
 
-  // Hide until client reaches minimum package quantity
-  if (!analysis || selectedCount < includedPhotos) return null;
+// Compact inline tier display for use inside SelectionSummary bottom-bar
+interface InlineDiscountTiersProps {
+  analysis: DiscountAnalysis;
+  totalExtras: number;
+  isMobile?: boolean;
+}
 
+export function InlineDiscountTiers({ analysis, totalExtras, isMobile = false }: InlineDiscountTiersProps) {
   const { faixas, faixaAtual, currentDiscount, nextDiscount, photosToNext, atMaxTier, basePrice } = analysis;
 
   return (
-    <div className="fixed bottom-[60px] left-0 right-0 z-40 animate-slide-up">
-      <div className="mx-auto max-w-2xl px-3 pb-1">
-        <div className="rounded-2xl backdrop-blur-xl bg-card border border-border/30 shadow-lg overflow-hidden">
-          <div className="px-4 py-3">
-            {/* Tier segments */}
-            <div className="flex gap-1 mb-2">
-              {faixas.map((faixa, idx) => {
-                const isActive = faixaAtual && faixa.min === faixaAtual.min && faixa.max === faixaAtual.max;
-                const isPast = faixaAtual && faixa.min < faixaAtual.min;
-                const discount = basePrice > 0 ? Math.round(((basePrice - normalizarValor(faixa.valor)) / basePrice) * 100) : 0;
-                
-                return (
-                  <div 
-                    key={idx} 
-                    className="flex-1 flex flex-col items-center gap-1"
-                  >
-                    <div 
-                      className={cn(
-                        'w-full h-2 rounded-full transition-all duration-500',
-                        isActive 
-                          ? 'bg-gradient-to-r from-primary to-primary-hover shadow-[0_0_8px_hsl(var(--primary)/0.4)]' 
-                          : isPast 
-                            ? 'bg-primary/30' 
-                            : 'bg-muted/60'
-                      )}
-                    />
-                    <span className={cn(
-                      'text-[10px] leading-none font-medium tracking-wide',
-                      isActive ? 'text-primary' : isPast ? 'text-primary/50' : 'text-muted-foreground/60'
-                    )}>
-                      {discount > 0 ? `-${discount}%` : 'Base'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Status text */}
-            <div className="flex items-center justify-center gap-1.5 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-primary/70" />
-              {atMaxTier && currentDiscount > 0 ? (
-                <span className="text-primary font-semibold">
-                  Desconto máximo ativado: {currentDiscount}% 🎉
-                </span>
-              ) : totalExtras === 0 ? (
-                <span className="text-muted-foreground">
-                  Selecione fotos extras para ativar descontos progressivos
-                </span>
-              ) : photosToNext > 0 && nextDiscount !== null && nextDiscount > 0 ? (
-                <span className="text-muted-foreground">
-                  +{photosToNext} foto{photosToNext > 1 ? 's' : ''} para{' '}
-                  <span className="text-primary font-semibold">{nextDiscount}% de desconto</span>
-                </span>
-              ) : currentDiscount > 0 ? (
-                <span className="text-primary font-semibold">
-                  Desconto ativo: {currentDiscount}%
-                </span>
-              ) : (
-                <span className="text-muted-foreground">
-                  Adicione mais fotos para ativar descontos
-                </span>
+    <div className={cn(
+      "flex items-center gap-2 w-full",
+      isMobile ? "gap-1.5" : "gap-2"
+    )}>
+      {/* Tier segments */}
+      <div className={cn(
+        "flex gap-0.5 flex-1 min-w-0",
+        isMobile ? "max-w-[100px]" : "max-w-[160px]"
+      )}>
+        {faixas.map((faixa, idx) => {
+          const isActive = faixaAtual && faixa.min === faixaAtual.min && faixa.max === faixaAtual.max;
+          const isPast = faixaAtual && faixa.min < faixaAtual.min;
+          
+          return (
+            <div 
+              key={idx} 
+              className={cn(
+                'flex-1 rounded-full transition-all duration-500',
+                isMobile ? 'h-1' : 'h-1.5',
+                isActive 
+                  ? 'bg-gradient-to-r from-primary to-primary/70 shadow-[0_0_6px_hsl(var(--primary)/0.4)]' 
+                  : isPast 
+                    ? 'bg-primary/30' 
+                    : 'bg-muted/50'
               )}
-            </div>
-          </div>
-        </div>
+            />
+          );
+        })}
+      </div>
+
+      {/* Status text */}
+      <div className={cn(
+        "flex items-center gap-1 shrink-0",
+        isMobile ? "text-[9px]" : "text-[11px]"
+      )}>
+        <Sparkles className={cn(
+          "text-primary/70 shrink-0",
+          isMobile ? "h-2.5 w-2.5" : "h-3 w-3"
+        )} />
+        {atMaxTier && currentDiscount > 0 ? (
+          <span className="text-primary font-semibold whitespace-nowrap">
+            {isMobile ? `Max ${currentDiscount}% 🎉` : `Desconto máximo: ${currentDiscount}% 🎉`}
+          </span>
+        ) : totalExtras === 0 ? (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {isMobile ? 'Extras = descontos' : 'Selecione extras para descontos'}
+          </span>
+        ) : photosToNext > 0 && nextDiscount !== null && nextDiscount > 0 ? (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {isMobile 
+              ? <>{`+${photosToNext} → `}<span className="text-primary font-semibold">{nextDiscount}%</span></>
+              : <>{`+${photosToNext} foto${photosToNext > 1 ? 's' : ''} → `}<span className="text-primary font-semibold">{nextDiscount}%</span></>
+            }
+          </span>
+        ) : currentDiscount > 0 ? (
+          <span className="text-primary font-semibold whitespace-nowrap">
+            {isMobile ? `-${currentDiscount}%` : `Desconto: ${currentDiscount}%`}
+          </span>
+        ) : (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {isMobile ? '+extras = desc.' : 'Mais extras = descontos'}
+          </span>
+        )}
       </div>
     </div>
   );
