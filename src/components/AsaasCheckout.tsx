@@ -161,6 +161,7 @@ export function AsaasCheckout({
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [cardPhone, setCardPhone] = useState('');
+  const [cardEmail, setCardEmail] = useState('');
   const [cardCep, setCardCep] = useState('');
   const [cardInstallments, setCardInstallments] = useState('1');
   const [cardError, setCardError] = useState<string | null>(null);
