@@ -359,18 +359,26 @@ Deno.serve(async (req) => {
     }
 
     // 6. Save cobrança in database
+    // Map billingType to valid tipo_cobranca values: 'pix', 'card', 'link', 'presencial'
+    const tipoCobranca = finalBillingType === 'CREDIT_CARD' ? 'card' 
+      : finalBillingType === 'PIX' ? 'pix' 
+      : 'link'; // BOLETO maps to 'link'
+
+    const isConfirmed = paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED';
+
     const cobrancaData: Record<string, unknown> = {
       user_id: userId,
       cliente_id: clienteId || null,
       session_id: sessionId || null,
       galeria_id: galeriaId || null,
       valor: valor,
-      status: paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED' ? 'pago' : 'pendente',
+      status: isConfirmed ? 'pago' : 'pendente',
       provedor: 'asaas',
-      tipo_cobranca: 'foto_extra',
+      tipo_cobranca: tipoCobranca,
       descricao: descricao || 'Pagamento galeria',
       qtd_fotos: qtdFotos || 0,
       mp_payment_id: paymentData.id, // Reuse mp_payment_id column for Asaas payment ID
+      data_pagamento: isConfirmed ? new Date().toISOString() : null,
     };
 
     if (finalBillingType === 'PIX' && pixData) {
@@ -391,6 +399,69 @@ Deno.serve(async (req) => {
     if (cobrancaError) {
       console.error('Error saving cobrança:', cobrancaError);
       // Payment was created in Asaas but we failed to save locally - log but don't fail
+    }
+
+    // 6b. If payment is CONFIRMED immediately (credit card), finalize gallery/session
+    if (isConfirmed && galeriaId) {
+      console.log(`💰 Payment confirmed immediately, finalizing gallery ${galeriaId}`);
+
+      // Update gallery
+      const { data: galeria } = await supabase
+        .from('galerias')
+        .select('id, total_fotos_extras_vendidas, valor_total_vendido')
+        .eq('id', galeriaId)
+        .maybeSingle();
+
+      if (galeria) {
+        const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
+        const extrasNovas = qtdFotos || 0;
+        const valorAtual = Number(galeria.valor_total_vendido) || 0;
+
+        await supabase
+          .from('galerias')
+          .update({
+            total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+            valor_total_vendido: valorAtual + valor,
+            status_pagamento: 'pago',
+            status_selecao: 'selecao_completa',
+            finalized_at: new Date().toISOString(),
+          })
+          .eq('id', galeriaId);
+
+        console.log(`✅ Gallery ${galeriaId} finalized`);
+      }
+
+      // Update session if linked
+      if (sessionId) {
+        const { data: sessao } = await supabase
+          .from('clientes_sessoes')
+          .select('valor_pago')
+          .eq('session_id', sessionId)
+          .maybeSingle();
+
+        if (sessao) {
+          const valorAtual = Number(sessao.valor_pago) || 0;
+
+          await supabase
+            .from('clientes_sessoes')
+            .update({
+              valor_pago: valorAtual + valor,
+              status_galeria: 'selecao_completa',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('session_id', sessionId);
+
+          console.log(`✅ Session ${sessionId} updated`);
+        }
+      }
+
+      // Log action
+      await supabase.from('galeria_acoes').insert({
+        galeria_id: galeriaId,
+        tipo: 'pagamento_confirmado',
+        descricao: `Pagamento de R$ ${valor.toFixed(2)} confirmado via Asaas (cartão)`,
+        user_id: null,
+      });
     }
 
     // 7. Build checkout URL for redirect-based flow

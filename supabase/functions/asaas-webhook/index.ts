@@ -215,6 +215,7 @@ Deno.serve(async (req) => {
     // Handle payment events
     if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
       if (payment?.subscription) {
+        // Subscription payment
         await adminClient
           .from("subscriptions_asaas")
           .update({
@@ -234,6 +235,101 @@ Deno.serve(async (req) => {
 
         if (sub?.pending_downgrade_plan) {
           await applyDowngrade(adminClient, sub);
+        }
+      } else {
+        // Non-subscription payment (gallery payment via PIX async)
+        console.log("🔍 Looking for gallery cobrança for payment:", payment.id);
+
+        const { data: cobranca, error: cobrancaError } = await adminClient
+          .from("cobrancas")
+          .select("*")
+          .eq("mp_payment_id", payment.id)
+          .eq("provedor", "asaas")
+          .maybeSingle();
+
+        if (cobrancaError) {
+          console.error("Error finding cobrança:", cobrancaError);
+        } else if (cobranca && cobranca.status !== "pago") {
+          console.log(`💰 Processing gallery payment for cobrança ${cobranca.id}`);
+
+          // 1. Update cobrança to paid
+          await adminClient
+            .from("cobrancas")
+            .update({
+              status: "pago",
+              data_pagamento: new Date().toISOString(),
+            })
+            .eq("id", cobranca.id);
+
+          // 2. Update gallery if linked
+          if (cobranca.galeria_id) {
+            const { data: galeria } = await adminClient
+              .from("galerias")
+              .select("id, total_fotos_extras_vendidas, valor_total_vendido")
+              .eq("id", cobranca.galeria_id)
+              .maybeSingle();
+
+            if (galeria) {
+              const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
+              const extrasNovas = cobranca.qtd_fotos || 0;
+              const valorAtual = Number(galeria.valor_total_vendido) || 0;
+              const valorCobranca = Number(cobranca.valor) || 0;
+
+              await adminClient
+                .from("galerias")
+                .update({
+                  total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
+                  valor_total_vendido: valorAtual + valorCobranca,
+                  status_pagamento: "pago",
+                  status_selecao: "selecao_completa",
+                  finalized_at: new Date().toISOString(),
+                })
+                .eq("id", cobranca.galeria_id);
+
+              console.log(`✅ Gallery ${cobranca.galeria_id} finalized via webhook`);
+            }
+          }
+
+          // 3. Update session if linked
+          if (cobranca.session_id) {
+            const { data: sessao } = await adminClient
+              .from("clientes_sessoes")
+              .select("valor_pago")
+              .eq("session_id", cobranca.session_id)
+              .maybeSingle();
+
+            if (sessao) {
+              const valorAtual = Number(sessao.valor_pago) || 0;
+              const valorCobranca = Number(cobranca.valor) || 0;
+
+              await adminClient
+                .from("clientes_sessoes")
+                .update({
+                  valor_pago: valorAtual + valorCobranca,
+                  status_galeria: "selecao_completa",
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("session_id", cobranca.session_id);
+
+              console.log(`✅ Session ${cobranca.session_id} updated via webhook`);
+            }
+          }
+
+          // 4. Log action
+          if (cobranca.galeria_id) {
+            await adminClient.from("galeria_acoes").insert({
+              galeria_id: cobranca.galeria_id,
+              tipo: "pagamento_confirmado",
+              descricao: `Pagamento de R$ ${Number(cobranca.valor).toFixed(2)} confirmado via Asaas`,
+              user_id: null,
+            });
+          }
+
+          console.log(`✅ Asaas webhook processed: cobrança ${cobranca.id} marked as paid`);
+        } else if (cobranca?.status === "pago") {
+          console.log(`⏭️ Cobrança ${cobranca.id} already paid, skipping`);
+        } else {
+          console.warn(`⚠️ No cobrança found for Asaas payment ${payment.id}`);
         }
       }
     }
