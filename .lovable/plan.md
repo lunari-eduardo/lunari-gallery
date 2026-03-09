@@ -1,35 +1,34 @@
 
-Objetivo: corrigir o bug de persistência do toggle de repasse/absorção no Asaas e eliminar a falsa confirmação de salvamento.
 
-1) Diagnóstico confirmado
-- `src/pages/Settings.tsx` tem botão fixo “Salvar Configurações” que só dispara `toast.success(...)` e não salva nada.
-- Em `src/components/settings/PaymentSettings.tsx`, o toggle `asaasAbsorverTaxa` só persiste quando o usuário clica no botão interno “Salvar Configurações” da seção Asaas.
-- Resultado: usuário muda o toggle, clica no botão global (toast de sucesso), recarrega, e o valor volta ao estado anterior no banco.
+## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
 
-2) Correção de UX e fluxo de salvamento
-- Em `src/pages/Settings.tsx`:
-  - Tornar abas controladas por estado (`activeTab`).
-  - Ocultar/desabilitar o botão global quando `activeTab === "payment"`.
-  - Ajustar mensagem para deixar claro que pagamentos são salvos dentro de cada integração.
-- Em `src/components/settings/PaymentSettings.tsx`:
-  - Tornar explícito o estado de alteração pendente no Asaas (ex.: “Alterações não salvas”).
-  - Renomear botão interno para algo específico: “Salvar configurações do Asaas”.
-  - Opcional recomendado: auto-save do toggle de `absorverTaxa` no `onCheckedChange` (com lock de loading e toast de erro/sucesso), para evitar depender de clique extra.
+### Problema resolvido
+As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
 
-3) Persistência e robustez
-- Em `src/hooks/usePaymentIntegration.ts`:
-  - Reutilizar `updateAsaasSettings` para persistência do toggle em tempo real (se auto-save for aplicado).
-  - Garantir tratamento de erro no update (já existe) e feedback claro quando falhar.
-  - Manter invalidação de cache (`payment-integration`) após sucesso.
+### Arquitetura implementada
 
-4) Validação funcional (fim a fim)
-- Cenário A: Asaas conectado, abrir “Configurar”, trocar para “Cliente paga juros”, salvar (ou auto-save), recarregar página, confirmar persistência.
-- Cenário B: trocar para “Eu absorvo a taxa”, recarregar e validar persistência.
-- Cenário C: confirmar no checkout que `absorverTaxa=false` exibe parcelas com acréscimo e `absorverTaxa=true` exibe valor limpo.
-- Cenário D: validar que botão global da página não induz sucesso falso na aba “Pagamentos”.
+```text
+Cliente abre checkout
+  → AsaasCheckout monta
+  → Chama asaas-fetch-fees (userId)
+  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
+  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação
+  → Exibe parcelas com valores corretos
 
-5) Impacto esperado
-- Remove confusão de UX.
-- Elimina falso positivo de “configurações salvas”.
-- Garante que a configuração do toggle sobreviva ao reload e reflita corretamente no checkout.
-- Sem alterações em edge functions de InfinitePay (`infinitepay-create-link` e `infinitepay-webhook`), preservando automações atuais.
+Cliente paga
+  → asaas-gallery-payment recalcula server-side com mesma API
+  → Cobra valor correto no Asaas
+```
+
+### Cálculo combinado por parcela
+```
+Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
+```
+
+### Arquivos modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` (NOVO)
+2. ✅ `supabase/config.toml` — registro da nova função
+3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real
+5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only
+6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada

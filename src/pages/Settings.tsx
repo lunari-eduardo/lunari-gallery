@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ export default function Settings() {
   const params = new URLSearchParams(location.search);
   const isMpCallback = params.has('mp_callback') || params.get('tab') === 'payment';
 
+  const [activeTab, setActiveTab] = useState(isMpCallback ? 'payment' : 'general');
+
   const handleSave = () => {
     toast.success('Configurações salvas!');
   };
@@ -30,7 +33,7 @@ export default function Settings() {
           </p>
         </div>
 
-        <Tabs defaultValue={isMpCallback ? "payment" : "general"} className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 max-w-lg">
             <TabsTrigger value="general">Geral</TabsTrigger>
             <TabsTrigger value="personalization">Personalização</TabsTrigger>
@@ -51,14 +54,16 @@ export default function Settings() {
         </Tabs>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/80 backdrop-blur-lg">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex justify-end">
-          <Button variant="terracotta" size="lg" onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            Salvar Configurações
-          </Button>
+      {activeTab !== 'payment' && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/80 backdrop-blur-lg">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex justify-end">
+            <Button variant="terracotta" size="lg" onClick={handleSave}>
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Configurações
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
