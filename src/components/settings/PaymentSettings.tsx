@@ -85,6 +85,11 @@ export function PaymentSettings() {
       tiers: Array<{ min: number; max: number; percentageFee: number }>;
     };
     pix: { fixedFeeValue: number };
+    discount?: {
+      active: boolean;
+      expiration?: string;
+      tiers: Array<{ min: number; max: number; percentageFee: number }>;
+    };
   } | null>(null);
   const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
 
