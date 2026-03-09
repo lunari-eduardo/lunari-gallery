@@ -161,6 +161,7 @@ export function AsaasCheckout({
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [cardPhone, setCardPhone] = useState('');
+  const [cardEmail, setCardEmail] = useState('');
   const [cardCep, setCardCep] = useState('');
   const [cardInstallments, setCardInstallments] = useState('1');
   const [cardError, setCardError] = useState<string | null>(null);
@@ -351,6 +352,7 @@ export function AsaasCheckout({
     const [expM, expY] = cardExpiry.split('/');
     if (!expM || !expY || parseInt(expM) < 1 || parseInt(expM) > 12) { setCardError('Validade inválida'); return; }
     if (cardCvv.length < 3) { setCardError('CVV inválido'); return; }
+    if (!cardEmail || !/\S+@\S+\.\S+/.test(cardEmail)) { setCardError('Informe o email do titular do cartão'); return; }
     if (cardPhone.replace(/\D/g, '').length < 10) { setCardError('Telefone inválido'); return; }
     if (cardCep.replace(/\D/g, '').length < 8) { setCardError('CEP inválido'); return; }
 
@@ -382,7 +384,7 @@ export function AsaasCheckout({
           creditCardHolderInfo: {
             name: cardName,
             cpfCnpj: cardCpfCnpj.replace(/\D/g, ''),
-            email: '',
+            email: cardEmail,
             phone: cardPhone.replace(/\D/g, ''),
             postalCode: cardCep.replace(/\D/g, ''),
             addressNumber: 'S/N',
@@ -519,6 +521,10 @@ export function AsaasCheckout({
                 <div>
                   <Label htmlFor="cc-cpf">CPF / CNPJ</Label>
                   <Input id="cc-cpf" value={cardCpfCnpj} onChange={e => setCardCpfCnpj(maskCpfCnpj(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={18} />
+                </div>
+                <div>
+                  <Label htmlFor="cc-email">Email do titular</Label>
+                  <Input id="cc-email" type="email" value={cardEmail} onChange={e => setCardEmail(e.target.value)} placeholder="email@exemplo.com" autoComplete="email" />
                 </div>
                 <div>
                   <Label htmlFor="cc-number">Número do cartão</Label>
