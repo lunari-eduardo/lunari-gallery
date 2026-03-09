@@ -271,19 +271,25 @@ export default function Home() {
   }, [galleries]);
 
   // Galleries requiring attention
+  // Aguardando ação: apenas expiradas e concluídas
   const attentionGalleries = useMemo(() => {
-    const now = new Date();
     return galleries
       .filter(g => g.tipo === 'selecao')
-      .filter(g => {
-        if (g.status === 'enviado') return true;
-        if (g.status === 'selecao_iniciada' && g.prazoSelecao) {
-          const daysLeft = differenceInDays(g.prazoSelecao, now);
-          return daysLeft <= 3;
-        }
-        return false;
-      })
+      .filter(g => g.status === 'expirado' || g.status === 'selecao_completa')
       .slice(0, 6);
+  }, [galleries]);
+
+  // Galerias ativas: enviadas e em seleção
+  const activeGalleries = useMemo(() => {
+    const now = new Date();
+    return galleries
+      .filter(g => g.tipo === 'selecao' && (g.status === 'enviado' || g.status === 'selecao_iniciada'))
+      .sort((a, b) => {
+        if (a.prazoSelecao && b.prazoSelecao) return differenceInDays(a.prazoSelecao, now) - differenceInDays(b.prazoSelecao, now);
+        if (a.prazoSelecao) return -1;
+        return 1;
+      })
+      .slice(0, 8);
   }, [galleries]);
 
   return (
