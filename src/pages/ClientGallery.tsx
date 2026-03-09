@@ -25,7 +25,7 @@ import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { AsaasCheckout, AsaasCheckoutData } from '@/components/AsaasCheckout';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
-import { DiscountProgressBar } from '@/components/DiscountProgressBar';
+
 import { DownloadModal } from '@/components/DownloadModal';
 import { getPhotoUrl, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { supabase } from '@/integrations/supabase/client';
@@ -1837,17 +1837,7 @@ export default function ClientGallery() {
         </MasonryGrid>
       </main>
 
-      {/* Discount Progress Bar */}
-      <DiscountProgressBar
-        regrasCongeladas={regrasCongeladas}
-        totalExtras={totalExtrasAcumuladas}
-        extraPhotoPrice={gallery.extraPhotoPrice}
-        selectedCount={selectedCount}
-        saleSettings={gallery.saleSettings}
-        includedPhotos={gallery.includedPhotos}
-      />
-
-      {/* Bottom Bar Summary */}
+      {/* Bottom Bar Summary (with integrated discount tiers) */}
       <SelectionSummary 
         gallery={{
           ...gallery,
@@ -1863,6 +1853,7 @@ export default function ClientGallery() {
         extrasPagasTotal={extrasPagasTotal}
         extrasACobrar={extrasACobrar}
         valorJaPago={valorJaPago}
+        saleSettings={gallery.saleSettings}
       />
 
       {lightboxIndex !== null && (() => {

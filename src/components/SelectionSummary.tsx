@@ -1,8 +1,10 @@
-import { Gallery } from '@/types/gallery';
+import { Gallery, DiscountPackage } from '@/types/gallery';
 import { Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { calcularPrecoProgressivoComCredito, RegrasCongeladas, formatFaixaDisplay, getFaixasFromRegras } from '@/lib/pricingUtils';
+import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
+import { useDiscountAnalysis, InlineDiscountTiers } from '@/components/DiscountProgressBar';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SelectionSummaryProps {
   gallery: Gallery;
@@ -10,9 +12,14 @@ interface SelectionSummaryProps {
   isClient?: boolean;
   variant?: 'default' | 'bottom-bar';
   regrasCongeladas?: RegrasCongeladas | null;
-  extrasPagasTotal?: number; // Previously paid extras (quantity)
-  extrasACobrar?: number; // Extras to charge in this cycle (quantity)
-  valorJaPago?: number; // Previously paid amount (R$)
+  extrasPagasTotal?: number;
+  extrasACobrar?: number;
+  valorJaPago?: number;
+  saleSettings?: {
+    pricingModel?: string;
+    discountPackages?: DiscountPackage[];
+    fixedPrice?: number;
+  } | null;
 }
 
 export function SelectionSummary({ 
@@ -23,46 +30,86 @@ export function SelectionSummary({
   regrasCongeladas,
   extrasPagasTotal = 0,
   extrasACobrar: extrasACobrarProp,
-  valorJaPago = 0
+  valorJaPago = 0,
+  saleSettings,
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
   const isOverLimit = extraCount > 0;
   const isConfirmed = selectionStatus === 'confirmed';
   const isBlocked = selectionStatus === 'blocked';
+  const isMobile = useIsMobile();
   
-  // Use provided extrasACobrar or calculate from total extras
   const extrasACobrar = extrasACobrarProp ?? Math.max(0, extraCount - extrasPagasTotal);
   
-  // Calculate pricing using credit system
   const { valorUnitario, valorACobrar, valorTotalIdeal, economia, totalExtras } = calcularPrecoProgressivoComCredito(
-    extrasACobrar,      // New extras in this cycle
-    extrasPagasTotal,   // Previously paid quantity
-    valorJaPago,        // Previously paid amount R$
+    extrasACobrar,
+    extrasPagasTotal,
+    valorJaPago,
     regrasCongeladas,
     extraPhotoPrice
   );
   
-  // Use calculated values
   const displayUnitPrice = valorUnitario;
-  const displayTotal = valorACobrar; // Use credit-adjusted amount
+  const displayTotal = valorACobrar;
+
+  // Discount analysis for inline tier display
+  const discountAnalysis = useDiscountAnalysis({
+    regrasCongeladas,
+    totalExtras: totalExtras,
+    extraPhotoPrice,
+    saleSettings,
+    includedPhotos,
+  });
+
+  const showDiscountTiers = discountAnalysis && selectedCount >= includedPhotos;
 
   // Bottom bar variant for client gallery
   if (variant === 'bottom-bar') {
     return (
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
-        <div className="flex items-center justify-between px-4 py-3 gap-4">
+      <div className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-card/80 border-t border-border/30 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+        {/* Discount tier row */}
+        {showDiscountTiers && (
+          <div className={cn(
+            "border-b border-border/20",
+            isMobile ? "px-3 py-1.5" : "px-4 py-2"
+          )}>
+            <InlineDiscountTiers
+              analysis={discountAnalysis}
+              totalExtras={totalExtras}
+              isMobile={isMobile}
+            />
+          </div>
+        )}
+
+        {/* Main selection row */}
+        <div className={cn(
+          "flex items-center justify-between gap-3",
+          isMobile ? "px-3 py-2" : "px-4 py-3 gap-4"
+        )}>
           {/* Selection count */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold">{selectedCount}</span>
-              <span className="text-sm text-muted-foreground">/ {includedPhotos}</span>
+            <div className="flex items-center gap-1.5">
+              <span className={cn(
+                "font-bold",
+                isMobile ? "text-base" : "text-lg"
+              )}>{selectedCount}</span>
+              <span className={cn(
+                "text-muted-foreground",
+                isMobile ? "text-xs" : "text-sm"
+              )}>/ {includedPhotos}</span>
             </div>
             
             {isOverLimit && (
-              <div className="flex items-center gap-2 text-primary">
-                <span className="text-sm font-medium">+{totalExtras} extras</span>
-                <span className="text-sm font-bold">R$ {displayTotal.toFixed(2)}</span>
+              <div className="flex items-center gap-1.5 text-primary">
+                <span className={cn(
+                  "font-medium",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>+{totalExtras} extras</span>
+                <span className={cn(
+                  "font-bold",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>R$ {displayTotal.toFixed(2)}</span>
               </div>
             )}
           </div>
@@ -70,23 +117,29 @@ export function SelectionSummary({
           {/* Status or action */}
           <div className="flex items-center gap-2">
             {isConfirmed ? (
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="h-5 w-5" />
-                <span className="text-sm font-medium hidden sm:inline">Confirmada</span>
+              <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                <Check className={cn(isMobile ? "h-4 w-4" : "h-5 w-5")} />
+                <span className={cn(
+                  "font-medium hidden sm:inline",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Confirmada</span>
               </div>
             ) : isBlocked ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <AlertCircle className="h-5 w-5" />
-                <span className="text-sm font-medium hidden sm:inline">Bloqueada</span>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <AlertCircle className={cn(isMobile ? "h-4 w-4" : "h-5 w-5")} />
+                <span className={cn(
+                  "font-medium hidden sm:inline",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Bloqueada</span>
               </div>
             ) : (
               <Button 
                 onClick={onConfirm}
                 variant="terracotta"
-                size="lg"
-                className="px-6"
+                size={isMobile ? "default" : "lg"}
+                className={cn(isMobile ? "px-4 text-xs h-8" : "px-6")}
               >
-                <Check className="h-4 w-4 mr-2" />
+                <Check className={cn(isMobile ? "h-3 w-3 mr-1" : "h-4 w-4 mr-2")} />
                 Confirmar
               </Button>
             )}
@@ -126,7 +179,6 @@ export function SelectionSummary({
               <span className="font-medium text-primary">+{totalExtras}</span>
             </div>
             
-            {/* Show previously paid extras */}
             {extrasPagasTotal > 0 && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Extras já pagas</span>
@@ -134,7 +186,6 @@ export function SelectionSummary({
               </div>
             )}
             
-            {/* Show new extras to pay */}
             {extrasACobrar > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Extras a pagar</span>
@@ -149,7 +200,6 @@ export function SelectionSummary({
             
             <div className="h-px bg-border" />
             
-            {/* Show credit breakdown when there are previously paid amounts */}
             {valorJaPago > 0 && valorTotalIdeal > 0 && (
               <>
                 <div className="flex items-center justify-between text-sm">
@@ -169,7 +219,6 @@ export function SelectionSummary({
                 R$ {displayTotal.toFixed(2)}
               </span>
             </div>
-            
           </>
         )}
       </div>
@@ -206,7 +255,6 @@ export function SelectionSummary({
           <p>Seleção confirmada com sucesso!</p>
         </div>
       )}
-
     </div>
   );
 }
