@@ -924,26 +924,81 @@ export function PaymentSettings() {
                   </div>
                 </div>
 
-                {/* Anticipation fee */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Antecipação de recebíveis</Label>
-                      <p className="text-sm text-muted-foreground">Repassar custo de antecipação ao cliente no cartão</p>
+                {/* Fee info - fetched from Asaas API in real-time */}
+                {!asaasAbsorverTaxa && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Taxas do Asaas</Label>
+                        <p className="text-sm text-muted-foreground">
+                          As taxas são buscadas automaticamente da sua conta Asaas no momento do checkout
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={asaasFeesLoading}
+                        onClick={async () => {
+                          setAsaasFeesLoading(true);
+                          try {
+                            const userId = user?.id;
+                            if (!userId) return;
+                            const res = await fetch(`https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/asaas-fetch-fees`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ userId }),
+                            });
+                            const result = await res.json();
+                            if (result.success && result.accountFees) {
+                              setAsaasFees(result.accountFees);
+                            } else {
+                              toast.error(result.error || 'Erro ao buscar taxas');
+                            }
+                          } catch {
+                            toast.error('Erro ao buscar taxas');
+                          } finally {
+                            setAsaasFeesLoading(false);
+                          }
+                        }}
+                      >
+                        {asaasFeesLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                        Ver taxas
+                      </Button>
                     </div>
-                    <Switch checked={asaasTaxaAntecipacao} onCheckedChange={setAsaasTaxaAntecipacao} />
+
+                    {asaasFees && (
+                      <div className="rounded-lg border border-border p-4 bg-muted/30 space-y-3">
+                        <h5 className="text-sm font-medium">Taxas de Cartão de Crédito</h5>
+                        <div className="grid gap-1">
+                          {asaasFees.creditCard.tiers.map((tier, idx) => (
+                            <div key={idx} className="flex justify-between text-sm text-muted-foreground">
+                              <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
+                              <span className="font-medium">{tier.percentageFee}% + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pt-2 border-t border-border grid gap-1">
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>Antecipação à vista</span>
+                            <span className="font-medium">{asaasFees.creditCard.detachedMonthlyFeeValue}%/mês</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>Antecipação parcelado</span>
+                            <span className="font-medium">{asaasFees.creditCard.installmentMonthlyFeeValue}%/mês</span>
+                          </div>
+                        </div>
+                        {asaasFees.pix && (
+                          <div className="pt-2 border-t border-border">
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                              <span>PIX (taxa fixa)</span>
+                              <span className="font-medium">R$ {asaasFees.pix.fixedFeeValue.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  
-                  {asaasTaxaAntecipacao && (
-                    <AnticipationConfig
-                      taxaAvista={asaasTaxaAvista}
-                      setTaxaAvista={setAsaasTaxaAvista}
-                      taxaParcelado={asaasTaxaParcelado}
-                      setTaxaParcelado={setAsaasTaxaParcelado}
-                      maxParcelas={parseInt(asaasMaxParcelas)}
-                    />
-                  )}
-                </div>
+                )}
               </div>
             )}
             
