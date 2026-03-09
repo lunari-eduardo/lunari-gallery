@@ -92,7 +92,7 @@ export function SelectionSummary({
             <div className="flex-1 flex justify-center min-w-0">
               <InlineDiscountTiers
                 analysis={discountAnalysis}
-                totalExtras={totalExtras}
+                totalExtras={currentExtras}
                 isMobile={isMobile}
               />
             </div>
