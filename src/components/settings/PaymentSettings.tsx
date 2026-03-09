@@ -73,9 +73,18 @@ export function PaymentSettings() {
   const [asaasHabilitarBoleto, setAsaasHabilitarBoleto] = useState(false);
   const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
-  const [asaasTaxaAntecipacao, setAsaasTaxaAntecipacao] = useState(false);
-  const [asaasTaxaAvista, setAsaasTaxaAvista] = useState('0');
-  const [asaasTaxaParcelado, setAsaasTaxaParcelado] = useState('0');
+  
+  // Real-time fees from Asaas API
+  const [asaasFees, setAsaasFees] = useState<{
+    creditCard: {
+      operationValue: number;
+      detachedMonthlyFeeValue: number;
+      installmentMonthlyFeeValue: number;
+      tiers: Array<{ min: number; max: number; percentageFee: number }>;
+    };
+    pix: { fixedFeeValue: number };
+  } | null>(null);
+  const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
 
   // Ref to prevent duplicate OAuth callback processing
   const hasProcessedCallback = useRef(false);
