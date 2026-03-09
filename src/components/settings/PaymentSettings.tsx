@@ -917,11 +917,31 @@ export function PaymentSettings() {
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={asaasAbsorverTaxa}
-                        onCheckedChange={setAsaasAbsorverTaxa}
+                        onCheckedChange={async (checked) => {
+                          setAsaasAbsorverTaxa(checked);
+                          // Auto-save immediately
+                          try {
+                            await updateAsaasSettings.mutateAsync({
+                              environment: asaasEnvironment,
+                              habilitarPix: asaasHabilitarPix,
+                              habilitarCartao: asaasHabilitarCartao,
+                              habilitarBoleto: asaasHabilitarBoleto,
+                              maxParcelas: parseInt(asaasMaxParcelas),
+                              absorverTaxa: checked,
+                            });
+                          } catch {
+                            // Revert on failure
+                            setAsaasAbsorverTaxa(!checked);
+                          }
+                        }}
+                        disabled={updateAsaasSettings.isPending}
                       />
                       <span className="text-sm text-muted-foreground">
                         {asaasAbsorverTaxa ? 'Eu absorvo a taxa' : 'Cliente paga juros'}
                       </span>
+                      {updateAsaasSettings.isPending && (
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      )}
                     </div>
                   </div>
                 </div>
