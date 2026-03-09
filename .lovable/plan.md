@@ -1,65 +1,59 @@
 
 
-## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
+## Diagnóstico: Pagamento Asaas não atualiza galeria
 
-### Problema resolvido
-As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
+### 3 problemas encontrados
 
-### Arquitetura implementada
+**1. Constraint de banco violada — cobrança nunca é salva**
 
-```text
-Cliente abre checkout
-  → AsaasCheckout monta
-  → Chama asaas-fetch-fees (userId)
-  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
-  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
-  → Exibe parcelas com valores corretos
+A edge function `asaas-gallery-payment` insere `tipo_cobranca: 'foto_extra'`, mas a constraint `cobrancas_tipo_cobranca_check` só aceita: `'pix'`, `'link'`, `'card'`, `'presencial'`.
 
-Cliente paga
-  → asaas-gallery-payment recalcula server-side com mesma API
-  → Cobra valor correto no Asaas
+Erro nos logs:
+```
+new row for relation "cobrancas" violates check constraint "cobrancas_tipo_cobranca_check"
 ```
 
-### Cálculo combinado por parcela
-```
-IF incluirTaxaAntecipacao = true:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
-ELSE:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49)
-```
+Resultado: a cobrança **nunca é salva no banco**, então o webhook não consegue encontrá-la para atualizar o status.
 
-### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+**2. Pagamento confirmado imediatamente, mas galeria não é atualizada**
 
-**Bugs corrigidos:**
-1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
-2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
-3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+No sandbox, pagamentos com cartão retornam `status: CONFIRMED` na hora. O frontend mostra "Pagamento aprovado!" e chama `onPaymentConfirmed()`, mas o backend (`asaas-gallery-payment`) **não atualiza a galeria nem a sessão** quando o pagamento é confirmado imediatamente.
 
-**Arquivos modificados:**
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
-2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
-3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
-4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+**3. Webhook de galeria nunca é chamado**
 
-### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+O `asaas-gallery-webhook` tem **zero logs** — nunca foi invocado. O webhook do Asaas aponta para `asaas-webhook` (que só trata assinaturas). Pagamentos de galeria são ignorados porque `payment.subscription` é null.
 
-**Funcionalidade adicionada:**
-1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
-2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
-3. ✅ Auto-save imediato ao alterar o toggle
-4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
-5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
+---
 
-**Arquivos modificados:**
-1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
-2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
-3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
+### Correções
 
-### Arquivos originais modificados
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
-2. ✅ `supabase/config.toml` — registro da nova função
-3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
-5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
-6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
+#### 1. `asaas-gallery-payment/index.ts` — Fix tipo_cobranca + finalização imediata
+
+- Linha 370: Mudar `tipo_cobranca: 'foto_extra'` para valor dinâmico:
+  - `'card'` se `CREDIT_CARD`
+  - `'pix'` se `PIX`
+  - `'link'` se `BOLETO`
+
+- Após salvar a cobrança, se `paymentData.status === 'CONFIRMED'`:
+  - Atualizar `cobrancas.status = 'pago'`
+  - Atualizar `galerias` (status_pagamento, finalized_at, fotos extras)
+  - Atualizar `clientes_sessoes` (valor_pago, status_galeria)
+  - Inserir ação em `galeria_acoes`
+
+#### 2. `asaas-webhook/index.ts` — Tratar pagamentos de galeria
+
+Para pagamentos **sem** `payment.subscription` (PIX async):
+- Buscar cobrança pelo `payment.externalReference` (galeriaId) ou `payment.id` (mp_payment_id)
+- Se encontrar cobrança pendente, aplicar a mesma lógica de finalização
+
+#### 3. Configuração no Asaas
+
+Não precisa criar webhook separado. O `asaas-webhook` existente receberá todos os eventos. A correção no código fará ele tratar também pagamentos sem subscription.
+
+---
+
+### Impacto
+- Edge functions de InfinitePay e create-link **não são alteradas**
+- Retrocompatível — pagamentos futuros serão salvos e finalizados corretamente
+- Pagamentos já feitos podem ser confirmados manualmente via "Confirmar pago"
+
