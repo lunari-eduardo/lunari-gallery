@@ -159,6 +159,47 @@ export function AsaasCheckout({
   const [cardError, setCardError] = useState<string | null>(null);
   const [cardSuccess, setCardSuccess] = useState(false);
 
+  // ——— Real-time fees from Asaas API ———
+  const [accountFees, setAccountFees] = useState<AccountFees | null>(null);
+  const [feesLoading, setFeesLoading] = useState(false);
+  const [feesError, setFeesError] = useState(false);
+
+  // Fetch fees from Asaas API on mount
+  useEffect(() => {
+    if (!data.userId || data.absorverTaxa) return; // No need to fetch fees if photographer absorbs
+    
+    let cancelled = false;
+    setFeesLoading(true);
+    setFeesError(false);
+    
+    fetch(`${SUPABASE_URL}/functions/v1/asaas-fetch-fees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: data.userId }),
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (cancelled) return;
+        if (result.success && result.accountFees) {
+          setAccountFees(result.accountFees);
+          console.log('📊 Asaas fees loaded:', result.accountFees);
+        } else {
+          console.warn('Failed to load Asaas fees:', result.error);
+          setFeesError(true);
+        }
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('Error fetching Asaas fees:', err);
+        setFeesError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setFeesLoading(false);
+      });
+    
+    return () => { cancelled = true; };
+  }, [data.userId, data.absorverTaxa]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
