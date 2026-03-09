@@ -80,10 +80,6 @@ Deno.serve(async (req) => {
       habilitarBoleto?: boolean;
       maxParcelas?: number;
       absorverTaxa?: boolean;
-      taxaAntecipacao?: boolean;
-      taxaAntecipacaoPercentual?: number;
-      taxaAntecipacaoCreditoAvista?: number;
-      taxaAntecipacaoCreditoParcelado?: number;
     };
 
     const asaasBaseUrl = settings.environment === 'production'
@@ -195,28 +191,78 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Calculate anticipation fee if applicable
+    // 3. Calculate fees using REAL Asaas API rates (server-side validation)
     let valorFinal = valor;
+    let processingCost = 0;
     let anticipationCost = 0;
 
-    if (finalBillingType === 'CREDIT_CARD' && settings.taxaAntecipacao) {
+    if (finalBillingType === 'CREDIT_CARD' && !settings.absorverTaxa) {
       const installments = body.installmentCount && body.installmentCount > 1 ? body.installmentCount : 1;
-      // Use new dual-field rates; fallback to old single field for backward compat
-      const taxaMensal = installments === 1
-        ? (settings.taxaAntecipacaoCreditoAvista ?? settings.taxaAntecipacaoPercentual ?? 0)
-        : (settings.taxaAntecipacaoCreditoParcelado ?? settings.taxaAntecipacaoPercentual ?? 0);
 
-      if (taxaMensal > 0) {
-        // Calculate anticipation cost using the same formula as frontend
-        const valorParcela = valor / installments;
-        let valorLiquido = 0;
-        for (let i = 1; i <= installments; i++) {
-          const taxaTotal = taxaMensal * i;
-          valorLiquido += valorParcela * (1 - taxaTotal / 100);
+      // Fetch real fees from Asaas API
+      try {
+        const feesResp = await fetch(`${asaasBaseUrl}/v3/myAccount/fees`, {
+          headers: { access_token: asaasApiKey },
+        });
+
+        if (feesResp.ok) {
+          const feesData = await feesResp.json();
+          const payment = feesData.payment || {};
+          const ccFees = payment.creditCard || {};
+
+          // 1. Processing fee (tier-based percentage + fixed operation value)
+          const operationValue = ccFees.operationValue ?? 0.49;
+          let percentageFee = 0;
+
+          // Try ranged tiers
+          if (ccFees.creditCardFeeRanges && Array.isArray(ccFees.creditCardFeeRanges)) {
+            const tier = ccFees.creditCardFeeRanges.find((r: Record<string, number>) => {
+              const min = r.startInstallment || r.min || 1;
+              const max = r.endInstallment || r.max || 21;
+              return installments >= min && installments <= max;
+            });
+            percentageFee = tier?.percentageFee ?? tier?.fee ?? 0;
+          }
+
+          // Fallback: standard fields
+          if (percentageFee === 0) {
+            if (installments === 1) {
+              percentageFee = ccFees.oneInstallmentPercentage ?? ccFees.detachedPercentageFee ?? 2.99;
+            } else if (installments <= 6) {
+              percentageFee = ccFees.upToSixInstallmentsPercentageFee ?? ccFees.installmentPercentageFee ?? 3.49;
+            } else if (installments <= 12) {
+              percentageFee = ccFees.upToTwelveInstallmentsPercentageFee ?? ccFees.installmentPercentageFee ?? 3.99;
+            } else {
+              percentageFee = ccFees.aboveTwelveInstallmentsPercentageFee ?? 4.29;
+            }
+          }
+
+          processingCost = (valor * percentageFee / 100) + operationValue;
+          processingCost = Math.round(processingCost * 100) / 100;
+
+          // 2. Anticipation fee
+          const detachedMonthlyFee = ccFees.detachedMonthlyFeeValue ?? ccFees.monthlyFeeValue ?? 1.25;
+          const installmentMonthlyFee = ccFees.installmentMonthlyFeeValue ?? ccFees.monthlyFeeValue ?? 1.70;
+          const taxaMensal = installments === 1 ? detachedMonthlyFee : installmentMonthlyFee;
+
+          if (taxaMensal > 0) {
+            const valorParcela = valor / installments;
+            let valorLiquido = 0;
+            for (let i = 1; i <= installments; i++) {
+              const taxaTotal = taxaMensal * i;
+              valorLiquido += valorParcela * (1 - taxaTotal / 100);
+            }
+            anticipationCost = Math.round((valor - valorLiquido) * 100) / 100;
+          }
+
+          valorFinal = Math.round((valor + processingCost + anticipationCost) * 100) / 100;
+          console.log(`📊 Server-side fee calc: processing=R$${processingCost} (${percentageFee}% + R$${operationValue}), anticipation=R$${anticipationCost}, total=R$${valorFinal}`);
+        } else {
+          console.warn('Failed to fetch Asaas fees for server-side validation, using valor as-is');
         }
-        anticipationCost = Math.round((valor - valorLiquido) * 100) / 100;
-        valorFinal = Math.round((valor + anticipationCost) * 100) / 100;
-        console.log(`📊 Antecipação: taxa=${taxaMensal}%/mês, parcelas=${installments}, custo=R$${anticipationCost}, valor final=R$${valorFinal}`);
+      } catch (feeErr) {
+        console.warn('Error fetching Asaas fees:', feeErr);
+        // Continue with original valor - don't block payment
       }
     }
 
@@ -349,6 +395,7 @@ Deno.serve(async (req) => {
       valorOriginal: valor,
       valorCobrado: valorFinal,
       custoAntecipacao: anticipationCost,
+      custoProcessamento: processingCost,
     };
 
     if (finalBillingType === 'PIX' && pixData) {

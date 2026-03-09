@@ -14,6 +14,18 @@ const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 const POLL_INTERVAL = 15_000;
 const POLL_MAX = 10 * 60 * 1000;
 
+export interface AccountFees {
+  creditCard: {
+    operationValue: number;
+    detachedMonthlyFeeValue: number;
+    installmentMonthlyFeeValue: number;
+    tiers: Array<{ min: number; max: number; percentageFee: number }>;
+  };
+  pix: {
+    fixedFeeValue: number;
+  };
+}
+
 export interface AsaasCheckoutData {
   galeriaId: string;
   userId: string;
@@ -26,7 +38,8 @@ export interface AsaasCheckoutData {
   enabledMethods: { pix: boolean; creditCard: boolean; boleto?: boolean };
   maxParcelas: number;
   absorverTaxa: boolean;
-  taxaAntecipacao: boolean;
+  // Legacy fields (kept for backward compat but ignored when accountFees is available)
+  taxaAntecipacao?: boolean;
   taxaAntecipacaoPercentual?: number;
   taxaAntecipacaoCreditoAvista?: number;
   taxaAntecipacaoCreditoParcelado?: number;
@@ -146,6 +159,47 @@ export function AsaasCheckout({
   const [cardError, setCardError] = useState<string | null>(null);
   const [cardSuccess, setCardSuccess] = useState(false);
 
+  // ——— Real-time fees from Asaas API ———
+  const [accountFees, setAccountFees] = useState<AccountFees | null>(null);
+  const [feesLoading, setFeesLoading] = useState(false);
+  const [feesError, setFeesError] = useState(false);
+
+  // Fetch fees from Asaas API on mount
+  useEffect(() => {
+    if (!data.userId || data.absorverTaxa) return; // No need to fetch fees if photographer absorbs
+    
+    let cancelled = false;
+    setFeesLoading(true);
+    setFeesError(false);
+    
+    fetch(`${SUPABASE_URL}/functions/v1/asaas-fetch-fees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: data.userId }),
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (cancelled) return;
+        if (result.success && result.accountFees) {
+          setAccountFees(result.accountFees);
+          console.log('📊 Asaas fees loaded:', result.accountFees);
+        } else {
+          console.warn('Failed to load Asaas fees:', result.error);
+          setFeesError(true);
+        }
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('Error fetching Asaas fees:', err);
+        setFeesError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setFeesLoading(false);
+      });
+    
+    return () => { cancelled = true; };
+  }, [data.userId, data.absorverTaxa]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
@@ -223,23 +277,48 @@ export function AsaasCheckout({
     } catch { toast.error('Erro ao copiar'); }
   };
 
-  // ——— Card Flow ———
-  const installmentOptions = [];
+  // ——— Card Flow: Calculate installments with combined fees ———
+  const installmentOptions: Array<{ value: string; label: string; totalValue: number }> = [];
   for (let i = 1; i <= (data.maxParcelas || 12); i++) {
+    let totalComTaxas = data.valorTotal;
     let label = `${i}x de R$ ${(data.valorTotal / i).toFixed(2)}`;
-    if (data.taxaAntecipacao && i >= 1) {
+
+    if (!data.absorverTaxa && accountFees) {
+      // 1. Processing fee (tier-based percentage + fixed operation value)
+      const tier = accountFees.creditCard.tiers.find(t => i >= t.min && i <= t.max);
+      const processingPercentage = tier?.percentageFee ?? 0;
+      const processingFee = (data.valorTotal * processingPercentage / 100) + accountFees.creditCard.operationValue;
+
+      // 2. Anticipation fee (monthly rate × installment number)
+      const taxaMensal = i === 1
+        ? accountFees.creditCard.detachedMonthlyFeeValue
+        : accountFees.creditCard.installmentMonthlyFeeValue;
+      const { totalTaxa: anticipationFee } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
+
+      totalComTaxas = data.valorTotal + processingFee + anticipationFee;
+      totalComTaxas = Math.round(totalComTaxas * 100) / 100;
+
+      label = `${i}x de R$ ${(totalComTaxas / i).toFixed(2)}`;
+      if (totalComTaxas > data.valorTotal) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
+    } else if (!data.absorverTaxa && !accountFees && !feesLoading) {
+      // Fallback to legacy fields if fees failed to load
       const taxaMensal = i === 1
         ? (data.taxaAntecipacaoCreditoAvista ?? data.taxaAntecipacaoPercentual ?? 0)
         : (data.taxaAntecipacaoCreditoParcelado ?? data.taxaAntecipacaoPercentual ?? 0);
       if (taxaMensal > 0) {
         const { totalTaxa } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
-        const total = data.valorTotal + totalTaxa;
-        label = `${i}x de R$ ${(total / i).toFixed(2)}`;
-        if (totalTaxa > 0) label += ` (total R$ ${total.toFixed(2)})`;
+        totalComTaxas = data.valorTotal + totalTaxa;
+        label = `${i}x de R$ ${(totalComTaxas / i).toFixed(2)}`;
+        if (totalTaxa > 0) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
       }
     }
-    installmentOptions.push({ value: String(i), label });
+
+    installmentOptions.push({ value: String(i), label, totalValue: totalComTaxas });
   }
+
+  // Get the total value for the selected installment (for the pay button and submission)
+  const selectedInstallmentOption = installmentOptions.find(o => o.value === cardInstallments);
+  const valorComTaxas = selectedInstallmentOption?.totalValue ?? data.valorTotal;
 
   const handleCardSubmit = async () => {
     setCardError(null);
@@ -271,6 +350,8 @@ export function AsaasCheckout({
           galleryToken: data.galleryToken,
           billingType: 'CREDIT_CARD',
           installmentCount: parseInt(cardInstallments),
+          // Let backend recalculate with real fees - but hint the frontend-calculated total
+          valorComTaxasFrontend: valorComTaxas,
           creditCard: {
             holderName: cardName,
             number: rawCard,
@@ -448,14 +529,21 @@ export function AsaasCheckout({
                 {data.maxParcelas > 1 && (
                   <div>
                     <Label>Parcelas</Label>
-                    <Select value={cardInstallments} onValueChange={setCardInstallments}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {installmentOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {feesLoading && !data.absorverTaxa ? (
+                      <div className="space-y-2 mt-1">
+                        <Skeleton className="h-10 w-full rounded-md" />
+                        <p className="text-xs text-muted-foreground">Carregando taxas...</p>
+                      </div>
+                    ) : (
+                      <Select value={cardInstallments} onValueChange={setCardInstallments}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {installmentOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 )}
 
@@ -466,8 +554,8 @@ export function AsaasCheckout({
                   </div>
                 )}
 
-                <Button onClick={handleCardSubmit} disabled={cardLoading} className="w-full gap-2" variant="terracotta" size="lg">
-                  {cardLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</> : <><Lock className="h-4 w-4" /> Pagar R$ {data.valorTotal.toFixed(2)}</>}
+                <Button onClick={handleCardSubmit} disabled={cardLoading || feesLoading} className="w-full gap-2" variant="terracotta" size="lg">
+                  {cardLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</> : <><Lock className="h-4 w-4" /> Pagar R$ {valorComTaxas.toFixed(2)}</>}
                 </Button>
               </div>
             </TabsContent>

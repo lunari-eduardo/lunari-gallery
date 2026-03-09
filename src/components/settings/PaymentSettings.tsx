@@ -22,11 +22,13 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { pixLogo, infinitepayLogo, mercadopagoLogo, asaasLogo } from '@/assets/payment-logos';
-import { calcularAntecipacao } from '@/lib/anticipationUtils';
+import { toast } from 'sonner';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 export function PaymentSettings() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuthContext();
   
   const { 
     data, 
@@ -73,9 +75,18 @@ export function PaymentSettings() {
   const [asaasHabilitarBoleto, setAsaasHabilitarBoleto] = useState(false);
   const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
-  const [asaasTaxaAntecipacao, setAsaasTaxaAntecipacao] = useState(false);
-  const [asaasTaxaAvista, setAsaasTaxaAvista] = useState('0');
-  const [asaasTaxaParcelado, setAsaasTaxaParcelado] = useState('0');
+  
+  // Real-time fees from Asaas API
+  const [asaasFees, setAsaasFees] = useState<{
+    creditCard: {
+      operationValue: number;
+      detachedMonthlyFeeValue: number;
+      installmentMonthlyFeeValue: number;
+      tiers: Array<{ min: number; max: number; percentageFee: number }>;
+    };
+    pix: { fixedFeeValue: number };
+  } | null>(null);
+  const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
 
   // Ref to prevent duplicate OAuth callback processing
   const hasProcessedCallback = useRef(false);
@@ -146,11 +157,6 @@ export function PaymentSettings() {
         setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
         setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
         setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
-        setAsaasTaxaAntecipacao(asData.taxaAntecipacao ?? false);
-        // Migrate from old single field to new dual fields
-        const fallback = asData.taxaAntecipacaoPercentual ?? 0;
-        setAsaasTaxaAvista(String(asData.taxaAntecipacaoCreditoAvista ?? fallback));
-        setAsaasTaxaParcelado(String(asData.taxaAntecipacaoCreditoParcelado ?? fallback));
       }
     }
   }, [data?.allIntegrations]);
@@ -206,9 +212,6 @@ export function PaymentSettings() {
         habilitarBoleto: asaasHabilitarBoleto,
         maxParcelas: parseInt(asaasMaxParcelas),
         absorverTaxa: asaasAbsorverTaxa,
-        taxaAntecipacao: asaasTaxaAntecipacao,
-        taxaAntecipacaoCreditoAvista: parseFloat(asaasTaxaAvista) || 0,
-        taxaAntecipacaoCreditoParcelado: parseFloat(asaasTaxaParcelado) || 0,
       },
       setAsDefault: !data?.hasPayment,
     });
@@ -223,9 +226,6 @@ export function PaymentSettings() {
       habilitarBoleto: asaasHabilitarBoleto,
       maxParcelas: parseInt(asaasMaxParcelas),
       absorverTaxa: asaasAbsorverTaxa,
-      taxaAntecipacao: asaasTaxaAntecipacao,
-      taxaAntecipacaoCreditoAvista: parseFloat(asaasTaxaAvista) || 0,
-      taxaAntecipacaoCreditoParcelado: parseFloat(asaasTaxaParcelado) || 0,
     });
     setShowAsaasSettings(false);
   };
@@ -926,26 +926,81 @@ export function PaymentSettings() {
                   </div>
                 </div>
 
-                {/* Anticipation fee */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Antecipação de recebíveis</Label>
-                      <p className="text-sm text-muted-foreground">Repassar custo de antecipação ao cliente no cartão</p>
+                {/* Fee info - fetched from Asaas API in real-time */}
+                {!asaasAbsorverTaxa && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Taxas do Asaas</Label>
+                        <p className="text-sm text-muted-foreground">
+                          As taxas são buscadas automaticamente da sua conta Asaas no momento do checkout
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={asaasFeesLoading}
+                        onClick={async () => {
+                          setAsaasFeesLoading(true);
+                          try {
+                            const userId = user?.id;
+                            if (!userId) return;
+                            const res = await fetch(`https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/asaas-fetch-fees`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ userId }),
+                            });
+                            const result = await res.json();
+                            if (result.success && result.accountFees) {
+                              setAsaasFees(result.accountFees);
+                            } else {
+                              toast.error(result.error || 'Erro ao buscar taxas');
+                            }
+                          } catch {
+                            toast.error('Erro ao buscar taxas');
+                          } finally {
+                            setAsaasFeesLoading(false);
+                          }
+                        }}
+                      >
+                        {asaasFeesLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                        Ver taxas
+                      </Button>
                     </div>
-                    <Switch checked={asaasTaxaAntecipacao} onCheckedChange={setAsaasTaxaAntecipacao} />
+
+                    {asaasFees && (
+                      <div className="rounded-lg border border-border p-4 bg-muted/30 space-y-3">
+                        <h5 className="text-sm font-medium">Taxas de Cartão de Crédito</h5>
+                        <div className="grid gap-1">
+                          {asaasFees.creditCard.tiers.map((tier, idx) => (
+                            <div key={idx} className="flex justify-between text-sm text-muted-foreground">
+                              <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
+                              <span className="font-medium">{tier.percentageFee}% + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pt-2 border-t border-border grid gap-1">
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>Antecipação à vista</span>
+                            <span className="font-medium">{asaasFees.creditCard.detachedMonthlyFeeValue}%/mês</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>Antecipação parcelado</span>
+                            <span className="font-medium">{asaasFees.creditCard.installmentMonthlyFeeValue}%/mês</span>
+                          </div>
+                        </div>
+                        {asaasFees.pix && (
+                          <div className="pt-2 border-t border-border">
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                              <span>PIX (taxa fixa)</span>
+                              <span className="font-medium">R$ {asaasFees.pix.fixedFeeValue.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  
-                  {asaasTaxaAntecipacao && (
-                    <AnticipationConfig
-                      taxaAvista={asaasTaxaAvista}
-                      setTaxaAvista={setAsaasTaxaAvista}
-                      taxaParcelado={asaasTaxaParcelado}
-                      setTaxaParcelado={setAsaasTaxaParcelado}
-                      maxParcelas={parseInt(asaasMaxParcelas)}
-                    />
-                  )}
-                </div>
+                )}
               </div>
             )}
             
@@ -1030,107 +1085,6 @@ export function PaymentSettings() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/** Sub-component: Anticipation rate configuration with inline simulator */
-function AnticipationConfig({
-  taxaAvista,
-  setTaxaAvista,
-  taxaParcelado,
-  setTaxaParcelado,
-  maxParcelas,
-}: {
-  taxaAvista: string;
-  setTaxaAvista: (v: string) => void;
-  taxaParcelado: string;
-  setTaxaParcelado: (v: string) => void;
-  maxParcelas: number;
-}) {
-  const simulacao = useMemo(() => {
-    const valor = 1000;
-    const parcelas = Math.min(maxParcelas, 3);
-    const taxa = parseFloat(taxaParcelado) || 0;
-    if (taxa <= 0 || parcelas <= 0) return null;
-    return calcularAntecipacao(valor, parcelas, taxa);
-  }, [taxaParcelado, maxParcelas]);
-
-  const simulacaoAvista = useMemo(() => {
-    const valor = 1000;
-    const taxa = parseFloat(taxaAvista) || 0;
-    if (taxa <= 0) return null;
-    return calcularAntecipacao(valor, 1, taxa);
-  }, [taxaAvista]);
-
-  return (
-    <div className="space-y-4 rounded-lg border border-border p-4 bg-muted/30">
-      <p className="text-xs text-muted-foreground">
-        A taxa é mensal e se acumula proporcionalmente ao número da parcela.
-      </p>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Taxa mensal — Crédito à vista (%)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max="10"
-            value={taxaAvista}
-            onChange={(e) => setTaxaAvista(e.target.value)}
-            placeholder="Ex: 1.99"
-          />
-          {simulacaoAvista && (
-            <p className="text-xs text-muted-foreground">
-              R$ 1.000 à vista → líquido R$ {simulacaoAvista.valorLiquido.toFixed(2)}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label>Taxa mensal — Crédito parcelado (%)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max="10"
-            value={taxaParcelado}
-            onChange={(e) => setTaxaParcelado(e.target.value)}
-            placeholder="Ex: 1.25"
-          />
-          {simulacao && (
-            <p className="text-xs text-muted-foreground">
-              R$ 1.000 em {Math.min(maxParcelas, 3)}x → líquido R$ {simulacao.valorLiquido.toFixed(2)}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Detailed simulator */}
-      {simulacao && simulacao.detalheParcelas.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-border">
-          <p className="text-xs font-medium text-muted-foreground">
-            Simulação: R$ 1.000 em {simulacao.detalheParcelas.length}x ({taxaParcelado}% a.m.)
-          </p>
-          <div className="grid gap-1">
-            {simulacao.detalheParcelas.map((p) => (
-              <div key={p.parcela} className="flex justify-between text-xs text-muted-foreground">
-                <span>Parcela {p.parcela} ({p.meses} {p.meses === 1 ? 'mês' : 'meses'} — {p.taxa}%)</span>
-                <span>R$ {p.liquido.toFixed(2)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between text-xs font-medium pt-1 border-t border-border">
-              <span>Total líquido</span>
-              <span>R$ {simulacao.valorLiquido.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-destructive">
-              <span>Custo antecipação</span>
-              <span>- R$ {simulacao.totalTaxa.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
