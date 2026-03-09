@@ -35,6 +35,7 @@ export function SelectionSummary({
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
+  const currentExtras = extraCount; // extras da seleção atual (não billing)
   const isOverLimit = extraCount > 0;
   const isConfirmed = selectionStatus === 'confirmed';
   const isBlocked = selectionStatus === 'blocked';
@@ -53,16 +54,16 @@ export function SelectionSummary({
   const displayUnitPrice = valorUnitario;
   const displayTotal = valorACobrar;
 
-  // Discount analysis for inline tier display
+  // Discount analysis uses current selection extras (not billing totalExtras)
   const discountAnalysis = useDiscountAnalysis({
     regrasCongeladas,
-    totalExtras: totalExtras,
+    totalExtras: currentExtras,
     extraPhotoPrice,
     saleSettings,
     includedPhotos,
   });
 
-  const showDiscountTiers = discountAnalysis && selectedCount >= includedPhotos;
+  const showDiscountTiers = discountAnalysis && currentExtras > 0;
 
   // Bottom bar variant for client gallery
   if (variant === 'bottom-bar') {
@@ -91,7 +92,7 @@ export function SelectionSummary({
             <div className="flex-1 flex justify-center min-w-0">
               <InlineDiscountTiers
                 analysis={discountAnalysis}
-                totalExtras={totalExtras}
+                totalExtras={currentExtras}
                 isMobile={isMobile}
               />
             </div>
