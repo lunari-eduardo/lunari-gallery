@@ -9,7 +9,7 @@ import {
   buildRegrasFromDiscountPackages 
 } from '@/lib/pricingUtils';
 import { DiscountPackage } from '@/types/gallery';
-import { Sparkles } from 'lucide-react';
+
 
 interface DiscountAnalysisInput {
   regrasCongeladas: RegrasCongeladas | null | undefined;
