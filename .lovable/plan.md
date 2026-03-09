@@ -25,8 +25,21 @@ Cliente paga
 Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
 ```
 
-### Arquivos modificados
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` (NOVO)
+### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+
+**Bugs corrigidos:**
+1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
+2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
+3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+
+**Arquivos modificados:**
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
+2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
+3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
+4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+
+### Arquivos originais modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
 2. ✅ `supabase/config.toml` — registro da nova função
 3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado
 4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real
