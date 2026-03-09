@@ -80,10 +80,6 @@ Deno.serve(async (req) => {
       habilitarBoleto?: boolean;
       maxParcelas?: number;
       absorverTaxa?: boolean;
-      taxaAntecipacao?: boolean;
-      taxaAntecipacaoPercentual?: number;
-      taxaAntecipacaoCreditoAvista?: number;
-      taxaAntecipacaoCreditoParcelado?: number;
     };
 
     const asaasBaseUrl = settings.environment === 'production'
