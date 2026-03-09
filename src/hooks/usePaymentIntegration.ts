@@ -32,11 +32,12 @@ export interface AsaasData {
   habilitarBoleto: boolean;
   maxParcelas: number;
   absorverTaxa: boolean;
-  taxaAntecipacao: boolean;
-  /** @deprecated Use taxaAntecipacaoCreditoAvista / taxaAntecipacaoCreditoParcelado */
+  // Legacy fields - kept for backward compat in data but no longer configured via UI
+  taxaAntecipacao?: boolean;
+  /** @deprecated */
   taxaAntecipacaoPercentual?: number;
-  taxaAntecipacaoCreditoAvista: number;
-  taxaAntecipacaoCreditoParcelado: number;
+  taxaAntecipacaoCreditoAvista?: number;
+  taxaAntecipacaoCreditoParcelado?: number;
 }
 
 export interface PaymentIntegration {
