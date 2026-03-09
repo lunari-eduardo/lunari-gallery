@@ -529,14 +529,21 @@ export function AsaasCheckout({
                 {data.maxParcelas > 1 && (
                   <div>
                     <Label>Parcelas</Label>
-                    <Select value={cardInstallments} onValueChange={setCardInstallments}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {installmentOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {feesLoading && !data.absorverTaxa ? (
+                      <div className="space-y-2 mt-1">
+                        <Skeleton className="h-10 w-full rounded-md" />
+                        <p className="text-xs text-muted-foreground">Carregando taxas...</p>
+                      </div>
+                    ) : (
+                      <Select value={cardInstallments} onValueChange={setCardInstallments}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {installmentOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 )}
 
@@ -547,8 +554,9 @@ export function AsaasCheckout({
                   </div>
                 )}
 
-                <Button onClick={handleCardSubmit} disabled={cardLoading} className="w-full gap-2" variant="terracotta" size="lg">
-                  {cardLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</> : <><Lock className="h-4 w-4" /> Pagar R$ {data.valorTotal.toFixed(2)}</>}
+                <Button onClick={handleCardSubmit} disabled={cardLoading || feesLoading} className="w-full gap-2" variant="terracotta" size="lg">
+                  {cardLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</> : <><Lock className="h-4 w-4" /> Pagar R$ {valorComTaxas.toFixed(2)}</>}
+                </Button>
                 </Button>
               </div>
             </TabsContent>
