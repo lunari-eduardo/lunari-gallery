@@ -350,6 +350,8 @@ export function AsaasCheckout({
           galleryToken: data.galleryToken,
           billingType: 'CREDIT_CARD',
           installmentCount: parseInt(cardInstallments),
+          // Let backend recalculate with real fees - but hint the frontend-calculated total
+          valorComTaxasFrontend: valorComTaxas,
           creditCard: {
             holderName: cardName,
             number: rawCard,
