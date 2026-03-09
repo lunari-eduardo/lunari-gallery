@@ -523,6 +523,10 @@ export function AsaasCheckout({
                   <Input id="cc-cpf" value={cardCpfCnpj} onChange={e => setCardCpfCnpj(maskCpfCnpj(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={18} />
                 </div>
                 <div>
+                  <Label htmlFor="cc-email">Email do titular</Label>
+                  <Input id="cc-email" type="email" value={cardEmail} onChange={e => setCardEmail(e.target.value)} placeholder="email@exemplo.com" autoComplete="email" />
+                </div>
+                <div>
                   <Label htmlFor="cc-number">Número do cartão</Label>
                   <Input id="cc-number" value={cardNumber} onChange={e => setCardNumber(maskCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" inputMode="numeric" maxLength={19} autoComplete="cc-number" />
                 </div>
