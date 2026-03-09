@@ -1,65 +1,35 @@
 
 
-## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
+## Diagnóstico e Correção da Barra de Desconto Progressivo
 
-### Problema resolvido
-As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
+### Bugs encontrados
 
-### Arquitetura implementada
+**Bug 1 — `totalExtras` errado passado ao `useDiscountAnalysis`**
+Em `SelectionSummary.tsx` linha 59, o `totalExtras` vem de `calcularPrecoProgressivoComCredito`, que na linha 294 retorna `totalExtras: extrasPagasTotal` quando não há novas extras a cobrar. Ou seja, se o cliente já pagou por 10 extras antes, mesmo que agora selecione 0 extras, o `totalExtras` continua 10 → a análise de desconto mostra a faixa máxima.
 
-```text
-Cliente abre checkout
-  → AsaasCheckout monta
-  → Chama asaas-fetch-fees (userId)
-  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
-  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
-  → Exibe parcelas com valores corretos
+**Correção**: Passar `extraCount` (extras da seleção atual = `selectedCount - includedPhotos`) ao `useDiscountAnalysis`, não o `totalExtras` de billing.
 
-Cliente paga
-  → asaas-gallery-payment recalcula server-side com mesma API
-  → Cobra valor correto no Asaas
-```
+**Bug 2 — `showDiscountTiers` aparece sem extras**
+Linha 65: `selectedCount >= includedPhotos` é true quando `selectedCount === includedPhotos` (0 extras). Deveria ser `>` (estritamente maior).
 
-### Cálculo combinado por parcela
-```
-IF incluirTaxaAntecipacao = true:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
-ELSE:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49)
-```
+**Bug 3 — Emojis residuais**
+O screenshot mostra emojis 🎉. Pode ser cache do deploy anterior, mas vou confirmar que não há nenhum emoji no código.
 
-### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+### Mudanças
 
-**Bugs corrigidos:**
-1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
-2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
-3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+**`src/components/SelectionSummary.tsx`**
+- Criar `const currentExtras = Math.max(0, selectedCount - includedPhotos)` 
+- Passar `currentExtras` ao `useDiscountAnalysis` em vez de `totalExtras`
+- Mudar condição para `showDiscountTiers = discountAnalysis && currentExtras > 0`
+- Passar `currentExtras` ao `InlineDiscountTiers` em vez de `totalExtras`
 
-**Arquivos modificados:**
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
-2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
-3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
-4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+**`src/components/DiscountProgressBar.tsx`**
+- Confirmar ausência de emojis
+- Nenhuma mudança estrutural necessária (a lógica do hook já recalcula corretamente baseada no `totalExtras` que recebe)
 
-### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+### Resultado
+- Cliente com 1/1 selecionada → 0 extras → barra de desconto não aparece
+- Cliente com 5/1 selecionadas → 4 extras → barra mostra faixa correta para 4 extras
+- Cliente desmarca 1 foto (4/1 → 3 extras) → barra atualiza para faixa de 3 extras
+- Sem emojis
 
-**Funcionalidade adicionada:**
-1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
-2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
-3. ✅ Auto-save imediato ao alterar o toggle
-4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
-5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
-
-**Arquivos modificados:**
-1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
-2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
-3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
-
-### Arquivos originais modificados
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
-2. ✅ `supabase/config.toml` — registro da nova função
-3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
-5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
-6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
