@@ -80,7 +80,8 @@ export function DiscountProgressBar({
     };
   }, [regrasCongeladas, totalExtras, extraPhotoPrice, saleSettings, includedPhotos]);
 
-  if (!analysis) return null;
+  // Hide until client reaches minimum package quantity
+  if (!analysis || selectedCount < includedPhotos) return null;
 
   const { faixas, faixaAtual, currentDiscount, nextDiscount, photosToNext, atMaxTier, basePrice } = analysis;
 
