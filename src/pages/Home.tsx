@@ -401,7 +401,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Attention Required */}
+            {/* Attention Required — expiradas e concluídas */}
             <div className="lg:col-span-3 glass p-6 overflow-hidden">
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="h-4 w-4 text-amber-500" />
@@ -418,37 +418,26 @@ export default function Home() {
                         <th className="text-left pb-2 font-medium hidden sm:table-cell">Sessão</th>
                         <th className="text-left pb-2 font-medium">Status</th>
                         <th className="text-left pb-2 font-medium hidden md:table-cell">Seleção</th>
-                        <th className="text-left pb-2 font-medium">Prazo</th>
                         <th className="pb-2"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {attentionGalleries.map(g => {
-                        const daysLeft = g.prazoSelecao ? differenceInDays(g.prazoSelecao, new Date()) : null;
-                        return (
-                          <tr key={g.id} className="border-b border-border/30 last:border-0">
-                            <td className="py-2.5 font-medium text-foreground">{g.clienteNome || '—'}</td>
-                            <td className="py-2.5 text-muted-foreground hidden sm:table-cell">{g.nomeSessao || '—'}</td>
-                            <td className="py-2.5">{getStatusBadge(g.status)}</td>
-                            <td className="py-2.5 text-muted-foreground hidden md:table-cell">
-                              {g.fotosSelecionadas} / {g.fotosIncluidas}
-                            </td>
-                            <td className="py-2.5">
-                              {daysLeft !== null ? (
-                                <span className={`text-xs font-medium ${daysLeft <= 1 ? 'text-destructive' : daysLeft <= 3 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                                  {daysLeft <= 0 ? 'Expirado' : `${daysLeft}d restantes`}
-                                </span>
-                              ) : '—'}
-                            </td>
-                            <td className="py-2.5 text-right">
-                              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate(`/gallery/${g.id}`)}>
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                Abrir
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {attentionGalleries.map(g => (
+                        <tr key={g.id} className="border-b border-border/30 last:border-0">
+                          <td className="py-2.5 font-medium text-foreground">{g.clienteNome || '—'}</td>
+                          <td className="py-2.5 text-muted-foreground hidden sm:table-cell">{g.nomeSessao || '—'}</td>
+                          <td className="py-2.5">{getStatusBadge(g.status)}</td>
+                          <td className="py-2.5 text-muted-foreground hidden md:table-cell">
+                            {g.fotosSelecionadas} / {g.fotosIncluidas}
+                          </td>
+                          <td className="py-2.5 text-right">
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate(`/gallery/${g.id}`)}>
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Abrir
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
