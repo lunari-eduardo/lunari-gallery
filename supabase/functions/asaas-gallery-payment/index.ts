@@ -209,40 +209,47 @@ Deno.serve(async (req) => {
           const feesData = await feesResp.json();
           const payment = feesData.payment || {};
           const ccFees = payment.creditCard || {};
+          const anticipationCC = (feesData.anticipation || {}).creditCard || {};
 
           // 1. Processing fee (tier-based percentage + fixed operation value)
           const operationValue = ccFees.operationValue ?? 0.49;
           let percentageFee = 0;
 
-          // Try ranged tiers
-          if (ccFees.creditCardFeeRanges && Array.isArray(ccFees.creditCardFeeRanges)) {
-            const tier = ccFees.creditCardFeeRanges.find((r: Record<string, number>) => {
-              const min = r.startInstallment || r.min || 1;
-              const max = r.endInstallment || r.max || 21;
-              return installments >= min && installments <= max;
-            });
-            percentageFee = tier?.percentageFee ?? tier?.fee ?? 0;
-          }
+          // Check for active promotional discount
+          const hasDiscount = ccFees.hasValidDiscount === true;
+          const discountExpiration = ccFees.discountExpiration;
+          const discountValid = hasDiscount && (!discountExpiration || new Date(discountExpiration) > new Date());
 
-          // Fallback: standard fields
-          if (percentageFee === 0) {
+          if (discountValid) {
+            // Use discount tiers
             if (installments === 1) {
-              percentageFee = ccFees.oneInstallmentPercentage ?? ccFees.detachedPercentageFee ?? 2.99;
+              percentageFee = ccFees.discountOneInstallmentPercentage ?? ccFees.oneInstallmentPercentage ?? 2.99;
             } else if (installments <= 6) {
-              percentageFee = ccFees.upToSixInstallmentsPercentageFee ?? ccFees.installmentPercentageFee ?? 3.49;
+              percentageFee = ccFees.discountUpToSixInstallmentsPercentage ?? ccFees.upToSixInstallmentsPercentage ?? 3.49;
             } else if (installments <= 12) {
-              percentageFee = ccFees.upToTwelveInstallmentsPercentageFee ?? ccFees.installmentPercentageFee ?? 3.99;
+              percentageFee = ccFees.discountUpToTwelveInstallmentsPercentage ?? ccFees.upToTwelveInstallmentsPercentage ?? 3.99;
             } else {
-              percentageFee = ccFees.aboveTwelveInstallmentsPercentageFee ?? 4.29;
+              percentageFee = ccFees.discountUpToTwentyOneInstallmentsPercentage ?? ccFees.upToTwentyOneInstallmentsPercentage ?? 4.29;
+            }
+          } else {
+            // Standard tiers (correct field names without "Fee" suffix)
+            if (installments === 1) {
+              percentageFee = ccFees.oneInstallmentPercentage ?? 2.99;
+            } else if (installments <= 6) {
+              percentageFee = ccFees.upToSixInstallmentsPercentage ?? 3.49;
+            } else if (installments <= 12) {
+              percentageFee = ccFees.upToTwelveInstallmentsPercentage ?? 3.99;
+            } else {
+              percentageFee = ccFees.upToTwentyOneInstallmentsPercentage ?? 4.29;
             }
           }
 
           processingCost = (valor * percentageFee / 100) + operationValue;
           processingCost = Math.round(processingCost * 100) / 100;
 
-          // 2. Anticipation fee
-          const detachedMonthlyFee = ccFees.detachedMonthlyFeeValue ?? ccFees.monthlyFeeValue ?? 1.25;
-          const installmentMonthlyFee = ccFees.installmentMonthlyFeeValue ?? ccFees.monthlyFeeValue ?? 1.70;
+          // 2. Anticipation fee (from anticipation.creditCard, NOT payment.creditCard)
+          const detachedMonthlyFee = anticipationCC.detachedMonthlyFeeValue ?? 1.25;
+          const installmentMonthlyFee = anticipationCC.installmentMonthlyFeeValue ?? 1.70;
           const taxaMensal = installments === 1 ? detachedMonthlyFee : installmentMonthlyFee;
 
           if (taxaMensal > 0) {

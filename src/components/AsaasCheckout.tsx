@@ -24,6 +24,11 @@ export interface AccountFees {
   pix: {
     fixedFeeValue: number;
   };
+  discount?: {
+    active: boolean;
+    expiration?: string;
+    tiers: Array<{ min: number; max: number; percentageFee: number }>;
+  };
 }
 
 export interface AsaasCheckoutData {
@@ -285,7 +290,11 @@ export function AsaasCheckout({
 
     if (!data.absorverTaxa && accountFees) {
       // 1. Processing fee (tier-based percentage + fixed operation value)
-      const tier = accountFees.creditCard.tiers.find(t => i >= t.min && i <= t.max);
+      // Use discount tiers if active, otherwise standard tiers
+      const activeTiers = (accountFees.discount?.active && accountFees.discount.tiers.length > 0)
+        ? accountFees.discount.tiers
+        : accountFees.creditCard.tiers;
+      const tier = activeTiers.find(t => i >= t.min && i <= t.max);
       const processingPercentage = tier?.percentageFee ?? 0;
       const processingFee = (data.valorTotal * processingPercentage / 100) + accountFees.creditCard.operationValue;
 

@@ -15,6 +15,11 @@ interface AccountFees {
   pix: {
     fixedFeeValue: number;
   };
+  discount?: {
+    active: boolean;
+    expiration?: string;
+    tiers: Array<{ min: number; max: number; percentageFee: number }>;
+  };
 }
 
 Deno.serve(async (req) => {
@@ -77,76 +82,85 @@ Deno.serve(async (req) => {
     const feesData = await feesResp.json();
     console.log('📊 Asaas fees raw:', JSON.stringify(feesData));
 
-    // Normalize the response into our structure
-    // The Asaas API returns payment, transfer, and anticipation fees
+    // ── Parse payment.creditCard ──
     const payment = feesData.payment || {};
     const creditCard = payment.creditCard || {};
     const pix = payment.pix || {};
 
-    // Build tiers from Asaas response
-    // Asaas returns: detachedMonthlyFeeValue, installmentMonthlyFeeValue
-    // and fee tiers with percentage per installment range
+    // ── Parse anticipation.creditCard (separate section!) ──
+    const anticipation = feesData.anticipation || {};
+    const anticipationCC = anticipation.creditCard || {};
+
+    // ── Build standard tiers from correct field names ──
+    const oneInstallment = creditCard.oneInstallmentPercentage;
+    const upToSix = creditCard.upToSixInstallmentsPercentage;
+    const upToTwelve = creditCard.upToTwelveInstallmentsPercentage;
+    const upToTwentyOne = creditCard.upToTwentyOneInstallmentsPercentage;
+
     const tiers: Array<{ min: number; max: number; percentageFee: number }> = [];
 
-    // Asaas returns creditCard with:
-    // - operationValue (fixed per transaction, e.g., 0.49)
-    // - oneInstallmentPercentage (e.g., 2.99)
-    // - ranged percentages via installmentPercentages or similar
-    
-    // Try to extract tiers from API response
-    if (creditCard.defaultPercentageFee !== undefined) {
-      // Flat fee structure
-      tiers.push({ min: 1, max: 21, percentageFee: creditCard.defaultPercentageFee });
-    }
-
-    // Check for per-installment or ranged fees from the API
-    if (creditCard.creditCardFeeRanges && Array.isArray(creditCard.creditCardFeeRanges)) {
-      tiers.length = 0; // Clear default
-      for (const range of creditCard.creditCardFeeRanges) {
-        tiers.push({
-          min: range.startInstallment || range.min || 1,
-          max: range.endInstallment || range.max || 21,
-          percentageFee: range.percentageFee || range.fee || 0,
-        });
-      }
-    }
-
-    // Fallback: if no tiers found, try standard fields
-    if (tiers.length === 0) {
-      // Use oneInstallmentPercentage and installment percentages
-      const oneInstallment = creditCard.oneInstallmentPercentage ?? creditCard.detachedPercentageFee ?? 2.99;
-      
-      if (creditCard.upToSixInstallmentsPercentageFee !== undefined || 
-          creditCard.upToTwelveInstallmentsPercentageFee !== undefined) {
+    if (oneInstallment !== undefined) {
+      if (upToSix !== undefined || upToTwelve !== undefined) {
         tiers.push({ min: 1, max: 1, percentageFee: oneInstallment });
-        tiers.push({ 
-          min: 2, max: 6, 
-          percentageFee: creditCard.upToSixInstallmentsPercentageFee ?? creditCard.installmentPercentageFee ?? 3.49 
-        });
-        tiers.push({ 
-          min: 7, max: 12, 
-          percentageFee: creditCard.upToTwelveInstallmentsPercentageFee ?? creditCard.installmentPercentageFee ?? 3.99 
-        });
-        // 13-21x if available
-        if (creditCard.aboveTwelveInstallmentsPercentageFee !== undefined) {
-          tiers.push({ min: 13, max: 21, percentageFee: creditCard.aboveTwelveInstallmentsPercentageFee });
-        }
+        if (upToSix !== undefined) tiers.push({ min: 2, max: 6, percentageFee: upToSix });
+        if (upToTwelve !== undefined) tiers.push({ min: 7, max: 12, percentageFee: upToTwelve });
+        if (upToTwentyOne !== undefined) tiers.push({ min: 13, max: 21, percentageFee: upToTwentyOne });
       } else {
-        // Absolute fallback: single tier
         tiers.push({ min: 1, max: 21, percentageFee: oneInstallment });
+      }
+    } else {
+      // Absolute fallback
+      tiers.push({ min: 1, max: 21, percentageFee: 2.99 });
+    }
+
+    // ── Discount tiers (when hasValidDiscount is true) ──
+    let discountInfo: AccountFees['discount'] = undefined;
+    const hasDiscount = creditCard.hasValidDiscount === true;
+    const discountExpiration = creditCard.discountExpiration;
+
+    // Only use discount if it hasn't expired
+    const discountStillValid = hasDiscount && (
+      !discountExpiration || new Date(discountExpiration) > new Date()
+    );
+
+    if (discountStillValid) {
+      const discountTiers: Array<{ min: number; max: number; percentageFee: number }> = [];
+      const dOne = creditCard.discountOneInstallmentPercentage;
+      const dSix = creditCard.discountUpToSixInstallmentsPercentage;
+      const dTwelve = creditCard.discountUpToTwelveInstallmentsPercentage;
+      const dTwentyOne = creditCard.discountUpToTwentyOneInstallmentsPercentage;
+
+      if (dOne !== undefined) {
+        if (dSix !== undefined || dTwelve !== undefined) {
+          discountTiers.push({ min: 1, max: 1, percentageFee: dOne });
+          if (dSix !== undefined) discountTiers.push({ min: 2, max: 6, percentageFee: dSix });
+          if (dTwelve !== undefined) discountTiers.push({ min: 7, max: 12, percentageFee: dTwelve });
+          if (dTwentyOne !== undefined) discountTiers.push({ min: 13, max: 21, percentageFee: dTwentyOne });
+        } else {
+          discountTiers.push({ min: 1, max: 21, percentageFee: dOne });
+        }
+      }
+
+      if (discountTiers.length > 0) {
+        discountInfo = {
+          active: true,
+          expiration: discountExpiration,
+          tiers: discountTiers,
+        };
       }
     }
 
     const accountFees: AccountFees = {
       creditCard: {
         operationValue: creditCard.operationValue ?? 0.49,
-        detachedMonthlyFeeValue: creditCard.detachedMonthlyFeeValue ?? creditCard.monthlyFeeValue ?? 1.25,
-        installmentMonthlyFeeValue: creditCard.installmentMonthlyFeeValue ?? creditCard.monthlyFeeValue ?? 1.70,
+        detachedMonthlyFeeValue: anticipationCC.detachedMonthlyFeeValue ?? 1.25,
+        installmentMonthlyFeeValue: anticipationCC.installmentMonthlyFeeValue ?? 1.70,
         tiers,
       },
       pix: {
         fixedFeeValue: pix.fixedFeeValue ?? pix.operationValue ?? 0.99,
       },
+      ...(discountInfo ? { discount: discountInfo } : {}),
     };
 
     console.log('📊 Normalized Asaas fees:', JSON.stringify(accountFees));

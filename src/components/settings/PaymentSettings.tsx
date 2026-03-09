@@ -85,6 +85,11 @@ export function PaymentSettings() {
       tiers: Array<{ min: number; max: number; percentageFee: number }>;
     };
     pix: { fixedFeeValue: number };
+    discount?: {
+      active: boolean;
+      expiration?: string;
+      tiers: Array<{ min: number; max: number; percentageFee: number }>;
+    };
   } | null>(null);
   const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
 
@@ -990,15 +995,55 @@ export function PaymentSettings() {
 
                     {asaasFees && (
                       <div className="rounded-lg border border-border p-4 bg-muted/30 space-y-3">
-                        <h5 className="text-sm font-medium">Taxas de Cartão de Crédito</h5>
-                        <div className="grid gap-1">
-                          {asaasFees.creditCard.tiers.map((tier, idx) => (
-                            <div key={idx} className="flex justify-between text-sm text-muted-foreground">
-                              <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
-                              <span className="font-medium">{tier.percentageFee}% + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
+                        {/* Discount banner */}
+                        {asaasFees.discount?.active && (
+                          <div className="flex items-start gap-2 p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm">
+                              <p className="font-medium text-green-700 dark:text-green-300">
+                                Desconto promocional ativo
+                              </p>
+                              {asaasFees.discount.expiration && (
+                                <p className="text-green-600 dark:text-green-400">
+                                  Válido até {format(new Date(asaasFees.discount.expiration), "dd/MM/yyyy", { locale: ptBR })}
+                                </p>
+                              )}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
+
+                        <h5 className="text-sm font-medium">Taxas de Cartão de Crédito</h5>
+                        
+                        {/* Show discount tiers if active, otherwise standard */}
+                        {asaasFees.discount?.active && asaasFees.discount.tiers.length > 0 ? (
+                          <div className="grid gap-1">
+                            {asaasFees.discount.tiers.map((tier, idx) => {
+                              const standardTier = asaasFees.creditCard.tiers[idx];
+                              return (
+                                <div key={idx} className="flex justify-between text-sm text-muted-foreground">
+                                  <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
+                                  <span className="font-medium">
+                                    <span className="text-green-600 dark:text-green-400">{tier.percentageFee}%</span>
+                                    {standardTier && standardTier.percentageFee !== tier.percentageFee && (
+                                      <span className="line-through text-muted-foreground/50 ml-1 text-xs">{standardTier.percentageFee}%</span>
+                                    )}
+                                    <span> + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="grid gap-1">
+                            {asaasFees.creditCard.tiers.map((tier, idx) => (
+                              <div key={idx} className="flex justify-between text-sm text-muted-foreground">
+                                <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
+                                <span className="font-medium">{tier.percentageFee}% + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         <div className="pt-2 border-t border-border grid gap-1">
                           <div className="flex justify-between text-sm text-muted-foreground">
                             <span>Antecipação à vista</span>
