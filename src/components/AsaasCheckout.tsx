@@ -352,6 +352,7 @@ export function AsaasCheckout({
     const [expM, expY] = cardExpiry.split('/');
     if (!expM || !expY || parseInt(expM) < 1 || parseInt(expM) > 12) { setCardError('Validade inválida'); return; }
     if (cardCvv.length < 3) { setCardError('CVV inválido'); return; }
+    if (!cardEmail || !/\S+@\S+\.\S+/.test(cardEmail)) { setCardError('Informe o email do titular do cartão'); return; }
     if (cardPhone.replace(/\D/g, '').length < 10) { setCardError('Telefone inválido'); return; }
     if (cardCep.replace(/\D/g, '').length < 8) { setCardError('CEP inválido'); return; }
 
