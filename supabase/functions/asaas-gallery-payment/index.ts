@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
       habilitarBoleto?: boolean;
       maxParcelas?: number;
       absorverTaxa?: boolean;
+      incluirTaxaAntecipacao?: boolean;
     };
 
     const asaasBaseUrl = settings.environment === 'production'
@@ -196,6 +197,9 @@ Deno.serve(async (req) => {
     let processingCost = 0;
     let anticipationCost = 0;
 
+    // incluirTaxaAntecipacao defaults to true for backward compatibility
+    const incluirAntecipacao = settings.incluirTaxaAntecipacao !== false;
+
     if (finalBillingType === 'CREDIT_CARD' && !settings.absorverTaxa) {
       const installments = body.installmentCount && body.installmentCount > 1 ? body.installmentCount : 1;
 
@@ -247,23 +251,25 @@ Deno.serve(async (req) => {
           processingCost = (valor * percentageFee / 100) + operationValue;
           processingCost = Math.round(processingCost * 100) / 100;
 
-          // 2. Anticipation fee (from anticipation.creditCard, NOT payment.creditCard)
-          const detachedMonthlyFee = anticipationCC.detachedMonthlyFeeValue ?? 1.25;
-          const installmentMonthlyFee = anticipationCC.installmentMonthlyFeeValue ?? 1.70;
-          const taxaMensal = installments === 1 ? detachedMonthlyFee : installmentMonthlyFee;
+          // 2. Anticipation fee — ONLY if incluirAntecipacao is true
+          if (incluirAntecipacao) {
+            const detachedMonthlyFee = anticipationCC.detachedMonthlyFeeValue ?? 1.25;
+            const installmentMonthlyFee = anticipationCC.installmentMonthlyFeeValue ?? 1.70;
+            const taxaMensal = installments === 1 ? detachedMonthlyFee : installmentMonthlyFee;
 
-          if (taxaMensal > 0) {
-            const valorParcela = valor / installments;
-            let valorLiquido = 0;
-            for (let i = 1; i <= installments; i++) {
-              const taxaTotal = taxaMensal * i;
-              valorLiquido += valorParcela * (1 - taxaTotal / 100);
+            if (taxaMensal > 0) {
+              const valorParcela = valor / installments;
+              let valorLiquido = 0;
+              for (let i = 1; i <= installments; i++) {
+                const taxaTotal = taxaMensal * i;
+                valorLiquido += valorParcela * (1 - taxaTotal / 100);
+              }
+              anticipationCost = Math.round((valor - valorLiquido) * 100) / 100;
             }
-            anticipationCost = Math.round((valor - valorLiquido) * 100) / 100;
           }
 
           valorFinal = Math.round((valor + processingCost + anticipationCost) * 100) / 100;
-          console.log(`📊 Server-side fee calc: processing=R$${processingCost} (${percentageFee}% + R$${operationValue}), anticipation=R$${anticipationCost}, total=R$${valorFinal}`);
+          console.log(`📊 Server-side fee calc: processing=R$${processingCost} (${percentageFee}% + R$${operationValue}), anticipation=${incluirAntecipacao ? 'R$' + anticipationCost : 'disabled'}, total=R$${valorFinal}`);
         } else {
           console.warn('Failed to fetch Asaas fees for server-side validation, using valor as-is');
         }
