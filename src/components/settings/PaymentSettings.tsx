@@ -224,9 +224,6 @@ export function PaymentSettings() {
       habilitarBoleto: asaasHabilitarBoleto,
       maxParcelas: parseInt(asaasMaxParcelas),
       absorverTaxa: asaasAbsorverTaxa,
-      taxaAntecipacao: asaasTaxaAntecipacao,
-      taxaAntecipacaoCreditoAvista: parseFloat(asaasTaxaAvista) || 0,
-      taxaAntecipacaoCreditoParcelado: parseFloat(asaasTaxaParcelado) || 0,
     });
     setShowAsaasSettings(false);
   };
