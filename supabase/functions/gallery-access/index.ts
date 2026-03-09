@@ -272,6 +272,7 @@ serve(async (req) => {
             taxaAntecipacaoPercentual: s.taxaAntecipacaoPercentual,
             taxaAntecipacaoCreditoAvista: s.taxaAntecipacaoCreditoAvista,
             taxaAntecipacaoCreditoParcelado: s.taxaAntecipacaoCreditoParcelado,
+            incluirTaxaAntecipacao: s.incluirTaxaAntecipacao ?? true,
           };
         }
       }

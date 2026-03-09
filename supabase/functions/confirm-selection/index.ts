@@ -399,6 +399,7 @@ Deno.serve(async (req) => {
             taxaAntecipacaoPercentual: asaasSettings.taxaAntecipacaoPercentual,
             taxaAntecipacaoCreditoAvista: asaasSettings.taxaAntecipacaoCreditoAvista,
             taxaAntecipacaoCreditoParcelado: asaasSettings.taxaAntecipacaoCreditoParcelado,
+            incluirTaxaAntecipacao: asaasSettings.incluirTaxaAntecipacao ?? true,
           };
 
           console.log(`💳 Asaas transparent checkout prepared for gallery ${galleryId}, R$ ${valorTotal}`);
