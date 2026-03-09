@@ -277,23 +277,48 @@ export function AsaasCheckout({
     } catch { toast.error('Erro ao copiar'); }
   };
 
-  // ——— Card Flow ———
-  const installmentOptions = [];
+  // ——— Card Flow: Calculate installments with combined fees ———
+  const installmentOptions: Array<{ value: string; label: string; totalValue: number }> = [];
   for (let i = 1; i <= (data.maxParcelas || 12); i++) {
+    let totalComTaxas = data.valorTotal;
     let label = `${i}x de R$ ${(data.valorTotal / i).toFixed(2)}`;
-    if (data.taxaAntecipacao && i >= 1) {
+
+    if (!data.absorverTaxa && accountFees) {
+      // 1. Processing fee (tier-based percentage + fixed operation value)
+      const tier = accountFees.creditCard.tiers.find(t => i >= t.min && i <= t.max);
+      const processingPercentage = tier?.percentageFee ?? 0;
+      const processingFee = (data.valorTotal * processingPercentage / 100) + accountFees.creditCard.operationValue;
+
+      // 2. Anticipation fee (monthly rate × installment number)
+      const taxaMensal = i === 1
+        ? accountFees.creditCard.detachedMonthlyFeeValue
+        : accountFees.creditCard.installmentMonthlyFeeValue;
+      const { totalTaxa: anticipationFee } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
+
+      totalComTaxas = data.valorTotal + processingFee + anticipationFee;
+      totalComTaxas = Math.round(totalComTaxas * 100) / 100;
+
+      label = `${i}x de R$ ${(totalComTaxas / i).toFixed(2)}`;
+      if (totalComTaxas > data.valorTotal) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
+    } else if (!data.absorverTaxa && !accountFees && !feesLoading) {
+      // Fallback to legacy fields if fees failed to load
       const taxaMensal = i === 1
         ? (data.taxaAntecipacaoCreditoAvista ?? data.taxaAntecipacaoPercentual ?? 0)
         : (data.taxaAntecipacaoCreditoParcelado ?? data.taxaAntecipacaoPercentual ?? 0);
       if (taxaMensal > 0) {
         const { totalTaxa } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
-        const total = data.valorTotal + totalTaxa;
-        label = `${i}x de R$ ${(total / i).toFixed(2)}`;
-        if (totalTaxa > 0) label += ` (total R$ ${total.toFixed(2)})`;
+        totalComTaxas = data.valorTotal + totalTaxa;
+        label = `${i}x de R$ ${(totalComTaxas / i).toFixed(2)}`;
+        if (totalTaxa > 0) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
       }
     }
-    installmentOptions.push({ value: String(i), label });
+
+    installmentOptions.push({ value: String(i), label, totalValue: totalComTaxas });
   }
+
+  // Get the total value for the selected installment (for the pay button and submission)
+  const selectedInstallmentOption = installmentOptions.find(o => o.value === cardInstallments);
+  const valorComTaxas = selectedInstallmentOption?.totalValue ?? data.valorTotal;
 
   const handleCardSubmit = async () => {
     setCardError(null);
