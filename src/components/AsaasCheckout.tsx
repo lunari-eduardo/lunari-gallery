@@ -557,7 +557,6 @@ export function AsaasCheckout({
                 <Button onClick={handleCardSubmit} disabled={cardLoading || feesLoading} className="w-full gap-2" variant="terracotta" size="lg">
                   {cardLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</> : <><Lock className="h-4 w-4" /> Pagar R$ {valorComTaxas.toFixed(2)}</>}
                 </Button>
-                </Button>
               </div>
             </TabsContent>
           )}
