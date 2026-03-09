@@ -35,6 +35,7 @@ export function SelectionSummary({
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
+  const currentExtras = extraCount; // extras da seleção atual (não billing)
   const isOverLimit = extraCount > 0;
   const isConfirmed = selectionStatus === 'confirmed';
   const isBlocked = selectionStatus === 'blocked';
