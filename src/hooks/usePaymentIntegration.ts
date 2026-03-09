@@ -32,6 +32,8 @@ export interface AsaasData {
   habilitarBoleto: boolean;
   maxParcelas: number;
   absorverTaxa: boolean;
+  /** Quando false, apenas a taxa de processamento é repassada ao cliente (sem antecipação) */
+  incluirTaxaAntecipacao?: boolean;
   // Legacy fields - kept for backward compat in data but no longer configured via UI
   taxaAntecipacao?: boolean;
   /** @deprecated */

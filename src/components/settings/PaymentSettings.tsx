@@ -75,6 +75,7 @@ export function PaymentSettings() {
   const [asaasHabilitarBoleto, setAsaasHabilitarBoleto] = useState(false);
   const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
+  const [asaasIncluirAntecipacao, setAsaasIncluirAntecipacao] = useState(true);
   
   // Real-time fees from Asaas API
   const [asaasFees, setAsaasFees] = useState<{
