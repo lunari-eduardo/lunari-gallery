@@ -43,6 +43,8 @@ export interface AsaasCheckoutData {
   enabledMethods: { pix: boolean; creditCard: boolean; boleto?: boolean };
   maxParcelas: number;
   absorverTaxa: boolean;
+  /** Quando false, apenas taxa de processamento é cobrada (sem antecipação) */
+  incluirTaxaAntecipacao?: boolean;
   // Legacy fields (kept for backward compat but ignored when accountFees is available)
   taxaAntecipacao?: boolean;
   taxaAntecipacaoPercentual?: number;
