@@ -163,6 +163,8 @@ export function PaymentSettings() {
         setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
         setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
         setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
+        // Default true para retrocompatibilidade
+        setAsaasIncluirAntecipacao(asData.incluirTaxaAntecipacao ?? true);
       }
     }
   }, [data?.allIntegrations]);
