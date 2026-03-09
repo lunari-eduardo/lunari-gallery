@@ -9,7 +9,7 @@ import {
   buildRegrasFromDiscountPackages 
 } from '@/lib/pricingUtils';
 import { DiscountPackage } from '@/types/gallery';
-import { Sparkles } from 'lucide-react';
+
 
 interface DiscountAnalysisInput {
   regrasCongeladas: RegrasCongeladas | null | undefined;
@@ -101,82 +101,62 @@ interface InlineDiscountTiersProps {
 export function InlineDiscountTiers({ analysis, totalExtras, isMobile = false }: InlineDiscountTiersProps) {
   const { faixas, faixaAtual, currentDiscount, nextDiscount, photosToNext, atMaxTier } = analysis;
 
+  const renderSegments = (maxWidth: string) => (
+    <div className={cn("flex gap-0.5", maxWidth)}>
+      {faixas.map((faixa, idx) => {
+        const isActive = faixaAtual && faixa.min === faixaAtual.min && faixa.max === faixaAtual.max;
+        const isPast = faixaAtual && faixa.min < faixaAtual.min;
+        return (
+          <div 
+            key={idx} 
+            className={cn(
+              'flex-1 h-1.5 rounded-full transition-all duration-300',
+              isActive 
+                ? 'bg-primary shadow-[0_0_6px_hsl(var(--primary)/0.4)]' 
+                : isPast 
+                  ? 'bg-primary/40' 
+                  : 'bg-muted/40'
+            )}
+          />
+        );
+      })}
+    </div>
+  );
+
+  const renderText = (size: string) => {
+    const textClass = cn("whitespace-nowrap", size);
+    if (atMaxTier && currentDiscount > 0) {
+      return <span className={cn(textClass, "text-primary font-semibold")}>Desconto máximo: {currentDiscount}%</span>;
+    }
+    if (totalExtras === 0) {
+      return <span className={cn(textClass, "text-muted-foreground")}>Selecione extras para descontos</span>;
+    }
+    if (photosToNext > 0 && nextDiscount !== null && nextDiscount > 0) {
+      return (
+        <span className={cn(textClass, "text-muted-foreground")}>
+          Falta{photosToNext > 1 ? 'm' : ''} {photosToNext} foto{photosToNext > 1 ? 's' : ''} para desconto de <span className="text-primary font-semibold">{nextDiscount}%</span>
+        </span>
+      );
+    }
+    if (currentDiscount > 0) {
+      return <span className={cn(textClass, "text-primary font-semibold")}>Você tem {currentDiscount}% de desconto em extras</span>;
+    }
+    return <span className={cn(textClass, "text-muted-foreground")}>Mais extras = descontos</span>;
+  };
+
   if (isMobile) {
-    // Mobile: text only, no tier segments
     return (
-      <div className="flex items-center gap-1 text-[10px]">
-        <Sparkles className="h-2.5 w-2.5 text-primary/70 shrink-0" />
-        {atMaxTier && currentDiscount > 0 ? (
-          <span className="text-primary font-semibold whitespace-nowrap">
-            Desconto máximo: {currentDiscount}%! 🎉
-          </span>
-        ) : totalExtras === 0 ? (
-          <span className="text-muted-foreground whitespace-nowrap">
-            Extras desbloqueiam descontos
-          </span>
-        ) : photosToNext > 0 && nextDiscount !== null && nextDiscount > 0 ? (
-          <span className="text-muted-foreground whitespace-nowrap">
-            Falta{photosToNext > 1 ? 'm' : ''} {photosToNext} foto{photosToNext > 1 ? 's' : ''} para desconto de <span className="text-primary font-semibold">{nextDiscount}%</span>
-          </span>
-        ) : currentDiscount > 0 ? (
-          <span className="text-primary font-semibold whitespace-nowrap">
-            Você tem {currentDiscount}% de desconto em extras
-          </span>
-        ) : (
-          <span className="text-muted-foreground whitespace-nowrap">
-            Mais extras = descontos
-          </span>
-        )}
+      <div className="flex flex-col items-center gap-0.5">
+        {renderSegments("w-24")}
+        {renderText("text-[10px]")}
       </div>
     );
   }
 
-  // Desktop: tier segments + text in one line
   return (
     <div className="flex items-center gap-2">
-      <div className="flex gap-0.5 max-w-[140px]">
-        {faixas.map((faixa, idx) => {
-          const isActive = faixaAtual && faixa.min === faixaAtual.min && faixa.max === faixaAtual.max;
-          const isPast = faixaAtual && faixa.min < faixaAtual.min;
-          return (
-            <div 
-              key={idx} 
-              className={cn(
-                'flex-1 h-1.5 rounded-full transition-all duration-500',
-                isActive 
-                  ? 'bg-gradient-to-r from-primary to-primary/70 shadow-[0_0_6px_hsl(var(--primary)/0.4)]' 
-                  : isPast 
-                    ? 'bg-primary/30' 
-                    : 'bg-muted/50'
-              )}
-            />
-          );
-        })}
-      </div>
-      <div className="flex items-center gap-1 text-[11px] shrink-0">
-        <Sparkles className="h-3 w-3 text-primary/70 shrink-0" />
-        {atMaxTier && currentDiscount > 0 ? (
-          <span className="text-primary font-semibold whitespace-nowrap">
-            Desconto máximo: {currentDiscount}%! 🎉
-          </span>
-        ) : totalExtras === 0 ? (
-          <span className="text-muted-foreground whitespace-nowrap">
-            Selecione extras para descontos
-          </span>
-        ) : photosToNext > 0 && nextDiscount !== null && nextDiscount > 0 ? (
-          <span className="text-muted-foreground whitespace-nowrap">
-            Falta{photosToNext > 1 ? 'm' : ''} {photosToNext} foto{photosToNext > 1 ? 's' : ''} para desconto de <span className="text-primary font-semibold">{nextDiscount}%</span>
-          </span>
-        ) : currentDiscount > 0 ? (
-          <span className="text-primary font-semibold whitespace-nowrap">
-            Você tem {currentDiscount}% de desconto em extras
-          </span>
-        ) : (
-          <span className="text-muted-foreground whitespace-nowrap">
-            Mais extras = descontos
-          </span>
-        )}
-      </div>
+      {renderSegments("w-[120px]")}
+      {renderText("text-[11px]")}
     </div>
   );
 }
