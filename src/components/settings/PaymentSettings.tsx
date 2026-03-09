@@ -155,11 +155,6 @@ export function PaymentSettings() {
         setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
         setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
         setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
-        setAsaasTaxaAntecipacao(asData.taxaAntecipacao ?? false);
-        // Migrate from old single field to new dual fields
-        const fallback = asData.taxaAntecipacaoPercentual ?? 0;
-        setAsaasTaxaAvista(String(asData.taxaAntecipacaoCreditoAvista ?? fallback));
-        setAsaasTaxaParcelado(String(asData.taxaAntecipacaoCreditoParcelado ?? fallback));
       }
     }
   }, [data?.allIntegrations]);
