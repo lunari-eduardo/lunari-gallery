@@ -28,6 +28,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 export function PaymentSettings() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuthContext();
   
   const { 
     data, 
