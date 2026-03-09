@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.asaas-gallery-webhook]
 verify_jwt = false
+
+[functions.asaas-fetch-fees]
+verify_jwt = false
