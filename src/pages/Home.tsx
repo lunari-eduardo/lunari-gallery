@@ -271,19 +271,25 @@ export default function Home() {
   }, [galleries]);
 
   // Galleries requiring attention
+  // Aguardando ação: apenas expiradas e concluídas
   const attentionGalleries = useMemo(() => {
-    const now = new Date();
     return galleries
       .filter(g => g.tipo === 'selecao')
-      .filter(g => {
-        if (g.status === 'enviado') return true;
-        if (g.status === 'selecao_iniciada' && g.prazoSelecao) {
-          const daysLeft = differenceInDays(g.prazoSelecao, now);
-          return daysLeft <= 3;
-        }
-        return false;
-      })
+      .filter(g => g.status === 'expirado' || g.status === 'selecao_completa')
       .slice(0, 6);
+  }, [galleries]);
+
+  // Galerias ativas: enviadas e em seleção
+  const activeGalleries = useMemo(() => {
+    const now = new Date();
+    return galleries
+      .filter(g => g.tipo === 'selecao' && (g.status === 'enviado' || g.status === 'selecao_iniciada'))
+      .sort((a, b) => {
+        if (a.prazoSelecao && b.prazoSelecao) return differenceInDays(a.prazoSelecao, now) - differenceInDays(b.prazoSelecao, now);
+        if (a.prazoSelecao) return -1;
+        return 1;
+      })
+      .slice(0, 8);
   }, [galleries]);
 
   return (
@@ -395,7 +401,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Attention Required */}
+            {/* Attention Required — expiradas e concluídas */}
             <div className="lg:col-span-3 glass p-6 overflow-hidden">
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="h-4 w-4 text-amber-500" />
@@ -412,37 +418,26 @@ export default function Home() {
                         <th className="text-left pb-2 font-medium hidden sm:table-cell">Sessão</th>
                         <th className="text-left pb-2 font-medium">Status</th>
                         <th className="text-left pb-2 font-medium hidden md:table-cell">Seleção</th>
-                        <th className="text-left pb-2 font-medium">Prazo</th>
                         <th className="pb-2"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {attentionGalleries.map(g => {
-                        const daysLeft = g.prazoSelecao ? differenceInDays(g.prazoSelecao, new Date()) : null;
-                        return (
-                          <tr key={g.id} className="border-b border-border/30 last:border-0">
-                            <td className="py-2.5 font-medium text-foreground">{g.clienteNome || '—'}</td>
-                            <td className="py-2.5 text-muted-foreground hidden sm:table-cell">{g.nomeSessao || '—'}</td>
-                            <td className="py-2.5">{getStatusBadge(g.status)}</td>
-                            <td className="py-2.5 text-muted-foreground hidden md:table-cell">
-                              {g.fotosSelecionadas} / {g.fotosIncluidas}
-                            </td>
-                            <td className="py-2.5">
-                              {daysLeft !== null ? (
-                                <span className={`text-xs font-medium ${daysLeft <= 1 ? 'text-destructive' : daysLeft <= 3 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                                  {daysLeft <= 0 ? 'Expirado' : `${daysLeft}d restantes`}
-                                </span>
-                              ) : '—'}
-                            </td>
-                            <td className="py-2.5 text-right">
-                              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate(`/gallery/${g.id}`)}>
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                Abrir
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {attentionGalleries.map(g => (
+                        <tr key={g.id} className="border-b border-border/30 last:border-0">
+                          <td className="py-2.5 font-medium text-foreground">{g.clienteNome || '—'}</td>
+                          <td className="py-2.5 text-muted-foreground hidden sm:table-cell">{g.nomeSessao || '—'}</td>
+                          <td className="py-2.5">{getStatusBadge(g.status)}</td>
+                          <td className="py-2.5 text-muted-foreground hidden md:table-cell">
+                            {g.fotosSelecionadas} / {g.fotosIncluidas}
+                          </td>
+                          <td className="py-2.5 text-right">
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate(`/gallery/${g.id}`)}>
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Abrir
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -450,34 +445,76 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Section 5 — Recent Activity */}
+          {/* Section 5 — Atividades recentes: galerias ativas + feed */}
           <div className="glass p-6">
             <div className="flex items-center gap-2 mb-4">
               <Activity className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Atividades recentes</h3>
             </div>
-            {recentActions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma atividade recente</p>
-            ) : (
-              <div className="space-y-3">
-                {recentActions.map((action: any) => {
-                  const gallery = action.galerias;
-                  const galleryLabel = gallery?.nome_sessao || gallery?.cliente_nome || 'Galeria';
-                  return (
-                    <div key={action.id} className="flex items-start gap-3">
-                      <div className="mt-1 w-2 h-2 rounded-full bg-primary/60 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground">
-                          {action.descricao || action.tipo} — <span className="text-muted-foreground">{galleryLabel}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(action.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
-                        </p>
+
+            {/* Galerias ativas (enviadas + em seleção) */}
+            {activeGalleries.length > 0 && (
+              <div className="mb-5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Galerias ativas</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {activeGalleries.map(g => {
+                    const daysLeft = g.prazoSelecao ? differenceInDays(g.prazoSelecao, new Date()) : null;
+                    return (
+                      <div
+                        key={g.id}
+                        className="flex items-center gap-3 p-3 rounded-xl border border-border/40 bg-background/30 hover:bg-background/50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/gallery/${g.id}`)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{g.clienteNome || '—'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{g.nomeSessao || '—'}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground">{g.fotosSelecionadas}/{g.fotosIncluidas}</span>
+                          {getStatusBadge(g.status)}
+                        </div>
+                        {daysLeft !== null && (
+                          <span className={`text-xs font-medium flex-shrink-0 ${daysLeft <= 1 ? 'text-destructive' : daysLeft <= 3 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                            {daysLeft <= 0 ? 'Expirado' : `${daysLeft}d`}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+            )}
+
+            {/* Feed de ações */}
+            {recentActions.length > 0 && (
+              <div>
+                {activeGalleries.length > 0 && (
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Histórico</p>
+                )}
+                <div className="space-y-3">
+                  {recentActions.map((action: any) => {
+                    const gallery = action.galerias;
+                    const galleryLabel = gallery?.nome_sessao || gallery?.cliente_nome || 'Galeria';
+                    return (
+                      <div key={action.id} className="flex items-start gap-3">
+                        <div className="mt-1 w-2 h-2 rounded-full bg-primary/60 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground">
+                            {action.descricao || action.tipo} — <span className="text-muted-foreground">{galleryLabel}</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(action.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeGalleries.length === 0 && recentActions.length === 0 && (
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma atividade recente</p>
             )}
           </div>
         </div>
