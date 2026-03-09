@@ -24,6 +24,11 @@ export interface AccountFees {
   pix: {
     fixedFeeValue: number;
   };
+  discount?: {
+    active: boolean;
+    expiration?: string;
+    tiers: Array<{ min: number; max: number; percentageFee: number }>;
+  };
 }
 
 export interface AsaasCheckoutData {
