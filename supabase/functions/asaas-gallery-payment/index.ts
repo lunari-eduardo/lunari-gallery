@@ -395,6 +395,7 @@ Deno.serve(async (req) => {
       valorOriginal: valor,
       valorCobrado: valorFinal,
       custoAntecipacao: anticipationCost,
+      custoProcessamento: processingCost,
     };
 
     if (finalBillingType === 'PIX' && pixData) {
