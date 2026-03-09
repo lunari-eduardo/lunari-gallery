@@ -285,6 +285,9 @@ export function AsaasCheckout({
   };
 
   // ——— Card Flow: Calculate installments with combined fees ———
+  // incluirTaxaAntecipacao defaults to true for backward compatibility
+  const incluirAntecipacao = data.incluirTaxaAntecipacao !== false;
+
   const installmentOptions: Array<{ value: string; label: string; totalValue: number }> = [];
   for (let i = 1; i <= (data.maxParcelas || 12); i++) {
     let totalComTaxas = data.valorTotal;
@@ -300,11 +303,15 @@ export function AsaasCheckout({
       const processingPercentage = tier?.percentageFee ?? 0;
       const processingFee = (data.valorTotal * processingPercentage / 100) + accountFees.creditCard.operationValue;
 
-      // 2. Anticipation fee (monthly rate × installment number)
-      const taxaMensal = i === 1
-        ? accountFees.creditCard.detachedMonthlyFeeValue
-        : accountFees.creditCard.installmentMonthlyFeeValue;
-      const { totalTaxa: anticipationFee } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
+      // 2. Anticipation fee — only when enabled
+      let anticipationFee = 0;
+      if (incluirAntecipacao) {
+        const taxaMensal = i === 1
+          ? accountFees.creditCard.detachedMonthlyFeeValue
+          : accountFees.creditCard.installmentMonthlyFeeValue;
+        const result = calcularAntecipacao(data.valorTotal, i, taxaMensal);
+        anticipationFee = result.totalTaxa;
+      }
 
       totalComTaxas = data.valorTotal + processingFee + anticipationFee;
       totalComTaxas = Math.round(totalComTaxas * 100) / 100;
@@ -313,14 +320,16 @@ export function AsaasCheckout({
       if (totalComTaxas > data.valorTotal) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
     } else if (!data.absorverTaxa && !accountFees && !feesLoading) {
       // Fallback to legacy fields if fees failed to load
-      const taxaMensal = i === 1
-        ? (data.taxaAntecipacaoCreditoAvista ?? data.taxaAntecipacaoPercentual ?? 0)
-        : (data.taxaAntecipacaoCreditoParcelado ?? data.taxaAntecipacaoPercentual ?? 0);
-      if (taxaMensal > 0) {
-        const { totalTaxa } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
-        totalComTaxas = data.valorTotal + totalTaxa;
-        label = `${i}x de R$ ${(totalComTaxas / i).toFixed(2)}`;
-        if (totalTaxa > 0) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
+      if (incluirAntecipacao) {
+        const taxaMensal = i === 1
+          ? (data.taxaAntecipacaoCreditoAvista ?? data.taxaAntecipacaoPercentual ?? 0)
+          : (data.taxaAntecipacaoCreditoParcelado ?? data.taxaAntecipacaoPercentual ?? 0);
+        if (taxaMensal > 0) {
+          const { totalTaxa } = calcularAntecipacao(data.valorTotal, i, taxaMensal);
+          totalComTaxas = data.valorTotal + totalTaxa;
+          label = `${i}x de R$ ${(totalComTaxas / i).toFixed(2)}`;
+          if (totalTaxa > 0) label += ` (total R$ ${totalComTaxas.toFixed(2)})`;
+        }
       }
     }
 
