@@ -499,6 +499,19 @@ export default function ClientGallery() {
         return;
       }
       
+      // GUARD: If backend says payment is required but no checkout data arrived,
+      // do NOT confirm — this is likely a config/payload issue
+      if (data.requiresPayment) {
+        console.error('⚠️ Backend indicated requiresPayment=true but no valid checkout data arrived. Payload:', JSON.stringify(data));
+        toast.error('Pagamento pendente', {
+          description: 'Não foi possível carregar o checkout. Recarregue a página e tente novamente.',
+          duration: 8000,
+        });
+        // Refetch gallery to let gallery-access handle the pending payment state
+        refetchGallery();
+        return;
+      }
+      
       // No payment required - go directly to confirmed
       setIsConfirmed(true);
       setCurrentStep('confirmed');

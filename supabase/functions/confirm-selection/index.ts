@@ -275,13 +275,14 @@ Deno.serve(async (req) => {
     console.log(`📊 Credit-based pricing: modelo=${regrasCongeladasSource ? 'progressivo' : 'fixo'}, valorTotalIdeal=R$${resultado.valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
 
     // 4. Parse sale settings to determine if payment is required
+    // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
     // (configuracoes already parsed above for chargeType)
     const saleMode = configuracoes?.saleSettings?.mode;
     const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod;
-    // Only create payment if there are extras to charge (respects credit system)
-    const shouldCreatePayment = requestPayment && saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
+    // Server-side rule: if mode is sale_with_payment AND there's value to charge, payment is required
+    const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
-    console.log(`💰 Payment check: mode=${saleMode}, valorTotal=${valorTotal}, shouldCreate=${shouldCreatePayment}`);
+    console.log(`💰 Payment check: mode=${saleMode}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment} (server-side, requestPayment from frontend IGNORED)`);
 
     // 5. CRITICAL: If payment is required, create it BEFORE confirming gallery
     let paymentResponse: { checkoutUrl?: string; provedor?: string; cobrancaId?: string } | null = null;
