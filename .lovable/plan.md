@@ -1,65 +1,80 @@
 
 
-## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
+## Diagnóstico: Histórico de Ações Incompleto nas Galerias
 
-### Problema resolvido
-As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
+### Problema Principal: RLS bloqueia ações de clientes
 
-### Arquitetura implementada
+A política RLS da tabela `galeria_acoes` é `auth.uid() = user_id`. Ações do cliente (acesso, seleção, pagamento) são inseridas com `user_id: null` pelas edge functions (que usam service_role). Porém, quando o fotógrafo consulta o histórico no frontend, o SELECT com RLS **nunca retorna** essas linhas porque `null != auth.uid()`.
 
-```text
-Cliente abre checkout
-  → AsaasCheckout monta
-  → Chama asaas-fetch-fees (userId)
-  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
-  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
-  → Exibe parcelas com valores corretos
+### Ações que já são logadas (mas invisíveis ao fotógrafo)
+| Tipo | Onde é inserido | user_id |
+|------|----------------|---------|
+| `criada` | useSupabaseGalleries | photographer ✅ |
+| `enviada` | useSupabaseGalleries | photographer ✅ |
+| `cliente_acessou` | gallery-access | null ❌ invisível |
+| `cliente_confirmou` | confirm-selection | null ❌ invisível |
+| `pagamento_informado` | client-selection | null ❌ invisível |
+| `pagamento_confirmado` | webhooks | null ❌ invisível |
+| `selecao_reaberta` | useSupabaseGalleries | photographer ✅ |
 
-Cliente paga
-  → asaas-gallery-payment recalcula server-side com mesma API
-  → Cobra valor correto no Asaas
+### Ações que NÃO são logadas (faltam)
+- **Galeria expirou** — nenhum lugar insere `tipo: 'expirada'`
+- **Seleção iniciada** (primeiro clique em selecionar foto) — `client-selection` loga foto individual mas não loga início da seleção como evento de timeline
+- **Cada acesso subsequente** do cliente — só o primeiro acesso é logado
+
+---
+
+### Correções Propostas
+
+#### 1. Corrigir RLS de `galeria_acoes` (SQL migration)
+Alterar a política para que o fotógrafo veja ações da própria galeria (via join com `galerias.user_id`):
+
+```sql
+DROP POLICY "Users can manage own gallery actions" ON galeria_acoes;
+
+-- Fotógrafo pode ver todas as ações das suas galerias (incluindo user_id null)
+CREATE POLICY "Owner can view gallery actions" ON galeria_acoes
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM galerias g 
+      WHERE g.id = galeria_acoes.galeria_id 
+      AND g.user_id = auth.uid()
+    )
+  );
+
+-- Fotógrafo pode inserir ações nas suas galerias
+CREATE POLICY "Owner can insert gallery actions" ON galeria_acoes
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+-- Edge functions com service_role continuam inserindo com user_id: null (bypass RLS)
 ```
 
-### Cálculo combinado por parcela
-```
-IF incluirTaxaAntecipacao = true:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
-ELSE:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49)
-```
+#### 2. Adicionar novos tipos de ação no `ActionTimeline.tsx`
+- Adicionar ícones/cores para: `pagamento_informado`, `pagamento_confirmado`, `expirada`, `selecao_iniciada`
+- Atualizar `GalleryAction['type']` em `types/gallery.ts` para incluir: `'payment_informed'`, `'payment_confirmed'`, `'expired'`, `'selection_started'`
 
-### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+#### 3. Adicionar log de expiração
+Na edge function `gallery-access`, quando detecta que a galeria expirou, inserir ação `tipo: 'expirada'`.
 
-**Bugs corrigidos:**
-1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
-2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
-3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+#### 4. Adicionar log de "seleção iniciada" 
+Na edge function `client-selection`, quando a galeria muda de `enviado` para `selecao_iniciada`, inserir ação `tipo: 'selecao_iniciada'`.
 
-**Arquivos modificados:**
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
-2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
-3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
-4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+#### 5. Atualizar o mapeamento no `GalleryDetail.tsx`
+Incluir os novos tipos no `typeMap` e `relevantTypes` para que apareçam na timeline.
 
-### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+---
 
-**Funcionalidade adicionada:**
-1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
-2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
-3. ✅ Auto-save imediato ao alterar o toggle
-4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
-5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
+### Arquivos alterados
+- **Migration SQL** — nova política RLS em `galeria_acoes`
+- **`src/types/gallery.ts`** — novos tipos de ação
+- **`src/components/ActionTimeline.tsx`** — novos ícones/cores para tipos adicionais
+- **`src/pages/GalleryDetail.tsx`** — mapear novos tipos na timeline
+- **`supabase/functions/gallery-access/index.ts`** — log de expiração
+- **`supabase/functions/client-selection/index.ts`** — log de início de seleção
 
-**Arquivos modificados:**
-1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
-2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
-3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
+### Impacto
+- Edge functions de InfinitePay e create-link **não são alteradas**
+- Histórico retroativo: ações já inseridas com `user_id: null` passarão a ser visíveis imediatamente após a correção de RLS
 
-### Arquivos originais modificados
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
-2. ✅ `supabase/config.toml` — registro da nova função
-3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
-5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
-6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
