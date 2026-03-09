@@ -1,57 +1,34 @@
 
 
-## Plano: Corrigir loop de redirecionamento pós-pagamento InfinitePay
+## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
 
-### Problema identificado
+### Problema resolvido
+As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
 
-Quando o cliente retorna do checkout InfinitePay com `?payment=success`, ocorre uma **corrida entre dois fluxos**:
-
-1. **Layer 2** (useEffect linha 546): Detecta `?payment=success` e chama `check-payment-status` para confirmar o pagamento
-2. **Pending Payment Screen** (linha 888): `gallery-access` retorna `pendingPayment: true` com `checkoutUrl` da cobrança ainda pendente → renderiza `PaymentRedirect` que **auto-redireciona para o checkout novamente**
-
-O Layer 2 não tem tempo de processar antes da tela de pagamento pendente ser renderizada. Resultado: loop infinito de checkout.
-
-### Solução
-
-**1. Detectar retorno de pagamento ANTES de renderizar tela de pagamento pendente**
-
-No `ClientGallery.tsx`, quando `?payment=success` está na URL:
-- NÃO renderizar a tela de `PaymentRedirect` (pendingPayment)
-- Mostrar uma tela de "Verificando pagamento..." enquanto `check-payment-status` processa
-- Se confirmado → mostrar tela de sucesso (confirmed)
-- Se não confirmado após timeout → mostrar botão para tentar novamente ou voltar ao checkout
-
-**2. Tela de processamento de pagamento (UX aprimorada)**
-
-Criar um estado visual intermediário com:
-- Logo do estúdio
-- Spinner + mensagem "Confirmando seu pagamento..."
-- Animação de sucesso quando confirmado
-- Transição suave para tela de confirmação
-
-**3. Evitar re-render do PaymentRedirect no retorno**
-
-Na condição da linha 888 (`if (galleryResponse?.pendingPayment)`), adicionar guard:
-```
-if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn)
-```
-
-Isso impede que a tela de redirect apareça enquanto o sistema está verificando o pagamento.
-
-### Arquivos a modificar
-
-- `src/pages/ClientGallery.tsx`: Adicionar guard no bloco pendingPayment + criar tela de verificação de pagamento
-- `src/components/PaymentRedirect.tsx`: Nenhuma alteração necessária
-
-### Fluxo corrigido
+### Arquitetura implementada
 
 ```text
-Cliente paga no InfinitePay
-  → InfinitePay redireciona para /g/TOKEN?payment=success
-  → Gallery detecta ?payment=success
-  → Mostra "Confirmando pagamento..." (NÃO mostra PaymentRedirect)
-  → check-payment-status confirma
-  → Transição para tela de sucesso
-  → Limpa URL params
+Cliente abre checkout
+  → AsaasCheckout monta
+  → Chama asaas-fetch-fees (userId)
+  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
+  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação
+  → Exibe parcelas com valores corretos
+
+Cliente paga
+  → asaas-gallery-payment recalcula server-side com mesma API
+  → Cobra valor correto no Asaas
 ```
 
+### Cálculo combinado por parcela
+```
+Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
+```
+
+### Arquivos modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` (NOVO)
+2. ✅ `supabase/config.toml` — registro da nova função
+3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real
+5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only
+6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
