@@ -1233,6 +1233,167 @@ export type Database = {
         }
         Relationships: []
       }
+      formulario_respostas: {
+        Row: {
+          created_at: string
+          formulario_id: string
+          id: string
+          respondente_email: string | null
+          respondente_nome: string | null
+          respostas: Json
+          submitted_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          formulario_id: string
+          id?: string
+          respondente_email?: string | null
+          respondente_nome?: string | null
+          respostas?: Json
+          submitted_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          formulario_id?: string
+          id?: string
+          respondente_email?: string | null
+          respondente_nome?: string | null
+          respostas?: Json
+          submitted_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "formulario_respostas_formulario_id_fkey"
+            columns: ["formulario_id"]
+            isOneToOne: false
+            referencedRelation: "formularios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      formulario_templates: {
+        Row: {
+          campos: Json
+          categoria: string
+          created_at: string
+          descricao: string | null
+          id: string
+          is_system: boolean
+          nome: string
+          tempo_estimado: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          campos?: Json
+          categoria?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_system?: boolean
+          nome: string
+          tempo_estimado?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          campos?: Json
+          categoria?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_system?: boolean
+          nome?: string
+          tempo_estimado?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      formularios: {
+        Row: {
+          campos: Json
+          cliente_id: string | null
+          created_at: string
+          descricao: string | null
+          enviado_em: string | null
+          expires_at: string | null
+          id: string
+          mensagem_conclusao: string | null
+          public_token: string | null
+          respondido_em: string | null
+          session_id: string | null
+          status: string
+          status_envio: string
+          template_id: string | null
+          tempo_estimado: number | null
+          titulo: string
+          titulo_cliente: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campos?: Json
+          cliente_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          enviado_em?: string | null
+          expires_at?: string | null
+          id?: string
+          mensagem_conclusao?: string | null
+          public_token?: string | null
+          respondido_em?: string | null
+          session_id?: string | null
+          status?: string
+          status_envio?: string
+          template_id?: string | null
+          tempo_estimado?: number | null
+          titulo: string
+          titulo_cliente?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campos?: Json
+          cliente_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          enviado_em?: string | null
+          expires_at?: string | null
+          id?: string
+          mensagem_conclusao?: string | null
+          public_token?: string | null
+          respondido_em?: string | null
+          session_id?: string | null
+          status?: string
+          status_envio?: string
+          template_id?: string | null
+          tempo_estimado?: number | null
+          titulo?: string
+          titulo_cliente?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "formularios_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "formularios_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "formulario_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       galeria_acoes: {
         Row: {
           created_at: string
