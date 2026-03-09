@@ -938,6 +938,7 @@ export function PaymentSettings() {
                               habilitarBoleto: asaasHabilitarBoleto,
                               maxParcelas: parseInt(asaasMaxParcelas),
                               absorverTaxa: checked,
+                              incluirTaxaAntecipacao: asaasIncluirAntecipacao,
                             });
                           } catch {
                             // Revert on failure
@@ -955,6 +956,49 @@ export function PaymentSettings() {
                     </div>
                   </div>
                 </div>
+
+                {/* Toggle de antecipação - só aparece quando cliente paga juros */}
+                {!asaasAbsorverTaxa && (
+                  <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="flex items-center gap-2">
+                          Incluir taxa de antecipação
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Desative se você não for antecipar os recebíveis no Asaas
+                        </p>
+                      </div>
+                      <Switch
+                        checked={asaasIncluirAntecipacao}
+                        onCheckedChange={async (checked) => {
+                          setAsaasIncluirAntecipacao(checked);
+                          // Auto-save immediately
+                          try {
+                            await updateAsaasSettings.mutateAsync({
+                              environment: asaasEnvironment,
+                              habilitarPix: asaasHabilitarPix,
+                              habilitarCartao: asaasHabilitarCartao,
+                              habilitarBoleto: asaasHabilitarBoleto,
+                              maxParcelas: parseInt(asaasMaxParcelas),
+                              absorverTaxa: asaasAbsorverTaxa,
+                              incluirTaxaAntecipacao: checked,
+                            });
+                          } catch {
+                            // Revert on failure
+                            setAsaasIncluirAntecipacao(!checked);
+                          }
+                        }}
+                        disabled={updateAsaasSettings.isPending}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {asaasIncluirAntecipacao
+                        ? 'O cliente pagará taxa de processamento + taxa de antecipação'
+                        : 'O cliente pagará apenas a taxa de processamento'}
+                    </p>
+                  </div>
+                )}
 
                 {/* Fee info - fetched from Asaas API in real-time */}
                 {!asaasAbsorverTaxa && (
