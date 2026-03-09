@@ -68,76 +68,53 @@ export function SelectionSummary({
   if (variant === 'bottom-bar') {
     return (
       <div className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-card/80 border-t border-border/30 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-        {/* Discount tier row */}
-        {showDiscountTiers && (
-          <div className={cn(
-            "border-b border-border/20",
-            isMobile ? "px-3 py-1.5" : "px-4 py-2"
-          )}>
-            <InlineDiscountTiers
-              analysis={discountAnalysis}
-              totalExtras={totalExtras}
-              isMobile={isMobile}
-            />
-          </div>
-        )}
-
-        {/* Main selection row */}
         <div className={cn(
-          "flex items-center justify-between gap-3",
-          isMobile ? "px-3 py-2" : "px-4 py-3 gap-4"
+          "flex items-center justify-between",
+          isMobile ? "px-3 py-2 gap-2" : "px-4 py-3 gap-4"
         )}>
-          {/* Selection count */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className={cn(
-                "font-bold",
-                isMobile ? "text-base" : "text-lg"
-              )}>{selectedCount}</span>
-              <span className={cn(
-                "text-muted-foreground",
-                isMobile ? "text-xs" : "text-sm"
-              )}>/ {includedPhotos}</span>
+          {/* Left: Selection count + extras */}
+          <div className={cn("flex items-center shrink-0", isMobile ? "gap-1.5" : "gap-3")}>
+            <div className="flex items-center gap-1">
+              <span className={cn("font-bold", isMobile ? "text-sm" : "text-lg")}>{selectedCount}</span>
+              <span className={cn("text-muted-foreground", isMobile ? "text-[10px]" : "text-sm")}>/ {includedPhotos}</span>
             </div>
-            
             {isOverLimit && (
-              <div className="flex items-center gap-1.5 text-primary">
-                <span className={cn(
-                  "font-medium",
-                  isMobile ? "text-xs" : "text-sm"
-                )}>+{totalExtras} extras</span>
-                <span className={cn(
-                  "font-bold",
-                  isMobile ? "text-xs" : "text-sm"
-                )}>R$ {displayTotal.toFixed(2)}</span>
+              <div className={cn("flex items-center gap-1 text-primary", isMobile ? "text-[10px]" : "text-sm")}>
+                <span className="font-medium">+{totalExtras}</span>
+                <span className="font-bold">R$ {displayTotal.toFixed(2)}</span>
               </div>
             )}
           </div>
 
-          {/* Status or action */}
-          <div className="flex items-center gap-2">
+          {/* Center: Discount tiers (desktop: segments+text, mobile: text only) */}
+          {showDiscountTiers && (
+            <div className="flex-1 flex justify-center min-w-0">
+              <InlineDiscountTiers
+                analysis={discountAnalysis}
+                totalExtras={totalExtras}
+                isMobile={isMobile}
+              />
+            </div>
+          )}
+
+          {/* Right: Status or action */}
+          <div className="flex items-center shrink-0">
             {isConfirmed ? (
               <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
                 <Check className={cn(isMobile ? "h-4 w-4" : "h-5 w-5")} />
-                <span className={cn(
-                  "font-medium hidden sm:inline",
-                  isMobile ? "text-xs" : "text-sm"
-                )}>Confirmada</span>
+                <span className={cn("font-medium hidden sm:inline", isMobile ? "text-xs" : "text-sm")}>Confirmada</span>
               </div>
             ) : isBlocked ? (
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <AlertCircle className={cn(isMobile ? "h-4 w-4" : "h-5 w-5")} />
-                <span className={cn(
-                  "font-medium hidden sm:inline",
-                  isMobile ? "text-xs" : "text-sm"
-                )}>Bloqueada</span>
+                <span className={cn("font-medium hidden sm:inline", isMobile ? "text-xs" : "text-sm")}>Bloqueada</span>
               </div>
             ) : (
               <Button 
                 onClick={onConfirm}
                 variant="terracotta"
-                size={isMobile ? "default" : "lg"}
-                className={cn(isMobile ? "px-4 text-xs h-8" : "px-6")}
+                size={isMobile ? "sm" : "lg"}
+                className={cn(isMobile ? "px-3 text-[11px] h-7" : "px-6")}
               >
                 <Check className={cn(isMobile ? "h-3 w-3 mr-1" : "h-4 w-4 mr-2")} />
                 Confirmar

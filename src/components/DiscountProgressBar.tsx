@@ -99,28 +99,50 @@ interface InlineDiscountTiersProps {
 }
 
 export function InlineDiscountTiers({ analysis, totalExtras, isMobile = false }: InlineDiscountTiersProps) {
-  const { faixas, faixaAtual, currentDiscount, nextDiscount, photosToNext, atMaxTier, basePrice } = analysis;
+  const { faixas, faixaAtual, currentDiscount, nextDiscount, photosToNext, atMaxTier } = analysis;
 
+  if (isMobile) {
+    // Mobile: text only, no tier segments
+    return (
+      <div className="flex items-center gap-1 text-[10px]">
+        <Sparkles className="h-2.5 w-2.5 text-primary/70 shrink-0" />
+        {atMaxTier && currentDiscount > 0 ? (
+          <span className="text-primary font-semibold whitespace-nowrap">
+            Desconto máximo: {currentDiscount}%! 🎉
+          </span>
+        ) : totalExtras === 0 ? (
+          <span className="text-muted-foreground whitespace-nowrap">
+            Extras desbloqueiam descontos
+          </span>
+        ) : photosToNext > 0 && nextDiscount !== null && nextDiscount > 0 ? (
+          <span className="text-muted-foreground whitespace-nowrap">
+            Falta{photosToNext > 1 ? 'm' : ''} {photosToNext} foto{photosToNext > 1 ? 's' : ''} para desconto de <span className="text-primary font-semibold">{nextDiscount}%</span>
+          </span>
+        ) : currentDiscount > 0 ? (
+          <span className="text-primary font-semibold whitespace-nowrap">
+            Você tem {currentDiscount}% de desconto em extras
+          </span>
+        ) : (
+          <span className="text-muted-foreground whitespace-nowrap">
+            Mais extras = descontos
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop: tier segments + text in one line
   return (
-    <div className={cn(
-      "flex items-center gap-2 w-full",
-      isMobile ? "gap-1.5" : "gap-2"
-    )}>
-      {/* Tier segments */}
-      <div className={cn(
-        "flex gap-0.5 flex-1 min-w-0",
-        isMobile ? "max-w-[100px]" : "max-w-[160px]"
-      )}>
+    <div className="flex items-center gap-2">
+      <div className="flex gap-0.5 max-w-[140px]">
         {faixas.map((faixa, idx) => {
           const isActive = faixaAtual && faixa.min === faixaAtual.min && faixa.max === faixaAtual.max;
           const isPast = faixaAtual && faixa.min < faixaAtual.min;
-          
           return (
             <div 
               key={idx} 
               className={cn(
-                'flex-1 rounded-full transition-all duration-500',
-                isMobile ? 'h-1' : 'h-1.5',
+                'flex-1 h-1.5 rounded-full transition-all duration-500',
                 isActive 
                   ? 'bg-gradient-to-r from-primary to-primary/70 shadow-[0_0_6px_hsl(var(--primary)/0.4)]' 
                   : isPast 
@@ -131,38 +153,27 @@ export function InlineDiscountTiers({ analysis, totalExtras, isMobile = false }:
           );
         })}
       </div>
-
-      {/* Status text */}
-      <div className={cn(
-        "flex items-center gap-1 shrink-0",
-        isMobile ? "text-[9px]" : "text-[11px]"
-      )}>
-        <Sparkles className={cn(
-          "text-primary/70 shrink-0",
-          isMobile ? "h-2.5 w-2.5" : "h-3 w-3"
-        )} />
+      <div className="flex items-center gap-1 text-[11px] shrink-0">
+        <Sparkles className="h-3 w-3 text-primary/70 shrink-0" />
         {atMaxTier && currentDiscount > 0 ? (
           <span className="text-primary font-semibold whitespace-nowrap">
-            {isMobile ? `Max ${currentDiscount}% 🎉` : `Desconto máximo: ${currentDiscount}% 🎉`}
+            Desconto máximo: {currentDiscount}%! 🎉
           </span>
         ) : totalExtras === 0 ? (
           <span className="text-muted-foreground whitespace-nowrap">
-            {isMobile ? 'Extras = descontos' : 'Selecione extras para descontos'}
+            Selecione extras para descontos
           </span>
         ) : photosToNext > 0 && nextDiscount !== null && nextDiscount > 0 ? (
           <span className="text-muted-foreground whitespace-nowrap">
-            {isMobile 
-              ? <>{`+${photosToNext} → `}<span className="text-primary font-semibold">{nextDiscount}%</span></>
-              : <>{`+${photosToNext} foto${photosToNext > 1 ? 's' : ''} → `}<span className="text-primary font-semibold">{nextDiscount}%</span></>
-            }
+            Falta{photosToNext > 1 ? 'm' : ''} {photosToNext} foto{photosToNext > 1 ? 's' : ''} para desconto de <span className="text-primary font-semibold">{nextDiscount}%</span>
           </span>
         ) : currentDiscount > 0 ? (
           <span className="text-primary font-semibold whitespace-nowrap">
-            {isMobile ? `-${currentDiscount}%` : `Desconto: ${currentDiscount}%`}
+            Você tem {currentDiscount}% de desconto em extras
           </span>
         ) : (
           <span className="text-muted-foreground whitespace-nowrap">
-            {isMobile ? '+extras = desc.' : 'Mais extras = descontos'}
+            Mais extras = descontos
           </span>
         )}
       </div>
