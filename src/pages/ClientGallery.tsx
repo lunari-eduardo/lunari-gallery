@@ -1033,6 +1033,16 @@ export default function ClientGallery() {
     }
   }
 
+  // If processing payment return and gallery is momentarily null, show loading instead of error
+  if (isProcessingPaymentReturn && !gallery) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background" style={themeStyles}>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+        <p className="mt-4 text-sm text-muted-foreground">Finalizando...</p>
+      </div>
+    );
+  }
+
   // Error state - gallery not found
   if (galleryError || !gallery) {
     return (
