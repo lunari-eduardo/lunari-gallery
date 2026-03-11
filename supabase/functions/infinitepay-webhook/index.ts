@@ -81,6 +81,62 @@ Deno.serve(async (req: Request) => {
       initialLogId = initialLog?.id;
       console.log('📝 Log inicial registrado:', initialLogId);
     }
+
+    // ============================================================
+    // VALIDAÇÃO DE ASSINATURA - HMAC-SHA256
+    // ============================================================
+    const webhookSecret = Deno.env.get('INFINITEPAY_WEBHOOK_SECRET');
+    if (!webhookSecret) {
+      console.warn('⚠️ INFINITEPAY_WEBHOOK_SECRET não configurado — validação de assinatura desabilitada');
+    } else {
+      const receivedSignature = req.headers.get('x-infinia-signature') || req.headers.get('X-Infinia-Signature');
+      if (!receivedSignature) {
+        console.error('❌ Header x-infinia-signature ausente');
+        if (initialLogId) {
+          await supabase.from('webhook_logs').update({
+            status: 'signature_invalid',
+            error_message: 'Missing x-infinia-signature header',
+            processed_at: new Date().toISOString(),
+          }).eq('id', initialLogId);
+        }
+        return new Response(
+          JSON.stringify({ error: 'Missing signature' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Compute HMAC-SHA256
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw', encoder.encode(webhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody));
+      const computedSignature = Array.from(new Uint8Array(signatureBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Timing-safe comparison
+      const sigA = encoder.encode(computedSignature);
+      const sigB = encoder.encode(receivedSignature.toLowerCase());
+      const isValid = sigA.length === sigB.length && crypto.subtle.timingSafeEqual
+        ? (() => { try { return crypto.subtle.timingSafeEqual(sigA, sigB); } catch { return computedSignature === receivedSignature.toLowerCase(); } })()
+        : computedSignature === receivedSignature.toLowerCase();
+
+      if (!isValid) {
+        console.error('❌ Assinatura HMAC inválida');
+        if (initialLogId) {
+          await supabase.from('webhook_logs').update({
+            status: 'signature_invalid',
+            error_message: 'Invalid HMAC signature',
+            processed_at: new Date().toISOString(),
+          }).eq('id', initialLogId);
+        }
+        return new Response(
+          JSON.stringify({ error: 'Invalid signature' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('✅ Assinatura HMAC válida');
+    }
     
     // Parse webhook payload
     try {

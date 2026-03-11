@@ -59,6 +59,65 @@ Deno.serve(async (req) => {
       data_id: payload.data?.id,
     });
 
+    // ============================================================
+    // VALIDAÇÃO DE ASSINATURA MERCADO PAGO - HMAC-SHA256
+    // ============================================================
+    const mpWebhookSecret = Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET');
+    if (!mpWebhookSecret) {
+      console.warn('⚠️ MERCADOPAGO_WEBHOOK_SECRET não configurado — validação de assinatura desabilitada');
+    } else {
+      const xSignature = req.headers.get('x-signature');
+      const xRequestId = req.headers.get('x-request-id');
+      
+      if (!xSignature || !xRequestId) {
+        console.error('❌ Headers x-signature ou x-request-id ausentes');
+        await supabase.from('webhook_logs').insert({
+          source: 'mercadopago',
+          event_type: 'signature_invalid',
+          payload: { raw: rawBody, reason: 'Missing signature headers' },
+        });
+        return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+      }
+
+      // Parse x-signature: "ts=...,v1=..."
+      const parts: Record<string, string> = {};
+      for (const part of xSignature.split(',')) {
+        const [key, ...vals] = part.split('=');
+        if (key && vals.length) parts[key.trim()] = vals.join('=').trim();
+      }
+      const ts = parts['ts'];
+      const v1 = parts['v1'];
+
+      if (!ts || !v1) {
+        console.error('❌ x-signature mal formatado:', xSignature);
+        return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+      }
+
+      // Build manifest
+      const dataId = payload.data?.id || '';
+      const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+      // Compute HMAC-SHA256
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw', encoder.encode(mpWebhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(manifest));
+      const computedHash = Array.from(new Uint8Array(signatureBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+
+      if (computedHash !== v1) {
+        console.error('❌ Assinatura HMAC inválida para Mercado Pago');
+        await supabase.from('webhook_logs').insert({
+          source: 'mercadopago',
+          event_type: 'signature_invalid',
+          payload: { raw: rawBody, manifest, computed: computedHash, received: v1 },
+        });
+        return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+      }
+      console.log('✅ Assinatura Mercado Pago válida');
+    }
+
     // Processar apenas eventos de pagamento
     if (payload.type !== 'payment') {
       console.log('Ignorando evento não-payment:', payload.type);
