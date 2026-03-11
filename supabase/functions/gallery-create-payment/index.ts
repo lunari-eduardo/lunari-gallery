@@ -16,6 +16,7 @@ interface RequestBody {
 interface PaymentResponse {
   success: boolean;
   checkoutUrl?: string;
+  galleryUrl?: string;
   cobrancaId?: string;
   provedor?: string;
   error?: string;

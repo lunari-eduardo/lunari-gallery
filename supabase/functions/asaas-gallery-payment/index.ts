@@ -110,10 +110,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Find or create Asaas customer
+    // 2. Find or create Asaas customer (prioritize externalReference over email)
     let asaasCustomerId: string | null = null;
 
-    // Check if client has an asaas_customer_id stored
     if (clienteId) {
       const { data: cliente } = await supabase
         .from('clientes')
@@ -122,30 +121,68 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (cliente) {
-        // Search for existing customer by email in Asaas
-        if (cliente.email) {
+        const clienteName = cliente.nome || 'Cliente';
+
+        // Step 1: Search by externalReference (clienteId) — most precise
+        const refResp = await fetch(`${asaasBaseUrl}/v3/customers?externalReference=${encodeURIComponent(clienteId)}`, {
+          headers: { access_token: asaasApiKey },
+        });
+        if (refResp.ok) {
+          const refData = await refResp.json();
+          if (refData.data && refData.data.length > 0) {
+            asaasCustomerId = refData.data[0].id;
+            const existingName = refData.data[0].name;
+            console.log(`📋 Found Asaas customer by externalReference: ${asaasCustomerId} (name: ${existingName})`);
+
+            // Update name if divergent
+            if (existingName !== clienteName) {
+              console.log(`📝 Updating Asaas customer name: "${existingName}" → "${clienteName}"`);
+              await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+                body: JSON.stringify({ name: clienteName }),
+              });
+            }
+          }
+        }
+
+        // Step 2: Fallback — search by email
+        if (!asaasCustomerId && cliente.email) {
           const searchResp = await fetch(`${asaasBaseUrl}/v3/customers?email=${encodeURIComponent(cliente.email)}`, {
             headers: { access_token: asaasApiKey },
           });
           if (searchResp.ok) {
             const searchData = await searchResp.json();
             if (searchData.data && searchData.data.length > 0) {
-              asaasCustomerId = searchData.data[0].id;
-              console.log(`📋 Found existing Asaas customer: ${asaasCustomerId}`);
+              // Find one with matching externalReference, or pick first
+              const match = searchData.data.find((c: Record<string, unknown>) => c.externalReference === clienteId) || searchData.data[0];
+              asaasCustomerId = match.id;
+              const existingName = match.name;
+              console.log(`📋 Found Asaas customer by email: ${asaasCustomerId} (name: ${existingName})`);
+
+              // Update name + externalReference if divergent
+              const updates: Record<string, string> = {};
+              if (existingName !== clienteName) updates.name = clienteName;
+              if (match.externalReference !== clienteId) updates.externalReference = clienteId;
+              if (Object.keys(updates).length > 0) {
+                console.log(`📝 Updating Asaas customer:`, updates);
+                await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+                  body: JSON.stringify(updates),
+                });
+              }
             }
           }
         }
 
-        // Create new customer if not found
+        // Step 3: Create new customer if not found
         if (!asaasCustomerId) {
           const createResp = await fetch(`${asaasBaseUrl}/v3/customers`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              access_token: asaasApiKey,
-            },
+            headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
             body: JSON.stringify({
-              name: cliente.nome || 'Cliente',
+              name: clienteName,
               email: cliente.email || undefined,
               phone: cliente.telefone || undefined,
               externalReference: clienteId,
@@ -159,7 +196,6 @@ Deno.serve(async (req) => {
           } else {
             const errData = await createResp.json();
             console.error('Failed to create Asaas customer:', errData);
-            // Continue without customer - Asaas allows it for some billing types
           }
         }
       }
