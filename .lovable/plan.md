@@ -1,65 +1,43 @@
 
 
-## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
+## Diagnóstico: Erro "Usuário Não Autenticado" no InfinitePay
 
-### Problema resolvido
-As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
+### Causa raiz identificada
 
-### Arquitetura implementada
+Existem **2 caminhos** que geram pagamento InfinitePay, e ambos têm vulnerabilidades de autenticação:
 
-```text
-Cliente abre checkout
-  → AsaasCheckout monta
-  → Chama asaas-fetch-fees (userId)
-  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
-  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
-  → Exibe parcelas com valores corretos
+**Caminho 1 — Cliente confirma seleção** (`ClientGallery.tsx` → `confirm-selection`)
+- Linha 440: chamada via `fetch()` SEM header de Authorization
+- Se o gateway do Supabase está validando JWT (mesmo com `verify_jwt = false` no config.toml), a chamada é rejeitada com 401
+- CORS headers no `confirm-selection` também estão incompletos (falta headers do SDK)
 
-Cliente paga
-  → asaas-gallery-payment recalcula server-side com mesma API
-  → Cobra valor correto no Asaas
-```
+**Caminho 2 — Fotógrafo recobra** (`PaymentStatusCard.tsx` → `gallery-create-payment`)  
+- Linha 137: usa `supabase.functions.invoke()` que envia o JWT do usuário automaticamente
+- Se o token expirou, o SDK envia token velho → gateway rejeita com 401
+- Não há refresh preventivo do token antes da chamada
 
-### Cálculo combinado por parcela
-```
-IF incluirTaxaAntecipacao = true:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
-ELSE:
-  Total = Valor + (Valor × taxa_faixa% + R$0.49)
-```
+**Problema comum**: O `config.toml` define `verify_jwt = false` para ambas as funções, mas essa configuração pode não estar sendo aplicada corretamente no deploy ao Supabase externo. E mesmo que esteja, as chamadas devem ser resilientes.
 
-### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+### Plano de correção definitivo
 
-**Bugs corrigidos:**
-1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
-2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
-3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+**1. `src/pages/ClientGallery.tsx` — Adicionar apikey header na chamada confirm-selection**
+- Adicionar header `apikey` com a anon key na chamada fetch (linha 441)
+- Isso garante que mesmo se verify_jwt estiver ativo, a chamada passa como anon
+- Também adicionar `authorization: Bearer <anon_key>` como fallback
 
-**Arquivos modificados:**
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
-2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
-3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
-4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+**2. `src/components/PaymentStatusCard.tsx` — Refresh de sessão antes de chamar gallery-create-payment**
+- Antes de `supabase.functions.invoke('gallery-create-payment')`, chamar `supabase.auth.getSession()` para garantir token fresco
+- Se não houver sessão válida, mostrar erro claro ao fotógrafo
 
-### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+**3. `supabase/functions/confirm-selection/index.ts` — CORS headers completos**
+- Atualizar CORS para incluir todos os headers do SDK Supabase (x-supabase-client-platform, etc.)
+- Garantir que OPTIONS retorna os headers corretos
 
-**Funcionalidade adicionada:**
-1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
-2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
-3. ✅ Auto-save imediato ao alterar o toggle
-4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
-5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
+**4. `supabase/functions/gallery-create-payment/index.ts` — CORS headers (já OK, verificar)**
+- Já tem CORS completo — apenas confirmar
 
-**Arquivos modificados:**
-1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
-2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
-3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
+### Arquivos alterados
+- `src/pages/ClientGallery.tsx` — adicionar auth headers na chamada confirm-selection
+- `src/components/PaymentStatusCard.tsx` — refresh de sessão antes do invoke
+- `supabase/functions/confirm-selection/index.ts` — CORS headers completos
 
-### Arquivos originais modificados
-1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
-2. ✅ `supabase/config.toml` — registro da nova função
-3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
-4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
-5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
-6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
