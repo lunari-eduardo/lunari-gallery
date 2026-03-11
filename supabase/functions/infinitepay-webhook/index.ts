@@ -306,135 +306,43 @@ Deno.serve(async (req: Request) => {
 
     console.log('💳 Processing payment for cobranca:', cobranca.id);
 
-    // Update cobranca to paid
-    const { error: updateCobrancaError } = await supabase
-      .from('cobrancas')
-      .update({
-        status: 'pago',
-        data_pagamento: new Date().toISOString(),
-        ip_transaction_nsu: payload?.transaction_nsu || null,
-        ip_receipt_url: payload?.receipt_url || null,
-      })
-      .eq('id', cobranca.id);
+    // Save InfinitePay-specific fields before RPC
+    if (payload?.transaction_nsu || payload?.receipt_url) {
+      await supabase
+        .from('cobrancas')
+        .update({
+          ip_transaction_nsu: payload?.transaction_nsu || null,
+        })
+        .eq('id', cobranca.id);
+    }
 
-    if (updateCobrancaError) {
-      console.error('❌ Error updating cobranca:', updateCobrancaError);
+    // Call centralized RPC for atomic payment finalization
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
+      p_cobranca_id: cobranca.id,
+      p_receipt_url: payload?.receipt_url || null,
+      p_paid_at: new Date().toISOString(),
+    });
+
+    if (rpcError) {
+      console.error('❌ RPC finalize_gallery_payment error:', rpcError);
       
       if (initialLogId) {
         await supabase.from('webhook_logs')
           .update({ 
             status: 'error', 
-            error_message: `Cobranca update failed: ${updateCobrancaError.message}`,
+            error_message: `RPC error: ${rpcError.message}`,
             processed_at: new Date().toISOString()
           })
           .eq('id', initialLogId);
       }
       
       return new Response(
-        JSON.stringify({ error: 'Failed to update cobranca', details: updateCobrancaError.message }),
+        JSON.stringify({ error: 'Failed to finalize payment', details: rpcError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ Cobranca updated to paid');
-
-    // CREDIT SYSTEM: Increment total_fotos_extras_vendidas on gallery if galeria_id exists
-    if (cobranca.galeria_id && cobranca.qtd_fotos) {
-      const { data: galeria, error: galeriaExtrasError } = await supabase
-        .from('galerias')
-        .select('id, total_fotos_extras_vendidas, valor_total_vendido')
-        .eq('id', cobranca.galeria_id)
-        .maybeSingle();
-
-      if (galeriaExtrasError) {
-        console.error('❌ Error fetching galeria for extras update:', galeriaExtrasError);
-      } else if (galeria) {
-        const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
-        const extrasNovas = cobranca.qtd_fotos || 0;
-        const valorAtual = Number(galeria.valor_total_vendido) || 0;
-        const valorCobranca = Number(cobranca.valor) || 0;
-
-        const { error: updateExtrasError } = await supabase
-          .from('galerias')
-          .update({
-            total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
-            valor_total_vendido: valorAtual + valorCobranca,
-            status_pagamento: 'pago',
-            // FINALIZE GALLERY: Payment confirmed, now finalize
-            status_selecao: 'selecao_completa',
-            finalized_at: new Date().toISOString(),
-          })
-          .eq('id', cobranca.galeria_id);
-
-        if (updateExtrasError) {
-          console.error('❌ Error updating galeria extras:', updateExtrasError);
-        } else {
-          console.log(`✅ Galeria extras updated and FINALIZED: ${extrasAtuais} + ${extrasNovas} = ${extrasAtuais + extrasNovas}`);
-        }
-        
-        // Update session status to concluida if linked
-        if (cobranca.session_id) {
-          await supabase
-            .from('clientes_sessoes')
-            .update({ status_galeria: 'selecao_completa', updated_at: new Date().toISOString() })
-            .eq('session_id', cobranca.session_id);
-          console.log(`✅ Session ${cobranca.session_id} status updated to selecao_completa`);
-        }
-      }
-    }
-    // Fallback: Update gallery payment status if session_id exists (legacy flow)
-    else if (cobranca.session_id) {
-      // Find gallery by session_id
-      const { data: galeria, error: galeriaError } = await supabase
-        .from('galerias')
-        .select('id')
-        .eq('session_id', cobranca.session_id)
-        .maybeSingle();
-
-      if (galeriaError) {
-        console.error('❌ Error fetching galeria:', galeriaError);
-      } else if (galeria) {
-        // Update gallery payment status
-        const { error: updateGaleriaError } = await supabase
-          .from('galerias')
-          .update({ status_pagamento: 'pago' })
-          .eq('id', galeria.id);
-
-        if (updateGaleriaError) {
-          console.error('❌ Error updating galeria:', updateGaleriaError);
-        } else {
-          console.log('✅ Galeria payment status updated to pago');
-        }
-      }
-    }
-
-    // Update clientes_sessoes.valor_pago if session_id exists
-    if (cobranca.session_id) {
-      const { data: sessao, error: sessaoError } = await supabase
-        .from('clientes_sessoes')
-        .select('valor_pago')
-        .eq('session_id', cobranca.session_id)
-        .maybeSingle();
-
-      if (sessaoError) {
-        console.error('❌ Error fetching sessao:', sessaoError);
-      } else if (sessao) {
-        const valorAtual = Number(sessao.valor_pago) || 0;
-        const valorCobranca = Number(cobranca.valor) || 0;
-        const novoValorPago = valorAtual + valorCobranca;
-
-        const { error: updateSessaoError } = await supabase
-          .from('clientes_sessoes')
-          .update({ valor_pago: novoValorPago })
-          .eq('session_id', cobranca.session_id);
-
-        if (updateSessaoError) {
-          console.error('❌ Error updating sessao valor_pago:', updateSessaoError);
-        } else {
-          console.log(`✅ Sessao valor_pago updated: ${valorAtual} + ${valorCobranca} = ${novoValorPago}`);
-        }
-      }
-    }
+    console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
 
     // Update webhook log to success
     if (initialLogId) {
