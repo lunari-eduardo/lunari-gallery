@@ -104,3 +104,29 @@ Lógica de finalização de pagamento duplicada em 5 Edge Functions com race con
 | `mercadopago-webhook` | Idem |
 | `confirm-payment-manual` | Idem |
 | `check-payment-status` | `updateToPaid()` refatorado para usar RPC |
+
+## Plano: Correção de Race Conditions e Controle de Concorrência (IMPLEMENTADO ✅)
+
+### Problema 1: Execução concorrente em `confirm-selection` ✅
+- RPC `try_lock_gallery_selection` criada com `pg_advisory_xact_lock` + `SELECT FOR UPDATE`
+- Estado transitório `processando_selecao` impede duplo clique
+- Edge Function retorna 409 se lock já adquirido
+
+### Problema 2: Read-then-write na sessão ✅
+- RPC `atomic_update_session_extras` criada com incrementos atômicos (`COALESCE + direct increment`)
+- `confirm-selection` usa RPC em vez de calcular totais no JS
+
+### Problema 3: Dupla escrita em `check-payment-status` ✅
+- Removido `status: 'pago'` e `data_pagamento` do UPDATE manual (agora só salva metadados do gateway)
+- RPC `finalize_gallery_payment` é o único responsável por marcar como pago
+
+### RPCs criadas
+| RPC | Propósito |
+|-----|-----------|
+| `try_lock_gallery_selection` | Lock atômico + validação + estado transitório |
+| `atomic_update_session_extras` | Incrementos atômicos em `clientes_sessoes` |
+
+### Arquivos modificados
+1. ✅ Nova migration SQL — `try_lock_gallery_selection` + `atomic_update_session_extras`
+2. ✅ `supabase/functions/confirm-selection/index.ts` — lock RPC + incrementos atômicos
+3. ✅ `supabase/functions/check-payment-status/index.ts` — removida dupla escrita de status
