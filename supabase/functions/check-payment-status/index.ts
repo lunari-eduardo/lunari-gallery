@@ -295,19 +295,17 @@ Deno.serve(async (req: Request) => {
       if (ipResult.status === 'paid') {
         console.log('💰 InfinitePay confirmou pagamento via API pública - atualizando banco...');
         
-        // Update cobranca with transaction_nsu and receipt_url if available
-        const updateData: Record<string, unknown> = {
-          status: 'pago',
-          data_pagamento: new Date().toISOString(),
-        };
-        
-        if (transactionNsu) updateData.ip_transaction_nsu = transactionNsu;
-        if (receiptUrl || ipResult.receiptUrl) updateData.ip_receipt_url = receiptUrl || ipResult.receiptUrl;
-        
-        await supabase
-          .from('cobrancas')
-          .update(updateData)
-          .eq('id', cobranca.id);
+        // Save gateway-specific metadata BEFORE RPC (RPC handles status/data_pagamento)
+        if (transactionNsu || receiptUrl || ipResult.receiptUrl) {
+          const metaData: Record<string, unknown> = {};
+          if (transactionNsu) metaData.ip_transaction_nsu = transactionNsu;
+          if (receiptUrl || ipResult.receiptUrl) metaData.ip_receipt_url = receiptUrl || ipResult.receiptUrl;
+          
+          await supabase
+            .from('cobrancas')
+            .update(metaData)
+            .eq('id', cobranca.id);
+        }
         
         // Also update gallery and session
         const updateResult = await updateToPaid();
