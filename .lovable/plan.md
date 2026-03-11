@@ -1,5 +1,31 @@
 
 
+## Plano: UX pagamento silenciosa + Asaas rebill interno + Fix nome cliente (IMPLEMENTADO ✅)
+
+### Problema 1: Tela intermediária removida ✅
+- Removido render condicional da tela "Confirmando seu pagamento..." (92 linhas de UI)
+- `check-payment-status` agora executa silenciosamente em background
+- URL limpa imediatamente ao detectar `?payment=success`
+- Polling silencioso (30s × 10min) se webhook não chegou ainda
+- Galeria renderiza normalmente durante verificação
+
+### Problema 2: "Cobrar novamente" Asaas usa link da galeria ✅
+- `gallery-create-payment` agora retorna `galleryUrl` junto com `checkoutUrl`
+- `PaymentStatusCard` para Asaas prioriza `galleryUrl` (checkout transparente interno)
+- Cliente acessa galeria → `gallery-access` detecta pendente → mostra AsaasCheckout
+
+### Problema 3: Bug nome cliente Asaas ✅
+- Busca agora prioriza `externalReference` (clienteId) sobre email
+- Se encontrado por email, verifica e atualiza nome + externalReference se divergentes
+- Garante que cada cliente Lunari mapeia corretamente para customer Asaas
+
+### Arquivos modificados
+1. ✅ `src/pages/ClientGallery.tsx` — verificação silenciosa, sem tela bloqueante
+2. ✅ `supabase/functions/gallery-create-payment/index.ts` — retorna `galleryUrl`
+3. ✅ `src/components/PaymentStatusCard.tsx` — Asaas usa `galleryUrl`
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — busca por externalReference + update nome
+
+
 ## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
 
 ### Problema resolvido
