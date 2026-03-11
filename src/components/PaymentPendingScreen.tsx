@@ -117,7 +117,7 @@ export function PaymentPendingScreen({
           <img 
             src={studioLogoUrl} 
             alt={studioName || 'Studio'} 
-            className="h-12 mx-auto object-contain opacity-60"
+            className="h-16 mx-auto object-contain opacity-60"
           />
         )}
 

@@ -124,16 +124,8 @@ export default function ClientGallery() {
   const [asaasCheckoutData, setAsaasCheckoutData] = useState<AsaasCheckoutData | null>(null);
   
   // Payment return detection state
-  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('payment') === 'success';
-  });
-  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'verifying' | 'confirmed' | 'failed' | null>(
-    () => {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('payment') === 'success' ? 'verifying' : null;
-    }
-  );
+  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
+  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'verifying' | 'confirmed' | 'failed' | null>(null);
   const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
   
   // Password state
@@ -598,6 +590,7 @@ export default function ClientGallery() {
     
     if (paymentStatus === 'success' && galleryId && !isProcessingPaymentReturn) {
       setIsProcessingPaymentReturn(true);
+      setPaymentReturnStatus('verifying');
       setShowWelcome(false); // Garantir que welcome não apareça
       
       const confirmPaymentReturn = async () => {
@@ -992,7 +985,7 @@ export default function ClientGallery() {
             <img 
               src={studioLogo} 
               alt={studioName || 'Studio'} 
-              className="h-12 mx-auto object-contain opacity-60"
+              className="h-16 mx-auto object-contain opacity-60"
             />
           )}
 
