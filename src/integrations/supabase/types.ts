@@ -3323,6 +3323,16 @@ export type Database = {
         Args: { _amount: number; _reason?: string; _target_user_id: string }
         Returns: string
       }
+      atomic_update_session_extras: {
+        Args: {
+          p_extras_increment: number
+          p_session_id: string
+          p_status_galeria?: string
+          p_valor_increment: number
+          p_valor_unitario: number
+        }
+        Returns: Json
+      }
       calculate_manual_products_total: {
         Args: { produtos: Json }
         Returns: number
