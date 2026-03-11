@@ -84,3 +84,23 @@ Todos usam o padrão: se o secret não estiver configurado, a validação é pul
 1. `INFINITEPAY_WEBHOOK_SECRET` — shared secret do painel InfinitePay
 2. `ASAAS_WEBHOOK_TOKEN` — token de autenticação do painel Asaas
 3. `MERCADOPAGO_WEBHOOK_SECRET` — secret signature do painel Mercado Pago
+
+## Plano: RPC `finalize_gallery_payment` (IMPLEMENTADO ✅)
+
+### Problema resolvido
+Lógica de finalização de pagamento duplicada em 5 Edge Functions com race conditions e incrementos não-atômicos.
+
+### Implementação
+- RPC PostgreSQL `SECURITY DEFINER` com advisory lock + `SELECT FOR UPDATE`
+- Incrementos atômicos (`SET x = x + N`)
+- Idempotente (verifica status antes de atualizar)
+- Triggers existentes (`ensure_transaction_on_cobranca_paid`, `trigger_recompute_session_paid`) continuam funcionando
+
+### Edge Functions refatoradas
+| Função | Mudança |
+|--------|---------|
+| `infinitepay-webhook` | Substituído bloco read-then-write por `supabase.rpc('finalize_gallery_payment')` |
+| `asaas-gallery-webhook` | Idem |
+| `mercadopago-webhook` | Idem |
+| `confirm-payment-manual` | Idem |
+| `check-payment-status` | `updateToPaid()` refatorado para usar RPC |
