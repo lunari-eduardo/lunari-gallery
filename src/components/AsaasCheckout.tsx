@@ -435,7 +435,7 @@ export function AsaasCheckout({
       <div className="max-w-md w-full space-y-6 py-6">
         {/* Header */}
         {studioLogoUrl ? (
-          <img src={studioLogoUrl} alt={studioName || 'Estúdio'} className="h-12 mx-auto object-contain" />
+          <img src={studioLogoUrl} alt={studioName || 'Estúdio'} className="h-16 mx-auto object-contain" />
         ) : studioName ? (
           <h1 className="text-xl font-semibold text-center">{studioName}</h1>
         ) : null}

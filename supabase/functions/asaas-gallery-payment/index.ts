@@ -401,67 +401,20 @@ Deno.serve(async (req) => {
       // Payment was created in Asaas but we failed to save locally - log but don't fail
     }
 
-    // 6b. If payment is CONFIRMED immediately (credit card), finalize gallery/session
-    if (isConfirmed && galeriaId) {
-      console.log(`💰 Payment confirmed immediately, finalizing gallery ${galeriaId}`);
+    // 6b. If payment is CONFIRMED immediately (credit card), finalize via RPC
+    if (isConfirmed && cobranca?.id) {
+      console.log(`💰 Payment confirmed immediately, finalizing via RPC for cobrança ${cobranca.id}`);
 
-      // Update gallery
-      const { data: galeria } = await supabase
-        .from('galerias')
-        .select('id, total_fotos_extras_vendidas, valor_total_vendido')
-        .eq('id', galeriaId)
-        .maybeSingle();
-
-      if (galeria) {
-        const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
-        const extrasNovas = qtdFotos || 0;
-        const valorAtual = Number(galeria.valor_total_vendido) || 0;
-
-        await supabase
-          .from('galerias')
-          .update({
-            total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
-            valor_total_vendido: valorAtual + valor,
-            status_pagamento: 'pago',
-            status_selecao: 'selecao_completa',
-            finalized_at: new Date().toISOString(),
-          })
-          .eq('id', galeriaId);
-
-        console.log(`✅ Gallery ${galeriaId} finalized`);
-      }
-
-      // Update session if linked
-      if (sessionId) {
-        const { data: sessao } = await supabase
-          .from('clientes_sessoes')
-          .select('valor_pago')
-          .eq('session_id', sessionId)
-          .maybeSingle();
-
-        if (sessao) {
-          const valorAtual = Number(sessao.valor_pago) || 0;
-
-          await supabase
-            .from('clientes_sessoes')
-            .update({
-              valor_pago: valorAtual + valor,
-              status_galeria: 'selecao_completa',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('session_id', sessionId);
-
-          console.log(`✅ Session ${sessionId} updated`);
-        }
-      }
-
-      // Log action
-      await supabase.from('galeria_acoes').insert({
-        galeria_id: galeriaId,
-        tipo: 'pagamento_confirmado',
-        descricao: `Pagamento de R$ ${valor.toFixed(2)} confirmado via Asaas (cartão)`,
-        user_id: null,
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
+        p_cobranca_id: cobranca.id,
+        p_paid_at: new Date().toISOString(),
       });
+
+      if (rpcError) {
+        console.error('❌ RPC finalize_gallery_payment error:', rpcError);
+      } else {
+        console.log('✅ RPC finalize_gallery_payment result:', rpcResult);
+      }
     }
 
     // 7. Build checkout URL for redirect-based flow
