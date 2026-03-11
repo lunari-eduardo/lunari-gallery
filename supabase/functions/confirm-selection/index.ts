@@ -179,28 +179,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Fetch gallery to validate status and get session_id + extras already paid
-    const { data: gallery, error: galleryError } = await supabase
-      .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas, valor_total_vendido, regras_congeladas')
-      .eq('id', galleryId)
-      .single();
+    // 1. Acquire atomic lock on gallery to prevent concurrent confirmations
+    const { data: lockResult, error: lockError } = await supabase.rpc('try_lock_gallery_selection', {
+      p_gallery_id: galleryId,
+    });
 
-    if (galleryError || !gallery) {
-      console.error('Gallery fetch error:', galleryError);
+    if (lockError) {
+      console.error('Lock RPC error:', lockError);
       return new Response(
-        JSON.stringify({ error: 'Galeria não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Erro ao processar seleção' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Check if selection is already confirmed
-    if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
+    if (!lockResult?.locked) {
+      const reason = lockResult?.reason || 'unknown';
+      console.log(`🔒 Gallery ${galleryId} lock denied: ${reason}`);
       return new Response(
-        JSON.stringify({ error: 'A seleção desta galeria já foi confirmada' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'A seleção desta galeria já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Gallery data returned from the lock RPC
+    const gallery = lockResult.gallery as {
+      id: string; status: string; status_selecao: string; finalized_at: string | null;
+      user_id: string; session_id: string | null; cliente_id: string | null;
+      fotos_incluidas: number; valor_foto_extra: number; nome_sessao: string | null;
+      configuracoes: Record<string, unknown> | null; public_token: string | null;
+      total_fotos_extras_vendidas: number | null; valor_total_vendido: number | null;
+      regras_congeladas: Record<string, unknown> | null;
+    };
 
     // 3. Calculate progressive pricing using CREDIT SYSTEM
     // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
