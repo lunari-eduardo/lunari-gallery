@@ -63,3 +63,24 @@ ELSE:
 4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
 5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
 6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
+
+## Plano: Validação de Assinatura em Webhooks de Pagamento (IMPLEMENTADO ✅)
+
+### Situação anterior
+Nenhum webhook validava a origem da requisição — qualquer POST forjado poderia marcar cobranças como pagas.
+
+### Implementação
+
+| Gateway | Mecanismo | Arquivo | Status |
+|---------|-----------|---------|--------|
+| **InfinitePay** | HMAC-SHA256 (`X-Infinia-Signature`) | `infinitepay-webhook/index.ts` | ✅ |
+| **Asaas** | Token fixo (`asaas-access-token`) | `asaas-webhook/index.ts` + `asaas-gallery-webhook/index.ts` | ✅ |
+| **Mercado Pago** | HMAC-SHA256 (`x-signature`) | `mercadopago-webhook/index.ts` | ✅ |
+
+### Graceful degradation
+Todos usam o padrão: se o secret não estiver configurado, a validação é pulada com warning. Quando configurado, é obrigatória.
+
+### Secrets necessários (adicionar no Supabase)
+1. `INFINITEPAY_WEBHOOK_SECRET` — shared secret do painel InfinitePay
+2. `ASAAS_WEBHOOK_TOKEN` — token de autenticação do painel Asaas
+3. `MERCADOPAGO_WEBHOOK_SECRET` — secret signature do painel Mercado Pago
