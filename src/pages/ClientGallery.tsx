@@ -123,9 +123,8 @@ export default function ClientGallery() {
   // Asaas transparent checkout state
   const [asaasCheckoutData, setAsaasCheckoutData] = useState<AsaasCheckoutData | null>(null);
   
-  // Payment return detection state
+  // Payment return detection state (silent — no blocking UI)
   const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
-  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'verifying' | 'confirmed' | 'failed' | null>(null);
   const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
   
   // Password state
