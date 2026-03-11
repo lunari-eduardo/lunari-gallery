@@ -589,56 +589,37 @@ export default function ClientGallery() {
     
     if (paymentStatus === 'success' && galleryId && !isProcessingPaymentReturn) {
       setIsProcessingPaymentReturn(true);
-      setPaymentReturnStatus('verifying');
-      setShowWelcome(false); // Garantir que welcome não apareça
+      setShowWelcome(false);
+      
+      // Clean URL params immediately (no blocking UI)
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
       
       const confirmPaymentReturn = async () => {
         try {
-          console.log('🔄 Detectado retorno de pagamento - parâmetros:', {
-            orderNsu,
-            transactionNsu,
-            slug,
-            captureMethod,
-            hasReceiptUrl: !!receiptUrl,
+          console.log('🔄 Verificação silenciosa de pagamento em background:', {
+            orderNsu, transactionNsu, slug, captureMethod,
           });
           
-          // Call check-payment-status with all InfinitePay parameters
           const response = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               sessionId: sessionId,
-              orderNsu: orderNsu,
-              transactionNsu: transactionNsu,
-              slug: slug,
-              receiptUrl: receiptUrl,
+              orderNsu, transactionNsu, slug, receiptUrl,
               forceUpdate: true,
             }),
           });
           
           const result = await response.json();
-          console.log('✅ Resultado confirmação pagamento:', result);
+          console.log('✅ Resultado verificação silenciosa:', result);
           
           if (result.status === 'pago' || result.updated) {
-            setPaymentReturnStatus('confirmed');
-            
-            // Clean URL params without reload
-            const newUrl = window.location.pathname;
-            window.history.replaceState({}, '', newUrl);
-            
-            // Brief delay to show success animation before transitioning
-            setTimeout(() => {
-              setCurrentStep('confirmed');
-              setIsConfirmed(true);
-              setIsProcessingPaymentReturn(false);
-              setPaymentReturnStatus(null);
-              refetchGallery();
-            }, 2500);
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
           } else {
-            // Payment not yet confirmed - start auto-polling
-            setPaymentReturnStatus('failed');
-            
-            // Auto-retry every 30s for up to 10min
+            // Not yet confirmed — start silent polling (30s intervals, up to 10min)
             const startTime = Date.now();
             const retryInterval = setInterval(async () => {
               if (Date.now() - startTime > 10 * 60 * 1000) {
@@ -649,37 +630,26 @@ export default function ClientGallery() {
                 const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    sessionId: sessionId,
-                    orderNsu: orderNsu,
-                    forceUpdate: false,
-                  }),
+                  body: JSON.stringify({ sessionId, orderNsu, forceUpdate: false }),
                 });
                 const retryResult = await retryResponse.json();
                 if (retryResult.status === 'pago' || retryResult.updated) {
                   clearInterval(retryInterval);
-                  setPaymentReturnStatus('confirmed');
-                  const newUrl = window.location.pathname;
-                  window.history.replaceState({}, '', newUrl);
-                  setTimeout(() => {
-                    setCurrentStep('confirmed');
-                    setIsConfirmed(true);
-                    setIsProcessingPaymentReturn(false);
-                    setPaymentReturnStatus(null);
-                    refetchGallery();
-                  }, 2500);
+                  setCurrentStep('confirmed');
+                  setIsConfirmed(true);
+                  refetchGallery();
                 }
               } catch (e) {
                 console.error('[Auto-retry] Error:', e);
               }
             }, 30000);
             
-            // Store cleanup ref
             return () => clearInterval(retryInterval);
           }
         } catch (error) {
-          console.error('❌ Erro ao confirmar pagamento:', error);
-          setPaymentReturnStatus('failed');
+          console.error('❌ Erro ao verificar pagamento:', error);
+          // Silently fail — gallery will show natural state
+          refetchGallery();
         }
       };
       
