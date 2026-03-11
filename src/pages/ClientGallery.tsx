@@ -590,6 +590,7 @@ export default function ClientGallery() {
     
     if (paymentStatus === 'success' && galleryId && !isProcessingPaymentReturn) {
       setIsProcessingPaymentReturn(true);
+      setPaymentReturnStatus('verifying');
       setShowWelcome(false); // Garantir que welcome não apareça
       
       const confirmPaymentReturn = async () => {
