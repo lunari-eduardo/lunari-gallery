@@ -179,28 +179,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Fetch gallery to validate status and get session_id + extras already paid
-    const { data: gallery, error: galleryError } = await supabase
-      .from('galerias')
-      .select('id, status, status_selecao, finalized_at, user_id, session_id, cliente_id, fotos_incluidas, valor_foto_extra, nome_sessao, configuracoes, public_token, total_fotos_extras_vendidas, valor_total_vendido, regras_congeladas')
-      .eq('id', galleryId)
-      .single();
+    // 1. Acquire atomic lock on gallery to prevent concurrent confirmations
+    const { data: lockResult, error: lockError } = await supabase.rpc('try_lock_gallery_selection', {
+      p_gallery_id: galleryId,
+    });
 
-    if (galleryError || !gallery) {
-      console.error('Gallery fetch error:', galleryError);
+    if (lockError) {
+      console.error('Lock RPC error:', lockError);
       return new Response(
-        JSON.stringify({ error: 'Galeria não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Erro ao processar seleção' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Check if selection is already confirmed
-    if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
+    if (!lockResult?.locked) {
+      const reason = lockResult?.reason || 'unknown';
+      console.log(`🔒 Gallery ${galleryId} lock denied: ${reason}`);
       return new Response(
-        JSON.stringify({ error: 'A seleção desta galeria já foi confirmada' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'A seleção desta galeria já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Gallery data returned from the lock RPC
+    const gallery = lockResult.gallery as {
+      id: string; status: string; status_selecao: string; finalized_at: string | null;
+      user_id: string; session_id: string | null; cliente_id: string | null;
+      fotos_incluidas: number; valor_foto_extra: number; nome_sessao: string | null;
+      configuracoes: Record<string, unknown> | null; public_token: string | null;
+      total_fotos_extras_vendidas: number | null; valor_total_vendido: number | null;
+      regras_congeladas: Record<string, unknown> | null;
+    };
 
     // 3. Calculate progressive pricing using CREDIT SYSTEM
     // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
@@ -585,26 +594,34 @@ Deno.serve(async (req) => {
     // 8. Sync with clientes_sessoes if gallery was created from Gestão
     // Use CUMULATIVE values for session to maintain accurate totals
     if (gallery.session_id) {
-      // Calculate cumulative totals for session record
-      const novoQtdFotosExtra = (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar;
-      const novoValorTotalFotoExtra = (gallery.valor_total_vendido || 0) + valorTotal;
-      
-      const { error: sessionError } = await supabase
-        .from('clientes_sessoes')
-        .update({
-          qtd_fotos_extra: novoQtdFotosExtra, // CUMULATIVE: total extras across all cycles
-          valor_foto_extra: valorUnitario, // Last unit price used
-          valor_total_foto_extra: novoValorTotalFotoExtra, // CUMULATIVE: total value across all cycles
-          // Only mark as concluida if finalizing now (no pending payment)
-          status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('session_id', gallery.session_id);
+      // ATOMIC INCREMENT: Avoid read-then-write race conditions
+      // Uses COALESCE + direct increment instead of pre-calculated values
+      const sessionUpdateQuery = supabase.rpc('atomic_update_session_extras', {
+        p_session_id: gallery.session_id,
+        p_extras_increment: extrasACobrar,
+        p_valor_unitario: valorUnitario,
+        p_valor_increment: valorTotal,
+        p_status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
+      });
+
+      const { error: sessionError } = await sessionUpdateQuery;
 
       if (sessionError) {
-        console.error('Session update error:', sessionError);
+        console.error('Session atomic update error:', sessionError);
+        // Fallback: try direct update if RPC doesn't exist yet
+        const { error: fallbackError } = await supabase
+          .from('clientes_sessoes')
+          .update({
+            qtd_fotos_extra: (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar,
+            valor_foto_extra: valorUnitario,
+            valor_total_foto_extra: (gallery.valor_total_vendido || 0) + valorTotal,
+            status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('session_id', gallery.session_id);
+        if (fallbackError) console.error('Session fallback update error:', fallbackError);
       } else {
-        console.log(`✅ Session ${gallery.session_id} updated: ${novoQtdFotosExtra} cumulative extras, R$ ${valorUnitario}/photo, total R$ ${novoValorTotalFotoExtra}, status=selecao_completa`);
+        console.log(`✅ Session ${gallery.session_id} atomically updated: +${extrasACobrar} extras, R$ ${valorUnitario}/photo, +R$ ${valorTotal}`);
       }
     }
 
