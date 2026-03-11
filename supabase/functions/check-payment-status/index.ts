@@ -240,102 +240,23 @@ Deno.serve(async (req: Request) => {
       foundBy
     });
 
-    // Helper function to update payment to paid (idempotent)
+    // Helper function to update payment to paid (uses centralized RPC)
     const updateToPaid = async () => {
-      console.log('💳 Atualizando pagamento para PAGO');
+      console.log('💳 Atualizando pagamento para PAGO via RPC');
       
-      // 1. Update cobranca status - ONLY if still pending (idempotent guard)
-      const { error: updateCobrancaError, count } = await supabase
-        .from('cobrancas')
-        .update({
-          status: 'pago',
-          data_pagamento: new Date().toISOString(),
-        })
-        .eq('id', cobranca.id)
-        .neq('status', 'pago');
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
+        p_cobranca_id: cobranca.id,
+        p_receipt_url: receiptUrl || null,
+        p_paid_at: new Date().toISOString(),
+      });
 
-      if (updateCobrancaError) {
-        console.error('❌ Erro ao atualizar cobrança:', updateCobrancaError);
-        return { success: false, error: updateCobrancaError.message };
-      }
-      console.log('✅ Cobrança atualizada para pago');
-
-      // 2. CREDIT SYSTEM: Increment total_fotos_extras_vendidas if galeria_id exists
-      if (cobranca.galeria_id && cobranca.qtd_fotos) {
-        const { data: galeria } = await supabase
-          .from('galerias')
-          .select('id, total_fotos_extras_vendidas, valor_total_vendido')
-          .eq('id', cobranca.galeria_id)
-          .maybeSingle();
-
-        if (galeria) {
-          const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
-          const extrasNovas = cobranca.qtd_fotos || 0;
-          const valorAtual = Number(galeria.valor_total_vendido) || 0;
-          const valorCobranca = Number(cobranca.valor) || 0;
-
-          await supabase
-            .from('galerias')
-            .update({
-              total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
-              valor_total_vendido: valorAtual + valorCobranca,
-              status_pagamento: 'pago',
-              // FINALIZE GALLERY: Payment confirmed
-              status_selecao: 'selecao_completa',
-              finalized_at: new Date().toISOString(),
-            })
-            .eq('id', cobranca.galeria_id);
-          console.log(`✅ Galeria extras atualizado e FINALIZADA: ${extrasAtuais} + ${extrasNovas} = ${extrasAtuais + extrasNovas}`);
-          
-          // Update session status to concluida if linked
-          if (cobranca.session_id) {
-            await supabase
-              .from('clientes_sessoes')
-              .update({ status_galeria: 'selecao_completa', updated_at: new Date().toISOString() })
-              .eq('session_id', cobranca.session_id);
-            console.log(`✅ Session ${cobranca.session_id} status updated to selecao_completa`);
-          }
-        }
-      }
-      // Fallback: Update gallery payment status if session_id exists
-      else if (cobranca.session_id) {
-        const { data: galeria } = await supabase
-          .from('galerias')
-          .select('id')
-          .eq('session_id', cobranca.session_id)
-          .maybeSingle();
-
-        if (galeria) {
-          await supabase
-            .from('galerias')
-            .update({ status_pagamento: 'pago' })
-            .eq('id', galeria.id);
-          console.log('✅ Galeria atualizada para pago');
-        }
+      if (rpcError) {
+        console.error('❌ RPC finalize_gallery_payment error:', rpcError);
+        return { success: false, error: rpcError.message };
       }
 
-      // 3. Update clientes_sessoes.valor_pago (increment) if session_id exists
-      if (cobranca.session_id) {
-        const { data: sessao } = await supabase
-          .from('clientes_sessoes')
-          .select('valor_pago')
-          .eq('session_id', cobranca.session_id)
-          .maybeSingle();
-
-        if (sessao) {
-          const valorAtual = Number(sessao.valor_pago) || 0;
-          const valorCobranca = Number(cobranca.valor) || 0;
-          const novoValorPago = valorAtual + valorCobranca;
-
-          await supabase
-            .from('clientes_sessoes')
-            .update({ valor_pago: novoValorPago })
-            .eq('session_id', cobranca.session_id);
-          console.log(`✅ Sessão valor_pago atualizado: ${valorAtual} + ${valorCobranca} = ${novoValorPago}`);
-        }
-      }
-
-      return { success: true };
+      console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
+      return { success: true, result: rpcResult };
     };
 
     // If already paid, just return the status

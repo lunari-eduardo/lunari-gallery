@@ -280,70 +280,23 @@ Deno.serve(async (req) => {
         if (mpPayment.status === 'approved') {
           const now = new Date().toISOString();
 
-          // Update cobranca
-          const { error: cobrancaError } = await supabase
+          // Save MP-specific fields before RPC
+          await supabase
             .from('cobrancas')
-            .update({
-              status: 'pago',
-              data_pagamento: now,
-              mp_payment_id: String(mpPayment.id),
-            })
+            .update({ mp_payment_id: String(mpPayment.id) })
             .eq('id', externalReference);
 
-          if (cobrancaError) {
-            console.error('Erro ao atualizar cobrança:', cobrancaError);
-          }
+          // Call centralized RPC for atomic payment finalization
+          const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
+            p_cobranca_id: externalReference,
+            p_receipt_url: null,
+            p_paid_at: now,
+          });
 
-          // Update gallery
-          if (cobranca.galeria_id) {
-            const { data: galeria } = await supabase
-              .from('galerias')
-              .select('total_fotos_extras_vendidas, valor_total_vendido')
-              .eq('id', cobranca.galeria_id)
-              .single();
-
-            if (galeria) {
-              const { error: galeriaError } = await supabase
-                .from('galerias')
-                .update({
-                  status_pagamento: 'pago',
-                  status: 'selecao_completa',
-                  // FINALIZE GALLERY: Payment confirmed
-                  status_selecao: 'selecao_completa',
-                  finalized_at: now,
-                  total_fotos_extras_vendidas: (galeria.total_fotos_extras_vendidas || 0) + (cobranca.qtd_fotos || 0),
-                  valor_total_vendido: (galeria.valor_total_vendido || 0) + cobranca.valor,
-                })
-                .eq('id', cobranca.galeria_id);
-
-              if (galeriaError) {
-                console.error('Erro ao atualizar galeria:', galeriaError);
-              } else {
-                console.log('Galeria atualizada e FINALIZADA, pagamento aprovado');
-              }
-            }
-          }
-
-          // Update session if exists
-          if (cobranca.session_id) {
-            const { data: sessao } = await supabase
-              .from('clientes_sessoes')
-              .select('valor_pago')
-              .eq('session_id', cobranca.session_id)
-              .maybeSingle();
-
-            if (sessao) {
-              await supabase
-                .from('clientes_sessoes')
-                .update({
-                  valor_pago: (sessao.valor_pago || 0) + cobranca.valor,
-                  status_pagamento_fotos_extra: 'pago',
-                  // FINALIZE SESSION: Payment confirmed
-                  status_galeria: 'selecao_completa',
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('session_id', cobranca.session_id);
-            }
+          if (rpcError) {
+            console.error('❌ RPC finalize_gallery_payment error:', rpcError);
+          } else {
+            console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
           }
 
           // Log action

@@ -1,84 +1,106 @@
 
 
-## Plano: RPC `finalize_gallery_payment` + Refactor das 5 Edge Functions
+## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
 
-### Lógica unificada identificada
+### Problema resolvido
+As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
 
-A mesma lógica está duplicada em **5 arquivos** (não 4):
-- `infinitepay-webhook` (linhas 310-436)
-- `asaas-gallery-webhook` (linhas 93-153)
-- `check-payment-status` (linhas 244-338)
-- `confirm-payment-manual` (linhas 52-130)
-- `mercadopago-webhook` (linhas 280-357)
-
-Cada um faz o mesmo read-then-write:
-1. Marcar `cobrancas.status = 'pago'`
-2. Ler galeria → incrementar `total_fotos_extras_vendidas` e `valor_total_vendido` → finalizar
-3. Ler sessão → incrementar `valor_pago` → atualizar status
-
-### RPC: `finalize_gallery_payment`
-
-Criar uma função PostgreSQL `SECURITY DEFINER` que recebe:
-- `p_cobranca_id UUID`
-- `p_receipt_url TEXT DEFAULT NULL`
-- `p_paid_at TIMESTAMPTZ DEFAULT now()`
-
-Executa atomicamente numa única transação:
+### Arquitetura implementada
 
 ```text
-1. Lock advisory na cobrança (previne race condition)
-2. SELECT cobrança FOR UPDATE
-3. Se já paga → retorna { already_paid: true } (idempotente)
-4. UPDATE cobrancas SET status='pago', data_pagamento, ip_receipt_url
-   WHERE id = p_cobranca_id AND status = 'pendente'
-5. Se galeria_id existe:
-   UPDATE galerias SET
-     total_fotos_extras_vendidas = total_fotos_extras_vendidas + qtd_fotos,  ← ATÔMICO
-     valor_total_vendido = valor_total_vendido + valor,  ← ATÔMICO
-     status_pagamento = 'pago',
-     status_selecao = 'selecao_completa',
-     finalized_at = p_paid_at
-6. Se session_id existe:
-   UPDATE clientes_sessoes SET
-     status_galeria = 'selecao_completa',
-     status_pagamento_fotos_extra = 'pago',
-     updated_at = now()
-7. Retorna JSONB com resultado
+Cliente abre checkout
+  → AsaasCheckout monta
+  → Chama asaas-fetch-fees (userId)
+  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
+  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
+  → Exibe parcelas com valores corretos
+
+Cliente paga
+  → asaas-gallery-payment recalcula server-side com mesma API
+  → Cobra valor correto no Asaas
 ```
 
-O trigger `ensure_transaction_on_cobranca_paid` já existente cria automaticamente a transação em `clientes_transacoes` quando `cobrancas.status` muda para `'pago'`.
-
-O trigger `trigger_recompute_session_paid` já existente recalcula `valor_pago` quando `clientes_transacoes` é inserido.
-
-Portanto a RPC **não precisa** incrementar `valor_pago` manualmente — os triggers fazem isso.
-
-### Refactor das Edge Functions
-
-Cada função substituirá toda a lógica duplicada por uma única chamada:
-
-```typescript
-const { data, error } = await supabase.rpc('finalize_gallery_payment', {
-  p_cobranca_id: cobranca.id,
-  p_receipt_url: receiptUrl || null,
-  p_paid_at: new Date().toISOString(),
-});
+### Cálculo combinado por parcela
+```
+IF incluirTaxaAntecipacao = true:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
+ELSE:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49)
 ```
 
-A lógica específica de cada webhook (validação de assinatura, busca da cobrança, log) permanece inalterada. Apenas o bloco de "atualizar cobrança + galeria + sessão" é substituído pela chamada RPC.
+### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
 
-### Arquivos modificados
+**Bugs corrigidos:**
+1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
+2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
+3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
 
-1. **Nova migration SQL** — cria `finalize_gallery_payment`
-2. `supabase/functions/infinitepay-webhook/index.ts` — substituir linhas 310-436
-3. `supabase/functions/asaas-gallery-webhook/index.ts` — substituir linhas 93-153
-4. `supabase/functions/check-payment-status/index.ts` — substituir linhas 244-338 (função `updateToPaid`)
-5. `supabase/functions/confirm-payment-manual/index.ts` — substituir linhas 52-130
-6. `supabase/functions/mercadopago-webhook/index.ts` — substituir linhas 280-357
+**Arquivos modificados:**
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
+2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
+3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
+4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
 
-### Benefícios
-- Operação atômica (uma transação PostgreSQL)
-- Incrementos atômicos (`SET x = x + N` em vez de read-then-write)
+### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+
+**Funcionalidade adicionada:**
+1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
+2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
+3. ✅ Auto-save imediato ao alterar o toggle
+4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
+5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
+
+**Arquivos modificados:**
+1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
+2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
+3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
+
+### Arquivos originais modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
+2. ✅ `supabase/config.toml` — registro da nova função
+3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
+5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
+6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
+
+## Plano: Validação de Assinatura em Webhooks de Pagamento (IMPLEMENTADO ✅)
+
+### Situação anterior
+Nenhum webhook validava a origem da requisição — qualquer POST forjado poderia marcar cobranças como pagas.
+
+### Implementação
+
+| Gateway | Mecanismo | Arquivo | Status |
+|---------|-----------|---------|--------|
+| **InfinitePay** | HMAC-SHA256 (`X-Infinia-Signature`) | `infinitepay-webhook/index.ts` | ✅ |
+| **Asaas** | Token fixo (`asaas-access-token`) | `asaas-webhook/index.ts` + `asaas-gallery-webhook/index.ts` | ✅ |
+| **Mercado Pago** | HMAC-SHA256 (`x-signature`) | `mercadopago-webhook/index.ts` | ✅ |
+
+### Graceful degradation
+Todos usam o padrão: se o secret não estiver configurado, a validação é pulada com warning. Quando configurado, é obrigatória.
+
+### Secrets necessários (adicionar no Supabase)
+1. `INFINITEPAY_WEBHOOK_SECRET` — shared secret do painel InfinitePay
+2. `ASAAS_WEBHOOK_TOKEN` — token de autenticação do painel Asaas
+3. `MERCADOPAGO_WEBHOOK_SECRET` — secret signature do painel Mercado Pago
+
+## Plano: RPC `finalize_gallery_payment` (IMPLEMENTADO ✅)
+
+### Problema resolvido
+Lógica de finalização de pagamento duplicada em 5 Edge Functions com race conditions e incrementos não-atômicos.
+
+### Implementação
+- RPC PostgreSQL `SECURITY DEFINER` com advisory lock + `SELECT FOR UPDATE`
+- Incrementos atômicos (`SET x = x + N`)
 - Idempotente (verifica status antes de atualizar)
-- Advisory lock previne race conditions
-- Ponto único de manutenção
+- Triggers existentes (`ensure_transaction_on_cobranca_paid`, `trigger_recompute_session_paid`) continuam funcionando
 
+### Edge Functions refatoradas
+| Função | Mudança |
+|--------|---------|
+| `infinitepay-webhook` | Substituído bloco read-then-write por `supabase.rpc('finalize_gallery_payment')` |
+| `asaas-gallery-webhook` | Idem |
+| `mercadopago-webhook` | Idem |
+| `confirm-payment-manual` | Idem |
+| `check-payment-status` | `updateToPaid()` refatorado para usar RPC |
