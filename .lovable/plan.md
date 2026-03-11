@@ -1,79 +1,86 @@
 
 
-## Plano: Validação de Assinatura em Webhooks de Pagamento
+## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
 
-### Situação atual
-Nenhum dos 3 webhooks valida a origem da requisição. Qualquer pessoa que conheça a URL pode enviar um POST forjado e marcar cobranças como pagas.
+### Problema resolvido
+As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
 
-### Mecanismos oficiais de cada gateway
-
-| Gateway | Mecanismo | Header | Como funciona |
-|---------|-----------|--------|---------------|
-| **InfinitePay** | HMAC-SHA256 | `X-Infinia-Signature` | HMAC do body usando um shared secret (configurado no painel InfinitePay) |
-| **Asaas** | Token fixo | `asaas-access-token` | Token definido pelo usuário no painel Asaas, enviado em todas as notificações |
-| **Mercado Pago** | HMAC-SHA256 | `x-signature` | `ts={timestamp},v1={hash}` — HMAC do manifest `id:{data.id};request-id:{x-request-id};ts:{ts};` usando secret key |
-
-### Secrets necessários
-
-1. **`INFINITEPAY_WEBHOOK_SECRET`** — shared secret configurado no painel InfinitePay (novo)
-2. **`ASAAS_WEBHOOK_TOKEN`** — token de autenticação configurado no painel Asaas (novo)
-3. **`MERCADOPAGO_WEBHOOK_SECRET`** — secret signature gerada automaticamente ao configurar webhook no painel MP (novo)
-
-Os 3 precisam ser adicionados como secrets no Supabase antes do deploy.
-
-### Mudanças por arquivo
-
-**1. `supabase/functions/infinitepay-webhook/index.ts`**
-- Após ler o `rawBody` e antes de qualquer processamento, extrair header `x-infinia-signature`
-- Computar HMAC-SHA256 do rawBody usando `INFINITEPAY_WEBHOOK_SECRET`
-- Comparar com o header usando timing-safe comparison
-- Se inválido: logar no `webhook_logs` com status `signature_invalid` e retornar 401
-- Se secret não configurado: logar warning e continuar (graceful degradation para não quebrar em produção)
-
-**2. `supabase/functions/asaas-webhook/index.ts`**
-- Antes de processar o body, extrair header `asaas-access-token`
-- Comparar com `ASAAS_WEBHOOK_TOKEN` (env)
-- Se inválido: retornar 401
-- Se secret não configurado: continuar com warning
-
-**3. `supabase/functions/asaas-gallery-webhook/index.ts`**
-- Mesmo mecanismo do `asaas-webhook`: validar `asaas-access-token` contra `ASAAS_WEBHOOK_TOKEN`
-- Se inválido: retornar 401
-
-**4. `supabase/functions/mercadopago-webhook/index.ts`**
-- Extrair header `x-signature` e `x-request-id`
-- Parsear `ts` e `v1` do header `x-signature`
-- Construir manifest: `id:{data.id};request-id:{x-request-id};ts:{ts};`
-- Computar HMAC-SHA256 do manifest usando `MERCADOPAGO_WEBHOOK_SECRET`
-- Comparar com `v1`
-- Se inválido: logar e retornar 401
-- Se secret não configurado: continuar com warning
-
-### Padrão de validação (aplicado nos 4 arquivos)
+### Arquitetura implementada
 
 ```text
-Request recebida
-  → Ler raw body + headers
-  → Logar imediatamente (já existe)
-  → VALIDAR ASSINATURA ← novo passo
-     ├─ Secret não configurado → warning + continuar (graceful)
-     ├─ Assinatura válida → continuar processamento
-     └─ Assinatura inválida → logar "signature_invalid" → retornar 401
-  → Processar pagamento (lógica existente)
+Cliente abre checkout
+  → AsaasCheckout monta
+  → Chama asaas-fetch-fees (userId)
+  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
+  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
+  → Exibe parcelas com valores corretos
+
+Cliente paga
+  → asaas-gallery-payment recalcula server-side com mesma API
+  → Cobra valor correto no Asaas
 ```
 
+### Cálculo combinado por parcela
+```
+IF incluirTaxaAntecipacao = true:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
+ELSE:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49)
+```
+
+### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+
+**Bugs corrigidos:**
+1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
+2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
+3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+
+**Arquivos modificados:**
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
+2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
+3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
+4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+
+### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+
+**Funcionalidade adicionada:**
+1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
+2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
+3. ✅ Auto-save imediato ao alterar o toggle
+4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
+5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
+
+**Arquivos modificados:**
+1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
+2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
+3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
+
+### Arquivos originais modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
+2. ✅ `supabase/config.toml` — registro da nova função
+3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
+5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
+6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
+
+## Plano: Validação de Assinatura em Webhooks de Pagamento (IMPLEMENTADO ✅)
+
+### Situação anterior
+Nenhum webhook validava a origem da requisição — qualquer POST forjado poderia marcar cobranças como pagas.
+
+### Implementação
+
+| Gateway | Mecanismo | Arquivo | Status |
+|---------|-----------|---------|--------|
+| **InfinitePay** | HMAC-SHA256 (`X-Infinia-Signature`) | `infinitepay-webhook/index.ts` | ✅ |
+| **Asaas** | Token fixo (`asaas-access-token`) | `asaas-webhook/index.ts` + `asaas-gallery-webhook/index.ts` | ✅ |
+| **Mercado Pago** | HMAC-SHA256 (`x-signature`) | `mercadopago-webhook/index.ts` | ✅ |
+
 ### Graceful degradation
-Todos os webhooks usam o padrão: se o secret correspondente **não estiver configurado** no ambiente, a validação é pulada com um `console.warn`. Isso garante que o sistema não quebre se o fotógrafo ainda não configurou o token no painel do gateway. Quando o secret existir, a validação é obrigatória.
+Todos usam o padrão: se o secret não estiver configurado, a validação é pulada com warning. Quando configurado, é obrigatória.
 
-### Pré-requisito do usuário
-Após a implementação, o usuário precisará:
-1. Configurar o webhook secret no painel da InfinitePay e adicionar como `INFINITEPAY_WEBHOOK_SECRET`
-2. Configurar o authentication token no painel do Asaas e adicionar como `ASAAS_WEBHOOK_TOKEN`
-3. Copiar a secret signature do painel do Mercado Pago e adicionar como `MERCADOPAGO_WEBHOOK_SECRET`
-
-### Arquivos modificados
-- `supabase/functions/infinitepay-webhook/index.ts`
-- `supabase/functions/asaas-webhook/index.ts`
-- `supabase/functions/asaas-gallery-webhook/index.ts`
-- `supabase/functions/mercadopago-webhook/index.ts`
-
+### Secrets necessários (adicionar no Supabase)
+1. `INFINITEPAY_WEBHOOK_SECRET` — shared secret do painel InfinitePay
+2. `ASAAS_WEBHOOK_TOKEN` — token de autenticação do painel Asaas
+3. `MERCADOPAGO_WEBHOOK_SECRET` — secret signature do painel Mercado Pago

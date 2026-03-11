@@ -192,6 +192,24 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // ============================================================
+    // VALIDAÇÃO DE TOKEN ASAAS
+    // ============================================================
+    const asaasWebhookToken = Deno.env.get('ASAAS_WEBHOOK_TOKEN');
+    if (!asaasWebhookToken) {
+      console.warn('⚠️ ASAAS_WEBHOOK_TOKEN não configurado — validação de token desabilitada');
+    } else {
+      const receivedToken = req.headers.get('asaas-access-token');
+      if (!receivedToken || receivedToken !== asaasWebhookToken) {
+        console.error('❌ Token Asaas inválido ou ausente');
+        return new Response(
+          JSON.stringify({ error: 'Invalid webhook token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('✅ Token Asaas válido');
+    }
+
     const body = await req.json();
     const event = body.event;
     const payment = body.payment;
