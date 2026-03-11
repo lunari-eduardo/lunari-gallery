@@ -16,6 +16,7 @@ interface RequestBody {
 interface PaymentResponse {
   success: boolean;
   checkoutUrl?: string;
+  galleryUrl?: string;
   cobrancaId?: string;
   provedor?: string;
   error?: string;
@@ -208,9 +209,15 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Payment created: ${cobrancaId} via ${provedor}`);
 
+    // 8. Build gallery URL for sharing (client sees internal checkout)
+    const galleryUrl = gallery.public_token 
+      ? `https://gallery.lunarihub.com/g/${gallery.public_token}`
+      : undefined;
+
     const response: PaymentResponse = {
       success: true,
       checkoutUrl,
+      galleryUrl,
       cobrancaId,
       provedor,
     };

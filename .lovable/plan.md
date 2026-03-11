@@ -1,66 +1,158 @@
 
 
-## Plano: 3 Correções (UX pagamento, Asaas rebill interno, bug nome cliente)
+## Plano: UX pagamento silenciosa + Asaas rebill interno + Fix nome cliente (IMPLEMENTADO ✅)
 
-### Problema 1: Tela intermediária de verificação desnecessária
+### Problema 1: Tela intermediária removida ✅
+- Removido render condicional da tela "Confirmando seu pagamento..." (92 linhas de UI)
+- `check-payment-status` agora executa silenciosamente em background
+- URL limpa imediatamente ao detectar `?payment=success`
+- Polling silencioso (30s × 10min) se webhook não chegou ainda
+- Galeria renderiza normalmente durante verificação
 
-O fluxo atual mostra uma tela "Confirmando seu pagamento..." que bloqueia a galeria. Se o cliente fechar a aba do InfinitePay sem clicar "continuar", o `?payment=success` nunca chega e a verificação nunca executa — depende apenas do webhook.
+### Problema 2: "Cobrar novamente" Asaas usa link da galeria ✅
+- `gallery-create-payment` agora retorna `galleryUrl` junto com `checkoutUrl`
+- `PaymentStatusCard` para Asaas prioriza `galleryUrl` (checkout transparente interno)
+- Cliente acessa galeria → `gallery-access` detecta pendente → mostra AsaasCheckout
 
-**Correção em `ClientGallery.tsx`**:
-- Remover o render condicional da tela de verificação (linhas 968-1059)
-- No useEffect (linha 591), ao detectar `?payment=success`, chamar `check-payment-status` silenciosamente em background
-- Não mostrar UI bloqueante — apenas limpar params da URL e fazer `refetchGallery()` ao completar
-- O estado natural da galeria (pago/pendente) será exibido automaticamente pelo fluxo existente
-
-### Problema 2: "Cobrar novamente" com Asaas gera link externo
-
-Atualmente o `PaymentStatusCard` recebe `checkoutUrl` (URL externa do Asaas) e exibe como link para copiar/abrir. O usuário quer que, para Asaas, o "Cobrar novamente" gere os dados necessários para o checkout transparente interno (AsaasCheckout), igual ao fluxo normal da galeria.
-
-**Correção em `PaymentStatusCard.tsx`**:
-- Quando a resposta do `gallery-create-payment` vier com `provedor: 'asaas'`, em vez de mostrar link externo, montar o objeto `AsaasCheckoutData` com os dados retornados e abrir o `AsaasCheckout` inline dentro do modal
-- O `gallery-create-payment` para Asaas já chama `asaas-gallery-payment` que cria a cobrança. Mas para checkout transparente, precisamos dos dados do Asaas (settings, métodos habilitados, etc.)
-
-**Correção no fluxo**: O `gallery-create-payment` quando `provider=asaas` deve retornar também os dados necessários para montar o `AsaasCheckoutData` (enabledMethods, maxParcelas, absorverTaxa, etc). Alternativamente, o `PaymentStatusCard` pode buscar esses dados via `gallery-access` ou montar diretamente.
-
-Na verdade, a abordagem mais simples: o `PaymentStatusCard` já tem acesso ao `galleryId` e `valor`. Para Asaas, em vez de chamar `gallery-create-payment` (que cria cobrança imediatamente), pode simplesmente montar o `AsaasCheckoutData` e renderizar o `AsaasCheckout` inline — o AsaasCheckout já chama `asaas-gallery-payment` internamente quando o cliente submete o pagamento.
-
-**Implementação**:
-- No `PaymentStatusCard`, para provider Asaas, buscar as configurações Asaas do fotógrafo (via query na tabela `usuarios_integracoes`)
-- Montar `AsaasCheckoutData` com os dados da galeria
-- Renderizar `AsaasCheckout` dentro do dialog em vez de mostrar link externo
-- O `AsaasCheckout` lida com toda a criação de cobrança e checkout transparente
-
-Porém, o `PaymentStatusCard` é do painel do **fotógrafo**, não do cliente. O checkout transparente é para o cliente pagar. O fotógrafo precisa gerar um link para enviar ao cliente. Nesse caso, o link correto é o da galeria: `https://gallery.lunarihub.com/g/{token}` — quando o cliente acessar, o `gallery-access` detecta o pagamento pendente e mostra o AsaasCheckout automaticamente.
-
-**Correção final para Asaas no rebill**:
-- Chamar `gallery-create-payment` normalmente (cria a cobrança pendente no DB)
-- Em vez de exibir o `invoiceUrl` externo, exibir o link da galeria (`/g/{token}`) como o link para copiar/enviar ao cliente
-- O cliente ao acessar a galeria verá o checkout transparente Asaas automaticamente
-
-**Alterações**:
-1. `gallery-create-payment`: Retornar `galleryUrl` (link da galeria) junto com `checkoutUrl`
-2. `PaymentStatusCard`: Para Asaas, preferir `galleryUrl` sobre `checkoutUrl` externo
-
-### Problema 3: Nome "Evelise" em vez de "Eduardo"
-
-**Bug encontrado**: Na `asaas-gallery-payment` linhas 126-136, a busca de customer no Asaas é feita por **email**:
-```typescript
-const searchResp = await fetch(`${asaasBaseUrl}/v3/customers?email=${encodeURIComponent(cliente.email)}`, ...);
-if (searchData.data && searchData.data.length > 0) {
-  asaasCustomerId = searchData.data[0].id; // Pega o PRIMEIRO resultado
-}
-```
-
-Se o email do cliente "Eduardo" já foi usado anteriormente para criar um customer "Evelise" no Asaas (ou vice-versa), o sistema reutiliza o customer antigo com o nome errado. Não há verificação de nome ou de `externalReference`.
-
-**Correção em `asaas-gallery-payment`**:
-- Após encontrar um customer por email, verificar se o nome bate. Se não bater, atualizar o nome do customer no Asaas via `PUT /v3/customers/{id}`
-- Ou melhor: buscar primeiro por `externalReference` (que é o `clienteId`), e só depois por email. Isso garante que cada cliente Lunari tem seu próprio customer Asaas
+### Problema 3: Bug nome cliente Asaas ✅
+- Busca agora prioriza `externalReference` (clienteId) sobre email
+- Se encontrado por email, verifica e atualiza nome + externalReference se divergentes
+- Garante que cada cliente Lunari mapeia corretamente para customer Asaas
 
 ### Arquivos modificados
+1. ✅ `src/pages/ClientGallery.tsx` — verificação silenciosa, sem tela bloqueante
+2. ✅ `supabase/functions/gallery-create-payment/index.ts` — retorna `galleryUrl`
+3. ✅ `src/components/PaymentStatusCard.tsx` — Asaas usa `galleryUrl`
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — busca por externalReference + update nome
 
-1. **`src/pages/ClientGallery.tsx`**: Remover tela intermediária de verificação, fazer check silencioso em background
-2. **`supabase/functions/gallery-create-payment/index.ts`**: Retornar `galleryUrl` na resposta
-3. **`src/components/PaymentStatusCard.tsx`**: Para Asaas, usar `galleryUrl` (link da galeria) em vez de `checkoutUrl` externo
-4. **`supabase/functions/asaas-gallery-payment/index.ts`**: Corrigir busca de customer — priorizar `externalReference` sobre email, e atualizar nome se divergente
 
+## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
+
+### Problema resolvido
+As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
+
+### Arquitetura implementada
+
+```text
+Cliente abre checkout
+  → AsaasCheckout monta
+  → Chama asaas-fetch-fees (userId)
+  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
+  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
+  → Exibe parcelas com valores corretos
+
+Cliente paga
+  → asaas-gallery-payment recalcula server-side com mesma API
+  → Cobra valor correto no Asaas
+```
+
+### Cálculo combinado por parcela
+```
+IF incluirTaxaAntecipacao = true:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
+ELSE:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49)
+```
+
+### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
+
+**Bugs corrigidos:**
+1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
+2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
+3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
+
+**Arquivos modificados:**
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
+2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
+3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
+4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
+
+### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
+
+**Funcionalidade adicionada:**
+1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
+2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
+3. ✅ Auto-save imediato ao alterar o toggle
+4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
+5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
+
+**Arquivos modificados:**
+1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
+2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
+3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
+
+### Arquivos originais modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
+2. ✅ `supabase/config.toml` — registro da nova função
+3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
+5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
+6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
+
+## Plano: Validação de Assinatura em Webhooks de Pagamento (IMPLEMENTADO ✅)
+
+### Situação anterior
+Nenhum webhook validava a origem da requisição — qualquer POST forjado poderia marcar cobranças como pagas.
+
+### Implementação
+
+| Gateway | Mecanismo | Arquivo | Status |
+|---------|-----------|---------|--------|
+| **InfinitePay** | HMAC-SHA256 (`X-Infinia-Signature`) | `infinitepay-webhook/index.ts` | ✅ |
+| **Asaas** | Token fixo (`asaas-access-token`) | `asaas-webhook/index.ts` + `asaas-gallery-webhook/index.ts` | ✅ |
+| **Mercado Pago** | HMAC-SHA256 (`x-signature`) | `mercadopago-webhook/index.ts` | ✅ |
+
+### Graceful degradation
+Todos usam o padrão: se o secret não estiver configurado, a validação é pulada com warning. Quando configurado, é obrigatória.
+
+### Secrets necessários (adicionar no Supabase)
+1. `INFINITEPAY_WEBHOOK_SECRET` — shared secret do painel InfinitePay
+2. `ASAAS_WEBHOOK_TOKEN` — token de autenticação do painel Asaas
+3. `MERCADOPAGO_WEBHOOK_SECRET` — secret signature do painel Mercado Pago
+
+## Plano: RPC `finalize_gallery_payment` (IMPLEMENTADO ✅)
+
+### Problema resolvido
+Lógica de finalização de pagamento duplicada em 5 Edge Functions com race conditions e incrementos não-atômicos.
+
+### Implementação
+- RPC PostgreSQL `SECURITY DEFINER` com advisory lock + `SELECT FOR UPDATE`
+- Incrementos atômicos (`SET x = x + N`)
+- Idempotente (verifica status antes de atualizar)
+- Triggers existentes (`ensure_transaction_on_cobranca_paid`, `trigger_recompute_session_paid`) continuam funcionando
+
+### Edge Functions refatoradas
+| Função | Mudança |
+|--------|---------|
+| `infinitepay-webhook` | Substituído bloco read-then-write por `supabase.rpc('finalize_gallery_payment')` |
+| `asaas-gallery-webhook` | Idem |
+| `mercadopago-webhook` | Idem |
+| `confirm-payment-manual` | Idem |
+| `check-payment-status` | `updateToPaid()` refatorado para usar RPC |
+
+## Plano: Correção de Race Conditions e Controle de Concorrência (IMPLEMENTADO ✅)
+
+### Problema 1: Execução concorrente em `confirm-selection` ✅
+- RPC `try_lock_gallery_selection` criada com `pg_advisory_xact_lock` + `SELECT FOR UPDATE`
+- Estado transitório `processando_selecao` impede duplo clique
+- Edge Function retorna 409 se lock já adquirido
+
+### Problema 2: Read-then-write na sessão ✅
+- RPC `atomic_update_session_extras` criada com incrementos atômicos (`COALESCE + direct increment`)
+- `confirm-selection` usa RPC em vez de calcular totais no JS
+
+### Problema 3: Dupla escrita em `check-payment-status` ✅
+- Removido `status: 'pago'` e `data_pagamento` do UPDATE manual (agora só salva metadados do gateway)
+- RPC `finalize_gallery_payment` é o único responsável por marcar como pago
+
+### RPCs criadas
+| RPC | Propósito |
+|-----|-----------|
+| `try_lock_gallery_selection` | Lock atômico + validação + estado transitório |
+| `atomic_update_session_extras` | Incrementos atômicos em `clientes_sessoes` |
+
+### Arquivos modificados
+1. ✅ Nova migration SQL — `try_lock_gallery_selection` + `atomic_update_session_extras`
+2. ✅ `supabase/functions/confirm-selection/index.ts` — lock RPC + incrementos atômicos
+3. ✅ `supabase/functions/check-payment-status/index.ts` — removida dupla escrita de status

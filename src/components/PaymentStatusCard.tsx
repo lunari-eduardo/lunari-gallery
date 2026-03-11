@@ -158,8 +158,10 @@ export function PaymentStatusCard({
       
       const data = response.data;
       
-      if (data.success && data.checkoutUrl) {
-        setNewCheckoutUrl(data.checkoutUrl);
+      if (data.success && (data.checkoutUrl || data.galleryUrl)) {
+        // For Asaas, prefer galleryUrl (client sees internal checkout)
+        const urlToShow = (provider === 'asaas' && data.galleryUrl) ? data.galleryUrl : data.checkoutUrl;
+        setNewCheckoutUrl(urlToShow || data.checkoutUrl);
         toast.success('Link de cobrança gerado!');
         onStatusUpdated?.();
       } else {
