@@ -3408,6 +3408,10 @@ export type Database = {
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }
+      try_lock_gallery_selection: {
+        Args: { p_gallery_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       account_status: "active" | "suspended" | "canceled"
