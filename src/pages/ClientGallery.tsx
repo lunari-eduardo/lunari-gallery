@@ -124,16 +124,8 @@ export default function ClientGallery() {
   const [asaasCheckoutData, setAsaasCheckoutData] = useState<AsaasCheckoutData | null>(null);
   
   // Payment return detection state
-  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('payment') === 'success';
-  });
-  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'verifying' | 'confirmed' | 'failed' | null>(
-    () => {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('payment') === 'success' ? 'verifying' : null;
-    }
-  );
+  const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
+  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'verifying' | 'confirmed' | 'failed' | null>(null);
   const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
   
   // Password state
