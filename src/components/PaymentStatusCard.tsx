@@ -134,6 +134,14 @@ export function PaymentStatusCard({
     setIsRebilling(true);
     setSelectedProvider(provider);
     try {
+      // Refresh session to ensure fresh token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session) {
+        toast.error('Sessão expirada. Recarregue a página e tente novamente.');
+        setIsRebilling(false);
+        return;
+      }
+      
       const response = await supabase.functions.invoke('gallery-create-payment', {
         body: {
           galleryId,

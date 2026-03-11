@@ -69,6 +69,7 @@ function hexToHsl(hex: string): string | null {
 type SelectionStep = 'gallery' | 'confirmation' | 'payment' | 'confirmed';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsbmpzcHN5d3ljYnVkaGV3c2Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0NjU1MDEsImV4cCI6MjA3MzA0MTUwMX0.LR_nMBh8cVY1SQS1TsB7RrGQ1zmCRm_bDvyfI5Dn1QI';
 
 // Check if the param is a UUID (legacy) or token (new)
 function isUUID(str: string): boolean {
@@ -439,7 +440,11 @@ export default function ClientGallery() {
       
       const response = await fetch(`${SUPABASE_URL}/functions/v1/confirm-selection`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
         body: JSON.stringify({ 
           galleryId, 
           selectedCount: pricingData.selectedCount,
