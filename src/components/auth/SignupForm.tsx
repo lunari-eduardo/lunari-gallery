@@ -25,6 +25,8 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export function SignupForm() {
   const { signUpWithEmail } = useAuthContext();
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref') || '';
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
