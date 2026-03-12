@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Clock, Check, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
-const POLL_INTERVAL = 30_000; // 30 seconds
+const FALLBACK_POLL_INTERVAL = 60_000; // 60s fallback if realtime fails
 const POLL_MAX_DURATION = 10 * 60 * 1000; // 10 minutes
 
 interface PaymentPendingScreenProps {
