@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { getReferralUrl } from '@/lib/galleryUrl';
 
 export interface ReferralItem {
   id: string;
@@ -94,7 +95,7 @@ export function useReferrals() {
   const activeTransferReferrals = referrals.filter(r => r.transfer_bonus_active).length;
 
   const referralLink = referralCode
-    ? `${window.location.origin}/auth?ref=${referralCode}`
+    ? getReferralUrl(referralCode)
     : null;
 
   return {

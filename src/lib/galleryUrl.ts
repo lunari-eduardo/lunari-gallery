@@ -33,3 +33,15 @@ export function isProductionDomain(): boolean {
   return window.location.hostname === 'gallery.lunarihub.com' ||
          window.location.hostname.endsWith('.gallery.lunarihub.com');
 }
+
+/**
+ * Generates a referral URL using the production domain in prod,
+ * or the current origin in dev/preview environments.
+ */
+export function getReferralUrl(referralCode: string): string {
+  if (!referralCode) return '';
+  const baseDomain = isProductionDomain()
+    ? PRODUCTION_GALLERY_DOMAIN
+    : window.location.origin;
+  return `${baseDomain}/auth?ref=${referralCode}`;
+}
