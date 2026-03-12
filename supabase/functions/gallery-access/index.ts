@@ -761,7 +761,7 @@ serve(async (req) => {
         success: true,
         gallery: {
           id: gallery.id,
-          userId: gallery.user_id, // Include user_id to check payment provider
+          // userId removed — not needed by frontend, reduces public data exposure
           sessionId: gallery.session_id,  // Include session_id for client-side
           sessionName: gallery.nome_sessao,
           packageName: gallery.nome_pacote,
