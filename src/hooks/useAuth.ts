@@ -67,6 +67,14 @@ export function useAuth() {
     const origin = window.location.origin;
     localStorage.setItem('auth_origin', origin);
     
+    // Capturar código de indicação da URL antes do redirect OAuth
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    if (refCode) {
+      localStorage.setItem('pending_referral_code', refCode);
+      console.log('🎁 Referral code saved to localStorage:', refCode);
+    }
+    
     // Normalizar URL removendo barra final para garantir match exato
     const redirectUrl = origin.endsWith('/') ? origin.slice(0, -1) : origin;
     

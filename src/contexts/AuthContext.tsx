@@ -52,11 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const referralProcessedRef = useRef(false);
   useEffect(() => {
     if (!user || referralProcessedRef.current) return;
-    const refCode = user.user_metadata?.referral_code;
+    
+    // Check both user metadata (email signup) and localStorage (Google OAuth)
+    const metaRefCode = user.user_metadata?.referral_code;
+    const pendingRefCode = localStorage.getItem('pending_referral_code');
+    const refCode = metaRefCode || pendingRefCode;
+    
     if (!refCode) return;
     
     referralProcessedRef.current = true;
-    console.log('🎁 Processing referral code from signup:', refCode);
+    console.log('🎁 Processing referral code:', refCode, metaRefCode ? '(from metadata)' : '(from localStorage)');
     
     supabase.rpc('register_referral', { _referral_code: refCode } as any)
       .then(({ data, error }) => {
@@ -64,8 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn('Referral registration failed (may already exist):', error.message);
         } else if (data) {
           console.log('✅ Referral registered successfully');
-          // Clear the referral_code from metadata
+        }
+        // Clean up both sources
+        if (metaRefCode) {
           supabase.auth.updateUser({ data: { referral_code: null } });
+        }
+        if (pendingRefCode) {
+          localStorage.removeItem('pending_referral_code');
         }
       });
   }, [user]);
