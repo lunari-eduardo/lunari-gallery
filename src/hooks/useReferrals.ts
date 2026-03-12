@@ -53,10 +53,10 @@ export function useReferrals() {
         const userIds = items.map(r => r.referred_user_id);
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('user_id, full_name')
+          .select('user_id, nome')
           .in('user_id', userIds);
         
-        const nameMap = new Map((profiles || []).map(p => [p.user_id, p.full_name]));
+        const nameMap = new Map((profiles || []).map(p => [p.user_id, p.nome]));
         
         return items.map(r => ({
           ...r,
