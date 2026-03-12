@@ -244,9 +244,15 @@ Deno.serve(async (req) => {
 
         console.log("Subscription activated:", payment.subscription);
 
+        // Get subscription data for bonus and downgrade checks
+        const { data: sub } = await adminClient
+          .from("subscriptions_asaas")
+          .select("*")
+          .eq("asaas_subscription_id", payment.subscription)
+          .single();
+
         // Referral Transfer bonus: activate if referred user has a transfer plan
         if (sub) {
-          const GB = 1024 * 1024 * 1024;
           const storageForPlan = STORAGE_LIMITS[sub.plan_type] || 0;
           if (storageForPlan > 0) {
             try {
@@ -266,12 +272,6 @@ Deno.serve(async (req) => {
         }
 
         // Check for pending downgrade
-        const { data: sub } = await adminClient
-          .from("subscriptions_asaas")
-          .select("*")
-          .eq("asaas_subscription_id", payment.subscription)
-          .single();
-
         if (sub?.pending_downgrade_plan) {
           await applyDowngrade(adminClient, sub);
         }
