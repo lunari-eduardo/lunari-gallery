@@ -11,7 +11,8 @@ import {
   LogOut,
   CreditCard,
   MousePointerClick,
-  Send
+  Send,
+  Gift
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
