@@ -40,9 +40,17 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Rate limit check
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const body: RequestBody = await req.json();
     const { galleryToken, photoId, action, comment } = body;
-    let { galleryId } = body;
 
     // Validate required fields
     if (!action) {
@@ -52,29 +60,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Resolve galleryId from token (preferred) or use legacy galleryId
-    if (galleryToken) {
-      const { data: tokenGallery, error: tokenError } = await supabase
-        .from('galerias')
-        .select('id')
-        .eq('public_token', galleryToken)
-        .single();
-
-      if (tokenError || !tokenGallery) {
-        return new Response(
-          JSON.stringify({ error: 'Galeria não encontrada' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      galleryId = tokenGallery.id;
-    }
-
-    if (!galleryId) {
+    if (!galleryToken) {
       return new Response(
-        JSON.stringify({ error: 'galleryToken ou galleryId é obrigatório' }),
+        JSON.stringify({ error: 'galleryToken é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Resolve galleryId from token (ONLY method — UUID access removed)
+    const { data: tokenGallery, error: tokenError } = await supabase
+      .from('galerias')
+      .select('id')
+      .eq('public_token', galleryToken)
+      .single();
+
+    if (tokenError || !tokenGallery) {
+      return new Response(
+        JSON.stringify({ error: 'Galeria não encontrada' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const galleryId = tokenGallery.id;
 
     // Handle finalize_payment action (PIX Manual confirmation by client)
     if (action === 'finalize_payment') {
