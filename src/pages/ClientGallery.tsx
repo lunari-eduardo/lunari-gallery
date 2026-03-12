@@ -437,7 +437,8 @@ export default function ClientGallery() {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ 
+         body: JSON.stringify({ 
+          galleryToken: identifier,
           galleryId, 
           selectedCount: pricingData.selectedCount,
           extraCount: pricingData.extraCount,
