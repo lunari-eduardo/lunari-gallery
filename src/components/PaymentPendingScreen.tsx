@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Clock, Check, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
-const POLL_INTERVAL = 30_000; // 30 seconds
+const FALLBACK_POLL_INTERVAL = 60_000; // 60s fallback if realtime fails
 const POLL_MAX_DURATION = 10 * 60 * 1000; // 10 minutes
 
 interface PaymentPendingScreenProps {
@@ -85,17 +86,66 @@ export function PaymentPendingScreen({
     }
   };
 
-  // Start polling on mount
+  // Primary: Supabase Realtime subscription on cobrancas table
+  // Fallback: polling every 60s if realtime fails
   useEffect(() => {
     startTimeRef.current = Date.now();
+    let realtimeActive = false;
     
     // Immediate check
     checkPayment();
+
+    // Set up Realtime subscription
+    const channelName = cobrancaId 
+      ? `payment-${cobrancaId}` 
+      : `payment-session-${sessionId}`;
     
-    // Set up interval
-    intervalRef.current = setInterval(checkPayment, POLL_INTERVAL);
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cobrancas',
+          ...(cobrancaId ? { filter: `id=eq.${cobrancaId}` } : {}),
+        },
+        (payload) => {
+          console.log('[PaymentPending] Realtime update:', payload.new);
+          if ((payload.new as any).status === 'pago') {
+            setStatus('confirmed');
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            setTimeout(() => onPaymentConfirmed(), 2000);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[PaymentPending] Realtime status:', status);
+        realtimeActive = status === 'SUBSCRIBED';
+        
+        // If realtime fails, start fallback polling
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (!intervalRef.current) {
+            intervalRef.current = setInterval(checkPayment, FALLBACK_POLL_INTERVAL);
+          }
+        }
+      });
+
+    // Fallback polling (less frequent since realtime is primary)
+    intervalRef.current = setInterval(() => {
+      // Only poll if realtime isn't active or as a safety net
+      if (!realtimeActive) {
+        checkPayment();
+      }
+      // Safety: still do occasional polls even with realtime (every 60s)
+      if (Date.now() - startTimeRef.current > POLL_MAX_DURATION) {
+        setStatus('timeout');
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      }
+    }, FALLBACK_POLL_INTERVAL);
     
     return () => {
+      supabase.removeChannel(channel);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,7 +265,7 @@ export function PaymentPendingScreen({
                   setStatus('polling');
                   setPollCount(0);
                   checkPayment();
-                  intervalRef.current = setInterval(checkPayment, POLL_INTERVAL);
+                  intervalRef.current = setInterval(checkPayment, FALLBACK_POLL_INTERVAL);
                 }}
                 className="w-full"
                 variant="terracotta"

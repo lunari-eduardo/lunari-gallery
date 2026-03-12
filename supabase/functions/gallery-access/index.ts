@@ -735,23 +735,17 @@ serve(async (req) => {
       console.log("🎨 Using system theme with mode:", clientMode);
     }
 
-    // 8. Log first client access if not already logged
-    const { data: existingAccess } = await supabase
-      .from('galeria_acoes')
-      .select('id')
-      .eq('galeria_id', gallery.id)
-      .eq('tipo', 'cliente_acessou')
-      .maybeSingle();
-
-    if (!existingAccess) {
-      await supabase.from('galeria_acoes').insert({
+    // 8. Log first client access (upsert — partial unique index prevents duplicates)
+    await supabase.from('galeria_acoes').upsert(
+      {
         galeria_id: gallery.id,
         tipo: 'cliente_acessou',
         descricao: 'Cliente acessou a galeria pela primeira vez',
         user_id: null, // Anonymous client action
-      });
-      console.log('📊 First access logged for gallery:', gallery.id);
-    }
+      },
+      { onConflict: 'galeria_id,tipo', ignoreDuplicates: true }
+    );
+    console.log('📊 Access logged for gallery:', gallery.id);
 
     // 9. Return gallery data
     const saleSettings = gallery.configuracoes?.saleSettings || null;
