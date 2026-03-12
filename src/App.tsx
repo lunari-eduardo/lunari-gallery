@@ -166,6 +166,11 @@ const App = () => (
                   <Layout><Admin /></Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/referrals" element={
+                <ProtectedRoute>
+                  <Layout><Referrals /></Layout>
+                </ProtectedRoute>
+              } />
               
               {/* Catch-all */}
               <Route path="*" element={<NotFound />} />

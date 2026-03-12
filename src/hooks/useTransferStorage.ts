@@ -91,8 +91,9 @@ export function useTransferStorage() {
   const planType = subscription?.plan_type ?? null;
   const planStorageBytes = getStorageLimitBytes(planType);
   const freeBytes = accountData?.free_transfer_bytes ?? FREE_TRANSFER_BYTES;
-  // Effective limit = plan limit + free bytes (free always applies)
-  const storageLimitBytes = planStorageBytes > 0 ? planStorageBytes + freeBytes : freeBytes;
+  const storageBonusBytes = accountData?.storage_bonus_bytes ?? 0;
+  // Effective limit = plan limit + free bytes + referral bonus
+  const storageLimitBytes = (planStorageBytes > 0 ? planStorageBytes + freeBytes : freeBytes) + storageBonusBytes;
   const hasTransferPlan = hasTransferStorage(planType);
   const planName = getPlanDisplayName(planType);
   // Users can always use free storage even without a plan

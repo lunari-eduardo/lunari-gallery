@@ -186,6 +186,12 @@ export function Layout({ children }: LayoutProps) {
                     Planos e Créditos
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/referrals" className="cursor-pointer">
+                    <Gift className="mr-2 h-4 w-4" />
+                    Indique e Ganhe
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
