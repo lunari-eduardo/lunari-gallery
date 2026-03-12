@@ -46,7 +46,8 @@ export function SignupForm() {
     const { error, needsEmailConfirmation } = await signUpWithEmail(
       values.email,
       values.password,
-      values.nome
+      values.nome,
+      referralCode || undefined
     );
     
     if (error) {
