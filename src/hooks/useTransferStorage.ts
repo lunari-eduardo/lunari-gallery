@@ -70,7 +70,7 @@ export function useTransferStorage() {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from('photographer_accounts' as any)
-        .select('account_over_limit, over_limit_since, deletion_scheduled_at, free_transfer_bytes')
+        .select('account_over_limit, over_limit_since, deletion_scheduled_at, free_transfer_bytes, storage_bonus_bytes')
         .eq('user_id', user.id)
         .maybeSingle();
       if (error) {
@@ -82,6 +82,7 @@ export function useTransferStorage() {
         over_limit_since: string | null;
         deletion_scheduled_at: string | null;
         free_transfer_bytes: number;
+        storage_bonus_bytes: number;
       } | null;
     },
     enabled: !!user?.id,
