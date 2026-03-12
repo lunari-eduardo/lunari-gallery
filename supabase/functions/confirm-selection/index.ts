@@ -5,14 +5,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Rate limiter — in-memory per isolate
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10; // confirm-selection is heavy, low limit
+const RATE_WINDOW = 60_000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT;
+}
+
 interface RequestBody {
-  galleryId?: string;
-  galleryToken?: string;    // Preferred — public_token for security
+  galleryToken: string;    // Required — public_token (UUID access removed)
   selectedCount: number;
   extraCount?: number;
   valorUnitario?: number;
   valorTotal?: number;
-  requestPayment?: boolean; // If true, create payment link
+  requestPayment?: boolean;
 }
 
 // Pricing calculation interfaces (mirrored from pricingUtils.ts)
