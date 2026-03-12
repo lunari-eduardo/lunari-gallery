@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, selectedCount, extraCount, requestPayment } = body;
+    const { galleryId, extraCount, requestPayment } = body;
 
     // Validate required fields
     if (!galleryId) {
@@ -178,6 +178,25 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // ── SERVER-SIDE COUNT: Never trust frontend selectedCount ──
+    const { count: serverSelectedCount, error: countError } = await supabase
+      .from('galeria_fotos')
+      .select('id', { count: 'exact', head: true })
+      .eq('galeria_id', galleryId)
+      .eq('is_selected', true);
+
+    if (countError) {
+      console.error('❌ Error counting selected photos:', countError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const selectedCount = serverSelectedCount || 0;
+    console.log(`🔒 Server-side selected count: ${selectedCount} (frontend sent: ${body.selectedCount})`);
+
 
     // 1. Acquire atomic lock on gallery to prevent concurrent confirmations
     const { data: lockResult, error: lockError } = await supabase.rpc('try_lock_gallery_selection', {
