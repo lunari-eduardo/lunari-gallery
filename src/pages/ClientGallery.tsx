@@ -1504,7 +1504,6 @@ export default function ClientGallery() {
           headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ 
             galleryToken: identifier,
-            galleryId, 
             action: 'finalize_payment' 
           }),
         });
