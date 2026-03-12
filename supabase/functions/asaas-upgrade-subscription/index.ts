@@ -458,7 +458,7 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.warn('Referral recalculate exception (non-fatal):', e);
       }
-
+    }
     return new Response(
       JSON.stringify({
         newSubscriptionId: newAsaasId,
