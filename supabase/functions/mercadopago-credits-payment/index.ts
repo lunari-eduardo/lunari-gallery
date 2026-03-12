@@ -216,10 +216,23 @@ Deno.serve(async (req) => {
 
       if (creditError) {
         console.error('Erro ao adicionar créditos:', creditError);
-        // Não falhar a resposta, pois o pagamento foi aprovado
-        // O webhook pode tentar novamente
       } else {
         updateData.ledger_id = ledgerId;
+      }
+
+      // Referral bonus: grant +1000 credits to both if applicable
+      try {
+        const adminForBonus = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const { data: bonusGranted, error: bonusError } = await adminForBonus.rpc('grant_referral_select_bonus', {
+          _referred_user_id: userId,
+        });
+        if (bonusError) {
+          console.warn('Referral bonus check error (non-fatal):', bonusError.message);
+        } else if (bonusGranted) {
+          console.log('🎁 Referral Select bonus granted for user:', userId);
+        }
+      } catch (e) {
+        console.warn('Referral bonus exception (non-fatal):', e);
       }
     }
 

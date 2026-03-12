@@ -408,6 +408,22 @@ Deno.serve(async (req) => {
 
         console.log("Subscription cancelled:", subId);
 
+        // Deactivate referral transfer bonus
+        if (sub) {
+          try {
+            const { data: deactivated, error: deactivateErr } = await adminClient.rpc('deactivate_referral_transfer_bonus', {
+              _referred_user_id: sub.user_id,
+            });
+            if (deactivateErr) {
+              console.warn('Referral deactivate error (non-fatal):', deactivateErr.message);
+            } else if (deactivated) {
+              console.log('🎁 Referral Transfer bonus deactivated for user:', sub.user_id);
+            }
+          } catch (e) {
+            console.warn('Referral deactivate exception (non-fatal):', e);
+          }
+        }
+
         // Expire subscription credits if plan included them
         if (sub) {
           const subCredits = PLAN_SUBSCRIPTION_CREDITS[sub.plan_type];
