@@ -170,12 +170,30 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, extraCount, requestPayment } = body;
+    const { extraCount, requestPayment, galleryToken } = body;
+    let galleryId = body.galleryId;
+
+    // Resolve galleryId from token (preferred) or use legacy galleryId
+    if (galleryToken) {
+      const { data: tokenGallery, error: tokenError } = await supabase
+        .from('galerias')
+        .select('id')
+        .eq('public_token', galleryToken)
+        .single();
+
+      if (tokenError || !tokenGallery) {
+        return new Response(
+          JSON.stringify({ error: 'Galeria não encontrada' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      galleryId = tokenGallery.id;
+    }
 
     // Validate required fields
     if (!galleryId) {
       return new Response(
-        JSON.stringify({ error: 'galleryId é obrigatório' }),
+        JSON.stringify({ error: 'galleryToken ou galleryId é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
