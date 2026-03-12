@@ -30,7 +30,7 @@ serve(async (req) => {
     // 1. Find gallery by public_token
     const { data: gallery, error: galleryError } = await supabase
       .from("galerias")
-      .select("*")
+      .select("id, user_id, tipo, status, status_selecao, status_pagamento, permissao, gallery_password, public_token, session_id, cliente_id, cliente_nome, cliente_email, cliente_telefone, nome_sessao, nome_pacote, mensagem_boas_vindas, fotos_incluidas, fotos_selecionadas, total_fotos, total_fotos_extras_vendidas, valor_foto_extra, valor_extras, valor_total_vendido, prazo_selecao, prazo_selecao_dias, configuracoes, regras_congeladas, regras_selecao, finalized_at, enviado_em, origin, orcamento_id, created_at, updated_at, published_at")
       .eq("public_token", token)
       .single();
 
