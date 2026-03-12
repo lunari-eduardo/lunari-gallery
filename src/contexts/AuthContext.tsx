@@ -16,7 +16,7 @@ interface AuthContextType {
   accessLoading: boolean;
   signInWithGoogle: () => Promise<{ error: AuthError | null }>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUpWithEmail: (email: string, password: string, nome?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
+  signUpWithEmail: (email: string, password: string, nome?: string, referralCode?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
   updateEmail: (newEmail: string) => Promise<{ error: AuthError | null }>;
