@@ -29,7 +29,21 @@ serve(async (req) => {
   }
 
   try {
-    const { token, password } = await req.json();
+    const { token, password, page, limit: rawLimit } = await req.json();
+
+    // Rate limit check
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Pagination defaults
+    const photoPage = Math.max(1, parseInt(page) || 1);
+    const photoLimit = Math.min(200, Math.max(1, parseInt(rawLimit) || 100));
+    const photoOffset = (photoPage - 1) * photoLimit;
 
     if (!token) {
       return new Response(
