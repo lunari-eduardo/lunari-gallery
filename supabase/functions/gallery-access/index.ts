@@ -1,6 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Rate limiter — in-memory per isolate
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 30; // max requests per window
+const RATE_WINDOW = 60_000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -13,7 +29,21 @@ serve(async (req) => {
   }
 
   try {
-    const { token, password } = await req.json();
+    const { token, password, page, limit: rawLimit } = await req.json();
+
+    // Rate limit check
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Pagination defaults
+    const photoPage = Math.max(1, parseInt(page) || 1);
+    const photoLimit = Math.min(200, Math.max(1, parseInt(rawLimit) || 100));
+    const photoOffset = (photoPage - 1) * photoLimit;
 
     if (!token) {
       return new Response(
@@ -669,12 +699,13 @@ serve(async (req) => {
       }
     }
 
-    // 5. Fetch photos for the gallery
-    const { data: photos, error: photosError } = await supabase
+    // 5. Fetch photos for the gallery (paginated)
+    const { data: photos, error: photosError, count: totalPhotoCount } = await supabase
       .from("galeria_fotos")
-      .select("id, galeria_id, filename, original_filename, storage_key, original_path, preview_path, preview_wm_path, thumb_path, is_selected, is_favorite, comment, pasta_id, width, height, has_watermark, order_index, processing_status")
+      .select("id, galeria_id, filename, original_filename, storage_key, original_path, preview_path, preview_wm_path, thumb_path, is_selected, is_favorite, comment, pasta_id, width, height, has_watermark, order_index, processing_status", { count: 'exact' })
       .eq("galeria_id", gallery.id)
-      .order("original_filename", { ascending: true });
+      .order("original_filename", { ascending: true })
+      .range(photoOffset, photoOffset + photoLimit - 1);
 
     if (photosError) {
       console.error("Error fetching photos:", photosError);
@@ -781,6 +812,12 @@ serve(async (req) => {
           valorTotalVendido: gallery.valor_total_vendido || 0,
         },
         photos: photos || [],
+        pagination: {
+          page: photoPage,
+          limit: photoLimit,
+          total: totalPhotoCount ?? gallery.total_fotos ?? 0,
+          hasMore: (photoOffset + photoLimit) < (totalPhotoCount ?? 0),
+        },
         folders: folders || [],
         studioSettings: settings || null,
         // Theme data for client gallery appearance

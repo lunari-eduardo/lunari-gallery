@@ -1,5 +1,36 @@
 
 
+## Auditoria Técnica — Etapa 4: Hardening (IMPLEMENTADO ✅)
+
+### 4.1 ✅ Descontinuar acesso por UUID em endpoints públicos
+- `client-selection` e `confirm-selection`: `galleryToken` agora OBRIGATÓRIO, `galleryId` removido
+- Frontend removeu `galleryId` de todas as chamadas públicas
+
+### 4.2 ✅ Paginação de fotos no `gallery-access`
+- Aceita `page` (default 1) e `limit` (default 100, max 200)
+- Retorna `pagination: { page, limit, total, hasMore }`
+- Frontend busca páginas restantes em paralelo quando `hasMore = true`
+
+### 4.3 ✅ Rate limiting básico (in-memory por isolate)
+- `gallery-access`: 30 req/min, `client-selection`: 60 req/min, `confirm-selection`: 10 req/min
+- Retorna HTTP 429 quando excedido
+
+### 4.4 ✅ Audit log de ações sensíveis
+- Tabela `audit_log` com RLS (admins + donos das galerias)
+- Ações logadas: `confirm_selection`, `confirm_payment_manual`, `delete_photos`
+
+### Arquivos modificados
+1. ✅ `supabase/functions/client-selection/index.ts`
+2. ✅ `supabase/functions/confirm-selection/index.ts`
+3. ✅ `supabase/functions/gallery-access/index.ts`
+4. ✅ `supabase/functions/confirm-payment-manual/index.ts`
+5. ✅ `supabase/functions/delete-photos/index.ts`
+6. ✅ `src/pages/ClientGallery.tsx`
+7. ✅ Migration: tabela `audit_log`
+
+---
+
+
 ## Auditoria Técnica — Etapa 3: Robustez (IMPLEMENTADO ✅)
 
 ### 3.1 ✅ Supabase Realtime em vez de polling para confirmação de pagamento

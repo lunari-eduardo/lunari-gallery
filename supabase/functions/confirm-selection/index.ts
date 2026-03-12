@@ -5,14 +5,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Rate limiter — in-memory per isolate
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10; // confirm-selection is heavy, low limit
+const RATE_WINDOW = 60_000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT;
+}
+
 interface RequestBody {
-  galleryId?: string;
-  galleryToken?: string;    // Preferred — public_token for security
+  galleryToken: string;    // Required — public_token (UUID access removed)
   selectedCount: number;
   extraCount?: number;
   valorUnitario?: number;
   valorTotal?: number;
-  requestPayment?: boolean; // If true, create payment link
+  requestPayment?: boolean;
 }
 
 // Pricing calculation interfaces (mirrored from pricingUtils.ts)
@@ -169,34 +184,39 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body: RequestBody = await req.json();
-    const { extraCount, requestPayment, galleryToken } = body;
-    let galleryId = body.galleryId;
-
-    // Resolve galleryId from token (preferred) or use legacy galleryId
-    if (galleryToken) {
-      const { data: tokenGallery, error: tokenError } = await supabase
-        .from('galerias')
-        .select('id')
-        .eq('public_token', galleryToken)
-        .single();
-
-      if (tokenError || !tokenGallery) {
-        return new Response(
-          JSON.stringify({ error: 'Galeria não encontrada' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      galleryId = tokenGallery.id;
+    // Rate limit check
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Validate required fields
-    if (!galleryId) {
+    const body: RequestBody = await req.json();
+    const { extraCount, requestPayment, galleryToken } = body;
+
+    // galleryToken is now REQUIRED — UUID access removed
+    if (!galleryToken) {
       return new Response(
-        JSON.stringify({ error: 'galleryToken ou galleryId é obrigatório' }),
+        JSON.stringify({ error: 'galleryToken é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { data: tokenGallery, error: tokenError } = await supabase
+      .from('galerias')
+      .select('id')
+      .eq('public_token', galleryToken)
+      .single();
+
+    if (tokenError || !tokenGallery) {
+      return new Response(
+        JSON.stringify({ error: 'Galeria não encontrada' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const galleryId = tokenGallery.id;
 
     // ── SERVER-SIDE COUNT: Never trust frontend selectedCount ──
     const { count: serverSelectedCount, error: countError } = await supabase
@@ -664,6 +684,25 @@ Deno.serve(async (req) => {
     }
 
     console.log(`✅ Gallery ${galleryId} selection confirmed with ${selectedCount} photos, status_pagamento=${statusPagamento}`);
+
+    // AUDIT LOG: Record selection confirmation
+    await supabase.from('audit_log').insert({
+      action: 'confirm_selection',
+      actor_type: 'client',
+      ip_address: clientIp,
+      resource_type: 'gallery',
+      resource_id: galleryId,
+      gallery_id: galleryId,
+      user_agent: req.headers.get('user-agent') || null,
+      metadata: {
+        selectedCount,
+        extrasACobrar,
+        valorTotal,
+        valorUnitario,
+        paymentRequired: shouldCreatePayment,
+        provedor: paymentResponse?.provedor || null,
+      },
+    }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
 
     // 9. Return response based on payment type
     if (paymentResponse?.provedor === 'pix_manual') {
