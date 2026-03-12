@@ -440,7 +440,6 @@ export default function ClientGallery() {
         },
          body: JSON.stringify({ 
           galleryToken: identifier,
-          galleryId, 
           selectedCount: pricingData.selectedCount,
           extraCount: pricingData.extraCount,
           valorUnitario: pricingData.valorUnitario,
