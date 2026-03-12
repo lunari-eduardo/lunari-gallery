@@ -95,7 +95,7 @@ export function useReferrals() {
   const activeTransferReferrals = referrals.filter(r => r.transfer_bonus_active).length;
 
   const referralLink = referralCode
-    ? `${window.location.origin}/auth?ref=${referralCode}`
+    ? getReferralUrl(referralCode)
     : null;
 
   return {
