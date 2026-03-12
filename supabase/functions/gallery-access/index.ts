@@ -672,7 +672,7 @@ serve(async (req) => {
     // 5. Fetch photos for the gallery
     const { data: photos, error: photosError } = await supabase
       .from("galeria_fotos")
-      .select("*")
+      .select("id, galeria_id, filename, original_filename, storage_key, original_path, preview_path, preview_wm_path, thumb_path, is_selected, is_favorite, comment, pasta_id, width, height, has_watermark, order_index, processing_status")
       .eq("galeria_id", gallery.id)
       .order("original_filename", { ascending: true });
 
