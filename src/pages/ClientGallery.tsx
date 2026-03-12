@@ -126,6 +126,7 @@ export default function ClientGallery() {
   // Payment return detection state (silent — no blocking UI)
   const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
   const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
+  const paymentRetryRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Password state
   const [requiresPassword, setRequiresPassword] = useState(false);
