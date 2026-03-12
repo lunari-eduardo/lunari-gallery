@@ -212,6 +212,19 @@ serve(async (req) => {
       );
     }
 
+    // AUDIT LOG
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    await supabaseAdmin.from('audit_log').insert({
+      action: 'delete_photos',
+      actor_type: 'user',
+      actor_id: user.id,
+      ip_address: clientIp,
+      resource_type: 'photo',
+      gallery_id: galleryId,
+      user_agent: req.headers.get('user-agent') || null,
+      metadata: { photoCount: photos.length, deletedFromStorage, photoIds },
+    }).then(({ error }: { error: any }) => { if (error) console.warn('Audit log error:', error.message); });
+
     return new Response(
       JSON.stringify({
         success: true,

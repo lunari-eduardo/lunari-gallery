@@ -110,6 +110,20 @@ Deno.serve(async (req: Request) => {
 
     console.log(`💳 Cobrança ${cobrancaId} finalizada via RPC por user ${authenticatedUserId}:`, JSON.stringify(rpcResult));
 
+    // AUDIT LOG
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    await supabase.from('audit_log').insert({
+      action: 'confirm_payment_manual',
+      actor_type: 'user',
+      actor_id: authenticatedUserId,
+      ip_address: clientIp,
+      resource_type: 'payment',
+      resource_id: cobrancaId,
+      gallery_id: cobranca.galeria_id || null,
+      user_agent: req.headers.get('user-agent') || null,
+      metadata: { valor: cobranca.valor, provedor: cobranca.provedor },
+    }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
+
     return new Response(
       JSON.stringify({ 
         success: true, 

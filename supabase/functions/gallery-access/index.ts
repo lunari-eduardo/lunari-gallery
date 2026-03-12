@@ -812,6 +812,12 @@ serve(async (req) => {
           valorTotalVendido: gallery.valor_total_vendido || 0,
         },
         photos: photos || [],
+        pagination: {
+          page: photoPage,
+          limit: photoLimit,
+          total: totalPhotoCount ?? gallery.total_fotos ?? 0,
+          hasMore: (photoOffset + photoLimit) < (totalPhotoCount ?? 0),
+        },
         folders: folders || [],
         studioSettings: settings || null,
         // Theme data for client gallery appearance
