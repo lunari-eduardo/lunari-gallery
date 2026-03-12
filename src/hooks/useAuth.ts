@@ -105,20 +105,25 @@ export function useAuth() {
     return { error: null };
   };
 
-  const signUpWithEmail = async (email: string, password: string, nome?: string) => {
+  const signUpWithEmail = async (email: string, password: string, nome?: string, referralCode?: string) => {
     console.log('📝 Starting email sign-up');
     
     const redirectUrl = window.location.origin;
+    
+    const userData: Record<string, string> = {
+      full_name: nome || '',
+      name: nome || '',
+    };
+    if (referralCode) {
+      userData.referral_code = referralCode;
+    }
     
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: {
-          full_name: nome || '',
-          name: nome || '',
-        },
+        data: userData,
       },
     });
     

@@ -70,7 +70,7 @@ export function useTransferStorage() {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from('photographer_accounts' as any)
-        .select('account_over_limit, over_limit_since, deletion_scheduled_at, free_transfer_bytes')
+        .select('account_over_limit, over_limit_since, deletion_scheduled_at, free_transfer_bytes, storage_bonus_bytes')
         .eq('user_id', user.id)
         .maybeSingle();
       if (error) {
@@ -82,6 +82,7 @@ export function useTransferStorage() {
         over_limit_since: string | null;
         deletion_scheduled_at: string | null;
         free_transfer_bytes: number;
+        storage_bonus_bytes: number;
       } | null;
     },
     enabled: !!user?.id,
@@ -90,8 +91,9 @@ export function useTransferStorage() {
   const planType = subscription?.plan_type ?? null;
   const planStorageBytes = getStorageLimitBytes(planType);
   const freeBytes = accountData?.free_transfer_bytes ?? FREE_TRANSFER_BYTES;
-  // Effective limit = plan limit + free bytes (free always applies)
-  const storageLimitBytes = planStorageBytes > 0 ? planStorageBytes + freeBytes : freeBytes;
+  const storageBonusBytes = accountData?.storage_bonus_bytes ?? 0;
+  // Effective limit = plan limit + free bytes + referral bonus
+  const storageLimitBytes = (planStorageBytes > 0 ? planStorageBytes + freeBytes : freeBytes) + storageBonusBytes;
   const hasTransferPlan = hasTransferStorage(planType);
   const planName = getPlanDisplayName(planType);
   // Users can always use free storage even without a plan

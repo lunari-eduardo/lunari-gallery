@@ -244,6 +244,27 @@ Deno.serve(async (req) => {
 
         console.log("Subscription activated:", payment.subscription);
 
+        // Referral Transfer bonus: activate if referred user has a transfer plan
+        if (sub) {
+          const GB = 1024 * 1024 * 1024;
+          const storageForPlan = STORAGE_LIMITS[sub.plan_type] || 0;
+          if (storageForPlan > 0) {
+            try {
+              const { data: bonusResult, error: bonusErr } = await adminClient.rpc('activate_referral_transfer_bonus', {
+                _referred_user_id: sub.user_id,
+                _plan_storage_bytes: storageForPlan,
+              });
+              if (bonusErr) {
+                console.warn('Referral transfer bonus error (non-fatal):', bonusErr.message);
+              } else if (bonusResult) {
+                console.log('🎁 Referral Transfer bonus activated for user:', sub.user_id);
+              }
+            } catch (e) {
+              console.warn('Referral transfer bonus exception (non-fatal):', e);
+            }
+          }
+        }
+
         // Check for pending downgrade
         const { data: sub } = await adminClient
           .from("subscriptions_asaas")
@@ -386,6 +407,22 @@ Deno.serve(async (req) => {
           .eq("asaas_subscription_id", subId);
 
         console.log("Subscription cancelled:", subId);
+
+        // Deactivate referral transfer bonus
+        if (sub) {
+          try {
+            const { data: deactivated, error: deactivateErr } = await adminClient.rpc('deactivate_referral_transfer_bonus', {
+              _referred_user_id: sub.user_id,
+            });
+            if (deactivateErr) {
+              console.warn('Referral deactivate error (non-fatal):', deactivateErr.message);
+            } else if (deactivated) {
+              console.log('🎁 Referral Transfer bonus deactivated for user:', sub.user_id);
+            }
+          } catch (e) {
+            console.warn('Referral deactivate exception (non-fatal):', e);
+          }
+        }
 
         // Expire subscription credits if plan included them
         if (sub) {

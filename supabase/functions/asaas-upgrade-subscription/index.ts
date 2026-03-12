@@ -442,6 +442,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 9. Recalculate referral transfer bonus for plan change
+    const newStorageLimitForReferral = newStorageLimit[newPlanType] || 0;
+    if (newStorageLimitForReferral > 0) {
+      try {
+        const { data: recalcResult, error: recalcErr } = await adminClient.rpc('recalculate_referral_transfer_bonus', {
+          _referred_user_id: userId,
+          _new_plan_storage_bytes: newStorageLimitForReferral,
+        });
+        if (recalcErr) {
+          console.warn('Referral recalculate error (non-fatal):', recalcErr.message);
+        } else if (recalcResult) {
+          console.log('🎁 Referral Transfer bonus recalculated for upgrade to', newPlanType);
+        }
+      } catch (e) {
+        console.warn('Referral recalculate exception (non-fatal):', e);
+      }
+    }
     return new Response(
       JSON.stringify({
         newSubscriptionId: newAsaasId,

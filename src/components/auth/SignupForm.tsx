@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Loader2, Eye, EyeOff, CheckCircle, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
 
 const signupSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
@@ -23,6 +25,8 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export function SignupForm() {
   const { signUpWithEmail } = useAuthContext();
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref') || '';
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -42,7 +46,8 @@ export function SignupForm() {
     const { error, needsEmailConfirmation } = await signUpWithEmail(
       values.email,
       values.password,
-      values.nome
+      values.nome,
+      referralCode || undefined
     );
     
     if (error) {
@@ -90,6 +95,14 @@ export function SignupForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {referralCode && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
+            <Gift className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-sm text-primary font-medium">
+              Indicação: <Badge variant="secondary" className="ml-1">{referralCode}</Badge>
+            </span>
+          </div>
+        )}
         <FormField
           control={form.control}
           name="nome"

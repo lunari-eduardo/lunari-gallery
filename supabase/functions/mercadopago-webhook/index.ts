@@ -245,6 +245,20 @@ Deno.serve(async (req) => {
           updateData.ledger_id = ledgerId;
           console.log('Créditos adicionados com sucesso, ledger_id:', ledgerId);
         }
+
+        // Referral bonus: grant +1000 credits to both if applicable
+        try {
+          const { data: bonusGranted, error: bonusError } = await supabase.rpc('grant_referral_select_bonus', {
+            _referred_user_id: purchase.user_id,
+          });
+          if (bonusError) {
+            console.warn('Referral bonus check error (non-fatal):', bonusError.message);
+          } else if (bonusGranted) {
+            console.log('🎁 Referral Select bonus granted for user:', purchase.user_id);
+          }
+        } catch (e) {
+          console.warn('Referral bonus exception (non-fatal):', e);
+        }
       } else if (mpPayment.status === 'rejected' || mpPayment.status === 'cancelled') {
         updateData.status = mpPayment.status;
       }

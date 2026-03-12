@@ -11,7 +11,8 @@ import {
   LogOut,
   CreditCard,
   MousePointerClick,
-  Send
+  Send,
+  Gift
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
@@ -183,6 +184,12 @@ export function Layout({ children }: LayoutProps) {
                   <Link to="/credits" className="cursor-pointer">
                     <CreditCard className="mr-2 h-4 w-4" />
                     Planos e Créditos
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/referrals" className="cursor-pointer">
+                    <Gift className="mr-2 h-4 w-4" />
+                    Indique e Ganhe
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

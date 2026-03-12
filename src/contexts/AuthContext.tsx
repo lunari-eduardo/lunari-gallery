@@ -1,7 +1,8 @@
-import React, { createContext, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useRef } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess, AccessLevel } from '@/hooks/useGalleryAccess';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -15,7 +16,7 @@ interface AuthContextType {
   accessLoading: boolean;
   signInWithGoogle: () => Promise<{ error: AuthError | null }>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUpWithEmail: (email: string, password: string, nome?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
+  signUpWithEmail: (email: string, password: string, nome?: string, referralCode?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
   updateEmail: (newEmail: string) => Promise<{ error: AuthError | null }>;
@@ -46,6 +47,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasGestaoIntegration,
     isAdmin,
   } = useGalleryAccess(user, session);
+
+  // Register referral code after login if present in user metadata
+  const referralProcessedRef = useRef(false);
+  useEffect(() => {
+    if (!user || referralProcessedRef.current) return;
+    const refCode = user.user_metadata?.referral_code;
+    if (!refCode) return;
+    
+    referralProcessedRef.current = true;
+    console.log('🎁 Processing referral code from signup:', refCode);
+    
+    supabase.rpc('register_referral', { _referral_code: refCode } as any)
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('Referral registration failed (may already exist):', error.message);
+        } else if (data) {
+          console.log('✅ Referral registered successfully');
+          // Clear the referral_code from metadata
+          supabase.auth.updateUser({ data: { referral_code: null } });
+        }
+      });
+  }, [user]);
 
   // Debug logging
   useEffect(() => {

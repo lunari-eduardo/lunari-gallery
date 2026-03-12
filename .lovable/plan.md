@@ -1,161 +1,277 @@
 
 
-# Plano Ajustado: Sistema "Indique e Ganhe"
+## Auditoria Técnica — Etapa 4: Hardening (IMPLEMENTADO ✅)
 
-Incorporando todos os 6 ajustes solicitados ao plano original.
+### 4.1 ✅ Descontinuar acesso por UUID em endpoints públicos
+- `client-selection` e `confirm-selection`: `galleryToken` agora OBRIGATÓRIO, `galleryId` removido
+- Frontend removeu `galleryId` de todas as chamadas públicas
+
+### 4.2 ✅ Paginação de fotos no `gallery-access`
+- Aceita `page` (default 1) e `limit` (default 100, max 200)
+- Retorna `pagination: { page, limit, total, hasMore }`
+- Frontend busca páginas restantes em paralelo quando `hasMore = true`
+
+### 4.3 ✅ Rate limiting básico (in-memory por isolate)
+- `gallery-access`: 30 req/min, `client-selection`: 60 req/min, `confirm-selection`: 10 req/min
+- Retorna HTTP 429 quando excedido
+
+### 4.4 ✅ Audit log de ações sensíveis
+- Tabela `audit_log` com RLS (admins + donos das galerias)
+- Ações logadas: `confirm_selection`, `confirm_payment_manual`, `delete_photos`
+
+### Arquivos modificados
+1. ✅ `supabase/functions/client-selection/index.ts`
+2. ✅ `supabase/functions/confirm-selection/index.ts`
+3. ✅ `supabase/functions/gallery-access/index.ts`
+4. ✅ `supabase/functions/confirm-payment-manual/index.ts`
+5. ✅ `supabase/functions/delete-photos/index.ts`
+6. ✅ `src/pages/ClientGallery.tsx`
+7. ✅ Migration: tabela `audit_log`
 
 ---
 
-## Fase 1: Migration — Tabela `referrals`, campos auxiliares, RPCs
 
-### Tabela e campos
+## Auditoria Técnica — Etapa 3: Robustez (IMPLEMENTADO ✅)
 
-```sql
-CREATE TABLE public.referrals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  referrer_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  referred_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  referral_code TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  select_bonus_granted BOOLEAN DEFAULT false,
-  transfer_bonus_active BOOLEAN DEFAULT false,
-  transfer_bonus_bytes BIGINT DEFAULT 0,
-  transfer_plan_storage_bytes BIGINT DEFAULT 0,  -- ✅ Ajuste #5: salvar plano base
-  UNIQUE(referred_user_id)
-);
+### 3.1 ✅ Supabase Realtime em vez de polling para confirmação de pagamento
+- `PaymentPendingScreen` agora usa Realtime subscription na tabela `cobrancas`
+- Polling reduzido para fallback de 60s (era 30s como mecanismo primário)
+- `ClientGallery.tsx` payment return também usa Realtime + polling de 60s como backup
 
--- profiles: referral_code + referred_by
-ALTER TABLE public.profiles 
-  ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE,
-  ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES auth.users(id);
+### 3.2 ✅ Fix race condition `cliente_acessou`
+- Unique partial index `idx_galeria_acoes_cliente_acessou` criado em `galeria_acoes`
+- `gallery-access` usa `.upsert()` com `ignoreDuplicates: true` em vez de read-then-write
+- Duplicatas existentes limpas via migration
 
--- photographer_accounts: storage_bonus_bytes
-ALTER TABLE public.photographer_accounts
-  ADD COLUMN IF NOT EXISTS storage_bonus_bytes BIGINT DEFAULT 0;
+### 3.3 ✅ Fix memory leak do interval no ClientGallery
+- `paymentRetryRef` (useRef) armazena o `setInterval` corretamente
+- Cleanup no `return` do `useEffect` limpa interval E remove canal Realtime
+- Antes: `return () => clearInterval()` estava dentro de async function, nunca executava
 
--- credit_ledger: adicionar referral_bonus ao constraint
-ALTER TABLE credit_ledger DROP CONSTRAINT credit_ledger_operation_type_check;
-ALTER TABLE credit_ledger ADD CONSTRAINT credit_ledger_operation_type_check 
-  CHECK (operation_type = ANY(ARRAY[
-    'purchase','bonus','upload','refund','adjustment',
-    'subscription_renewal','subscription_expiry','referral_bonus'
-  ]));
+### 3.4 CORS — Pulado ✅
+- Fotógrafos usam domínios personalizados — restringir CORS quebraria esse cenário
+- Segurança já coberta por token resolution (Etapa 2) e JWT (Etapa 1)
+
+### Arquivos modificados
+1. ✅ `src/components/PaymentPendingScreen.tsx` — Realtime + fallback polling
+2. ✅ `src/pages/ClientGallery.tsx` — Realtime, useRef para interval, cleanup correto
+3. ✅ `supabase/functions/gallery-access/index.ts` — upsert com ignoreDuplicates
+4. ✅ Migration: unique partial index + limpeza de duplicatas
+
+---
+
+
+## Auditoria Técnica — Etapa 2: Segurança e Escalabilidade (IMPLEMENTADO ✅)
+
+### 2.1 ✅ `client-selection` aceita `galleryToken` em vez de `galleryId`
+- Interface pública agora aceita `galleryToken` (public_token) como identificador preferido
+- `galleryId` (UUID) ainda aceito como fallback para retrocompatibilidade
+- Token é resolvido internamente para o UUID real via query no banco
+- Previne que atacantes usem UUIDs conhecidos para manipular galerias de terceiros
+
+### 2.2 ✅ `confirm-selection` aceita `galleryToken`
+- Mesma lógica: resolve `galleryToken` → `galleryId` internamente
+- Frontend envia ambos para retrocompatibilidade
+
+### 2.3 ✅ Removido `userId` da resposta pública de `gallery-access`
+- `gallery.userId` (user_id do fotógrafo) não é mais exposto na resposta da galeria de seleção
+- `asaasCheckoutData.userId` permanece (construído server-side, necessário para checkout)
+- Reduz superfície de ataque e exposição de dados internos
+
+### 2.4 ✅ SELECT explícito em `gallery-access`
+- `galerias SELECT *` substituído por SELECT com campos explícitos
+- `galeria_fotos SELECT *` substituído por SELECT com campos necessários (excluído `file_size`, `original_file_size`, `mime_type`, `upload_key`, `created_at`, `updated_at`, `user_id`)
+- Reduz payload e exposição de dados desnecessários
+
+### 2.5 ✅ `staleTime` adicionado ao React Query do frontend
+- `staleTime: 5 * 60 * 1000` (5 min) na query principal de `client-gallery`
+- Evita refetches desnecessários ao trocar abas/pastas
+
+### Arquivos modificados
+1. ✅ `supabase/functions/client-selection/index.ts` — aceita galleryToken
+2. ✅ `supabase/functions/confirm-selection/index.ts` — aceita galleryToken
+3. ✅ `supabase/functions/gallery-access/index.ts` — removido userId, SELECT explícito
+4. ✅ `src/pages/ClientGallery.tsx` — envia galleryToken, staleTime adicionado
+
+---
+
+
+## Auditoria Técnica — Etapa 1: Segurança Crítica (IMPLEMENTADO ✅)
+
+### 1.1 ✅ Autenticação em `confirm-payment-manual`
+- Edge Function agora exige `Authorization: Bearer <JWT>` válido
+- Verifica ownership: `cobranca.user_id === authenticatedUserId`
+- Retorna 401 (sem token) ou 403 (sem permissão) para acessos não autorizados
+- `verify_jwt = true` no `config.toml`
+- Frontend já envia JWT via `supabase.functions.invoke()` — sem breaking change
+
+### 1.2 ✅ Contagem server-side de fotos selecionadas no `confirm-selection`
+- `selectedCount` do frontend agora é IGNORADO para cálculos
+- Servidor faz `SELECT COUNT(*) FROM galeria_fotos WHERE galeria_id = X AND is_selected = true`
+- Valor do frontend é logado para auditoria, mas não usado
+- Elimina risco de manipulação de preço via parâmetro adulterado
+
+### Arquivos modificados
+1. ✅ `supabase/functions/confirm-payment-manual/index.ts` — auth check + ownership
+2. ✅ `supabase/functions/confirm-selection/index.ts` — server-side COUNT(*)
+3. ✅ `supabase/config.toml` — `verify_jwt = true` para confirm-payment-manual
+
+---
+
+
+## Plano: UX pagamento silenciosa + Asaas rebill interno + Fix nome cliente (IMPLEMENTADO ✅)
+
+### Problema 1: Tela intermediária removida ✅
+- Removido render condicional da tela "Confirmando seu pagamento..." (92 linhas de UI)
+- `check-payment-status` agora executa silenciosamente em background
+- URL limpa imediatamente ao detectar `?payment=success`
+- Polling silencioso (30s × 10min) se webhook não chegou ainda
+- Galeria renderiza normalmente durante verificação
+
+### Problema 2: "Cobrar novamente" Asaas usa link da galeria ✅
+- `gallery-create-payment` agora retorna `galleryUrl` junto com `checkoutUrl`
+- `PaymentStatusCard` para Asaas prioriza `galleryUrl` (checkout transparente interno)
+- Cliente acessa galeria → `gallery-access` detecta pendente → mostra AsaasCheckout
+
+### Problema 3: Bug nome cliente Asaas ✅
+- Busca agora prioriza `externalReference` (clienteId) sobre email
+- Se encontrado por email, verifica e atualiza nome + externalReference se divergentes
+- Garante que cada cliente Lunari mapeia corretamente para customer Asaas
+
+### Arquivos modificados
+1. ✅ `src/pages/ClientGallery.tsx` — verificação silenciosa, sem tela bloqueante
+2. ✅ `supabase/functions/gallery-create-payment/index.ts` — retorna `galleryUrl`
+3. ✅ `src/components/PaymentStatusCard.tsx` — Asaas usa `galleryUrl`
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — busca por externalReference + update nome
+
+
+## Plano: Taxas Asaas em tempo real no checkout (IMPLEMENTADO ✅)
+
+### Problema resolvido
+As taxas eram configuradas manualmente pelo fotógrafo. Agora são buscadas em tempo real da API Asaas (`GET /v3/myAccount/fees/`).
+
+### Arquitetura implementada
+
+```text
+Cliente abre checkout
+  → AsaasCheckout monta
+  → Chama asaas-fetch-fees (userId)
+  → API Asaas retorna taxas reais (processamento por faixa + antecipação + valor fixo)
+  → Frontend calcula: processamento (tier%) + R$0.49 + antecipação (se incluirTaxaAntecipacao = true)
+  → Exibe parcelas com valores corretos
+
+Cliente paga
+  → asaas-gallery-payment recalcula server-side com mesma API
+  → Cobra valor correto no Asaas
 ```
 
-### RPCs (SECURITY DEFINER)
-
-**`ensure_referral_code()`** — gera código único 8 chars, idempotente.
-
-**`register_referral(_referral_code)`** — valida (não self-referral, não já indicado), insere em `referrals` e seta `referred_by` em `profiles`.
-- ✅ Ajuste #3: Verifica se profile existe (`SELECT user_id FROM profiles WHERE user_id = auth.uid()`). Se não existir, retorna FALSE.
-
-**`grant_referral_select_bonus(_referred_user_id)`** — ✅ Ajuste #4: Usa apenas `select_bonus_granted = false` como controle (não depende de count de compras). Concede +1000 créditos a ambos, marca `select_bonus_granted = true`.
-
-**`activate_referral_transfer_bonus(_referred_user_id, _plan_storage_bytes)`** — ✅ Ajuste #1: Adiciona guard no início:
-```sql
-IF v_ref.transfer_bonus_active = true THEN
-  RETURN FALSE;  -- já ativo, evita duplicação por webhook repetido
-END IF;
+### Cálculo combinado por parcela
 ```
-Calcula 10%, soma `storage_bonus_bytes`, salva `transfer_bonus_bytes` e `transfer_plan_storage_bytes`.
+IF incluirTaxaAntecipacao = true:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49) + antecipação(taxa_mensal × parcela)
+ELSE:
+  Total = Valor + (Valor × taxa_faixa% + R$0.49)
+```
 
-**`recalculate_referral_transfer_bonus(_referred_user_id, _new_plan_storage_bytes)`** — ✅ Ajuste #2 (NOVA): Trata upgrade/downgrade:
-1. Busca referral com `transfer_bonus_active = true`
-2. Calcula novo bônus (10% do novo plano)
-3. Calcula diferença (`novo - antigo`)
-4. Atualiza `storage_bonus_bytes` do referrer e referred (soma a diferença)
-5. Atualiza `transfer_bonus_bytes` e `transfer_plan_storage_bytes`
+### Fix v2 — Correção de parsing da API Asaas (2026-03-09) ✅
 
-**`deactivate_referral_transfer_bonus(_referred_user_id)`** — Remove bônus de ambos.
+**Bugs corrigidos:**
+1. ✅ Nomes de campos errados (`upToSixInstallmentsPercentageFee` → `upToSixInstallmentsPercentage`)
+2. ✅ Antecipação lida de `payment.creditCard` → corrigido para `anticipation.creditCard`
+3. ✅ Desconto promocional (`hasValidDiscount`) agora é respeitado em todos os cálculos
 
-### RLS
+**Arquivos modificados:**
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts` — parsing corrigido + suporte a discount tiers
+2. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — mesma correção server-side
+3. ✅ `src/components/AsaasCheckout.tsx` — usa discount tiers quando ativos
+4. ✅ `src/components/settings/PaymentSettings.tsx` — indicador de desconto ativo + tabela com taxas promocionais
 
-- `referrals`: SELECT para `referrer_user_id = auth.uid() OR referred_user_id = auth.uid()`. No direct INSERT (via SECURITY DEFINER apenas).
+### Fix v3 — Toggle de taxa de antecipação (2026-03-09) ✅
 
----
+**Funcionalidade adicionada:**
+1. ✅ Novo campo `incluirTaxaAntecipacao: boolean` na interface `AsaasData` (default `true` para retrocompatibilidade)
+2. ✅ Toggle na UI "Incluir taxa de antecipação" visível apenas quando `absorverTaxa = false`
+3. ✅ Auto-save imediato ao alterar o toggle
+4. ✅ Frontend (`AsaasCheckout.tsx`) calcula antecipação apenas se flag = `true`
+5. ✅ Backend (`asaas-gallery-payment`) respeita a flag server-side para segurança
 
-## Fase 2: Webhooks
+**Arquivos modificados:**
+1. ✅ `src/hooks/usePaymentIntegration.ts` — interface atualizada + persistência
+2. ✅ `src/components/settings/PaymentSettings.tsx` — toggle com auto-save + loading indicator
+3. ✅ `src/components/AsaasCheckout.tsx` — condicional `incluirAntecipacao` no cálculo
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side
 
-### `mercadopago-webhook/index.ts`
-Após bloco de `credit_purchases` com status `approved`: chamar `grant_referral_select_bonus(purchase.user_id)`. A RPC já controla duplicação via `select_bonus_granted`.
+### Arquivos originais modificados
+1. ✅ `supabase/functions/asaas-fetch-fees/index.ts`
+2. ✅ `supabase/config.toml` — registro da nova função
+3. ✅ `src/components/AsaasCheckout.tsx` — fetch de taxas + cálculo combinado + toggle antecipação
+4. ✅ `supabase/functions/asaas-gallery-payment/index.ts` — validação server-side com API real + toggle antecipação
+5. ✅ `src/components/settings/PaymentSettings.tsx` — removidos campos manuais, botão "Ver taxas" read-only, toggle antecipação
+6. ✅ `src/hooks/usePaymentIntegration.ts` — interface AsaasData atualizada
 
-### `mercadopago-credits-payment/index.ts`
-Após cartão aprovado imediatamente: mesma chamada `grant_referral_select_bonus`.
+## Plano: Validação de Assinatura em Webhooks de Pagamento (IMPLEMENTADO ✅)
 
-### `asaas-webhook/index.ts`
-- **PAYMENT_CONFIRMED/RECEIVED** (subscription payment): após ativar assinatura, buscar `STORAGE_LIMITS[plan_type]` e chamar `activate_referral_transfer_bonus(sub.user_id, storage_bytes)`.
-- **SUBSCRIPTION_DELETED/INACTIVATED**: chamar `deactivate_referral_transfer_bonus(sub.user_id)`.
-- ✅ Ajuste #2: No `asaas-upgrade-subscription` e `asaas-downgrade-subscription`: após mudança de plano, chamar `recalculate_referral_transfer_bonus(user_id, new_storage_bytes)`.
+### Situação anterior
+Nenhum webhook validava a origem da requisição — qualquer POST forjado poderia marcar cobranças como pagas.
 
----
+### Implementação
 
-## Fase 3: Signup com código de indicação
+| Gateway | Mecanismo | Arquivo | Status |
+|---------|-----------|---------|--------|
+| **InfinitePay** | HMAC-SHA256 (`X-Infinia-Signature`) | `infinitepay-webhook/index.ts` | ✅ |
+| **Asaas** | Token fixo (`asaas-access-token`) | `asaas-webhook/index.ts` + `asaas-gallery-webhook/index.ts` | ✅ |
+| **Mercado Pago** | HMAC-SHA256 (`x-signature`) | `mercadopago-webhook/index.ts` | ✅ |
 
-### `SignupForm.tsx`
-- Ler `?ref=` da URL via `useSearchParams`
-- Exibir badge visual "Indicado por código: XXXX"
-- Passar `referral_code` via `signUpWithEmail`
+### Graceful degradation
+Todos usam o padrão: se o secret não estiver configurado, a validação é pulada com warning. Quando configurado, é obrigatória.
 
-### `useAuth.ts` → `signUpWithEmail`
-- Aceitar parâmetro opcional `referralCode`
-- Incluir em `options.data: { referral_code: referralCode }`
+### Secrets necessários (adicionar no Supabase)
+1. `INFINITEPAY_WEBHOOK_SECRET` — shared secret do painel InfinitePay
+2. `ASAAS_WEBHOOK_TOKEN` — token de autenticação do painel Asaas
+3. `MERCADOPAGO_WEBHOOK_SECRET` — secret signature do painel Mercado Pago
 
-### ✅ Ajuste #3: Registrar indicação após profile existir
-- No `AuthContext` ou hook de inicialização: após login, verificar `user.user_metadata.referral_code`
-- Chamar `supabase.rpc('register_referral', { _referral_code: code })` apenas quando profile já existe
-- Limpar metadata após registro bem-sucedido
+## Plano: RPC `finalize_gallery_payment` (IMPLEMENTADO ✅)
 
----
+### Problema resolvido
+Lógica de finalização de pagamento duplicada em 5 Edge Functions com race conditions e incrementos não-atômicos.
 
-## Fase 4: Frontend — Página "Indique e Ganhe"
+### Implementação
+- RPC PostgreSQL `SECURITY DEFINER` com advisory lock + `SELECT FOR UPDATE`
+- Incrementos atômicos (`SET x = x + N`)
+- Idempotente (verifica status antes de atualizar)
+- Triggers existentes (`ensure_transaction_on_cobranca_paid`, `trigger_recompute_session_paid`) continuam funcionando
 
-### `src/pages/Referrals.tsx`
-- ✅ Ajuste #6: Dashboard com estatísticas no topo:
-  - **Indicados**: total count
-  - **Créditos ganhos**: soma dos bônus Select concedidos (count * 1000)
-  - **Armazenamento bônus**: soma `storage_bonus_bytes` do `photographer_accounts`
-- Link copiável de indicação
-- Lista de indicados: nome parcial, data, status Select (concedido/pendente), status Transfer (ativo/cancelado)
+### Edge Functions refatoradas
+| Função | Mudança |
+|--------|---------|
+| `infinitepay-webhook` | Substituído bloco read-then-write por `supabase.rpc('finalize_gallery_payment')` |
+| `asaas-gallery-webhook` | Idem |
+| `mercadopago-webhook` | Idem |
+| `confirm-payment-manual` | Idem |
+| `check-payment-status` | `updateToPaid()` refatorado para usar RPC |
 
-### `src/hooks/useReferrals.ts`
-- Busca `referrals` onde `referrer_user_id = user.id`
-- Join com `profiles` para nomes dos indicados
-- Busca `storage_bonus_bytes` de `photographer_accounts`
-- Chama `ensure_referral_code()` para garantir código
+## Plano: Correção de Race Conditions e Controle de Concorrência (IMPLEMENTADO ✅)
 
-### `src/App.tsx`
-- Rota protegida `/referrals`
+### Problema 1: Execução concorrente em `confirm-selection` ✅
+- RPC `try_lock_gallery_selection` criada com `pg_advisory_xact_lock` + `SELECT FOR UPDATE`
+- Estado transitório `processando_selecao` impede duplo clique
+- Edge Function retorna 409 se lock já adquirido
 
-### `src/components/Layout.tsx`
-- Adicionar link "Indique e Ganhe" no menu (ícone `Gift` do lucide)
+### Problema 2: Read-then-write na sessão ✅
+- RPC `atomic_update_session_extras` criada com incrementos atômicos (`COALESCE + direct increment`)
+- `confirm-selection` usa RPC em vez de calcular totais no JS
 
----
+### Problema 3: Dupla escrita em `check-payment-status` ✅
+- Removido `status: 'pago'` e `data_pagamento` do UPDATE manual (agora só salva metadados do gateway)
+- RPC `finalize_gallery_payment` é o único responsável por marcar como pago
 
-## Fase 5: Storage — Incluir bônus no cálculo
+### RPCs criadas
+| RPC | Propósito |
+|-----|-----------|
+| `try_lock_gallery_selection` | Lock atômico + validação + estado transitório |
+| `atomic_update_session_extras` | Incrementos atômicos em `clientes_sessoes` |
 
-### `src/hooks/useTransferStorage.ts`
-- No query `transfer-account-data`: adicionar `storage_bonus_bytes` ao select
-- Calcular: `storageLimitBytes = planStorageBytes + freeBytes + storageBonusBytes`
-- Quando `storage_used > storage_total` (após remoção de bônus): bloquear uploads, manter arquivos, exibir aviso
-
----
-
-## Arquivos a criar/editar
-
-| Arquivo | Ação |
-|---|---|
-| Migration SQL | Criar tabela, campos, 6 RPCs |
-| `supabase/functions/mercadopago-webhook/index.ts` | +grant_referral_select_bonus |
-| `supabase/functions/mercadopago-credits-payment/index.ts` | +grant_referral_select_bonus |
-| `supabase/functions/asaas-webhook/index.ts` | +activate/deactivate/recalculate transfer bonus |
-| `supabase/functions/asaas-upgrade-subscription/index.ts` | +recalculate transfer bonus |
-| `supabase/functions/asaas-downgrade-subscription/index.ts` | +recalculate transfer bonus |
-| `src/hooks/useAuth.ts` | Passar referral_code no signup |
-| `src/components/auth/SignupForm.tsx` | Ler ?ref=, badge, passar code |
-| `src/contexts/AuthContext.tsx` | register_referral após login |
-| `src/hooks/useTransferStorage.ts` | +storage_bonus_bytes |
-| `src/hooks/useReferrals.ts` | Novo hook |
-| `src/pages/Referrals.tsx` | Nova página |
-| `src/App.tsx` | Rota /referrals |
-| `src/components/Layout.tsx` | Link no menu |
-
+### Arquivos modificados
+1. ✅ Nova migration SQL — `try_lock_gallery_selection` + `atomic_update_session_extras`
+2. ✅ `supabase/functions/confirm-selection/index.ts` — lock RPC + incrementos atômicos
+3. ✅ `supabase/functions/check-payment-status/index.ts` — removida dupla escrita de status

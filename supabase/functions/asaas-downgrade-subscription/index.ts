@@ -124,6 +124,30 @@ Deno.serve(async (req) => {
 
     console.log(`Downgrade scheduled: ${currentSub.plan_type} → ${newPlanType} for subscription ${subscriptionId}`);
 
+    // Recalculate referral transfer bonus for the new (downgraded) plan
+    const GB = 1024 * 1024 * 1024;
+    const DOWNGRADE_STORAGE: Record<string, number> = {
+      transfer_5gb: 5 * GB, transfer_20gb: 20 * GB,
+      transfer_50gb: 50 * GB, transfer_100gb: 100 * GB,
+      combo_completo: 20 * GB,
+    };
+    const newStorageBytes = DOWNGRADE_STORAGE[newPlanType] || 0;
+    if (newStorageBytes > 0) {
+      try {
+        const { data: recalcResult, error: recalcErr } = await adminClient.rpc('recalculate_referral_transfer_bonus', {
+          _referred_user_id: user.id,
+          _new_plan_storage_bytes: newStorageBytes,
+        });
+        if (recalcErr) {
+          console.warn('Referral recalculate error (non-fatal):', recalcErr.message);
+        } else if (recalcResult) {
+          console.log('🎁 Referral Transfer bonus recalculated for downgrade to', newPlanType);
+        }
+      } catch (e) {
+        console.warn('Referral recalculate exception (non-fatal):', e);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
