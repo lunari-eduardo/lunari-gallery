@@ -157,29 +157,48 @@ export default function ClientGallery() {
         return { success: true, gallery: data, photos: null, isLegacy: true };
       }
       
-      // For token access, use Edge Function
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/gallery-access`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token: identifier, 
-          password: sessionPassword 
-        }),
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok) {
-        if (result.code === 'NOT_FOUND') {
-          throw new Error('Galeria não encontrada');
+      // For token access, use Edge Function with pagination
+      const fetchPage = async (page: number) => {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/gallery-access`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            token: identifier, 
+            password: sessionPassword,
+            page,
+            limit: 200,
+          }),
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          if (result.code === 'NOT_FOUND') throw new Error('Galeria não encontrada');
+          if (result.code === 'WRONG_PASSWORD') throw new Error('Senha incorreta');
+          throw new Error(result.error || 'Erro ao acessar galeria');
         }
-        if (result.code === 'WRONG_PASSWORD') {
-          throw new Error('Senha incorreta');
+        
+        return result;
+      };
+
+      // Fetch first page
+      const firstPage = await fetchPage(1);
+      
+      // If there are more photos, fetch remaining pages in parallel
+      if (firstPage.pagination?.hasMore) {
+        const totalPages = Math.ceil(firstPage.pagination.total / firstPage.pagination.limit);
+        const remainingPages = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) => fetchPage(i + 2))
+        );
+        // Merge all photos into first page result
+        for (const page of remainingPages) {
+          if (page.photos) {
+            firstPage.photos.push(...page.photos);
+          }
         }
-        throw new Error(result.error || 'Erro ao acessar galeria');
       }
       
-      return result;
+      return firstPage;
     },
     enabled: !!identifier,
     retry: false,
