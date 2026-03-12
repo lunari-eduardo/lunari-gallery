@@ -341,6 +341,20 @@ Deno.serve(async (req) => {
             console.error(`[${requestId}] RPC purchase_credits error:`, rpcError);
           } else {
             console.log(`[${requestId}] Credits added: ${credits} for user ${userId}`);
+
+            // Grant referral bonus if applicable
+            try {
+              const { data: bonusGranted, error: bonusError } = await adminClient.rpc('grant_referral_select_bonus', {
+                _referred_user_id: userId,
+              });
+              if (bonusError) {
+                console.warn(`[${requestId}] Referral bonus error (non-fatal):`, bonusError.message);
+              } else if (bonusGranted) {
+                console.log(`[${requestId}] 🎁 Referral Select bonus granted for user:`, userId);
+              }
+            } catch (e) {
+              console.warn(`[${requestId}] Referral bonus exception (non-fatal):`, e);
+            }
           }
         }
       }
