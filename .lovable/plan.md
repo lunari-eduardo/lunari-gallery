@@ -1,5 +1,28 @@
 
 
+## Auditoria Técnica — Etapa 1: Segurança Crítica (IMPLEMENTADO ✅)
+
+### 1.1 ✅ Autenticação em `confirm-payment-manual`
+- Edge Function agora exige `Authorization: Bearer <JWT>` válido
+- Verifica ownership: `cobranca.user_id === authenticatedUserId`
+- Retorna 401 (sem token) ou 403 (sem permissão) para acessos não autorizados
+- `verify_jwt = true` no `config.toml`
+- Frontend já envia JWT via `supabase.functions.invoke()` — sem breaking change
+
+### 1.2 ✅ Contagem server-side de fotos selecionadas no `confirm-selection`
+- `selectedCount` do frontend agora é IGNORADO para cálculos
+- Servidor faz `SELECT COUNT(*) FROM galeria_fotos WHERE galeria_id = X AND is_selected = true`
+- Valor do frontend é logado para auditoria, mas não usado
+- Elimina risco de manipulação de preço via parâmetro adulterado
+
+### Arquivos modificados
+1. ✅ `supabase/functions/confirm-payment-manual/index.ts` — auth check + ownership
+2. ✅ `supabase/functions/confirm-selection/index.ts` — server-side COUNT(*)
+3. ✅ `supabase/config.toml` — `verify_jwt = true` para confirm-payment-manual
+
+---
+
+
 ## Plano: UX pagamento silenciosa + Asaas rebill interno + Fix nome cliente (IMPLEMENTADO ✅)
 
 ### Problema 1: Tela intermediária removida ✅
