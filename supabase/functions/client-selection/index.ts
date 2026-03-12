@@ -6,7 +6,8 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-  galleryId: string;
+  galleryId?: string;       // Legacy — still accepted but resolved via token when possible
+  galleryToken?: string;    // Preferred — public_token for security
   photoId?: string;
   action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment';
   comment?: string;
