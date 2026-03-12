@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { getReferralUrl } from '@/lib/galleryUrl';
 
 export interface ReferralItem {
   id: string;
