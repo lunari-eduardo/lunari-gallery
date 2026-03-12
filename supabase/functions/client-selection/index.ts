@@ -6,7 +6,8 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-  galleryId: string;
+  galleryId?: string;       // Legacy — still accepted but resolved via token when possible
+  galleryToken?: string;    // Preferred — public_token for security
   photoId?: string;
   action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment';
   comment?: string;
@@ -25,12 +26,37 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, photoId, action, comment } = body;
+    const { galleryToken, photoId, action, comment } = body;
+    let { galleryId } = body;
 
     // Validate required fields
-    if (!galleryId || !action) {
+    if (!action) {
       return new Response(
-        JSON.stringify({ error: 'galleryId e action são obrigatórios' }),
+        JSON.stringify({ error: 'action é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Resolve galleryId from token (preferred) or use legacy galleryId
+    if (galleryToken) {
+      const { data: tokenGallery, error: tokenError } = await supabase
+        .from('galerias')
+        .select('id')
+        .eq('public_token', galleryToken)
+        .single();
+
+      if (tokenError || !tokenGallery) {
+        return new Response(
+          JSON.stringify({ error: 'Galeria não encontrada' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      galleryId = tokenGallery.id;
+    }
+
+    if (!galleryId) {
+      return new Response(
+        JSON.stringify({ error: 'galleryToken ou galleryId é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

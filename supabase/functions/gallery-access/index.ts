@@ -30,7 +30,7 @@ serve(async (req) => {
     // 1. Find gallery by public_token
     const { data: gallery, error: galleryError } = await supabase
       .from("galerias")
-      .select("*")
+      .select("id, user_id, tipo, status, status_selecao, status_pagamento, permissao, gallery_password, public_token, session_id, cliente_id, cliente_nome, cliente_email, cliente_telefone, nome_sessao, nome_pacote, mensagem_boas_vindas, fotos_incluidas, fotos_selecionadas, total_fotos, total_fotos_extras_vendidas, valor_foto_extra, valor_extras, valor_total_vendido, prazo_selecao, prazo_selecao_dias, configuracoes, regras_congeladas, regras_selecao, finalized_at, enviado_em, origin, orcamento_id, created_at, updated_at, published_at")
       .eq("public_token", token)
       .single();
 
@@ -672,7 +672,7 @@ serve(async (req) => {
     // 5. Fetch photos for the gallery
     const { data: photos, error: photosError } = await supabase
       .from("galeria_fotos")
-      .select("*")
+      .select("id, galeria_id, filename, original_filename, storage_key, original_path, preview_path, preview_wm_path, thumb_path, is_selected, is_favorite, comment, pasta_id, width, height, has_watermark, order_index, processing_status")
       .eq("galeria_id", gallery.id)
       .order("original_filename", { ascending: true });
 
@@ -761,7 +761,7 @@ serve(async (req) => {
         success: true,
         gallery: {
           id: gallery.id,
-          userId: gallery.user_id, // Include user_id to check payment provider
+          // userId removed — not needed by frontend, reduces public data exposure
           sessionId: gallery.session_id,  // Include session_id for client-side
           sessionName: gallery.nome_sessao,
           packageName: gallery.nome_pacote,

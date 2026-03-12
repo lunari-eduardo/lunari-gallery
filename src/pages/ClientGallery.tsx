@@ -182,6 +182,7 @@ export default function ClientGallery() {
     },
     enabled: !!identifier,
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 min — avoid unnecessary refetches on tab switch
   });
 
   // Handle password requirement
@@ -378,7 +379,7 @@ export default function ClientGallery() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ galleryId, photoId, action, comment }),
+        body: JSON.stringify({ galleryToken: identifier, galleryId, photoId, action, comment }),
       });
       
       if (!response.ok) {
@@ -436,7 +437,8 @@ export default function ClientGallery() {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ 
+         body: JSON.stringify({ 
+          galleryToken: identifier,
           galleryId, 
           selectedCount: pricingData.selectedCount,
           extraCount: pricingData.extraCount,
@@ -950,7 +952,8 @@ export default function ClientGallery() {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+           body: JSON.stringify({ 
+            galleryToken: identifier,
             galleryId: galleryResponse.galleryId, 
             action: 'finalize_payment' 
           }),
@@ -1469,7 +1472,8 @@ export default function ClientGallery() {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+           body: JSON.stringify({ 
+            galleryToken: identifier,
             galleryId, 
             action: 'finalize_payment' 
           }),
