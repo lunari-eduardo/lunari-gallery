@@ -184,34 +184,39 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body: RequestBody = await req.json();
-    const { extraCount, requestPayment, galleryToken } = body;
-    let galleryId = body.galleryId;
-
-    // Resolve galleryId from token (preferred) or use legacy galleryId
-    if (galleryToken) {
-      const { data: tokenGallery, error: tokenError } = await supabase
-        .from('galerias')
-        .select('id')
-        .eq('public_token', galleryToken)
-        .single();
-
-      if (tokenError || !tokenGallery) {
-        return new Response(
-          JSON.stringify({ error: 'Galeria não encontrada' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      galleryId = tokenGallery.id;
+    // Rate limit check
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Validate required fields
-    if (!galleryId) {
+    const body: RequestBody = await req.json();
+    const { extraCount, requestPayment, galleryToken } = body;
+
+    // galleryToken is now REQUIRED — UUID access removed
+    if (!galleryToken) {
       return new Response(
-        JSON.stringify({ error: 'galleryToken ou galleryId é obrigatório' }),
+        JSON.stringify({ error: 'galleryToken é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { data: tokenGallery, error: tokenError } = await supabase
+      .from('galerias')
+      .select('id')
+      .eq('public_token', galleryToken)
+      .single();
+
+    if (tokenError || !tokenGallery) {
+      return new Response(
+        JSON.stringify({ error: 'Galeria não encontrada' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const galleryId = tokenGallery.id;
 
     // ── SERVER-SIDE COUNT: Never trust frontend selectedCount ──
     const { count: serverSelectedCount, error: countError } = await supabase
