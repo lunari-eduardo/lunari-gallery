@@ -685,6 +685,25 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Gallery ${galleryId} selection confirmed with ${selectedCount} photos, status_pagamento=${statusPagamento}`);
 
+    // AUDIT LOG: Record selection confirmation
+    await supabase.from('audit_log').insert({
+      action: 'confirm_selection',
+      actor_type: 'client',
+      ip_address: clientIp,
+      resource_type: 'gallery',
+      resource_id: galleryId,
+      gallery_id: galleryId,
+      user_agent: req.headers.get('user-agent') || null,
+      metadata: {
+        selectedCount,
+        extrasACobrar,
+        valorTotal,
+        valorUnitario,
+        paymentRequired: shouldCreatePayment,
+        provedor: paymentResponse?.provedor || null,
+      },
+    }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
+
     // 9. Return response based on payment type
     if (paymentResponse?.provedor === 'pix_manual') {
       const integracao = await supabase
