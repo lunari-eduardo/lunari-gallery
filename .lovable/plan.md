@@ -1,5 +1,35 @@
 
 
+## Auditoria Técnica — Etapa 3: Robustez (IMPLEMENTADO ✅)
+
+### 3.1 ✅ Supabase Realtime em vez de polling para confirmação de pagamento
+- `PaymentPendingScreen` agora usa Realtime subscription na tabela `cobrancas`
+- Polling reduzido para fallback de 60s (era 30s como mecanismo primário)
+- `ClientGallery.tsx` payment return também usa Realtime + polling de 60s como backup
+
+### 3.2 ✅ Fix race condition `cliente_acessou`
+- Unique partial index `idx_galeria_acoes_cliente_acessou` criado em `galeria_acoes`
+- `gallery-access` usa `.upsert()` com `ignoreDuplicates: true` em vez de read-then-write
+- Duplicatas existentes limpas via migration
+
+### 3.3 ✅ Fix memory leak do interval no ClientGallery
+- `paymentRetryRef` (useRef) armazena o `setInterval` corretamente
+- Cleanup no `return` do `useEffect` limpa interval E remove canal Realtime
+- Antes: `return () => clearInterval()` estava dentro de async function, nunca executava
+
+### 3.4 CORS — Pulado ✅
+- Fotógrafos usam domínios personalizados — restringir CORS quebraria esse cenário
+- Segurança já coberta por token resolution (Etapa 2) e JWT (Etapa 1)
+
+### Arquivos modificados
+1. ✅ `src/components/PaymentPendingScreen.tsx` — Realtime + fallback polling
+2. ✅ `src/pages/ClientGallery.tsx` — Realtime, useRef para interval, cleanup correto
+3. ✅ `supabase/functions/gallery-access/index.ts` — upsert com ignoreDuplicates
+4. ✅ Migration: unique partial index + limpeza de duplicatas
+
+---
+
+
 ## Auditoria Técnica — Etapa 2: Segurança e Escalabilidade (IMPLEMENTADO ✅)
 
 ### 2.1 ✅ `client-selection` aceita `galleryToken` em vez de `galleryId`
