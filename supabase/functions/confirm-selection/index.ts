@@ -6,7 +6,8 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-  galleryId: string;
+  galleryId?: string;
+  galleryToken?: string;    // Preferred — public_token for security
   selectedCount: number;
   extraCount?: number;
   valorUnitario?: number;
