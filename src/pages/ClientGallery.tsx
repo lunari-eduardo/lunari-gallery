@@ -380,7 +380,7 @@ export default function ClientGallery() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ galleryToken: identifier, galleryId, photoId, action, comment }),
+        body: JSON.stringify({ galleryToken: identifier, photoId, action, comment }),
       });
       
       if (!response.ok) {
