@@ -13,6 +13,34 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // ── AUTH CHECK: Extract and verify the photographer's JWT ──
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Autenticação obrigatória' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create a client with the user's JWT to verify identity
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
+    if (authError || !user) {
+      console.error('❌ Auth error:', authError?.message);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Token inválido ou expirado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const authenticatedUserId = user.id;
+    console.log(`🔐 Authenticated user: ${authenticatedUserId}`);
+
+    // Service role client for privileged operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { cobrancaId, receiptUrl, paidAt } = await req.json();
@@ -35,6 +63,15 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ success: false, error: 'Cobrança não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── OWNERSHIP CHECK: Only the photographer who owns the cobrança can confirm ──
+    if (cobranca.user_id !== authenticatedUserId) {
+      console.error(`❌ Ownership mismatch: cobrança.user_id=${cobranca.user_id}, auth=${authenticatedUserId}`);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Sem permissão para confirmar esta cobrança' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -71,7 +108,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`💳 Cobrança ${cobrancaId} finalizada via RPC:`, JSON.stringify(rpcResult));
+    console.log(`💳 Cobrança ${cobrancaId} finalizada via RPC por user ${authenticatedUserId}:`, JSON.stringify(rpcResult));
 
     return new Response(
       JSON.stringify({ 
