@@ -182,6 +182,7 @@ export default function ClientGallery() {
     },
     enabled: !!identifier,
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 min — avoid unnecessary refetches on tab switch
   });
 
   // Handle password requirement
