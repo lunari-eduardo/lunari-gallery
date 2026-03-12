@@ -622,11 +622,36 @@ export default function ClientGallery() {
             setIsConfirmed(true);
             refetchGallery();
           } else {
-            // Not yet confirmed — start silent polling (30s intervals, up to 10min)
+            // Not yet confirmed — start Realtime subscription + fallback polling
+            const channel = supabase
+              .channel(`payment-return-${sessionId || galleryId}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: 'UPDATE',
+                  schema: 'public',
+                  table: 'cobrancas',
+                  ...(sessionId ? { filter: `session_id=eq.${sessionId}` } : {}),
+                },
+                (payload) => {
+                  if ((payload.new as any).status === 'pago') {
+                    console.log('✅ Realtime: pagamento confirmado');
+                    if (paymentRetryRef.current) clearInterval(paymentRetryRef.current);
+                    supabase.removeChannel(channel);
+                    setCurrentStep('confirmed');
+                    setIsConfirmed(true);
+                    refetchGallery();
+                  }
+                }
+              )
+              .subscribe();
+
+            // Fallback polling every 60s (safety net if realtime misses)
             const startTime = Date.now();
-            const retryInterval = setInterval(async () => {
+            paymentRetryRef.current = setInterval(async () => {
               if (Date.now() - startTime > 10 * 60 * 1000) {
-                clearInterval(retryInterval);
+                if (paymentRetryRef.current) clearInterval(paymentRetryRef.current);
+                supabase.removeChannel(channel);
                 return;
               }
               try {
@@ -637,7 +662,8 @@ export default function ClientGallery() {
                 });
                 const retryResult = await retryResponse.json();
                 if (retryResult.status === 'pago' || retryResult.updated) {
-                  clearInterval(retryInterval);
+                  if (paymentRetryRef.current) clearInterval(paymentRetryRef.current);
+                  supabase.removeChannel(channel);
                   setCurrentStep('confirmed');
                   setIsConfirmed(true);
                   refetchGallery();
@@ -645,9 +671,7 @@ export default function ClientGallery() {
               } catch (e) {
                 console.error('[Auto-retry] Error:', e);
               }
-            }, 30000);
-            
-            return () => clearInterval(retryInterval);
+            }, 60000);
           }
         } catch (error) {
           console.error('❌ Erro ao verificar pagamento:', error);
@@ -658,6 +682,13 @@ export default function ClientGallery() {
       
       confirmPaymentReturn();
     }
+    
+    return () => {
+      if (paymentRetryRef.current) {
+        clearInterval(paymentRetryRef.current);
+        paymentRetryRef.current = null;
+      }
+    };
   }, [galleryId, sessionId, isProcessingPaymentReturn]);
 
   // Priority: theme.backgroundMode > clientMode > 'light'
