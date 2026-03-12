@@ -5,9 +5,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Rate limiter — in-memory per isolate (burst protection)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 60; // max requests per window
+const RATE_WINDOW = 60_000; // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT;
+}
+
 interface RequestBody {
-  galleryId?: string;       // Legacy — still accepted but resolved via token when possible
-  galleryToken?: string;    // Preferred — public_token for security
+  galleryToken: string;    // Required — public_token (UUID access removed)
   photoId?: string;
   action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment';
   comment?: string;
