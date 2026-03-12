@@ -1470,7 +1470,8 @@ export default function ClientGallery() {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+           body: JSON.stringify({ 
+            galleryToken: identifier,
             galleryId, 
             action: 'finalize_payment' 
           }),
