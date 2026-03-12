@@ -29,6 +29,7 @@ import NotFound from "./pages/NotFound";
 import DeliverDetail from "./pages/DeliverDetail";
 import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
+import Referrals from "./pages/Referrals";
 
 const queryClient = new QueryClient({
   defaultOptions: {
