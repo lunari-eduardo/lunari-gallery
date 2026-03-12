@@ -48,6 +48,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
   } = useGalleryAccess(user, session);
 
+  // Register referral code after login if present in user metadata
+  const referralProcessedRef = useRef(false);
+  useEffect(() => {
+    if (!user || referralProcessedRef.current) return;
+    const refCode = user.user_metadata?.referral_code;
+    if (!refCode) return;
+    
+    referralProcessedRef.current = true;
+    console.log('🎁 Processing referral code from signup:', refCode);
+    
+    supabase.rpc('register_referral', { _referral_code: refCode } as any)
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('Referral registration failed (may already exist):', error.message);
+        } else if (data) {
+          console.log('✅ Referral registered successfully');
+          // Clear the referral_code from metadata
+          supabase.auth.updateUser({ data: { referral_code: null } });
+        }
+      });
+  }, [user]);
+
   // Debug logging
   useEffect(() => {
     console.log('📊 AuthContext state:', {

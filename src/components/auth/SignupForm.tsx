@@ -95,6 +95,14 @@ export function SignupForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {referralCode && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
+            <Gift className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-sm text-primary font-medium">
+              Indicação: <Badge variant="secondary" className="ml-1">{referralCode}</Badge>
+            </span>
+          </div>
+        )}
         <FormField
           control={form.control}
           name="nome"
