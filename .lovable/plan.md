@@ -1,5 +1,40 @@
 
 
+## Auditoria Técnica — Etapa 2: Segurança e Escalabilidade (IMPLEMENTADO ✅)
+
+### 2.1 ✅ `client-selection` aceita `galleryToken` em vez de `galleryId`
+- Interface pública agora aceita `galleryToken` (public_token) como identificador preferido
+- `galleryId` (UUID) ainda aceito como fallback para retrocompatibilidade
+- Token é resolvido internamente para o UUID real via query no banco
+- Previne que atacantes usem UUIDs conhecidos para manipular galerias de terceiros
+
+### 2.2 ✅ `confirm-selection` aceita `galleryToken`
+- Mesma lógica: resolve `galleryToken` → `galleryId` internamente
+- Frontend envia ambos para retrocompatibilidade
+
+### 2.3 ✅ Removido `userId` da resposta pública de `gallery-access`
+- `gallery.userId` (user_id do fotógrafo) não é mais exposto na resposta da galeria de seleção
+- `asaasCheckoutData.userId` permanece (construído server-side, necessário para checkout)
+- Reduz superfície de ataque e exposição de dados internos
+
+### 2.4 ✅ SELECT explícito em `gallery-access`
+- `galerias SELECT *` substituído por SELECT com campos explícitos
+- `galeria_fotos SELECT *` substituído por SELECT com campos necessários (excluído `file_size`, `original_file_size`, `mime_type`, `upload_key`, `created_at`, `updated_at`, `user_id`)
+- Reduz payload e exposição de dados desnecessários
+
+### 2.5 ✅ `staleTime` adicionado ao React Query do frontend
+- `staleTime: 5 * 60 * 1000` (5 min) na query principal de `client-gallery`
+- Evita refetches desnecessários ao trocar abas/pastas
+
+### Arquivos modificados
+1. ✅ `supabase/functions/client-selection/index.ts` — aceita galleryToken
+2. ✅ `supabase/functions/confirm-selection/index.ts` — aceita galleryToken
+3. ✅ `supabase/functions/gallery-access/index.ts` — removido userId, SELECT explícito
+4. ✅ `src/pages/ClientGallery.tsx` — envia galleryToken, staleTime adicionado
+
+---
+
+
 ## Auditoria Técnica — Etapa 1: Segurança Crítica (IMPLEMENTADO ✅)
 
 ### 1.1 ✅ Autenticação em `confirm-payment-manual`
