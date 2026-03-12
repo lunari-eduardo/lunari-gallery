@@ -1,7 +1,8 @@
-import React, { createContext, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useRef } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess, AccessLevel } from '@/hooks/useGalleryAccess';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
