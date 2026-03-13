@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_fingerprints: {
+        Row: {
+          created_at: string
+          device_fingerprint: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_fingerprint: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_fingerprint?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_credit_grants: {
         Row: {
           amount: number
@@ -2626,6 +2656,7 @@ export type Database = {
           site_redes_sociais: string[] | null
           studio_trial_ends_at: string | null
           studio_trial_started_at: string | null
+          suspected_duplicate: boolean | null
           telefone: string | null
           telefones: string[] | null
           updated_at: string
@@ -2652,6 +2683,7 @@ export type Database = {
           site_redes_sociais?: string[] | null
           studio_trial_ends_at?: string | null
           studio_trial_started_at?: string | null
+          suspected_duplicate?: boolean | null
           telefone?: string | null
           telefones?: string[] | null
           updated_at?: string
@@ -2678,6 +2710,7 @@ export type Database = {
           site_redes_sociais?: string[] | null
           studio_trial_ends_at?: string | null
           studio_trial_started_at?: string | null
+          suspected_duplicate?: boolean | null
           telefone?: string | null
           telefones?: string[] | null
           updated_at?: string
@@ -3523,6 +3556,16 @@ export type Database = {
       recompute_session_paid: {
         Args: { p_session_id: string }
         Returns: undefined
+      }
+      record_device_fingerprint: {
+        Args: {
+          _event_type?: string
+          _fingerprint: string
+          _ip_address?: string
+          _user_agent?: string
+          _user_id: string
+        }
+        Returns: Json
       }
       refund_photo_credit: { Args: { _user_id: string }; Returns: undefined }
       register_referral: { Args: { _referral_code: string }; Returns: boolean }
