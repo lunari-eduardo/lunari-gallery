@@ -230,7 +230,7 @@ export default function Credits() {
           {/* Cards grid lado a lado */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {/* Card 1 — Studio Pro + Select 2k */}
-            <div className="rounded-xl border border-border/60 bg-background p-7 md:p-8 flex flex-col gap-5">
+            <div className="glass rounded-xl border border-border/50 p-7 md:p-8 flex flex-col gap-5">
               <div className="space-y-2">
                 <p className="text-base font-semibold">Studio Pro + Gallery Select 2k</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
