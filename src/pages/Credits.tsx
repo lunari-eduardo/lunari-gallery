@@ -267,7 +267,7 @@ export default function Credits() {
             </div>
 
             {/* Card 2 — Combo Completo */}
-            <div className="relative rounded-xl border border-primary/20 bg-background p-7 md:p-8 flex flex-col gap-5">
+            <div className="relative glass rounded-xl border border-primary/20 p-7 md:p-8 flex flex-col gap-5">
               <Badge variant="secondary" className="absolute -top-2.5 left-5 text-[10px] font-medium">
                 Mais completo
               </Badge>
