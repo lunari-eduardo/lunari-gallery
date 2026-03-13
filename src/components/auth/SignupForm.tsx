@@ -44,11 +44,21 @@ export function SignupForm() {
 
   const onSubmit = async (values: SignupFormValues) => {
     setIsLoading(true);
+    
+    // Generate device fingerprint before signup
+    let fingerprint: string | undefined;
+    try {
+      fingerprint = await generateDeviceFingerprint();
+    } catch (err) {
+      console.warn('⚠️ Could not generate fingerprint:', err);
+    }
+    
     const { error, needsEmailConfirmation } = await signUpWithEmail(
       values.email,
       values.password,
       values.nome,
-      referralCode || undefined
+      referralCode || undefined,
+      fingerprint
     );
     
     if (error) {

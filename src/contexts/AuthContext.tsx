@@ -81,6 +81,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, [user]);
 
+  // Record device fingerprint after login/signup
+  const fingerprintRecordedRef = useRef(false);
+  useEffect(() => {
+    if (!user || !session || fingerprintRecordedRef.current) return;
+    fingerprintRecordedRef.current = true;
+    
+    generateDeviceFingerprint().then(fingerprint => {
+      supabase.functions.invoke('record-auth-fingerprint', {
+        body: { device_fingerprint: fingerprint, event_type: 'login' },
+      }).then(({ error }) => {
+        if (error) {
+          console.warn('⚠️ Failed to record fingerprint:', error);
+        } else {
+          console.log('🔒 Device fingerprint recorded');
+        }
+      });
+    }).catch(err => {
+      console.warn('⚠️ Fingerprint generation failed:', err);
+    });
+  }, [user, session]);
+
   // Debug logging
   useEffect(() => {
     console.log('📊 AuthContext state:', {
