@@ -212,7 +212,7 @@ export default function Credits() {
 
       {/* Strategic expansion section */}
       {!isAdmin && (
-        <div className="bg-muted/30 -mx-4 px-4 md:-mx-6 md:px-6 py-12 md:py-16 rounded-2xl space-y-10">
+        <div className="bg-muted/30 backdrop-blur-sm -mx-4 px-4 md:-mx-6 md:px-6 py-12 md:py-16 rounded-2xl space-y-10">
           {/* Header centrado — landing page style */}
           <div className="text-center max-w-2xl mx-auto space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -230,7 +230,7 @@ export default function Credits() {
           {/* Cards grid lado a lado */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {/* Card 1 — Studio Pro + Select 2k */}
-            <div className="rounded-xl border border-border/60 bg-background p-7 md:p-8 flex flex-col gap-5">
+            <div className="glass rounded-xl border border-border/50 p-7 md:p-8 flex flex-col gap-5">
               <div className="space-y-2">
                 <p className="text-base font-semibold">Studio Pro + Gallery Select 2k</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -267,7 +267,7 @@ export default function Credits() {
             </div>
 
             {/* Card 2 — Combo Completo */}
-            <div className="relative rounded-xl border border-primary/20 bg-background p-7 md:p-8 flex flex-col gap-5">
+            <div className="relative glass rounded-xl border border-primary/20 p-7 md:p-8 flex flex-col gap-5">
               <Badge variant="secondary" className="absolute -top-2.5 left-5 text-[10px] font-medium">
                 Mais completo
               </Badge>
