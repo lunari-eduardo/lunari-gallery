@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.asaas-fetch-fees]
 verify_jwt = false
+
+[functions.record-auth-fingerprint]
+verify_jwt = false

@@ -10,6 +10,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { generateDeviceFingerprint } from '@/lib/deviceFingerprint';
 
 const signupSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
@@ -43,11 +44,21 @@ export function SignupForm() {
 
   const onSubmit = async (values: SignupFormValues) => {
     setIsLoading(true);
+    
+    // Generate device fingerprint before signup
+    let fingerprint: string | undefined;
+    try {
+      fingerprint = await generateDeviceFingerprint();
+    } catch (err) {
+      console.warn('⚠️ Could not generate fingerprint:', err);
+    }
+    
     const { error, needsEmailConfirmation } = await signUpWithEmail(
       values.email,
       values.password,
       values.nome,
-      referralCode || undefined
+      referralCode || undefined,
+      fingerprint
     );
     
     if (error) {

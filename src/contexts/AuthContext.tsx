@@ -3,6 +3,7 @@ import { User, Session, AuthError } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess, AccessLevel } from '@/hooks/useGalleryAccess';
 import { supabase } from '@/integrations/supabase/client';
+import { generateDeviceFingerprint } from '@/lib/deviceFingerprint';
 
 interface AuthContextType {
   user: User | null;
@@ -16,7 +17,7 @@ interface AuthContextType {
   accessLoading: boolean;
   signInWithGoogle: () => Promise<{ error: AuthError | null }>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUpWithEmail: (email: string, password: string, nome?: string, referralCode?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
+  signUpWithEmail: (email: string, password: string, nome?: string, referralCode?: string, deviceFingerprint?: string) => Promise<{ error: AuthError | null; needsEmailConfirmation: boolean }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
   updateEmail: (newEmail: string) => Promise<{ error: AuthError | null }>;
@@ -79,6 +80,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       });
   }, [user]);
+
+  // Record device fingerprint after login/signup
+  const fingerprintRecordedRef = useRef(false);
+  useEffect(() => {
+    if (!user || !session || fingerprintRecordedRef.current) return;
+    fingerprintRecordedRef.current = true;
+    
+    const recordFingerprint = async () => {
+      try {
+        // Use pending fingerprint from OAuth flow if available, otherwise generate new
+        const pendingFp = localStorage.getItem('pending_device_fingerprint');
+        const fingerprint = pendingFp || await generateDeviceFingerprint();
+        
+        // Determine event type
+        const eventType = pendingFp ? 'signup' : 'login';
+        
+        const { error } = await supabase.functions.invoke('record-auth-fingerprint', {
+          body: { device_fingerprint: fingerprint, event_type: eventType },
+        });
+        
+        if (error) {
+          console.warn('⚠️ Failed to record fingerprint:', error);
+        } else {
+          console.log('🔒 Device fingerprint recorded');
+        }
+        
+        // Clean up
+        if (pendingFp) {
+          localStorage.removeItem('pending_device_fingerprint');
+        }
+      } catch (err) {
+        console.warn('⚠️ Fingerprint recording failed:', err);
+      }
+    };
+    
+    recordFingerprint();
+  }, [user, session]);
 
   // Debug logging
   useEffect(() => {

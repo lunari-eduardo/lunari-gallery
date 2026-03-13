@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { generateDeviceFingerprint } from '@/lib/deviceFingerprint';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -75,6 +76,15 @@ export function useAuth() {
       console.log('🎁 Referral code saved to localStorage:', refCode);
     }
     
+    // Save device fingerprint to localStorage for post-OAuth recording
+    try {
+      const fingerprint = await generateDeviceFingerprint();
+      localStorage.setItem('pending_device_fingerprint', fingerprint);
+      console.log('🔒 Device fingerprint saved for OAuth flow');
+    } catch (err) {
+      console.warn('⚠️ Could not save fingerprint for OAuth:', err);
+    }
+    
     // Normalizar URL removendo barra final para garantir match exato
     const redirectUrl = origin.endsWith('/') ? origin.slice(0, -1) : origin;
     
@@ -113,7 +123,7 @@ export function useAuth() {
     return { error: null };
   };
 
-  const signUpWithEmail = async (email: string, password: string, nome?: string, referralCode?: string) => {
+  const signUpWithEmail = async (email: string, password: string, nome?: string, referralCode?: string, deviceFingerprint?: string) => {
     console.log('📝 Starting email sign-up');
     
     const redirectUrl = window.location.origin;
@@ -124,6 +134,9 @@ export function useAuth() {
     };
     if (referralCode) {
       userData.referral_code = referralCode;
+    }
+    if (deviceFingerprint) {
+      userData.device_fingerprint = deviceFingerprint;
     }
     
     const { data, error } = await supabase.auth.signUp({
