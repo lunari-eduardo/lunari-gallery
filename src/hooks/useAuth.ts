@@ -76,6 +76,15 @@ export function useAuth() {
       console.log('🎁 Referral code saved to localStorage:', refCode);
     }
     
+    // Save device fingerprint to localStorage for post-OAuth recording
+    try {
+      const fingerprint = await generateDeviceFingerprint();
+      localStorage.setItem('pending_device_fingerprint', fingerprint);
+      console.log('🔒 Device fingerprint saved for OAuth flow');
+    } catch (err) {
+      console.warn('⚠️ Could not save fingerprint for OAuth:', err);
+    }
+    
     // Normalizar URL removendo barra final para garantir match exato
     const redirectUrl = origin.endsWith('/') ? origin.slice(0, -1) : origin;
     
