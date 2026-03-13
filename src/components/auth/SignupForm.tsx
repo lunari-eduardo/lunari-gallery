@@ -10,6 +10,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { generateDeviceFingerprint } from '@/lib/deviceFingerprint';
 
 const signupSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
