@@ -212,7 +212,7 @@ export default function Credits() {
 
       {/* Strategic expansion section */}
       {!isAdmin && (
-        <div className="bg-muted/30 -mx-4 px-4 md:-mx-6 md:px-6 py-12 md:py-16 rounded-2xl space-y-10">
+        <div className="bg-muted/30 backdrop-blur-sm -mx-4 px-4 md:-mx-6 md:px-6 py-12 md:py-16 rounded-2xl space-y-10">
           {/* Header centrado — landing page style */}
           <div className="text-center max-w-2xl mx-auto space-y-4">
             <p className="text-sm text-muted-foreground">
