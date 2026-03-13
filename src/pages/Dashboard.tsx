@@ -358,7 +358,7 @@ export default function Dashboard() {
                 className="pl-10"
               />
             </div>
-            <div className="inline-flex border border-border rounded-lg overflow-hidden">
+            <div className="inline-flex border border-border/50 rounded-lg overflow-hidden bg-background/60 backdrop-blur-sm">
               {selectStatusFilters.map((filter, i) => (
                 <button
                   key={filter.value}
