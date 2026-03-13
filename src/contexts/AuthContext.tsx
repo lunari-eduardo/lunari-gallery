@@ -87,19 +87,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || !session || fingerprintRecordedRef.current) return;
     fingerprintRecordedRef.current = true;
     
-    generateDeviceFingerprint().then(fingerprint => {
-      supabase.functions.invoke('record-auth-fingerprint', {
-        body: { device_fingerprint: fingerprint, event_type: 'login' },
-      }).then(({ error }) => {
+    const recordFingerprint = async () => {
+      try {
+        // Use pending fingerprint from OAuth flow if available, otherwise generate new
+        const pendingFp = localStorage.getItem('pending_device_fingerprint');
+        const fingerprint = pendingFp || await generateDeviceFingerprint();
+        
+        // Determine event type
+        const eventType = pendingFp ? 'signup' : 'login';
+        
+        const { error } = await supabase.functions.invoke('record-auth-fingerprint', {
+          body: { device_fingerprint: fingerprint, event_type: eventType },
+        });
+        
         if (error) {
           console.warn('⚠️ Failed to record fingerprint:', error);
         } else {
           console.log('🔒 Device fingerprint recorded');
         }
-      });
-    }).catch(err => {
-      console.warn('⚠️ Fingerprint generation failed:', err);
-    });
+        
+        // Clean up
+        if (pendingFp) {
+          localStorage.removeItem('pending_device_fingerprint');
+        }
+      } catch (err) {
+        console.warn('⚠️ Fingerprint recording failed:', err);
+      }
+    };
+    
+    recordFingerprint();
   }, [user, session]);
 
   // Debug logging
