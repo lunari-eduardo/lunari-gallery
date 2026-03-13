@@ -113,7 +113,7 @@ export function useAuth() {
     return { error: null };
   };
 
-  const signUpWithEmail = async (email: string, password: string, nome?: string, referralCode?: string) => {
+  const signUpWithEmail = async (email: string, password: string, nome?: string, referralCode?: string, deviceFingerprint?: string) => {
     console.log('📝 Starting email sign-up');
     
     const redirectUrl = window.location.origin;
@@ -124,6 +124,9 @@ export function useAuth() {
     };
     if (referralCode) {
       userData.referral_code = referralCode;
+    }
+    if (deviceFingerprint) {
+      userData.device_fingerprint = deviceFingerprint;
     }
     
     const { data, error } = await supabase.auth.signUp({

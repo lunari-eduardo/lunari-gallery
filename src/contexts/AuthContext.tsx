@@ -3,6 +3,7 @@ import { User, Session, AuthError } from '@supabase/supabase-js';
 import { useAuth } from '@/hooks/useAuth';
 import { useGalleryAccess, AccessLevel } from '@/hooks/useGalleryAccess';
 import { supabase } from '@/integrations/supabase/client';
+import { generateDeviceFingerprint } from '@/lib/deviceFingerprint';
 
 interface AuthContextType {
   user: User | null;
