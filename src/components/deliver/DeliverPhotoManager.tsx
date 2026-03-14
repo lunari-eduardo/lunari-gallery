@@ -140,6 +140,12 @@ export function DeliverPhotoManager({
                 className="w-full h-full object-cover"
                 loading="lazy"
               />
+              {/* Video play indicator */}
+              {photo.mime_type?.startsWith('video/') && (
+                <div className="absolute top-1.5 right-1.5 p-1 bg-black/50 text-white rounded-full pointer-events-none">
+                  <Play className="h-3 w-3 fill-white" />
+                </div>
+              )}
 
               {/* Cover badge */}
               {isCover && (

@@ -439,11 +439,20 @@ export function PhotoUploader({
                 key={item.id}
                 className="relative aspect-square rounded-lg overflow-hidden bg-muted"
               >
-                <img
-                  src={item.preview}
-                  alt={item.file.name}
-                  className="w-full h-full object-cover"
-                />
+                {isVideoFile(item.file) ? (
+                  <video
+                    src={item.preview}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={item.preview}
+                    alt={item.file.name}
+                    className="w-full h-full object-cover"
+                  />
+                )}
 
                 {/* Status Overlay */}
                 {item.status !== 'queued' && (

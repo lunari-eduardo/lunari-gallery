@@ -115,13 +115,24 @@ export function DeliverLightbox({ photos, currentIndex, onClose, onNavigate, onD
         </button>
       )}
 
-      {/* Image */}
-      <img
-        src={url}
-        alt={photo.originalFilename}
-        className="max-w-full max-h-full object-contain select-none"
-        draggable={false}
-      />
+      {/* Media */}
+      {photo.mimeType?.startsWith('video/') ? (
+        <video
+          key={photo.id}
+          src={url}
+          controls
+          autoPlay
+          className="max-w-full max-h-full object-contain select-none"
+          playsInline
+        />
+      ) : (
+        <img
+          src={url}
+          alt={photo.originalFilename}
+          className="max-w-full max-h-full object-contain select-none"
+          draggable={false}
+        />
+      )}
     </div>
   );
 }

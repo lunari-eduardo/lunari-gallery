@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
         original_path: originalPath || null,
         file_size: fileData.byteLength,
         original_file_size: originalFileSize,
-        mime_type: file.type || "image/jpeg",
+        mime_type: file.type || "application/octet-stream",
         width,
         height,
         is_selected: false,

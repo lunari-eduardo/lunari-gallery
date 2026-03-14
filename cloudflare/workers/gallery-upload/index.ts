@@ -298,13 +298,44 @@ async function handleUploadOriginal(
   }
 }
 
-// Handle image serving from R2
+// Handle file serving from R2 with Range request support (for video streaming)
 async function handleServe(
   request: Request,
   env: Env,
   path: string
 ): Promise<Response> {
   try {
+    const rangeHeader = request.headers.get('Range');
+    const contentType = path.match(/\.(mp4|mov|webm|m4v)$/i) ? 'video' : 'image';
+
+    // For Range requests (video seeking), use R2's range support
+    if (rangeHeader && contentType === 'video') {
+      const object = await env.GALLERY_BUCKET.get(path, { range: request.headers });
+
+      if (!object) {
+        return new Response('Not found', { status: 404, headers: corsHeaders });
+      }
+
+      const headers = new Headers(corsHeaders);
+      headers.set('Content-Type', object.httpMetadata?.contentType || 'video/mp4');
+      headers.set('Accept-Ranges', 'bytes');
+      headers.set('Cache-Control', 'public, max-age=86400');
+      headers.set('ETag', object.etag);
+
+      // R2 sets the Content-Range header in the response when range is used
+      if ('range' in object && object.range) {
+        const range = object.range as { offset: number; length: number };
+        const end = range.offset + range.length - 1;
+        headers.set('Content-Range', `bytes ${range.offset}-${end}/${object.size}`);
+        headers.set('Content-Length', range.length.toString());
+        return new Response(object.body, { status: 206, headers });
+      }
+
+      if (object.size) headers.set('Content-Length', object.size.toString());
+      return new Response(object.body, { headers });
+    }
+
+    // Regular full-file serve (images or full video)
     const object = await env.GALLERY_BUCKET.get(path);
 
     if (!object) {
@@ -312,9 +343,17 @@ async function handleServe(
     }
 
     const headers = new Headers(corsHeaders);
-    headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    const detectedType = object.httpMetadata?.contentType || (contentType === 'video' ? 'video/mp4' : 'image/jpeg');
+    headers.set('Content-Type', detectedType);
     headers.set('ETag', object.etag);
+
+    if (contentType === 'video') {
+      headers.set('Accept-Ranges', 'bytes');
+      headers.set('Cache-Control', 'public, max-age=86400');
+      if (object.size) headers.set('Content-Length', object.size.toString());
+    } else {
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
 
     const ifNoneMatch = request.headers.get('If-None-Match');
     if (ifNoneMatch === object.etag) {
