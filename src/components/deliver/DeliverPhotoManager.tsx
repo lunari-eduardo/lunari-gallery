@@ -37,7 +37,7 @@ export function DeliverPhotoManager({
   const fetchPhotos = useCallback(async () => {
     const { data, error } = await supabase
       .from('galeria_fotos')
-      .select('id, storage_key, original_filename, width, height, preview_path, thumb_path')
+      .select('id, storage_key, original_filename, width, height, preview_path, thumb_path, mime_type')
       .eq('galeria_id', galleryId)
       .order('created_at');
 
