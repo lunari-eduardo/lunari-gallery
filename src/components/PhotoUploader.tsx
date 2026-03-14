@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { isValidImageType, formatFileSize, type WatermarkConfig } from '@/lib/imageCompression';
+import { isValidTransferMedia, isVideoFile, isWithinSizeLimit, MAX_VIDEO_SIZE, MAX_IMAGE_SIZE } from '@/lib/mediaValidation';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
