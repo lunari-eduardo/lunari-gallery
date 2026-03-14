@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react';
+import { Download, Play } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 
