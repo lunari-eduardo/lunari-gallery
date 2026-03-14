@@ -461,7 +461,58 @@ async function handleDownload(
   }
 }
 
-// handleDeliverDownload removed - Deliver downloads now handled by handleDownload with tipo check
+/**
+ * Handle file download for DELIVER (Transfer) galleries.
+ * NO finalized_at or allowDownload checks — Transfer galleries are always downloadable.
+ * Only verifies the photo belongs to the gallery (anti-enumeration).
+ */
+async function handleDeliverDownload(
+  request: Request,
+  env: Env,
+  path: string
+): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const requestedFilename = url.searchParams.get('filename') || path.split('/').pop() || 'file';
+
+    const pathParts = path.split('/');
+    if (pathParts.length < 3) {
+      return new Response(JSON.stringify({ error: 'Invalid path' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const galleryId = pathParts[1];
+
+    // Verify photo belongs to gallery
+    const photoRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?galeria_id=eq.${galleryId}&or=(original_path.eq.${encodeURIComponent(path)},storage_key.eq.${encodeURIComponent(path)})&select=id`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const photos = await photoRes.json();
+
+    if (!photos || photos.length === 0) {
+      return new Response(JSON.stringify({ error: 'File not found in gallery' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    return await serveFileAsDownload(env, path, requestedFilename);
+  } catch (error) {
+    console.error('Deliver download error:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Download failed' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
 
 /**
  * Shared helper: fetch file from R2 and serve with Content-Disposition: attachment.
@@ -582,7 +633,13 @@ export default {
       return handleWatermarkUpload(request, env);
     }
 
-    // Route: GET /download/{path} - Download for both Select and Deliver galleries
+    // Route: GET /deliver-download/{path} - Download for DELIVER/Transfer galleries (no finalized check)
+    if (request.method === 'GET' && url.pathname.startsWith('/deliver-download/')) {
+      const downloadPath = url.pathname.replace('/deliver-download/', '');
+      return handleDeliverDownload(request, env, decodeURIComponent(downloadPath));
+    }
+
+    // Route: GET /download/{path} - Download for Select (and fallback Deliver) galleries
     if (request.method === 'GET' && url.pathname.startsWith('/download/')) {
       const downloadPath = url.pathname.replace('/download/', '');
       return handleDownload(request, env, decodeURIComponent(downloadPath));
