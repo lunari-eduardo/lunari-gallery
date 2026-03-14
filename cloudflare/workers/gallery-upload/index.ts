@@ -633,7 +633,13 @@ export default {
       return handleWatermarkUpload(request, env);
     }
 
-    // Route: GET /download/{path} - Download for both Select and Deliver galleries
+    // Route: GET /deliver-download/{path} - Download for DELIVER/Transfer galleries (no finalized check)
+    if (request.method === 'GET' && url.pathname.startsWith('/deliver-download/')) {
+      const downloadPath = url.pathname.replace('/deliver-download/', '');
+      return handleDeliverDownload(request, env, decodeURIComponent(downloadPath));
+    }
+
+    // Route: GET /download/{path} - Download for Select (and fallback Deliver) galleries
     if (request.method === 'GET' && url.pathname.startsWith('/download/')) {
       const downloadPath = url.pathname.replace('/download/', '');
       return handleDownload(request, env, decodeURIComponent(downloadPath));
