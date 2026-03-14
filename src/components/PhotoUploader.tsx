@@ -391,7 +391,10 @@ export function PhotoUploader({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        accept={skipCredits
+          ? ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.m4v,image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+          : ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        }
         multiple
         className="hidden"
         onChange={(e) => {
