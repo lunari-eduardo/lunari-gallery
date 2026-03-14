@@ -1104,25 +1104,43 @@ export default function ClientGallery() {
     );
   }
 
-  // Error state - gallery not found
+  // Error state - gallery not found or not available
   if (galleryError || !gallery) {
+    const errorMessage = galleryError?.message || '';
+    const isNotAvailable = errorMessage === 'Galeria não disponível';
+    const isPublishing = errorMessage === 'GALLERY_PUBLISHING';
+    
     return (
       <div className="min-h-screen flex flex-col bg-background">
         
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md w-full text-center space-y-6">
-            <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-              <AlertCircle className="h-10 w-10 text-destructive" />
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${isPublishing ? 'bg-primary/10' : isNotAvailable ? 'bg-muted' : 'bg-destructive/10'}`}>
+              {isPublishing ? (
+                <Clock className="h-10 w-10 text-primary animate-pulse" />
+              ) : (
+                <AlertCircle className={`h-10 w-10 ${isNotAvailable ? 'text-muted-foreground' : 'text-destructive'}`} />
+              )}
             </div>
             
             <div>
               <h1 className="text-2xl font-bold mb-2">
-                Galeria não encontrada
+                {isPublishing ? 'Galeria em publicação' : isNotAvailable ? 'Galeria não disponível' : 'Galeria não encontrada'}
               </h1>
               <p className="text-muted-foreground text-sm">
-                Verifique se o link está correto ou entre em contato com o fotógrafo.
+                {isPublishing 
+                  ? 'A galeria está sendo preparada. Tente novamente em alguns instantes.'
+                  : isNotAvailable
+                  ? 'Esta galeria ainda não está acessível. Entre em contato com o fotógrafo.'
+                  : 'Verifique se o link está correto ou entre em contato com o fotógrafo.'}
               </p>
             </div>
+
+            {isPublishing && (
+              <Button variant="outline" onClick={() => refetchGallery()}>
+                Tentar novamente
+              </Button>
+            )}
 
             <div className="lunari-card p-4">
               <p className="text-xs text-muted-foreground">
