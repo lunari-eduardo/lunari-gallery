@@ -15,6 +15,7 @@ import {
   type CompressedImage,
   type WatermarkConfig,
 } from '@/lib/imageCompression';
+import { isVideoFile, generateVideoThumbnail, getVideoDimensions } from '@/lib/mediaValidation';
 import { supabase } from '@/integrations/supabase/client';
 import { retryWithBackoff, getUploadErrorMessage } from '@/lib/retryFetch';
 
