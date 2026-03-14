@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
 
     await uploadToR2WithRetry(
       r2AccountId, r2AccessKeyId, r2SecretKey, r2BucketName,
-      storagePath, fileData, file.type || "image/jpeg", requestId
+      storagePath, fileData, file.type || "application/octet-stream", requestId
     );
 
     console.log(`[${requestId}] R2 upload complete`);
