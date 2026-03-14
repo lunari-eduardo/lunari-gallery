@@ -13,6 +13,7 @@ export interface DeliverPhoto {
   thumbPath?: string | null;
   previewPath?: string | null;
   folderId?: string | null;
+  mimeType?: string | null;
 }
 
 interface DeliverPhotoGridProps {
