@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ImageIcon, Star } from 'lucide-react';
+import { X, ImageIcon, Star, Play } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { toast } from 'sonner';
