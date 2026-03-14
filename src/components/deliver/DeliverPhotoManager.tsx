@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ImageIcon, Star } from 'lucide-react';
+import { X, ImageIcon, Star, Play } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ interface GalleryPhoto {
   height: number | null;
   preview_path: string | null;
   thumb_path: string | null;
+  mime_type: string | null;
 }
 
 interface DeliverPhotoManagerProps {
@@ -36,7 +37,7 @@ export function DeliverPhotoManager({
   const fetchPhotos = useCallback(async () => {
     const { data, error } = await supabase
       .from('galeria_fotos')
-      .select('id, storage_key, original_filename, width, height, preview_path, thumb_path')
+      .select('id, storage_key, original_filename, width, height, preview_path, thumb_path, mime_type')
       .eq('galeria_id', galleryId)
       .order('created_at');
 
@@ -139,6 +140,12 @@ export function DeliverPhotoManager({
                 className="w-full h-full object-cover"
                 loading="lazy"
               />
+              {/* Video play indicator */}
+              {photo.mime_type?.startsWith('video/') && (
+                <div className="absolute top-1.5 right-1.5 p-1 bg-black/50 text-white rounded-full pointer-events-none">
+                  <Play className="h-3 w-3 fill-white" />
+                </div>
+              )}
 
               {/* Cover badge */}
               {isCover && (

@@ -15,6 +15,7 @@ import {
   type CompressedImage,
   type WatermarkConfig,
 } from '@/lib/imageCompression';
+import { isVideoFile, generateVideoThumbnail, getVideoDimensions } from '@/lib/mediaValidation';
 import { supabase } from '@/integrations/supabase/client';
 import { retryWithBackoff, getUploadErrorMessage } from '@/lib/retryFetch';
 
@@ -241,36 +242,53 @@ export class UploadPipeline {
         this.opts.onItemUpdate(item);
       }
 
-      // ── Step 2: Compress ──
+      // ── Step 2: Compress (or skip for video) ──
       item.status = 'compressing';
       item.progress = this.opts.allowDownload ? 25 : 10;
       this.opts.onItemUpdate(item);
 
-      const compressionOptions: Partial<CompressionOptions> = {
-        maxLongEdge: this.opts.maxLongEdge,
-        quality: this.opts.quality,
-        removeExif: true,
-        watermark: this.opts.watermarkConfig,
-      };
-
       let compressed: CompressedImage;
-      try {
-        if (signal.aborted) throw new Error('Cancelado');
-        compressed = await compressImage(item.file, compressionOptions);
-      } catch (err) {
-        // Fallback: send original if compression fails and no watermark required
-        if (this.opts.watermarkConfig && this.opts.watermarkConfig.mode !== 'none') {
-          throw err; // Watermark is mandatory – do not fallback
-        }
-        console.warn('[Pipeline] Compression failed, using original as fallback:', err);
+      const isVideo = isVideoFile(item.file);
+
+      if (isVideo) {
+        // Videos: skip compression, use original blob directly
+        // Try to get dimensions from the video
+        const dims = await getVideoDimensions(item.file);
         compressed = {
           blob: item.file,
-          width: 0,
-          height: 0,
+          width: dims.width,
+          height: dims.height,
           originalSize: item.file.size,
           compressedSize: item.file.size,
           filename: item.file.name,
         };
+        console.log('[Pipeline] Video detected, skipping compression:', item.file.name);
+      } else {
+        const compressionOptions: Partial<CompressionOptions> = {
+          maxLongEdge: this.opts.maxLongEdge,
+          quality: this.opts.quality,
+          removeExif: true,
+          watermark: this.opts.watermarkConfig,
+        };
+
+        try {
+          if (signal.aborted) throw new Error('Cancelado');
+          compressed = await compressImage(item.file, compressionOptions);
+        } catch (err) {
+          // Fallback: send original if compression fails and no watermark required
+          if (this.opts.watermarkConfig && this.opts.watermarkConfig.mode !== 'none') {
+            throw err; // Watermark is mandatory – do not fallback
+          }
+          console.warn('[Pipeline] Compression failed, using original as fallback:', err);
+          compressed = {
+            blob: item.file,
+            width: 0,
+            height: 0,
+            originalSize: item.file.size,
+            compressedSize: item.file.size,
+            filename: item.file.name,
+          };
+        }
       }
 
       item._compressed = compressed;

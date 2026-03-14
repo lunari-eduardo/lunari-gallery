@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { isValidImageType, formatFileSize, type WatermarkConfig } from '@/lib/imageCompression';
+import { isValidTransferMedia, isVideoFile, isWithinSizeLimit, MAX_VIDEO_SIZE, MAX_IMAGE_SIZE } from '@/lib/mediaValidation';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
@@ -183,10 +184,11 @@ export function PhotoUploader({
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
-    let validFiles = fileArray.filter(isValidImageType);
+    const validateFn = skipCredits ? isValidTransferMedia : isValidImageType;
+    let validFiles = fileArray.filter(validateFn);
 
     // Log diagnostic info for debugging
-    const rejected = fileArray.filter(f => !isValidImageType(f));
+    const rejected = fileArray.filter(f => !validateFn(f));
     if (rejected.length > 0) {
       console.warn('[PhotoUploader] Arquivos rejeitados:', rejected.map(f => ({
         name: f.name, type: f.type, size: f.size,
@@ -195,12 +197,26 @@ export function PhotoUploader({
     console.log(`[PhotoUploader] addFiles: total=${fileArray.length}, valid=${validFiles.length}, folderId=${folderId}`);
 
     if (validFiles.length === 0) {
-      toast.error('Nenhuma imagem válida selecionada. Formatos aceitos: JPG/JPEG, PNG, WEBP');
+      const formats = skipCredits ? 'JPG/JPEG, PNG, WEBP, MP4, MOV, WEBM' : 'JPG/JPEG, PNG, WEBP';
+      toast.error(`Nenhum arquivo válido selecionado. Formatos aceitos: ${formats}`);
       return;
     }
 
+    // Check file size limits (especially for videos)
+    const oversized = validFiles.filter(f => !isWithinSizeLimit(f));
+    if (oversized.length > 0) {
+      const videoOversized = oversized.filter(isVideoFile);
+      const imageOversized = oversized.filter(f => !isVideoFile(f));
+      if (videoOversized.length > 0) toast.error(`${videoOversized.length} vídeo(s) excede(m) o limite de ${formatFileSize(MAX_VIDEO_SIZE)}`);
+      if (imageOversized.length > 0) toast.error(`${imageOversized.length} foto(s) excede(m) o limite de ${formatFileSize(MAX_IMAGE_SIZE)}`);
+      validFiles = validFiles.filter(isWithinSizeLimit);
+      if (validFiles.length === 0) return;
+    }
+
     if (validFiles.length !== fileArray.length) {
-      toast.error('Alguns arquivos foram ignorados. Formatos aceitos: JPG, PNG, WEBP');
+      const formats = skipCredits ? 'JPG, PNG, WEBP, MP4, MOV' : 'JPG, PNG, WEBP';
+      const extraInfo = oversized.length > 0 ? '' : `Formatos aceitos: ${formats}`;
+      if (extraInfo) toast.error(`Alguns arquivos foram ignorados. ${extraInfo}`);
     }
 
     if (!skipCredits && !isAdmin && !canUpload(validFiles.length)) {
@@ -356,9 +372,11 @@ export function PhotoUploader({
           </>
         ) : (
           <>
-            <p className="text-lg font-medium">Arraste fotos aqui</p>
+            <p className="text-lg font-medium">Arraste arquivos aqui</p>
             <p className="text-sm text-muted-foreground mt-1">
-              ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto
+              {skipCredits
+                ? 'ou clique para selecionar • JPG, PNG, WEBP, MP4, MOV, WEBM • Máx. 500MB por vídeo'
+                : 'ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto'}
             </p>
           </>
         )}
@@ -373,7 +391,10 @@ export function PhotoUploader({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        accept={skipCredits
+          ? ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.m4v,image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+          : ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        }
         multiple
         className="hidden"
         onChange={(e) => {
@@ -418,11 +439,20 @@ export function PhotoUploader({
                 key={item.id}
                 className="relative aspect-square rounded-lg overflow-hidden bg-muted"
               >
-                <img
-                  src={item.preview}
-                  alt={item.file.name}
-                  className="w-full h-full object-cover"
-                />
+                {isVideoFile(item.file) ? (
+                  <video
+                    src={item.preview}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={item.preview}
+                    alt={item.file.name}
+                    className="w-full h-full object-cover"
+                  />
+                )}
 
                 {/* Status Overlay */}
                 {item.status !== 'queued' && (

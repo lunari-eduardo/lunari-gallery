@@ -94,6 +94,7 @@ export default function ClientDeliverGallery({ data }: Props) {
       thumbPath: p.thumb_path,
       previewPath: p.preview_path,
       folderId: p.pasta_id || null,
+      mimeType: (p as any).mime_type || null,
     }));
   }, [data.photos]);
 
