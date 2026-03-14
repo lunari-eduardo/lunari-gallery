@@ -205,7 +205,12 @@ export default function ClientGallery() {
       return firstPage;
     },
     enabled: !!identifier,
-    retry: false,
+    retry: (failureCount, error) => {
+      // Retry up to 3 times for galleries that are being published (transitional state)
+      if (error?.message === 'GALLERY_PUBLISHING' && failureCount < 3) return true;
+      return false;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     staleTime: 5 * 60 * 1000, // 5 min — avoid unnecessary refetches on tab switch
   });
 
