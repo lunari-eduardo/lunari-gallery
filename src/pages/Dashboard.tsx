@@ -560,9 +560,18 @@ export default function Dashboard() {
       {shareGaleria && (
         <SendGalleryModal
           isOpen={!!shareGalleryId}
-          onOpenChange={(open) => !open && setShareGalleryId(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShareGalleryId(null);
+              // Refresh galleries to pick up status change from RPC
+              refetch();
+            }
+          }}
           gallery={shareGaleria}
           settings={settings}
+          onSendGallery={async () => {
+            await sendGallery(shareGaleria.id);
+          }}
         />
       )}
 

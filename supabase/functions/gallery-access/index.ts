@@ -560,8 +560,15 @@ serve(async (req) => {
     // 3. Check if gallery is in valid status for selection
     const validStatuses = ["enviado", "selecao_iniciada", "expirado"];
     if (!validStatuses.includes(gallery.status)) {
+      const isTransitional = gallery.status === 'rascunho' && gallery.public_token;
+      console.log(`⚠️ Gallery ${gallery.id} status=${gallery.status} token=${gallery.public_token ? 'yes' : 'no'} transitional=${isTransitional}`);
       return new Response(
-        JSON.stringify({ error: "Galeria não disponível", code: "NOT_AVAILABLE" }),
+        JSON.stringify({ 
+          error: isTransitional ? "Galeria em publicação, tente novamente em instantes" : "Galeria não disponível", 
+          code: "NOT_AVAILABLE",
+          retryable: isTransitional,
+          status: gallery.status,
+        }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

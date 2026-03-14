@@ -175,6 +175,10 @@ export default function ClientGallery() {
         if (!response.ok) {
           if (result.code === 'NOT_FOUND') throw new Error('Galeria não encontrada');
           if (result.code === 'WRONG_PASSWORD') throw new Error('Senha incorreta');
+          if (result.code === 'NOT_AVAILABLE' && result.retryable) {
+            throw new Error('GALLERY_PUBLISHING');
+          }
+          if (result.code === 'NOT_AVAILABLE') throw new Error('Galeria não disponível');
           throw new Error(result.error || 'Erro ao acessar galeria');
         }
         
