@@ -372,9 +372,11 @@ export function PhotoUploader({
           </>
         ) : (
           <>
-            <p className="text-lg font-medium">Arraste fotos aqui</p>
+            <p className="text-lg font-medium">Arraste arquivos aqui</p>
             <p className="text-sm text-muted-foreground mt-1">
-              ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto
+              {skipCredits
+                ? 'ou clique para selecionar • JPG, PNG, WEBP, MP4, MOV, WEBM • Máx. 500MB por vídeo'
+                : 'ou clique para selecionar • JPG, PNG, WEBP • Máx. 20MB por foto'}
             </p>
           </>
         )}
