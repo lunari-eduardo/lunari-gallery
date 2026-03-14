@@ -1,8 +1,8 @@
 /**
  * Deliver Download Utilities - DEDICATED module for Deliver galleries.
  * 
- * Uses /deliver-download/ route which has NO finalized_at or allowDownload checks.
- * Completely independent from downloadUtils.ts (Select galleries).
+ * Uses /download/ route. The Worker bypasses finalized_at and allowDownload checks
+ * when gallery tipo='entrega'. Completely independent from downloadUtils.ts (Select galleries).
  */
 
 import JSZip from 'jszip';
@@ -20,7 +20,7 @@ export interface DeliverDownloadablePhoto {
 function buildDeliverDownloadUrl(storagePath: string, filename: string): string {
   const safePath = storagePath.split('/').map(encodeURIComponent).join('/');
   const encodedFilename = encodeURIComponent(filename);
-  return `${R2_WORKER_URL}/deliver-download/${safePath}?filename=${encodedFilename}`;
+  return `${R2_WORKER_URL}/download/${safePath}?filename=${encodedFilename}`;
 }
 
 /**
