@@ -219,19 +219,20 @@ export function SendGalleryModal({
           </DialogHeader>
           <div className="text-center py-6 space-y-4">
             <p className="text-muted-foreground">{prepareError}</p>
-            <Button variant="outline" onClick={() => {
-              // Retry
+            <Button variant="outline" onClick={async () => {
               setPrepareError(null);
               setIsPreparing(true);
-              supabase.rpc('prepare_gallery_share', { p_gallery_id: gallery.id })
-                .then(({ data, error }) => {
-                  if (error) throw error;
-                  const result = data as { token?: string; ready?: boolean; error?: string };
-                  if (!result?.ready) throw new Error(result?.error || 'Erro');
-                  setResolvedToken(result.token!);
-                })
-                .catch((e: any) => setPrepareError(e.message))
-                .finally(() => setIsPreparing(false));
+              try {
+                const { data, error } = await supabase.rpc('prepare_gallery_share', { p_gallery_id: gallery.id });
+                if (error) throw error;
+                const result = data as { token?: string; ready?: boolean; error?: string };
+                if (!result?.ready) throw new Error(result?.error || 'Erro');
+                setResolvedToken(result.token!);
+              } catch (e: any) {
+                setPrepareError(e.message);
+              } finally {
+                setIsPreparing(false);
+              }
             }}>
               Tentar novamente
             </Button>
