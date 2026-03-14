@@ -12,6 +12,7 @@ interface GalleryPhoto {
   height: number | null;
   preview_path: string | null;
   thumb_path: string | null;
+  mime_type: string | null;
 }
 
 interface DeliverPhotoManagerProps {
