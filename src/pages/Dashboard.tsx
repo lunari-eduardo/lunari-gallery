@@ -174,7 +174,7 @@ export default function Dashboard() {
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
   
-  const { galleries: supabaseGalleries, isLoading, error, deleteGallery } = useSupabaseGalleries();
+  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, refetch } = useSupabaseGalleries();
   const { settings } = useSettings();
 
   // Share & Delete modal state
@@ -560,9 +560,18 @@ export default function Dashboard() {
       {shareGaleria && (
         <SendGalleryModal
           isOpen={!!shareGalleryId}
-          onOpenChange={(open) => !open && setShareGalleryId(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShareGalleryId(null);
+              // Refresh galleries to pick up status change from RPC
+              refetch();
+            }
+          }}
           gallery={shareGaleria}
           settings={settings}
+          onSendGallery={async () => {
+            await sendGallery(shareGaleria.id);
+          }}
         />
       )}
 

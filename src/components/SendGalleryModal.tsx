@@ -1,7 +1,7 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, MessageCircle, Mail, Check, Send, Link, Phone, Calendar, Lock } from 'lucide-react';
+import { Copy, MessageCircle, Mail, Check, Send, Link, Phone, Calendar, Lock, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { GlobalSettings } from '@/types/gallery';
 import { Galeria } from '@/hooks/useSupabaseGalleries';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SendGalleryModalProps {
   isOpen: boolean;
@@ -44,17 +45,63 @@ export function SendGalleryModal({
 }: SendGalleryModalProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [resolvedToken, setResolvedToken] = useState<string | null>(gallery.publicToken);
   const hasSentRef = useRef(false);
 
-  const clientLink = gallery.publicToken
-    ? getGalleryUrl(gallery.publicToken)
+  // When modal opens, ensure gallery is ready for sharing via RPC
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset state on close
+      hasSentRef.current = false;
+      setPrepareError(null);
+      return;
+    }
+
+    // If gallery already has token AND is not a draft, skip RPC
+    if (gallery.publicToken && gallery.status !== 'rascunho') {
+      setResolvedToken(gallery.publicToken);
+      return;
+    }
+
+    // Call RPC to atomically prepare gallery for sharing
+    const prepareShare = async () => {
+      setIsPreparing(true);
+      setPrepareError(null);
+      try {
+        const { data, error } = await supabase.rpc('prepare_gallery_share', {
+          p_gallery_id: gallery.id,
+        });
+
+        if (error) throw error;
+
+        const result = data as { token?: string; status?: string; ready?: boolean; error?: string };
+
+        if (!result?.ready) {
+          throw new Error(result?.error || 'Erro ao preparar galeria');
+        }
+
+        setResolvedToken(result.token!);
+      } catch (e: any) {
+        console.error('Error preparing gallery share:', e);
+        setPrepareError(e.message || 'Erro ao publicar galeria');
+      } finally {
+        setIsPreparing(false);
+      }
+    };
+
+    prepareShare();
+  }, [isOpen, gallery.id, gallery.publicToken, gallery.status]);
+
+  const clientLink = resolvedToken
+    ? getGalleryUrl(resolvedToken)
     : null;
 
   const gallerySentTemplate = useMemo(() => {
     return settings.emailTemplates.find((t) => t.type === 'gallery_sent');
   }, [settings.emailTemplates]);
 
-  // Always use clientLink in messages (clean production URL)
   const fullMessage = useMemo(() => {
     if (!gallerySentTemplate || !clientLink) {
       let msg = `Olá${gallery.clienteNome ? ` ${gallery.clienteNome}` : ''}! 🎉\n\nSua galeria de fotos está pronta!\n\n📸 ${gallery.nomeSessao || 'Sessão de Fotos'}\n\n🔗 Link: ${clientLink || '[link]'}`;
@@ -85,16 +132,18 @@ export function SendGalleryModal({
     return message;
   }, [gallerySentTemplate, clientLink, gallery, settings.studioName]);
 
-  // Mark gallery as sent (only once per modal open)
+  // Mark gallery as sent (only once per modal open) — uses onSendGallery if provided, otherwise RPC already handled it
   const markAsSent = async () => {
-    if (hasSentRef.current || !onSendGallery) return;
-    if (gallery.status === 'enviado') return; // Already sent
+    if (hasSentRef.current) return;
     hasSentRef.current = true;
-    try {
-      await onSendGallery();
-    } catch (e) {
-      console.error('Error marking gallery as sent:', e);
-      hasSentRef.current = false;
+    
+    if (onSendGallery && gallery.status !== 'enviado') {
+      try {
+        await onSendGallery();
+      } catch (e) {
+        console.error('Error marking gallery as sent:', e);
+        hasSentRef.current = false;
+      }
     }
   };
 
@@ -128,13 +177,70 @@ export function SendGalleryModal({
 
   const formattedPhone = formatPhoneDisplay(gallery.clienteTelefone);
 
-  // Reset sent ref when modal closes
   const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      hasSentRef.current = false;
-    }
     onOpenChange(open);
   };
+
+  // Show loading state while preparing gallery
+  if (isPreparing) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Loader2 className="h-5 w-5 text-primary animate-spin" />
+              </div>
+              Publicando galeria...
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-6">
+            <p className="text-muted-foreground">
+              Gerando link de compartilhamento e preparando a galeria para o cliente.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Show error state
+  if (prepareError) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Link className="h-5 w-5 text-destructive" />
+              </div>
+              Erro ao publicar
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-6 space-y-4">
+            <p className="text-muted-foreground">{prepareError}</p>
+            <Button variant="outline" onClick={async () => {
+              setPrepareError(null);
+              setIsPreparing(true);
+              try {
+                const { data, error } = await supabase.rpc('prepare_gallery_share', { p_gallery_id: gallery.id });
+                if (error) throw error;
+                const result = data as { token?: string; ready?: boolean; error?: string };
+                if (!result?.ready) throw new Error(result?.error || 'Erro');
+                setResolvedToken(result.token!);
+              } catch (e: any) {
+                setPrepareError(e.message);
+              } finally {
+                setIsPreparing(false);
+              }
+            }}>
+              Tentar novamente
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   if (!clientLink) {
     return (

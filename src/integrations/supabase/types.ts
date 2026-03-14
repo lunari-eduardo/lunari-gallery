@@ -297,42 +297,51 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          display_order: number
           featured_image_url: string | null
           id: string
           meta_description: string | null
           meta_title: string | null
           published_at: string | null
+          route_reference: string | null
           slug: string
           status: string
           title: string
+          type: string
           updated_at: string
           user_id: string
         }
         Insert: {
           content?: string
           created_at?: string
+          display_order?: number
           featured_image_url?: string | null
           id?: string
           meta_description?: string | null
           meta_title?: string | null
           published_at?: string | null
+          route_reference?: string | null
           slug: string
           status?: string
           title: string
+          type?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           content?: string
           created_at?: string
+          display_order?: number
           featured_image_url?: string | null
           id?: string
           meta_description?: string | null
           meta_title?: string | null
           published_at?: string | null
+          route_reference?: string | null
           slug?: string
           status?: string
           title?: string
+          type?: string
           updated_at?: string
           user_id?: string
         }
@@ -3540,6 +3549,7 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      prepare_gallery_share: { Args: { p_gallery_id: string }; Returns: Json }
       purchase_credits: {
         Args: {
           _amount: number
