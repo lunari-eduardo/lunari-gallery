@@ -647,6 +647,7 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error('Gallery update error:', updateError);
+      await rollbackGalleryStatus();
       return new Response(
         JSON.stringify({ error: 'Erro ao confirmar seleção' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
