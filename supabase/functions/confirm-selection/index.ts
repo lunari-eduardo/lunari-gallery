@@ -259,6 +259,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── ROLLBACK HELPER: Reset status on any failure after lock ──
+    const rollbackGalleryStatus = async () => {
+      try {
+        await supabase.from('galerias').update({
+          status_selecao: 'selecao_iniciada',
+          updated_at: new Date().toISOString(),
+        }).eq('id', galleryId);
+        console.log(`🔓 Rollback: Gallery ${galleryId} status_selecao reset to selecao_iniciada`);
+      } catch (rollbackErr) {
+        console.error(`❌ Rollback failed for gallery ${galleryId}:`, rollbackErr);
+      }
+    };
+
     // Gallery data returned from the lock RPC
     const gallery = lockResult.gallery as {
       id: string; status: string; status_selecao: string; finalized_at: string | null;
@@ -555,6 +568,7 @@ Deno.serve(async (req) => {
             const errorDetails = (paymentData?.details as string) || '';
             console.error(`❌ CRITICAL: Payment creation failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
             
+            await rollbackGalleryStatus();
             return new Response(
               JSON.stringify({
                 error: errorMsg,
@@ -567,6 +581,7 @@ Deno.serve(async (req) => {
         } catch (payErr) {
           console.error('❌ CRITICAL: Payment fetch error:', payErr);
           
+          await rollbackGalleryStatus();
           return new Response(
             JSON.stringify({
               error: 'Erro ao processar cobrança. Tente novamente.',
@@ -581,6 +596,7 @@ Deno.serve(async (req) => {
         // No payment provider configured but payment was required
         console.error('❌ CRITICAL: No payment provider configured for user but payment required');
         
+        await rollbackGalleryStatus();
         return new Response(
           JSON.stringify({
             error: 'Nenhum método de pagamento configurado. Configure nas configurações.',
@@ -631,6 +647,7 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error('Gallery update error:', updateError);
+      await rollbackGalleryStatus();
       return new Response(
         JSON.stringify({ error: 'Erro ao confirmar seleção' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
