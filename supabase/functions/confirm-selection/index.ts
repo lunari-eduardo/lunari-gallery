@@ -568,6 +568,7 @@ Deno.serve(async (req) => {
             const errorDetails = (paymentData?.details as string) || '';
             console.error(`❌ CRITICAL: Payment creation failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
             
+            await rollbackGalleryStatus();
             return new Response(
               JSON.stringify({
                 error: errorMsg,
