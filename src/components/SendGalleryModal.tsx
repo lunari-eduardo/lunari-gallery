@@ -50,22 +50,15 @@ export function SendGalleryModal({
   const [resolvedToken, setResolvedToken] = useState<string | null>(gallery.publicToken);
   const hasSentRef = useRef(false);
 
-  // When modal opens, ensure gallery is ready for sharing via RPC
+  // When modal opens, always call RPC to ensure gallery is ready for sharing
   useEffect(() => {
     if (!isOpen) {
-      // Reset state on close
       hasSentRef.current = false;
       setPrepareError(null);
+      setResolvedToken(null);
       return;
     }
 
-    // If gallery already has token AND is not a draft, skip RPC
-    if (gallery.publicToken && gallery.status !== 'rascunho') {
-      setResolvedToken(gallery.publicToken);
-      return;
-    }
-
-    // Call RPC to atomically prepare gallery for sharing
     const prepareShare = async () => {
       setIsPreparing(true);
       setPrepareError(null);
@@ -92,7 +85,7 @@ export function SendGalleryModal({
     };
 
     prepareShare();
-  }, [isOpen, gallery.id, gallery.publicToken, gallery.status]);
+  }, [isOpen, gallery.id]);
 
   const clientLink = resolvedToken
     ? getGalleryUrl(resolvedToken)
