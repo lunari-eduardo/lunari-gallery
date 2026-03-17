@@ -581,6 +581,7 @@ Deno.serve(async (req) => {
         } catch (payErr) {
           console.error('❌ CRITICAL: Payment fetch error:', payErr);
           
+          await rollbackGalleryStatus();
           return new Response(
             JSON.stringify({
               error: 'Erro ao processar cobrança. Tente novamente.',
