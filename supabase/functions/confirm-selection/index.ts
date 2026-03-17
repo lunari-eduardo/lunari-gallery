@@ -596,6 +596,7 @@ Deno.serve(async (req) => {
         // No payment provider configured but payment was required
         console.error('❌ CRITICAL: No payment provider configured for user but payment required');
         
+        await rollbackGalleryStatus();
         return new Response(
           JSON.stringify({
             error: 'Nenhum método de pagamento configurado. Configure nas configurações.',
