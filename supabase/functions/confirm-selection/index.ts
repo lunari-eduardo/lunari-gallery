@@ -259,6 +259,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── ROLLBACK HELPER: Reset status on any failure after lock ──
+    const rollbackGalleryStatus = async () => {
+      try {
+        await supabase.from('galerias').update({
+          status_selecao: 'selecao_iniciada',
+          updated_at: new Date().toISOString(),
+        }).eq('id', galleryId);
+        console.log(`🔓 Rollback: Gallery ${galleryId} status_selecao reset to selecao_iniciada`);
+      } catch (rollbackErr) {
+        console.error(`❌ Rollback failed for gallery ${galleryId}:`, rollbackErr);
+      }
+    };
+
     // Gallery data returned from the lock RPC
     const gallery = lockResult.gallery as {
       id: string; status: string; status_selecao: string; finalized_at: string | null;
