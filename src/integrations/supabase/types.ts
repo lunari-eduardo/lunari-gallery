@@ -198,6 +198,36 @@ export type Database = {
           },
         ]
       }
+      asaas_webhook_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          installment_id: string | null
+          payload: Json | null
+          payment_id: string | null
+          processed: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          installment_id?: string | null
+          payload?: Json | null
+          payment_id?: string | null
+          processed?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          installment_id?: string | null
+          payload?: Json | null
+          payment_id?: string | null
+          processed?: boolean | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -701,8 +731,74 @@ export type Database = {
           },
         ]
       }
+      cobranca_parcelas: {
+        Row: {
+          antecipado: boolean | null
+          asaas_payment_id: string
+          billing_type: string | null
+          cobranca_id: string
+          created_at: string | null
+          data_credito: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          id: string
+          numero_parcela: number
+          status: string
+          taxa_antecipacao: number | null
+          taxa_gateway: number | null
+          updated_at: string | null
+          valor_bruto: number
+          valor_liquido: number | null
+        }
+        Insert: {
+          antecipado?: boolean | null
+          asaas_payment_id: string
+          billing_type?: string | null
+          cobranca_id: string
+          created_at?: string | null
+          data_credito?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          id?: string
+          numero_parcela: number
+          status?: string
+          taxa_antecipacao?: number | null
+          taxa_gateway?: number | null
+          updated_at?: string | null
+          valor_bruto: number
+          valor_liquido?: number | null
+        }
+        Update: {
+          antecipado?: boolean | null
+          asaas_payment_id?: string
+          billing_type?: string | null
+          cobranca_id?: string
+          created_at?: string | null
+          data_credito?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          id?: string
+          numero_parcela?: number
+          status?: string
+          taxa_antecipacao?: number | null
+          taxa_gateway?: number | null
+          updated_at?: string | null
+          valor_bruto?: number
+          valor_liquido?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_parcelas_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cobrancas: {
         Row: {
+          asaas_installment_id: string | null
           cliente_id: string | null
           created_at: string | null
           dados_extras: Json | null
@@ -721,17 +817,20 @@ export type Database = {
           mp_preference_id: string | null
           mp_qr_code: string | null
           mp_qr_code_base64: string | null
+          parcelas_pagas: number | null
           provedor: string | null
           qtd_fotos: number | null
           session_id: string | null
           status: string | null
           tipo_cobranca: string
+          total_parcelas: number | null
           updated_at: string | null
           user_id: string
           valor: number
           valor_liquido: number | null
         }
         Insert: {
+          asaas_installment_id?: string | null
           cliente_id?: string | null
           created_at?: string | null
           dados_extras?: Json | null
@@ -750,17 +849,20 @@ export type Database = {
           mp_preference_id?: string | null
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
+          parcelas_pagas?: number | null
           provedor?: string | null
           qtd_fotos?: number | null
           session_id?: string | null
           status?: string | null
           tipo_cobranca: string
+          total_parcelas?: number | null
           updated_at?: string | null
           user_id: string
           valor: number
           valor_liquido?: number | null
         }
         Update: {
+          asaas_installment_id?: string | null
           cliente_id?: string | null
           created_at?: string | null
           dados_extras?: Json | null
@@ -779,11 +881,13 @@ export type Database = {
           mp_preference_id?: string | null
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
+          parcelas_pagas?: number | null
           provedor?: string | null
           qtd_fotos?: number | null
           session_id?: string | null
           status?: string | null
           tipo_cobranca?: string
+          total_parcelas?: number | null
           updated_at?: string | null
           user_id?: string
           valor?: number
