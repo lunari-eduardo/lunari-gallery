@@ -1,3 +1,19 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
+ * ║                                                              ║
+ * ║  Esta função é chamada internamente por confirm-selection    ║
+ * ║  usando SUPABASE_SERVICE_ROLE_KEY (não JWT de usuário).      ║
+ * ║                                                              ║
+ * ║  REGRAS IMUTÁVEIS:                                           ║
+ * ║  1. NÃO adicionar verificação de JWT (auth.getUser)          ║
+ * ║  2. userId DEVE ser aceito no body da request                ║
+ * ║  3. verify_jwt DEVE ser false no config.toml                 ║
+ * ║  4. Autenticação do fotógrafo é via userId no body           ║
+ * ║                                                              ║
+ * ║  Projetos: Gallery (Select) + Gestão                         ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
