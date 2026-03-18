@@ -622,6 +622,24 @@ export default function Dashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reactivate Dialog */}
+      {reactivateGalleryId && (() => {
+        const galeria = supabaseGalleries.find(g => g.id === reactivateGalleryId);
+        const clientLink = galeria?.publicToken ? getGalleryUrl(galeria.publicToken) : null;
+        return (
+          <ReactivateGalleryDialog
+            galleryName={galeria?.nomeSessao || 'Esta galeria'}
+            clientLink={clientLink}
+            onReactivate={async (days) => {
+              await reopenSelection({ id: reactivateGalleryId, days });
+              setReactivateGalleryId(null);
+            }}
+            open={true}
+            onOpenChange={(open) => { if (!open) setReactivateGalleryId(null); }}
+          />
+        );
+      })()}
     </div>
   );
 }
