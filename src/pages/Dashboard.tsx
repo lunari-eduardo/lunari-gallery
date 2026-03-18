@@ -176,12 +176,13 @@ export default function Dashboard() {
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
   
-  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, refetch } = useSupabaseGalleries();
+  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, reopenSelection, refetch } = useSupabaseGalleries();
   const { settings } = useSettings();
 
-  // Share & Delete modal state
+  // Share, Delete & Reactivate modal state
   const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
   const [deleteGalleryId, setDeleteGalleryId] = useState<string | null>(null);
+  const [reactivateGalleryId, setReactivateGalleryId] = useState<string | null>(null);
 
   const shareGaleria = useMemo(() => 
     supabaseGalleries.find(g => g.id === shareGalleryId) || null
