@@ -394,17 +394,23 @@ export default function Dashboard() {
           ) : filteredSelectGalleries.length > 0 ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3">
-                {paginatedSelectGalleries.map((gallery) => (
-                  <GalleryCard
-                    key={gallery.id}
-                    gallery={gallery}
-                    thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
-                    onClick={() => navigate(`/gallery/${gallery.id}`)}
-                    onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
-                    onShare={() => setShareGalleryId(gallery.id)}
-                    onDelete={() => setDeleteGalleryId(gallery.id)}
-                  />
-                ))}
+                {paginatedSelectGalleries.map((gallery) => {
+                  const galeria = supabaseGalleries.find(g => g.id === gallery.id);
+                  const canReactivate = ['selection_completed', 'expired'].includes(gallery.status);
+                  return (
+                    <GalleryCard
+                      key={gallery.id}
+                      gallery={gallery}
+                      thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
+                      paymentStatus={galeria?.statusPagamento}
+                      onClick={() => navigate(`/gallery/${gallery.id}`)}
+                      onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
+                      onShare={() => setShareGalleryId(gallery.id)}
+                      onDelete={() => setDeleteGalleryId(gallery.id)}
+                      onReactivate={canReactivate ? () => setReactivateGalleryId(gallery.id) : undefined}
+                    />
+                  );
+                })}
               </div>
               {totalSelectPages > 1 && (
                 <div className="flex items-center justify-center gap-2 pt-2">
