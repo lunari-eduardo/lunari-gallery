@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, RotateCcw } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,14 +17,17 @@ interface ReactivateGalleryDialogProps {
   galleryName: string;
   clientLink: string | null;
   onReactivate: (days: number) => Promise<void>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export function ReactivateGalleryDialog({
   galleryName,
   clientLink,
   onReactivate,
+  open,
+  onOpenChange,
 }: ReactivateGalleryDialogProps) {
-  const [open, setOpen] = useState(false);
   const [days, setDays] = useState(7);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -59,8 +61,7 @@ export function ReactivateGalleryDialog({
   };
 
   const handleClose = () => {
-    setOpen(false);
-    // Reset state after dialog closes
+    onOpenChange(false);
     setTimeout(() => {
       setShowSuccess(false);
       setDays(7);
@@ -71,14 +72,7 @@ export function ReactivateGalleryDialog({
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isOpen) handleClose();
-      else setOpen(true);
     }}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Reativar
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         {!showSuccess ? (
           <>
@@ -118,7 +112,7 @@ export function ReactivateGalleryDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Check className="h-5 w-5 text-green-500" />
+                <Check className="h-5 w-5 text-emerald-500" />
                 Galeria Reativada!
               </DialogTitle>
               <DialogDescription>
@@ -141,7 +135,7 @@ export function ReactivateGalleryDialog({
                       onClick={handleCopyLink}
                     >
                       {copied ? (
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-emerald-500" />
                       ) : (
                         <Copy className="h-4 w-4" />
                       )}
