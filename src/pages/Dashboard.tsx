@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { getGalleryUrl } from '@/lib/galleryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -174,12 +176,13 @@ export default function Dashboard() {
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
   
-  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, refetch } = useSupabaseGalleries();
+  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, reopenSelection, refetch } = useSupabaseGalleries();
   const { settings } = useSettings();
 
-  // Share & Delete modal state
+  // Share, Delete & Reactivate modal state
   const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
   const [deleteGalleryId, setDeleteGalleryId] = useState<string | null>(null);
+  const [reactivateGalleryId, setReactivateGalleryId] = useState<string | null>(null);
 
   const shareGaleria = useMemo(() => 
     supabaseGalleries.find(g => g.id === shareGalleryId) || null
@@ -391,17 +394,23 @@ export default function Dashboard() {
           ) : filteredSelectGalleries.length > 0 ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3">
-                {paginatedSelectGalleries.map((gallery) => (
-                  <GalleryCard
-                    key={gallery.id}
-                    gallery={gallery}
-                    thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
-                    onClick={() => navigate(`/gallery/${gallery.id}`)}
-                    onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
-                    onShare={() => setShareGalleryId(gallery.id)}
-                    onDelete={() => setDeleteGalleryId(gallery.id)}
-                  />
-                ))}
+                {paginatedSelectGalleries.map((gallery) => {
+                  const galeria = supabaseGalleries.find(g => g.id === gallery.id);
+                  const canReactivate = ['selection_completed', 'expired'].includes(gallery.status);
+                  return (
+                    <GalleryCard
+                      key={gallery.id}
+                      gallery={gallery}
+                      thumbnailUrl={gallery.firstPhotoKey ? getDisplayUrl(gallery.firstPhotoKey) : undefined}
+                      paymentStatus={galeria?.statusPagamento}
+                      onClick={() => navigate(`/gallery/${gallery.id}`)}
+                      onEdit={() => navigate(`/gallery/${gallery.id}/edit`)}
+                      onShare={() => setShareGalleryId(gallery.id)}
+                      onDelete={() => setDeleteGalleryId(gallery.id)}
+                      onReactivate={canReactivate ? () => setReactivateGalleryId(gallery.id) : undefined}
+                    />
+                  );
+                })}
               </div>
               {totalSelectPages > 1 && (
                 <div className="flex items-center justify-center gap-2 pt-2">
@@ -613,6 +622,24 @@ export default function Dashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reactivate Dialog */}
+      {reactivateGalleryId && (() => {
+        const galeria = supabaseGalleries.find(g => g.id === reactivateGalleryId);
+        const clientLink = galeria?.publicToken ? getGalleryUrl(galeria.publicToken) : null;
+        return (
+          <ReactivateGalleryDialog
+            galleryName={galeria?.nomeSessao || 'Esta galeria'}
+            clientLink={clientLink}
+            onReactivate={async (days) => {
+              await reopenSelection({ id: reactivateGalleryId, days });
+              setReactivateGalleryId(null);
+            }}
+            open={true}
+            onOpenChange={(open) => { if (!open) setReactivateGalleryId(null); }}
+          />
+        );
+      })()}
     </div>
   );
 }
