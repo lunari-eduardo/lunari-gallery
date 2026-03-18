@@ -66,7 +66,7 @@ export function ReactivateGalleryDialog({
   };
 
   const handleClose = () => {
-    onOpenChange(false);
+    setOpen(false);
     setTimeout(() => {
       setShowSuccess(false);
       setDays(7);
@@ -77,7 +77,16 @@ export function ReactivateGalleryDialog({
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isOpen) handleClose();
+      else setOpen(true);
     }}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reativar
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         {!showSuccess ? (
           <>
