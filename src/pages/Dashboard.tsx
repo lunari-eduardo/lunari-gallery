@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
-import { getClientUrl } from '@/lib/galleryUrl';
+import { getGalleryUrl } from '@/lib/galleryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
