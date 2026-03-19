@@ -164,8 +164,9 @@ export function PaymentSettings() {
         setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
         setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
         setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
-        // Default true para retrocompatibilidade
-        setAsaasIncluirAntecipacao(asData.incluirTaxaAntecipacao ?? true);
+        // Resolver hierarquia: campos granulares → legacy fallback
+        setAsaasIreiAntecipar(asData.ireiAntecipar ?? asData.incluirTaxaAntecipacao ?? false);
+        setAsaasRepassarAntecipacao(asData.repassarTaxaAntecipacao ?? asData.incluirTaxaAntecipacao ?? false);
       }
     }
   }, [data?.allIntegrations]);
