@@ -475,6 +475,8 @@ Deno.serve(async (req) => {
             },
             maxParcelas: asaasSettings.maxParcelas || 12,
             absorverTaxa: asaasSettings.absorverTaxa || false,
+            ireiAntecipar: asaasSettings.ireiAntecipar ?? asaasSettings.incluirTaxaAntecipacao ?? false,
+            repassarTaxaAntecipacao: asaasSettings.repassarTaxaAntecipacao ?? asaasSettings.incluirTaxaAntecipacao ?? false,
             taxaAntecipacao: asaasSettings.taxaAntecipacao || false,
             taxaAntecipacaoPercentual: asaasSettings.taxaAntecipacaoPercentual,
             taxaAntecipacaoCreditoAvista: asaasSettings.taxaAntecipacaoCreditoAvista,

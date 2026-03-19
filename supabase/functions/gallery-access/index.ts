@@ -298,6 +298,8 @@ serve(async (req) => {
             },
             maxParcelas: (s.maxParcelas as number) || 12,
             absorverTaxa: s.absorverTaxa || false,
+            ireiAntecipar: s.ireiAntecipar ?? s.incluirTaxaAntecipacao ?? false,
+            repassarTaxaAntecipacao: s.repassarTaxaAntecipacao ?? s.incluirTaxaAntecipacao ?? false,
             taxaAntecipacao: s.taxaAntecipacao || false,
             taxaAntecipacaoPercentual: s.taxaAntecipacaoPercentual,
             taxaAntecipacaoCreditoAvista: s.taxaAntecipacaoCreditoAvista,

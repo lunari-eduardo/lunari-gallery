@@ -43,7 +43,11 @@ export interface AsaasCheckoutData {
   enabledMethods: { pix: boolean; creditCard: boolean; boleto?: boolean };
   maxParcelas: number;
   absorverTaxa: boolean;
-  /** Quando false, apenas taxa de processamento é cobrada (sem antecipação) */
+  /** "Vou antecipar recebíveis?" — campo granular */
+  ireiAntecipar?: boolean;
+  /** "Repassar custo da antecipação ao cliente?" — campo granular */
+  repassarTaxaAntecipacao?: boolean;
+  /** Legacy fallback — quando false, apenas taxa de processamento é cobrada (sem antecipação) */
   incluirTaxaAntecipacao?: boolean;
   // Legacy fields (kept for backward compat but ignored when accountFees is available)
   taxaAntecipacao?: boolean;
@@ -286,8 +290,12 @@ export function AsaasCheckout({
   };
 
   // ——— Card Flow: Calculate installments with combined fees ———
-  // incluirTaxaAntecipacao defaults to true for backward compatibility
-  const incluirAntecipacao = data.incluirTaxaAntecipacao !== false;
+  // Resolve anticipation config: new granular fields → legacy fallback
+  const ireiAntecipar = data.ireiAntecipar ?? data.incluirTaxaAntecipacao ?? false;
+  const repassarAntecipacao = ireiAntecipar
+    ? (data.repassarTaxaAntecipacao ?? data.incluirTaxaAntecipacao ?? false)
+    : false;
+  const incluirAntecipacao = repassarAntecipacao;
 
   const installmentOptions: Array<{ value: string; label: string; totalValue: number }> = [];
   for (let i = 1; i <= (data.maxParcelas || 12); i++) {

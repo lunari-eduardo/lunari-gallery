@@ -75,7 +75,8 @@ export function PaymentSettings() {
   const [asaasHabilitarBoleto, setAsaasHabilitarBoleto] = useState(false);
   const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
-  const [asaasIncluirAntecipacao, setAsaasIncluirAntecipacao] = useState(true);
+  const [asaasIreiAntecipar, setAsaasIreiAntecipar] = useState(false);
+  const [asaasRepassarAntecipacao, setAsaasRepassarAntecipacao] = useState(false);
   
   // Real-time fees from Asaas API
   const [asaasFees, setAsaasFees] = useState<{
@@ -163,8 +164,9 @@ export function PaymentSettings() {
         setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
         setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
         setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
-        // Default true para retrocompatibilidade
-        setAsaasIncluirAntecipacao(asData.incluirTaxaAntecipacao ?? true);
+        // Resolver hierarquia: campos granulares → legacy fallback
+        setAsaasIreiAntecipar(asData.ireiAntecipar ?? asData.incluirTaxaAntecipacao ?? false);
+        setAsaasRepassarAntecipacao(asData.repassarTaxaAntecipacao ?? asData.incluirTaxaAntecipacao ?? false);
       }
     }
   }, [data?.allIntegrations]);
@@ -220,7 +222,9 @@ export function PaymentSettings() {
         habilitarBoleto: asaasHabilitarBoleto,
         maxParcelas: parseInt(asaasMaxParcelas),
         absorverTaxa: asaasAbsorverTaxa,
-        incluirTaxaAntecipacao: asaasIncluirAntecipacao,
+        ireiAntecipar: asaasIreiAntecipar,
+        repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+        incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
       },
       setAsDefault: !data?.hasPayment,
     });
@@ -235,7 +239,9 @@ export function PaymentSettings() {
       habilitarBoleto: asaasHabilitarBoleto,
       maxParcelas: parseInt(asaasMaxParcelas),
       absorverTaxa: asaasAbsorverTaxa,
-      incluirTaxaAntecipacao: asaasIncluirAntecipacao,
+      ireiAntecipar: asaasIreiAntecipar,
+      repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+      incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
     });
     setShowAsaasSettings(false);
   };
@@ -938,7 +944,9 @@ export function PaymentSettings() {
                               habilitarBoleto: asaasHabilitarBoleto,
                               maxParcelas: parseInt(asaasMaxParcelas),
                               absorverTaxa: checked,
-                              incluirTaxaAntecipacao: asaasIncluirAntecipacao,
+                              ireiAntecipar: asaasIreiAntecipar,
+                              repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+                              incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
                             });
                           } catch {
                             // Revert on failure
@@ -960,43 +968,76 @@ export function PaymentSettings() {
                 {/* Toggle de antecipação - só aparece quando cliente paga juros */}
                 {!asaasAbsorverTaxa && (
                   <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                    {/* Toggle 1: Vou antecipar recebíveis? */}
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label className="flex items-center gap-2">
-                          Incluir taxa de antecipação
+                          Vou antecipar meus recebíveis
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                          Desative se você não for antecipar os recebíveis no Asaas
+                          Ative se você pretende antecipar os recebíveis no Asaas
                         </p>
                       </div>
                       <Switch
-                        checked={asaasIncluirAntecipacao}
+                        checked={asaasIreiAntecipar}
                         onCheckedChange={async (checked) => {
-                          setAsaasIncluirAntecipacao(checked);
-                          // Auto-save immediately
+                          setAsaasIreiAntecipar(checked);
+                          // Se desativar antecipação, desativar repasse também
+                          if (!checked) setAsaasRepassarAntecipacao(false);
                           try {
                             await updateAsaasSettings.mutateAsync({
-                              environment: asaasEnvironment,
-                              habilitarPix: asaasHabilitarPix,
-                              habilitarCartao: asaasHabilitarCartao,
-                              habilitarBoleto: asaasHabilitarBoleto,
-                              maxParcelas: parseInt(asaasMaxParcelas),
-                              absorverTaxa: asaasAbsorverTaxa,
-                              incluirTaxaAntecipacao: checked,
+                              ireiAntecipar: checked,
+                              repassarTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
+                              incluirTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
                             });
                           } catch {
-                            // Revert on failure
-                            setAsaasIncluirAntecipacao(!checked);
+                            setAsaasIreiAntecipar(!checked);
                           }
                         }}
                         disabled={updateAsaasSettings.isPending}
                       />
                     </div>
+
+                    {/* Toggle 2: Repassar taxa ao cliente? — só aparece se ireiAntecipar */}
+                    {asaasIreiAntecipar && (
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                        <div className="space-y-0.5">
+                          <Label className="flex items-center gap-2">
+                            Repassar taxa de antecipação ao cliente
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            O cliente pagará a taxa de antecipação junto com a taxa de processamento
+                          </p>
+                        </div>
+                        <Switch
+                          checked={asaasRepassarAntecipacao}
+                          onCheckedChange={async (checked) => {
+                            setAsaasRepassarAntecipacao(checked);
+                            try {
+                              await updateAsaasSettings.mutateAsync({
+                                ireiAntecipar: asaasIreiAntecipar,
+                                repassarTaxaAntecipacao: checked,
+                                incluirTaxaAntecipacao: checked,
+                              });
+                            } catch {
+                              setAsaasRepassarAntecipacao(!checked);
+                            }
+                          }}
+                          disabled={updateAsaasSettings.isPending}
+                        />
+                      </div>
+                    )}
+
                     <p className="text-xs text-muted-foreground">
-                      {asaasIncluirAntecipacao
-                        ? 'O cliente pagará taxa de processamento + taxa de antecipação'
-                        : 'O cliente pagará apenas a taxa de processamento'}
+                      {!asaasIreiAntecipar
+                        ? 'O cliente pagará apenas a taxa de processamento'
+                        : asaasRepassarAntecipacao
+                          ? 'O cliente pagará taxa de processamento + taxa de antecipação'
+                          : 'Você antecipará, mas absorverá o custo da antecipação'}
                     </p>
+                    {updateAsaasSettings.isPending && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
                   </div>
                 )}
 

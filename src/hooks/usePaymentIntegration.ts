@@ -32,7 +32,11 @@ export interface AsaasData {
   habilitarBoleto: boolean;
   maxParcelas: number;
   absorverTaxa: boolean;
-  /** Quando false, apenas a taxa de processamento é repassada ao cliente (sem antecipação) */
+  /** "Vou antecipar meus recebíveis?" — campo granular do Gestão */
+  ireiAntecipar?: boolean;
+  /** "Repassar custo da antecipação ao cliente?" — campo granular do Gestão */
+  repassarTaxaAntecipacao?: boolean;
+  /** Quando false, apenas a taxa de processamento é repassada ao cliente (sem antecipação). Legacy fallback. */
   incluirTaxaAntecipacao?: boolean;
   // Legacy fields - kept for backward compat in data but no longer configured via UI
   taxaAntecipacao?: boolean;
