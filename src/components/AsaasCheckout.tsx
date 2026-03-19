@@ -290,8 +290,12 @@ export function AsaasCheckout({
   };
 
   // ——— Card Flow: Calculate installments with combined fees ———
-  // incluirTaxaAntecipacao defaults to true for backward compatibility
-  const incluirAntecipacao = data.incluirTaxaAntecipacao !== false;
+  // Resolve anticipation config: new granular fields → legacy fallback
+  const ireiAntecipar = data.ireiAntecipar ?? data.incluirTaxaAntecipacao ?? false;
+  const repassarAntecipacao = ireiAntecipar
+    ? (data.repassarTaxaAntecipacao ?? data.incluirTaxaAntecipacao ?? false)
+    : false;
+  const incluirAntecipacao = repassarAntecipacao;
 
   const installmentOptions: Array<{ value: string; label: string; totalValue: number }> = [];
   for (let i = 1; i <= (data.maxParcelas || 12); i++) {
