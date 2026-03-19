@@ -944,7 +944,9 @@ export function PaymentSettings() {
                               habilitarBoleto: asaasHabilitarBoleto,
                               maxParcelas: parseInt(asaasMaxParcelas),
                               absorverTaxa: checked,
-                              incluirTaxaAntecipacao: asaasIncluirAntecipacao,
+                              ireiAntecipar: asaasIreiAntecipar,
+                              repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+                              incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
                             });
                           } catch {
                             // Revert on failure
