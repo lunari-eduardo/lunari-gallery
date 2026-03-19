@@ -239,7 +239,9 @@ export function PaymentSettings() {
       habilitarBoleto: asaasHabilitarBoleto,
       maxParcelas: parseInt(asaasMaxParcelas),
       absorverTaxa: asaasAbsorverTaxa,
-      incluirTaxaAntecipacao: asaasIncluirAntecipacao,
+      ireiAntecipar: asaasIreiAntecipar,
+      repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+      incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
     });
     setShowAsaasSettings(false);
   };
