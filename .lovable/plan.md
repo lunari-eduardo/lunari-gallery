@@ -1,74 +1,50 @@
 
 
-# Sincronizar Configurações de Taxas Asaas: Gallery ↔ Gestão
+# Fix: "Confirmar Pago" como Chave Mestra + Correção de Galeria Órfã
 
-## Contexto
+## Problema Encontrado (dados reais)
 
-O Gestão introduziu dois campos mais granulares no `dados_extras` do Asaas:
-- `ireiAntecipar` — "Vou antecipar recebíveis?"
-- `repassarTaxaAntecipacao` — "Repassar custo ao cliente?"
+A galeria "Teste" (`8ca891fc`) tem `status_pagamento = 'pendente'`, mas a cobrança associada (`dc7c8539`) já está `status = 'pago'`. A cobrança foi criada com **`galeria_id = NULL`**, então quando o pagamento foi processado (via webhook MP ou confirm manual), a RPC `finalize_gallery_payment` marcou a cobrança como paga mas **pulou a atualização da galeria** porque `galeria_id` era NULL.
 
-O Gallery usa apenas `incluirTaxaAntecipacao` (legacy). Precisa ler os campos novos com fallback.
+Isso também explica por que "Confirmar Pago" mostra erro — ao clicar novamente, a RPC retorna `already_paid: true`, mas a galeria continua pendente, criando inconsistência visual.
 
-## Alterações
+### Bugs identificados na RPC `finalize_gallery_payment`
 
-### 1. Interface `AsaasData` — `usePaymentIntegration.ts`
+1. **`AND status = 'pendente'` é restritivo demais** — rejeita cobranças com status `aguardando_confirmacao`, `cancelado`, etc. O "Confirmar Pago" precisa ser uma **chave mestra** que funcione para qualquer status.
 
-Adicionar os dois novos campos opcionais:
-```typescript
-ireiAntecipar?: boolean;
-repassarTaxaAntecipacao?: boolean;
+2. **Não resolve `galeria_id` quando NULL** — se a cobrança tem `session_id` mas não `galeria_id`, a RPC deveria buscar a galeria pelo session_id como fallback.
+
+## Plano
+
+### 1. Migração SQL: Atualizar RPC `finalize_gallery_payment`
+
+**Mudanças:**
+- Trocar `AND status = 'pendente'` por `AND status != 'pago'` (aceita qualquer status não-pago)
+- Adicionar fallback: se `galeria_id IS NULL` mas `session_id IS NOT NULL`, buscar galeria pela `session_id`
+- Isso torna o "Confirmar Pago" uma verdadeira chave mestra para qualquer provedor
+
+### 2. Migração SQL: Corrigir dados órfãos
+
+Atualizar cobranças existentes que têm `session_id` mas `galeria_id = NULL`:
+```sql
+UPDATE cobrancas c
+SET galeria_id = g.id
+FROM galerias g
+WHERE c.galeria_id IS NULL
+  AND c.session_id IS NOT NULL
+  AND g.session_id = c.session_id;
 ```
 
-### 2. Interface `AsaasCheckoutData` — `AsaasCheckout.tsx`
+E re-executar a finalização para a galeria "Teste" especificamente.
 
-Adicionar os mesmos dois campos opcionais à interface do checkout.
+### 3. `PaymentStatusCard.tsx` — Melhorar tratamento de erro
 
-### 3. Lógica de antecipação — `AsaasCheckout.tsx` (linha ~290)
+Mostrar a mensagem de erro real do servidor (ex: `data.error`) em vez do genérico "Erro ao confirmar pagamento".
 
-Substituir:
-```typescript
-const incluirAntecipacao = data.incluirTaxaAntecipacao !== false;
-```
-Por:
-```typescript
-const ireiAntecipar = data.ireiAntecipar ?? data.incluirTaxaAntecipacao ?? false;
-const repassarAntecipacao = ireiAntecipar
-  ? (data.repassarTaxaAntecipacao ?? data.incluirTaxaAntecipacao ?? false)
-  : false;
-const incluirAntecipacao = repassarAntecipacao;
-```
-
-### 4. Edge Functions — `gallery-access/index.ts` e `confirm-selection/index.ts`
-
-Nos dois blocos `asaasCheckoutData`, adicionar:
-```typescript
-ireiAntecipar: s.ireiAntecipar ?? s.incluirTaxaAntecipacao ?? false,
-repassarTaxaAntecipacao: s.repassarTaxaAntecipacao ?? s.incluirTaxaAntecipacao ?? false,
-```
-
-### 5. PaymentSettings.tsx — Toggles de antecipação Asaas
-
-Substituir o toggle único "Incluir taxa de antecipação" por dois toggles hierárquicos:
-
-1. **"Vou antecipar meus recebíveis"** (`ireiAntecipar`) — sempre visível quando `absorverTaxa = false`
-2. **"Repassar taxa de antecipação ao cliente"** (`repassarTaxaAntecipacao`) — visível apenas quando `ireiAntecipar = true`
-
-Ambos com auto-save (mesmo padrão do toggle existente). O campo legacy `incluirTaxaAntecipacao` continua sendo gravado como fallback.
-
-Estado local: trocar `asaasIncluirAntecipacao` por `asaasIreiAntecipar` + `asaasRepassarAntecipacao`. Na leitura inicial, resolver hierarquia: `ireiAntecipar ?? incluirTaxaAntecipacao ?? false`.
-
-### 6. `usePaymentIntegration.ts` — `updateAsaasSettings`
-
-Já aceita `Partial<AsaasData>`, sem mudança necessária na mutation. Os novos campos serão enviados automaticamente.
-
-## Arquivos a editar
+## Arquivos
 
 | Arquivo | Mudança |
 |---|---|
-| `src/hooks/usePaymentIntegration.ts` | +2 campos na interface `AsaasData` |
-| `src/components/AsaasCheckout.tsx` | +2 campos na interface + lógica de resolução |
-| `src/components/settings/PaymentSettings.tsx` | Trocar toggle único por 2 toggles hierárquicos |
-| `supabase/functions/gallery-access/index.ts` | +2 campos no `asaasCheckoutData` |
-| `supabase/functions/confirm-selection/index.ts` | +2 campos no `asaasCheckoutData` |
+| Nova migração SQL | Atualizar RPC + corrigir dados órfãos |
+| `src/components/PaymentStatusCard.tsx` | Exibir erro real do servidor no toast |
 
