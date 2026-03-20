@@ -116,9 +116,11 @@ export function PaymentStatusCard({
       } else {
         toast.error(data.error || 'Erro ao confirmar pagamento');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao confirmar pagamento:', error);
-      toast.error('Erro ao confirmar pagamento');
+      toast.error('Erro ao confirmar pagamento', {
+        description: error?.message || 'Tente novamente',
+      });
     } finally {
       setIsConfirming(false);
     }
