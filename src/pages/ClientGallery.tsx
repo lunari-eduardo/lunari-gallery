@@ -1620,11 +1620,11 @@ export default function ClientGallery() {
         style={themeStyles}
       >
         {galleryResponse?.studioSettings?.studio_logo_url && (
-          <header className="flex items-center justify-center py-5">
+          <header className="flex items-center justify-center py-6 sm:py-8">
             <img 
               src={galleryResponse.studioSettings.studio_logo_url} 
               alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-              className="h-16 sm:h-20 md:h-24 max-w-[320px] object-contain"
+              className="h-24 sm:h-28 md:h-36 lg:h-40 max-w-[320px] object-contain"
             />
           </header>
         )}
@@ -1635,8 +1635,7 @@ export default function ClientGallery() {
           >
             {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
           </h2>
-          <p className="text-muted-foreground text-sm">{localPhotos.length} fotos</p>
-          <p className="text-muted-foreground text-sm mt-1 mb-10">Escolha um álbum para visualizar</p>
+          <p className="text-muted-foreground text-sm mb-10">{localPhotos.length} fotos</p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-4xl w-full">
             {galleryFolders.map((folder: { id: string; nome: string; ordem: number; cover_photo_id?: string | null }) => {
