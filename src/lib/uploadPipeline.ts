@@ -11,6 +11,7 @@
 
 import {
   compressImage,
+  compressCover,
   type CompressionOptions,
   type CompressedImage,
   type WatermarkConfig,
