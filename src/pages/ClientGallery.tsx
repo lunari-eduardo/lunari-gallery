@@ -1660,9 +1660,9 @@ export default function ClientGallery() {
                   }}
                   className="group relative aspect-[3/4] overflow-hidden cursor-pointer"
                 >
-                  {thumb ? (
+                  {coverUrl ? (
                     <img
-                      src={thumb.thumbnailUrl}
+                      src={coverUrl}
                       alt={folder.nome}
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
                     />
