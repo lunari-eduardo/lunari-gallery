@@ -511,18 +511,9 @@ export default function ClientGallery() {
         return;
       }
 
-      // Checkout externo (InfinitePay/MercadoPago) - redirect BEFORE confirming
+      // Checkout externo (InfinitePay/MercadoPago) - redirect immediately
       if (data.requiresPayment && data.checkoutUrl) {
-        // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
-        setPaymentInfo({
-          checkoutUrl: data.checkoutUrl,
-          provedor: data.provedor || 'pagamento',
-          valorTotal: data.valorTotal || 0,
-        });
-        setCurrentStep('payment');
-        toast.success('Seleção confirmada!', {
-          description: 'Redirecionando para pagamento...',
-        });
+        window.location.href = data.checkoutUrl;
         return;
       }
       
@@ -1650,7 +1641,7 @@ export default function ClientGallery() {
               const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
               const coverPhoto = folder.cover_photo_id ? localPhotos.find(p => p.id === folder.cover_photo_id) : null;
               const thumb = coverPhoto || folderPhotos[0];
-              const coverUrl = thumb ? ((thumb as any).coverUrl || thumb.thumbnailUrl) : null;
+              const coverUrl = thumb ? ((thumb as any).coverUrl || (thumb as any).previewUrl || thumb.thumbnailUrl) : null;
               const folderSelectedCount = folderPhotos.filter(p => p.isSelected).length;
               return (
                 <button
