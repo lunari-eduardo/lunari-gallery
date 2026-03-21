@@ -1649,6 +1649,7 @@ export type Database = {
       galeria_fotos: {
         Row: {
           comment: string | null
+          cover_path: string | null
           created_at: string
           file_size: number | null
           filename: string
@@ -1676,6 +1677,7 @@ export type Database = {
         }
         Insert: {
           comment?: string | null
+          cover_path?: string | null
           created_at?: string
           file_size?: number | null
           filename: string
@@ -1703,6 +1705,7 @@ export type Database = {
         }
         Update: {
           comment?: string | null
+          cover_path?: string | null
           created_at?: string
           file_size?: number | null
           filename?: string

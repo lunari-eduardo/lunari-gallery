@@ -291,6 +291,47 @@ export function isValidImageType(file: File): boolean {
 }
 
 /**
+ * Compress image for album cover (no watermark, low quality, small resolution)
+ * Used for watermark-free cover display on album selection screen
+ */
+export async function compressCover(file: File): Promise<CompressedImage> {
+  const img = await loadImage(file);
+  const { width, height } = calculateDimensions(img.naturalWidth, img.naturalHeight, 600);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, width, height);
+
+  // No watermark applied — intentionally clean for cover display
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to compress cover"))),
+      "image/jpeg",
+      0.45 // Very low quality — prevents commercial use
+    );
+  });
+
+  URL.revokeObjectURL(img.src);
+
+  const baseName = file.name.replace(/\.[^/.]+$/, "");
+  return {
+    blob,
+    width,
+    height,
+    originalSize: file.size,
+    compressedSize: blob.size,
+    filename: `${baseName}-cover.jpg`,
+  };
+}
+
+/**
  * Format file size for display
  */
 export function formatFileSize(bytes: number): string {

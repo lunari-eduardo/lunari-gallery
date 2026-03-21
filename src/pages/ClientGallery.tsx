@@ -398,6 +398,7 @@ export default function ClientGallery() {
         comment: photo.comment || '',
         order: photo.order_index || 0,
         folderId: photo.pasta_id || null,
+        coverUrl: photo.cover_path ? getPhotoUrl({ storageKey: photo.cover_path }, 'thumbnail') : null,
       };
     });
   }, [supabasePhotos, transformedGallery]);
@@ -1620,11 +1621,11 @@ export default function ClientGallery() {
         style={themeStyles}
       >
         {galleryResponse?.studioSettings?.studio_logo_url && (
-          <header className="flex items-center justify-center py-5">
+          <header className="flex items-center justify-center py-6 sm:py-8">
             <img 
               src={galleryResponse.studioSettings.studio_logo_url} 
               alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-              className="h-16 sm:h-20 md:h-24 max-w-[320px] object-contain"
+              className="h-24 sm:h-28 md:h-36 lg:h-40 max-w-[320px] object-contain"
             />
           </header>
         )}
@@ -1635,14 +1636,21 @@ export default function ClientGallery() {
           >
             {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
           </h2>
-          <p className="text-muted-foreground text-sm">{localPhotos.length} fotos</p>
-          <p className="text-muted-foreground text-sm mt-1 mb-10">Escolha um álbum para visualizar</p>
+          <p className="text-muted-foreground text-sm mb-10">{localPhotos.length} fotos</p>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-4xl w-full">
+          <div className={cn(
+            "grid gap-5 w-full",
+            galleryFolders.length === 1 
+              ? "max-w-md mx-auto" 
+              : galleryFolders.length === 2 
+                ? "grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto"
+                : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto"
+          )}>
             {galleryFolders.map((folder: { id: string; nome: string; ordem: number; cover_photo_id?: string | null }) => {
               const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
               const coverPhoto = folder.cover_photo_id ? localPhotos.find(p => p.id === folder.cover_photo_id) : null;
               const thumb = coverPhoto || folderPhotos[0];
+              const coverUrl = thumb ? ((thumb as any).coverUrl || thumb.thumbnailUrl) : null;
               const folderSelectedCount = folderPhotos.filter(p => p.isSelected).length;
               return (
                 <button
@@ -1651,11 +1659,11 @@ export default function ClientGallery() {
                     setActiveFolderId(folder.id);
                     setFolderViewMode('grid');
                   }}
-                  className="group relative aspect-[4/5] rounded-lg overflow-hidden cursor-pointer transition-shadow duration-700 hover:shadow-xl"
+                  className="group relative aspect-[3/4] overflow-hidden cursor-pointer"
                 >
-                  {thumb ? (
+                  {coverUrl ? (
                     <img
-                      src={thumb.thumbnailUrl}
+                      src={coverUrl}
                       alt={folder.nome}
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
                     />

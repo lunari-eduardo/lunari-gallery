@@ -608,6 +608,81 @@ async function handleWatermarkUpload(
   }
 }
 
+/**
+ * Handle cover image upload (watermark-free, low quality for album covers)
+ * Updates existing photo record with cover_path
+ */
+async function handleUploadCover(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const user = await validateAuth(request);
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const galleryId = formData.get('galleryId') as string;
+    const photoId = formData.get('photoId') as string;
+
+    if (!file || !galleryId || !photoId) {
+      return new Response(
+        JSON.stringify({ error: 'file, galleryId e photoId são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Store cover in covers/{galleryId}/{photoId}.jpg
+    const coverPath = `covers/${galleryId}/${photoId}.jpg`;
+    const fileBuffer = await file.arrayBuffer();
+
+    await env.GALLERY_BUCKET.put(coverPath, fileBuffer, {
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {
+        uploadedAt: new Date().toISOString(),
+        userId: user.userId,
+        type: 'cover',
+      },
+    });
+
+    // Update photo record with cover_path
+    const updateRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/galeria_fotos?id=eq.${photoId}&galeria_id=eq.${galleryId}&user_id=eq.${user.userId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ cover_path: coverPath }),
+      }
+    );
+
+    if (!updateRes.ok) {
+      console.error('Cover DB update failed:', await updateRes.text());
+    }
+
+    console.log(`Cover uploaded: ${coverPath} (${fileBuffer.byteLength} bytes)`);
+
+    return new Response(
+      JSON.stringify({ success: true, coverPath }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Cover upload error:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro no upload da cover' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
 // Main request handler
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -626,6 +701,11 @@ export default {
     // Route: POST /upload-original (original file for download)
     if (request.method === 'POST' && url.pathname === '/upload-original') {
       return handleUploadOriginal(request, env);
+    }
+
+    // Route: POST /upload-cover (cover image without watermark)
+    if (request.method === 'POST' && url.pathname === '/upload-cover') {
+      return handleUploadCover(request, env);
     }
 
     // Route: POST /upload-watermark
