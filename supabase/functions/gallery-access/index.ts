@@ -277,10 +277,12 @@ serve(async (req) => {
       let pendingValor: number | null = null;
 
       if (paymentMethod !== 'pix_manual') {
+        // Search by galeria_id AND fallback by session_id
+        const orFilter = `galeria_id.eq.${gallery.id}${gallery.session_id ? `,session_id.eq.${gallery.session_id}` : ''}`;
         const { data: pendingCobranca } = await supabase
           .from("cobrancas")
           .select("id, ip_checkout_url, mp_payment_link, provedor, valor, status")
-          .eq("galeria_id", gallery.id)
+          .or(orFilter)
           .eq("status", "pendente")
           .order("created_at", { ascending: false })
           .limit(1)
