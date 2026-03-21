@@ -472,4 +472,37 @@ export class UploadPipeline {
       URL.revokeObjectURL(item.preview);
     }
   }
+
+  /** Upload a cover variant in the background (non-blocking, best-effort) */
+  private async uploadCoverInBackground(item: PipelineItem) {
+    if (!item.result?.id) return;
+
+    try {
+      const coverCompressed = await compressCover(item.file);
+      
+      const formData = new FormData();
+      formData.append('file', coverCompressed.blob, coverCompressed.filename);
+      formData.append('galleryId', this.opts.galleryId);
+      formData.append('photoId', item.result.id);
+      formData.append('uploadType', 'cover');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const R2_WORKER_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
+      const resp = await fetch(`${R2_WORKER_URL}/upload-cover`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+
+      if (resp.ok) {
+        console.log('[Pipeline] Cover uploaded for:', item.file.name);
+      } else {
+        console.warn('[Pipeline] Cover upload response not ok:', resp.status);
+      }
+    } catch (err) {
+      console.warn('[Pipeline] Cover generation/upload error:', err);
+    }
+  }
 }
