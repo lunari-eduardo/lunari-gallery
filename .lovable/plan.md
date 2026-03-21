@@ -1,50 +1,78 @@
 
 
-# Fix: "Confirmar Pago" como Chave Mestra + Correção de Galeria Órfã
+# Diagnóstico: Galerias Pagas mas com Status "Pendente"
 
-## Problema Encontrado (dados reais)
+## Causa Raiz (confirmada com dados)
 
-A galeria "Teste" (`8ca891fc`) tem `status_pagamento = 'pendente'`, mas a cobrança associada (`dc7c8539`) já está `status = 'pago'`. A cobrança foi criada com **`galeria_id = NULL`**, então quando o pagamento foi processado (via webhook MP ou confirm manual), a RPC `finalize_gallery_payment` marcou a cobrança como paga mas **pulou a atualização da galeria** porque `galeria_id` era NULL.
+Encontrei **4 galerias afetadas** (Roberta Tomaz, Agatha 5 meses, Cecília Smash, Aurora Páscoa) — todas InfinitePay, todas com cobranças `status = 'pago'` com comprovante, mas galeria `status_pagamento = 'pendente'`.
 
-Isso também explica por que "Confirmar Pago" mostra erro — ao clicar novamente, a RPC retorna `already_paid: true`, mas a galeria continua pendente, criando inconsistência visual.
+**Dois problemas encadeados:**
 
-### Bugs identificados na RPC `finalize_gallery_payment`
+1. **`galeria_id = NULL` nas cobranças**: O deploy do Gestão sobre `infinitepay-create-link` removeu o campo `galeriaId` da inserção. Nosso redeploy corrigiu o código, mas as cobranças criadas no período já foram inseridas sem `galeria_id`.
 
-1. **`AND status = 'pendente'` é restritivo demais** — rejeita cobranças com status `aguardando_confirmacao`, `cancelado`, etc. O "Confirmar Pago" precisa ser uma **chave mestra** que funcione para qualquer status.
+2. **Armadilha de idempotência na RPC**: A migration que corrigiu a RPC (`finalize_gallery_payment`) adicionou o fallback session_id, mas as cobranças já tinham sido processadas pela versão ANTIGA da RPC (sem fallback). Agora, ao tentar "Confirmar Pago", a RPC vê `status = 'pago'` e retorna `already_paid = true` **sem verificar se a galeria foi atualizada**. Resultado: a galeria fica permanentemente travada em `pendente`.
 
-2. **Não resolve `galeria_id` quando NULL** — se a cobrança tem `session_id` mas não `galeria_id`, a RPC deveria buscar a galeria pelo session_id como fallback.
+3. **`qtd_fotos = 0`**: O deploy do Gestão também removeu o campo `qtdFotos` da inserção na cobrança. Mesmo que corrijamos o status, o incremento atômico de fotos extras na RPC soma 0.
 
-## Plano
+## Plano de Correção
 
-### 1. Migração SQL: Atualizar RPC `finalize_gallery_payment`
+### 1. Corrigir a armadilha de idempotência na RPC
 
-**Mudanças:**
-- Trocar `AND status = 'pendente'` por `AND status != 'pago'` (aceita qualquer status não-pago)
-- Adicionar fallback: se `galeria_id IS NULL` mas `session_id IS NOT NULL`, buscar galeria pela `session_id`
-- Isso torna o "Confirmar Pago" uma verdadeira chave mestra para qualquer provedor
+Alterar o bloco `already_paid` para **não retornar imediatamente**. Em vez disso, verificar se a galeria associada ainda precisa ser atualizada:
 
-### 2. Migração SQL: Corrigir dados órfãos
-
-Atualizar cobranças existentes que têm `session_id` mas `galeria_id = NULL`:
 ```sql
-UPDATE cobrancas c
-SET galeria_id = g.id
-FROM galerias g
-WHERE c.galeria_id IS NULL
-  AND c.session_id IS NOT NULL
-  AND g.session_id = c.session_id;
+IF v_cobranca.status = 'pago' THEN
+  -- Resolve galeria_id if missing
+  v_galeria_id := v_cobranca.galeria_id;
+  IF v_galeria_id IS NULL AND v_cobranca.session_id IS NOT NULL THEN
+    SELECT id INTO v_galeria_id FROM galerias
+    WHERE session_id = v_cobranca.session_id LIMIT 1;
+    IF v_galeria_id IS NOT NULL THEN
+      UPDATE cobrancas SET galeria_id = v_galeria_id WHERE id = p_cobranca_id;
+    END IF;
+  END IF;
+
+  -- Check if gallery still needs update
+  IF v_galeria_id IS NOT NULL THEN
+    PERFORM 1 FROM galerias
+    WHERE id = v_galeria_id AND status_pagamento != 'pago';
+    IF FOUND THEN
+      -- Gallery out of sync — apply updates
+      UPDATE galerias SET status_pagamento = 'pago', status_selecao = 'selecao_completa',
+        finalized_at = COALESCE(finalized_at, v_cobranca.data_pagamento)
+      WHERE id = v_galeria_id;
+      UPDATE clientes_sessoes SET status_galeria = 'selecao_completa',
+        status_pagamento_fotos_extra = 'pago' WHERE session_id = v_cobranca.session_id;
+      RETURN jsonb_build_object('success', true, 'already_paid', true,
+        'gallery_synced', true, 'galeria_id', v_galeria_id);
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'already_paid', true);
+END IF;
 ```
 
-E re-executar a finalização para a galeria "Teste" especificamente.
+Isso garante que "Confirmar Pago" **sempre sincronize a galeria**, mesmo que a cobrança já esteja paga.
 
-### 3. `PaymentStatusCard.tsx` — Melhorar tratamento de erro
+### 2. Corrigir dados das 4 galerias afetadas (na mesma migração)
 
-Mostrar a mensagem de erro real do servidor (ex: `data.error`) em vez do genérico "Erro ao confirmar pagamento".
+- Vincular `galeria_id` nas cobranças órfãs via session_id
+- Atualizar as galerias: `status_pagamento = 'pago'`, `status_selecao = 'selecao_completa'`, `finalized_at = cobranca.data_pagamento`
+- Atualizar `clientes_sessoes` correspondentes
 
-## Arquivos
+### 3. Prevenir regressão futura
+
+O `qtd_fotos = 0` nas cobranças é um problema menor agora (os valores de `valor_extras` já estão corretos na galeria via `confirm-selection`), mas devemos garantir que o campo seja sempre salvo. Isso já está correto no nosso código atual — o problema foi apenas o deploy do Gestão.
+
+## Arquivos a editar
 
 | Arquivo | Mudança |
 |---|---|
-| Nova migração SQL | Atualizar RPC + corrigir dados órfãos |
-| `src/components/PaymentStatusCard.tsx` | Exibir erro real do servidor no toast |
+| Nova migração SQL | Atualizar RPC (corrigir armadilha idempotência) + corrigir 4 galerias afetadas |
+
+## Resultado esperado
+
+- As 4 galerias passam imediatamente a `status_pagamento = 'pago'`
+- "Confirmar Pago" nunca mais deixa galeria dessincronizada, mesmo para cobranças já pagas
+- Fotógrafos podem usar "Confirmar Pago" como chave mestra confiável em qualquer cenário
 
