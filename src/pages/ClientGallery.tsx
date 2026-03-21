@@ -511,18 +511,11 @@ export default function ClientGallery() {
         return;
       }
 
-      // Checkout externo (InfinitePay/MercadoPago) - redirect BEFORE confirming
+      // Checkout externo (InfinitePay/MercadoPago) - redirect immediately
       if (data.requiresPayment && data.checkoutUrl) {
-        // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
-        setPaymentInfo({
-          checkoutUrl: data.checkoutUrl,
-          provedor: data.provedor || 'pagamento',
-          valorTotal: data.valorTotal || 0,
-        });
-        setCurrentStep('payment');
-        toast.success('Seleção confirmada!', {
-          description: 'Redirecionando para pagamento...',
-        });
+        // Redirect immediately without intermediate screen
+        setIsConfirmingSelection(true); // keep spinner on button
+        window.location.href = data.checkoutUrl;
         return;
       }
       
