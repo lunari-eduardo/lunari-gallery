@@ -1,3 +1,12 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║  CONTRATO: REGISTRAR RECEBIMENTO MANUAL                     ║
+ * ║                                                              ║
+ * ║  Aceita recebimento manual (dinheiro, pix externo, etc.)     ║
+ * ║  OU confirma cobrança existente como paga.                   ║
+ * ║  Cria cobrança manual se cobrancaId não fornecido.           ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -14,7 +23,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // ── AUTH CHECK: Extract and verify the photographer's JWT ──
+    // ── AUTH CHECK ──
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
@@ -23,7 +32,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Create a client with the user's JWT to verify identity
     const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -40,23 +48,75 @@ Deno.serve(async (req: Request) => {
     const authenticatedUserId = user.id;
     console.log(`🔐 Authenticated user: ${authenticatedUserId}`);
 
-    // Service role client for privileged operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { cobrancaId, receiptUrl, paidAt } = await req.json();
+    const { cobrancaId, galleryId, sessionId, metodoManual, valorManual, observacao, receiptUrl, paidAt } = await req.json();
 
-    if (!cobrancaId) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'cobrancaId é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    let targetCobrancaId = cobrancaId;
+
+    // If no cobrancaId, create a manual cobrança
+    if (!targetCobrancaId) {
+      if (!galleryId && !sessionId) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'cobrancaId ou galleryId/sessionId é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Resolve gallery info
+      let resolvedGalleryId = galleryId;
+      let resolvedSessionId = sessionId;
+      let resolvedClienteId: string | null = null;
+      let resolvedValor = valorManual || 0;
+
+      if (galleryId) {
+        const { data: gallery } = await supabase
+          .from('galerias')
+          .select('session_id, cliente_id, valor_extras')
+          .eq('id', galleryId)
+          .single();
+        if (gallery) {
+          resolvedSessionId = resolvedSessionId || gallery.session_id;
+          resolvedClienteId = gallery.cliente_id;
+          if (!valorManual && gallery.valor_extras) resolvedValor = gallery.valor_extras;
+        }
+      }
+
+      // Create manual cobrança
+      const { data: newCobranca, error: insertError } = await supabase
+        .from('cobrancas')
+        .insert({
+          user_id: authenticatedUserId,
+          galeria_id: resolvedGalleryId || null,
+          session_id: resolvedSessionId || null,
+          cliente_id: resolvedClienteId || null,
+          valor: resolvedValor,
+          tipo_cobranca: 'foto_extra',
+          provedor: 'manual',
+          status: 'pendente',
+          metodo_manual: metodoManual || 'dinheiro',
+          obs_manual: observacao || null,
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !newCobranca) {
+        console.error('❌ Error creating manual cobrança:', insertError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      targetCobrancaId = newCobranca.id;
+      console.log(`📝 Created manual cobrança: ${targetCobrancaId}`);
     }
 
-    // 1. Fetch cobrança
+    // Fetch cobrança to verify ownership
     const { data: cobranca, error: fetchError } = await supabase
       .from('cobrancas')
       .select('*')
-      .eq('id', cobrancaId)
+      .eq('id', targetCobrancaId)
       .single();
 
     if (fetchError || !cobranca) {
@@ -66,7 +126,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // ── OWNERSHIP CHECK: Only the photographer who owns the cobrança can confirm ──
+    // ── OWNERSHIP CHECK ──
     if (cobranca.user_id !== authenticatedUserId) {
       console.error(`❌ Ownership mismatch: cobrança.user_id=${cobranca.user_id}, auth=${authenticatedUserId}`);
       return new Response(
@@ -75,19 +135,21 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Save receipt URL if provided (before RPC)
-    if (receiptUrl) {
+    // Update valor if manual amount provided
+    if (valorManual && valorManual !== cobranca.valor) {
       await supabase
         .from('cobrancas')
-        .update({ ip_receipt_url: receiptUrl })
-        .eq('id', cobrancaId);
+        .update({ valor: valorManual })
+        .eq('id', targetCobrancaId);
     }
 
-    // Call centralized RPC for atomic payment finalization
+    // Call RPC for atomic payment finalization
     const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
-      p_cobranca_id: cobrancaId,
+      p_cobranca_id: targetCobrancaId,
       p_receipt_url: receiptUrl || null,
       p_paid_at: paidAt || new Date().toISOString(),
+      p_manual_method: metodoManual || null,
+      p_manual_obs: observacao || null,
     });
 
     if (rpcError) {
@@ -99,16 +161,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const result = rpcResult as Record<string, unknown>;
-    
+
     if (result?.already_paid) {
-      console.log(`✅ Cobrança ${cobrancaId} já está paga (idempotente)`);
+      console.log(`✅ Cobrança ${targetCobrancaId} já está paga (idempotente)`);
       return new Response(
         JSON.stringify({ success: true, alreadyPaid: true, message: 'Pagamento já confirmado' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`💳 Cobrança ${cobrancaId} finalizada via RPC por user ${authenticatedUserId}:`, JSON.stringify(rpcResult));
+    console.log(`💳 Cobrança ${targetCobrancaId} finalizada por user ${authenticatedUserId}:`, JSON.stringify(rpcResult));
 
     // AUDIT LOG
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -118,18 +180,18 @@ Deno.serve(async (req: Request) => {
       actor_id: authenticatedUserId,
       ip_address: clientIp,
       resource_type: 'payment',
-      resource_id: cobrancaId,
+      resource_id: targetCobrancaId,
       gallery_id: cobranca.galeria_id || null,
       user_agent: req.headers.get('user-agent') || null,
-      metadata: { valor: cobranca.valor, provedor: cobranca.provedor },
+      metadata: { valor: valorManual || cobranca.valor, provedor: metodoManual || 'manual', observacao },
     }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         updated: true,
-        message: 'Pagamento confirmado manualmente',
-        cobrancaId,
+        message: 'Recebimento registrado com sucesso',
+        cobrancaId: targetCobrancaId,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
