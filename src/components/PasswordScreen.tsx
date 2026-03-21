@@ -48,9 +48,9 @@ export function PasswordScreen({
       )}
       style={themeStyles}
     >
-      {/* Header - only show if photographer has a logo */}
+      {/* Header */}
       {studioLogo && (
-        <header className="flex items-center justify-center p-4 border-b border-border/50">
+        <header className="flex items-center justify-center p-4 border-b border-border/30">
           <img 
             src={studioLogo} 
             alt={studioName || 'Studio'} 
@@ -61,16 +61,11 @@ export function PasswordScreen({
 
       {/* Content */}
       <main className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-sm w-full text-center space-y-6 animate-slide-up">
-          {/* Lock Icon */}
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-            <Lock className="h-10 w-10 text-primary" />
-          </div>
-
+        <div className="max-w-sm w-full text-center space-y-8 animate-slide-up">
           {/* Title */}
-          <div>
-            <h1 className="text-2xl font-bold mb-2">
-              Galeria Protegida
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Sua galeria está pronta
             </h1>
             {sessionName && (
               <p 
@@ -80,23 +75,29 @@ export function PasswordScreen({
                 {applyTitleCase(sessionName, titleCaseMode)}
               </p>
             )}
+            <p className="text-sm text-muted-foreground pt-1">
+              Conteúdo exclusivo da sua sessão fotográfica.
+            </p>
           </div>
 
           {/* Password Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Input
-                type="password"
-                placeholder="Digite a senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={cn(
-                  "text-center text-lg h-12",
-                  error && "border-destructive focus-visible:ring-destructive"
-                )}
-                disabled={isLoading}
-                autoFocus
-              />
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="password"
+                  placeholder="Digite a senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={cn(
+                    "pl-10 text-center text-base h-11 rounded-sm",
+                    error && "border-destructive focus-visible:ring-destructive"
+                  )}
+                  disabled={isLoading}
+                  autoFocus
+                />
+              </div>
               
               {error && (
                 <div className="flex items-center justify-center gap-2 text-destructive text-sm">
@@ -109,8 +110,7 @@ export function PasswordScreen({
             <Button 
               type="submit" 
               variant="terracotta" 
-              size="lg" 
-              className="w-full"
+              className="w-full rounded-sm"
               disabled={isLoading || !password.trim()}
             >
               {isLoading ? (
@@ -126,7 +126,7 @@ export function PasswordScreen({
 
           {/* Help Text */}
           <p className="text-xs text-muted-foreground">
-            A senha foi enviada pelo fotógrafo junto com o link.
+            Digite a senha enviada para acessar sua sessão.
           </p>
         </div>
       </main>
