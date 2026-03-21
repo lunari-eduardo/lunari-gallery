@@ -1,61 +1,100 @@
 
+# Diagnóstico Completo: Galerias Pagas com Status Pendente
 
-# Fix: 2 Galerias pagas mas com status pendente + Prevenção
+## Causa raiz confirmada com evidências do banco
 
-## Diagnóstico
+A **"Antônia 4 anos"** foi paga via PIX InfinitePay (R$ 25,00). O webhook chegou **5 vezes** entre 14:03 e 14:05 UTC. Todas as 5 tentativas falharam com o **mesmo erro**:
 
-Apenas **2 galerias** estão dessincronizadas:
+```text
+Could not choose the best candidate function between:
+  finalize_gallery_payment(uuid, text, timestamptz)
+  finalize_gallery_payment(uuid, text, timestamptz, text, text)
+```
 
-| Galeria | Cobrança | Provedor | Status cobrança | Status galeria |
+A migração que adicionou a versão com 5 parâmetros (para pagamento manual) **não removeu a versão antiga com 3 parâmetros**. O PostgreSQL não consegue desambiguar chamadas com 3 args quando a versão de 5 tem `DEFAULT NULL` nos últimos 2 — ambas são candidatas válidas.
+
+Após a InfinitePay esgotar as 5 tentativas de retry, parou de enviar. A migração seguinte corrigiu a ambiguidade (ficou só 1 versão), mas o dano já estava feito.
+
+### Galerias afetadas (3 no total)
+
+| Galeria | Cobrança | Provedor | Valor | Situação |
 |---|---|---|---|---|
-| `8ca891fc` | `dc7c8539` | MercadoPago | `pago` | `pendente` |
-| `3493ada1` | `f289469f` | InfinitePay | `pago` | `pendente` |
+| Antônia 4 anos | `25b5dfd1` | InfinitePay | R$ 25 | Paga (receipt existe nos webhook_logs), webhook falhou por ambiguidade RPC |
+| Lorena 9 meses | `0ffb440c` | InfinitePay | R$ 92 | ip_order_nsu = UUID (deploy antigo), nenhum webhook recebido |
+| Mensal | `7eb21a3c` | InfinitePay | R$ 138 | ip_order_nsu correto, nenhum webhook recebido |
 
-**Causa**: ambas as cobranças foram criadas com `galeria_id = NULL` (bug do deploy do Gestão). Quando o webhook processou o pagamento, a RPC `finalize_gallery_payment` não encontrou a galeria. Migrações posteriores vincularam o `galeria_id`, mas a cobrança já estava `pago` — nenhum trigger ou RPC foi re-executado.
+A Antônia tem **prova de pagamento** nos logs (receipt_url, paid_amount=2500). As outras duas não têm evidência nos logs — podem estar genuinamente pendentes ou o webhook se perdeu.
 
-**Todas as outras cobranças pagas** com `galeria_id = NULL` não têm galerias pendentes correspondentes (já foram corrigidas por auto-heal ou são cobranças de teste).
+## O que já está corrigido
 
-## Estado atual do sistema
+- A ambiguidade RPC **já foi resolvida** — existe apenas 1 versão da função agora
+- O trigger `sync_gallery_on_cobranca_paid` já existe como rede de segurança
+- Os webhooks futuros vão funcionar normalmente
 
-A arquitetura agora está correta:
-- Todos os webhooks (Asaas, MP, InfinitePay) chamam a RPC `finalize_gallery_payment`
-- `check-payment-status` faz auto-heal
-- `gallery-access` faz auto-heal
-- `confirm-payment-manual` funciona como chave mestra
-- A RPC resolve `galeria_id` via `session_id` como fallback
+## O que falta corrigir
 
-O problema é **apenas dados históricos** — não há falha estrutural ativa.
+### 1. Correção imediata: Antônia 4 anos
 
-## Plano
-
-### 1. Migração SQL: corrigir as 2 galerias + prevenção
-
-**Correção imediata** — chamar a RPC para cada uma das 2 galerias (usa o mecanismo already_paid + auto-heal):
+Migração SQL para finalizar a cobrança `25b5dfd1` usando os dados do webhook (receipt_url confirmado nos logs):
 
 ```sql
-SELECT finalize_gallery_payment('dc7c8539-3c47-477c-9a24-bde150c3d791');
-SELECT finalize_gallery_payment('f289469f-901d-4a13-95f0-c9977da648e6');
+-- Atualizar cobrança com dados do pagamento confirmado
+UPDATE cobrancas
+SET ip_receipt_url = 'https://recibo.infinitepay.io/77cc7ac0-baa4-4684-b597-28fd07a89acd',
+    ip_transaction_nsu = '77cc7ac0-baa4-4684-b597-28fd07a89acd'
+WHERE id = '25b5dfd1-d696-4ce8-85d8-ca946cb5e445';
+
+-- Chamar RPC para finalizar atomicamente
+SELECT finalize_gallery_payment(
+  '25b5dfd1-d696-4ce8-85d8-ca946cb5e445',
+  'https://recibo.infinitepay.io/77cc7ac0-baa4-4684-b597-28fd07a89acd',
+  '2026-03-21T14:02:14Z'
+);
 ```
 
-**Prevenção** — adicionar um trigger de segurança no `cobrancas` que sincroniza a galeria automaticamente quando o status muda para `pago`/`pago_manual`, como rede de segurança além da RPC:
+O trigger `sync_gallery_on_cobranca_paid` cuidará da galeria e sessão automaticamente.
+
+### 2. Proteção: garantir que a ambiguidade nunca volte
+
+Adicionar na mesma migração um `DROP FUNCTION IF EXISTS` explícito da assinatura antiga de 3 args, como segurança caso alguma migração futura recrie a versão antiga:
 
 ```sql
-CREATE FUNCTION sync_gallery_on_cobranca_paid()
-  -- Quando cobrança muda para pago/pago_manual:
-  -- 1. Resolver galeria_id via session_id se NULL
-  -- 2. Atualizar galerias.status_pagamento
-  -- 3. Atualizar clientes_sessoes
+DROP FUNCTION IF EXISTS finalize_gallery_payment(uuid, text, timestamptz);
 ```
 
-Esse trigger atua como **última linha de defesa** — mesmo que um webhook hipotético faça UPDATE direto no futuro, a galeria será sincronizada.
+Isso não afeta a versão de 5 args (que tem assinatura diferente).
 
-### 2. Nenhuma mudança em código
+### 3. Atualizar webhook_logs das 5 tentativas falhadas
 
-Todos os caminhos de código já estão corretos.
+Marcar os 5 registros de erro como `recovered` para auditoria:
 
-## Arquivo
+```sql
+UPDATE webhook_logs
+SET status = 'recovered', 
+    error_message = error_message || ' [recovered via migration]'
+WHERE order_nsu = 'gallery-1774101734173-jr3t9g' AND status = 'error';
+```
+
+## Detalhes técnicos
+
+### Por que o trigger `sync_gallery_on_cobranca_paid` não salvou?
+
+Porque a cobrança **nunca teve seu status alterado para `pago`**. Todas as 5 tentativas do webhook falharam na chamada RPC, então o `UPDATE cobrancas SET status = 'pago'` nunca foi executado, e o trigger nunca disparou.
+
+### Por que o `check-payment-status` (polling) não salvou?
+
+O polling depende do cliente ficar na página. Se o cliente viu "pagamento confirmado" no checkout InfinitePay e saiu, o polling nunca executou. Além disso, durante o período da ambiguidade, o polling também teria falhado na mesma chamada RPC.
+
+### Por que o `gallery-access` (auto-heal) não salvou?
+
+O auto-heal verifica se existe cobrança com `status IN ('pago', 'pago_manual')`. Como a cobrança ficou em `pendente` (RPC nunca executou), o auto-heal não encontrou nada para corrigir.
+
+### Sobre Lorena e Mensal
+
+Sem evidência de pagamento nos webhook_logs. Se o usuário confirmar que foram pagas, pode usar o botão "Registrar recebimento" que agora funciona corretamente.
+
+## Arquivo a editar
 
 | Arquivo | Mudança |
 |---|---|
-| Nova migração SQL | Corrigir 2 galerias via RPC + trigger de segurança |
-
+| Nova migração SQL | Finalizar Antônia + DROP da assinatura antiga como prevenção + marcar logs como recovered |
