@@ -322,6 +322,13 @@ export class UploadPipeline {
       this.cleanupItem(item);
       this.opts.onItemUpdate(item);
       this.opts.onItemDone(item);
+
+      // ── Background: Upload cover variant (non-blocking) ──
+      if (!isVideo) {
+        this.uploadCoverInBackground(item).catch(err => {
+          console.warn('[Pipeline] Cover upload failed (non-critical):', err);
+        });
+      }
     } catch (err) {
       // Track if we were still in compression phase to release the slot
       const wasCompressing = item.status === 'compressing';
