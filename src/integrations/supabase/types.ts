@@ -822,6 +822,7 @@ export type Database = {
           ip_order_nsu: string | null
           ip_receipt_url: string | null
           ip_transaction_nsu: string | null
+          metodo_manual: string | null
           mp_expiration_date: string | null
           mp_payment_id: string | null
           mp_payment_link: string | null
@@ -829,6 +830,7 @@ export type Database = {
           mp_preference_id: string | null
           mp_qr_code: string | null
           mp_qr_code_base64: string | null
+          obs_manual: string | null
           parcelas_pagas: number | null
           provedor: string | null
           qtd_fotos: number | null
@@ -854,6 +856,7 @@ export type Database = {
           ip_order_nsu?: string | null
           ip_receipt_url?: string | null
           ip_transaction_nsu?: string | null
+          metodo_manual?: string | null
           mp_expiration_date?: string | null
           mp_payment_id?: string | null
           mp_payment_link?: string | null
@@ -861,6 +864,7 @@ export type Database = {
           mp_preference_id?: string | null
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
+          obs_manual?: string | null
           parcelas_pagas?: number | null
           provedor?: string | null
           qtd_fotos?: number | null
@@ -886,6 +890,7 @@ export type Database = {
           ip_order_nsu?: string | null
           ip_receipt_url?: string | null
           ip_transaction_nsu?: string | null
+          metodo_manual?: string | null
           mp_expiration_date?: string | null
           mp_payment_id?: string | null
           mp_payment_link?: string | null
@@ -893,6 +898,7 @@ export type Database = {
           mp_preference_id?: string | null
           mp_qr_code?: string | null
           mp_qr_code_base64?: string | null
+          obs_manual?: string | null
           parcelas_pagas?: number | null
           provedor?: string | null
           qtd_fotos?: number | null
@@ -3626,14 +3632,25 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
-      finalize_gallery_payment: {
-        Args: {
-          p_cobranca_id: string
-          p_paid_at?: string
-          p_receipt_url?: string
-        }
-        Returns: Json
-      }
+      finalize_gallery_payment:
+        | {
+            Args: {
+              p_cobranca_id: string
+              p_paid_at?: string
+              p_receipt_url?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_cobranca_id: string
+              p_manual_method?: string
+              p_manual_obs?: string
+              p_paid_at?: string
+              p_receipt_url?: string
+            }
+            Returns: Json
+          }
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
