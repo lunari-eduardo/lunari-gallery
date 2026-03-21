@@ -1637,11 +1637,19 @@ export default function ClientGallery() {
           </h2>
           <p className="text-muted-foreground text-sm mb-10">{localPhotos.length} fotos</p>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-4xl w-full">
+          <div className={cn(
+            "grid gap-5 w-full",
+            galleryFolders.length === 1 
+              ? "max-w-md mx-auto" 
+              : galleryFolders.length === 2 
+                ? "grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto"
+                : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto"
+          )}>
             {galleryFolders.map((folder: { id: string; nome: string; ordem: number; cover_photo_id?: string | null }) => {
               const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
               const coverPhoto = folder.cover_photo_id ? localPhotos.find(p => p.id === folder.cover_photo_id) : null;
               const thumb = coverPhoto || folderPhotos[0];
+              const coverUrl = thumb ? ((thumb as any).coverUrl || thumb.thumbnailUrl) : null;
               const folderSelectedCount = folderPhotos.filter(p => p.isSelected).length;
               return (
                 <button
@@ -1650,7 +1658,7 @@ export default function ClientGallery() {
                     setActiveFolderId(folder.id);
                     setFolderViewMode('grid');
                   }}
-                  className="group relative aspect-[4/5] rounded-lg overflow-hidden cursor-pointer transition-shadow duration-700 hover:shadow-xl"
+                  className="group relative aspect-[3/4] overflow-hidden cursor-pointer"
                 >
                   {thumb ? (
                     <img
