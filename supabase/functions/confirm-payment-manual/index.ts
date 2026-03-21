@@ -8,7 +8,7 @@
  * ║                                                              ║
  * ║  REGRAS:                                                     ║
  * ║  1. verify_jwt = false no config.toml                        ║
- * ║  2. Validação JWT feita IN-CODE via getClaims()              ║
+ * ║  2. Validação JWT feita IN-CODE via getUser()                ║
  * ║  3. Ownership check obrigatório via user_id                  ║
  * ╚══════════════════════════════════════════════════════════════╝
  */
@@ -23,6 +23,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  console.log('🚀 confirm-payment-manual started');
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -44,27 +46,31 @@ Deno.serve(async (req: Request) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      console.error('❌ JWT validation failed:', claimsError?.message);
+    console.log('🔑 Validating JWT via getUser...');
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
+    if (userError || !userData?.user) {
+      console.error('❌ JWT validation failed:', userError?.message);
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido ou expirado. Recarregue a página.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const authenticatedUserId = claimsData.claims.sub as string;
-    console.log(`🔐 Authenticated user: ${authenticatedUserId}`);
+    const authenticatedUserId = userData.user.id;
+    console.log(`🔐 Auth validated: ${authenticatedUserId}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { cobrancaId, galleryId, sessionId, metodoManual, valorManual, observacao, receiptUrl, paidAt } = await req.json();
+    const body = await req.json();
+    const { cobrancaId, galleryId, sessionId, metodoManual, valorManual, observacao, receiptUrl, paidAt } = body;
+    console.log('📦 Body received:', JSON.stringify({ cobrancaId, galleryId, sessionId, metodoManual, valorManual }));
 
     let targetCobrancaId = cobrancaId;
 
     // If no cobrancaId, create a manual cobrança
     if (!targetCobrancaId) {
       if (!galleryId && !sessionId) {
+        console.error('❌ Missing cobrancaId and galleryId/sessionId');
         return new Response(
           JSON.stringify({ success: false, error: 'cobrancaId ou galleryId/sessionId é obrigatório' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -78,6 +84,7 @@ Deno.serve(async (req: Request) => {
       let resolvedValor = valorManual || 0;
 
       if (galleryId) {
+        console.log(`📋 Resolving gallery info for: ${galleryId}`);
         const { data: gallery } = await supabase
           .from('galerias')
           .select('session_id, cliente_id, valor_extras')
@@ -90,7 +97,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Create manual cobrança
+      console.log(`📝 Creating manual cobrança: gallery=${resolvedGalleryId}, session=${resolvedSessionId}, valor=${resolvedValor}`);
       const { data: newCobranca, error: insertError } = await supabase
         .from('cobrancas')
         .insert({
@@ -109,18 +116,19 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (insertError || !newCobranca) {
-        console.error('❌ Error creating manual cobrança:', insertError);
+        console.error('❌ Error creating manual cobrança:', insertError?.message, insertError?.details);
         return new Response(
-          JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento' }),
+          JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento: ' + (insertError?.message || 'unknown') }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       targetCobrancaId = newCobranca.id;
-      console.log(`📝 Created manual cobrança: ${targetCobrancaId}`);
+      console.log(`✅ Created manual cobrança: ${targetCobrancaId}`);
     }
 
     // Fetch cobrança to verify ownership
+    console.log(`📋 Fetching cobrança: ${targetCobrancaId}`);
     const { data: cobranca, error: fetchError } = await supabase
       .from('cobrancas')
       .select('*')
@@ -128,6 +136,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (fetchError || !cobranca) {
+      console.error('❌ Cobrança not found:', fetchError?.message);
       return new Response(
         JSON.stringify({ success: false, error: 'Cobrança não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -145,6 +154,7 @@ Deno.serve(async (req: Request) => {
 
     // Update valor if manual amount provided
     if (valorManual && valorManual !== cobranca.valor) {
+      console.log(`💰 Updating valor: ${cobranca.valor} → ${valorManual}`);
       await supabase
         .from('cobrancas')
         .update({ valor: valorManual })
@@ -152,6 +162,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Call RPC for atomic payment finalization
+    console.log(`🔄 Calling RPC finalize_gallery_payment for cobrança ${targetCobrancaId}`);
     const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
       p_cobranca_id: targetCobrancaId,
       p_receipt_url: receiptUrl || null,
@@ -161,13 +172,14 @@ Deno.serve(async (req: Request) => {
     });
 
     if (rpcError) {
-      console.error('❌ RPC finalize_gallery_payment error:', rpcError);
+      console.error('❌ RPC finalize_gallery_payment error:', rpcError.message, rpcError.details, rpcError.hint);
       return new Response(
         JSON.stringify({ success: false, error: 'Erro ao finalizar pagamento: ' + rpcError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log(`✅ RPC result:`, JSON.stringify(rpcResult));
     const result = rpcResult as Record<string, unknown>;
 
     if (result?.already_paid) {
@@ -178,7 +190,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`💳 Cobrança ${targetCobrancaId} finalizada por user ${authenticatedUserId}:`, JSON.stringify(rpcResult));
+    console.log(`💳 Cobrança ${targetCobrancaId} finalizada por user ${authenticatedUserId}`);
 
     // AUDIT LOG
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -204,10 +216,10 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
-    console.error('❌ Erro:', error);
+  } catch (error: any) {
+    console.error('❌ Erro fatal:', error?.message, error?.stack);
     return new Response(
-      JSON.stringify({ success: false, error: 'Erro interno do servidor' }),
+      JSON.stringify({ success: false, error: error?.message || 'Erro interno do servidor', stack: error?.stack?.split('\n').slice(0, 3) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
