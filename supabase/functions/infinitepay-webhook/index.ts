@@ -1,3 +1,18 @@
+/**
+ * v1.0.2 — Auto-heal para cobranças já pagas (2026-03-21)
+ *
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
+ * ║                                                              ║
+ * ║  REGRAS IMUTÁVEIS:                                           ║
+ * ║  1. NÃO adicionar verificação de JWT                         ║
+ * ║  2. verify_jwt DEVE ser false no config.toml                 ║
+ * ║  3. Sempre chamar finalize_gallery_payment para sincronizar  ║
+ * ║  4. Busca por ip_order_nsu PRIMEIRO, fallback por id (UUID)  ║
+ * ║                                                              ║
+ * ║  Projetos: Gallery (Select) + Gestão                         ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
