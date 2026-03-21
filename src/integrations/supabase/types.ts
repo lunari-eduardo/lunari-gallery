@@ -3632,25 +3632,16 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
-      finalize_gallery_payment:
-        | {
-            Args: {
-              p_cobranca_id: string
-              p_paid_at?: string
-              p_receipt_url?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_cobranca_id: string
-              p_manual_method?: string
-              p_manual_obs?: string
-              p_paid_at?: string
-              p_receipt_url?: string
-            }
-            Returns: Json
-          }
+      finalize_gallery_payment: {
+        Args: {
+          p_cobranca_id: string
+          p_manual_method?: string
+          p_manual_obs?: string
+          p_paid_at?: string
+          p_receipt_url?: string
+        }
+        Returns: Json
+      }
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
