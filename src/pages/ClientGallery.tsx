@@ -1438,66 +1438,51 @@ export default function ClientGallery() {
         )}
         
         <main className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full text-center space-y-6 animate-slide-up">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-              <Image className="h-10 w-10 text-primary" />
-            </div>
-            
-            <div>
+          <div className="max-w-md w-full text-center space-y-8 animate-slide-up">
+            <div className="space-y-1">
               <h1 
-                className="text-4xl sm:text-5xl font-normal mb-2"
+                className="text-4xl sm:text-5xl font-normal"
                 style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
               >
                 {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {localPhotos.length} fotos disponíveis
               </p>
             </div>
 
-            <div className="lunari-card p-6 text-left">
-              <p className="whitespace-pre-line text-sm leading-relaxed">
-                {welcomeMessage}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-4 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{gallery.includedPhotos} fotos incluídas</span>
+            {welcomeMessage && (
+              <div className="border-t border-border/30 pt-5 text-left">
+                <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                  {welcomeMessage}
+                </p>
               </div>
+            )}
+
+            <div className="border-t border-border/30 pt-5 flex items-center justify-center gap-6 text-sm text-muted-foreground">
+              <span>{gallery.includedPhotos} fotos incluídas</span>
               {hasDeadline && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>
-                    até {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
-                  </span>
-                </div>
+                <span>
+                  até {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
+                </span>
               )}
             </div>
 
             {isNearDeadline && (
-              <div className="flex items-center gap-2 justify-center text-warning">
-                <AlertTriangle className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  Atenção: {hoursUntilDeadline}h restantes para seleção
-                </span>
-              </div>
+              <p className="text-sm font-medium text-warning">
+                Atenção: {hoursUntilDeadline}h restantes para seleção
+              </p>
             )}
 
             {isExpired && (
-              <div className="flex items-center gap-2 justify-center text-destructive">
-                <Clock className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  Prazo de seleção expirado
-                </span>
-              </div>
+              <p className="text-sm font-medium text-destructive">
+                Prazo de seleção expirado
+              </p>
             )}
 
             <Button 
               variant="terracotta" 
-              size="xl" 
-              className="w-full"
+              className="w-full rounded-sm"
               onClick={() => {
                 setShowWelcome(false);
                 if (hasFolders) {
