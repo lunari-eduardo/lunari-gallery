@@ -96,6 +96,14 @@ export function PaymentStatusCard({
     
     setIsConfirming(true);
     try {
+      // Refresh session to ensure fresh JWT
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session) {
+        toast.error('Sessão expirada. Recarregue a página e tente novamente.');
+        setIsConfirming(false);
+        return;
+      }
+
       const response = await supabase.functions.invoke('confirm-payment-manual', {
         body: { cobrancaId },
       });
