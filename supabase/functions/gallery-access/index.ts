@@ -198,7 +198,7 @@ serve(async (req) => {
         .from("cobrancas")
         .select("id, status, ip_receipt_url, data_pagamento")
         .or(`galeria_id.eq.${gallery.id}${gallery.session_id ? `,session_id.eq.${gallery.session_id}` : ''}`)
-        .eq("status", "pago")
+        .in("status", ["pago", "pago_manual"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
