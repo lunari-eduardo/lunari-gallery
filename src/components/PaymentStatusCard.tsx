@@ -151,7 +151,10 @@ export function PaymentStatusCard({
       });
 
       if (response.error) {
-        throw new Error(response.error.message);
+        // Extract real error from FunctionsHttpError context
+        const ctx = response.error as any;
+        const realMessage = ctx?.context?.error || ctx?.context?.message || response.error.message || 'Erro desconhecido';
+        throw new Error(realMessage);
       }
 
       const data = response.data;
