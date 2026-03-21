@@ -131,8 +131,9 @@ export function PaymentStatusCard({
 
     setIsRegistering(true);
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session) {
+      // Force token refresh to avoid 401
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData?.session) {
         toast.error('Sessão expirada. Recarregue a página e tente novamente.');
         setIsRegistering(false);
         return;

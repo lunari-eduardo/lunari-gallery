@@ -5,6 +5,11 @@
  * ║  Aceita recebimento manual (dinheiro, pix externo, etc.)     ║
  * ║  OU confirma cobrança existente como paga.                   ║
  * ║  Cria cobrança manual se cobrancaId não fornecido.           ║
+ * ║                                                              ║
+ * ║  REGRAS:                                                     ║
+ * ║  1. verify_jwt = false no config.toml                        ║
+ * ║  2. Validação JWT feita IN-CODE via getClaims()              ║
+ * ║  3. Ownership check obrigatório via user_id                  ║
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -22,30 +27,33 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // ── AUTH CHECK ──
+    // ── IN-CODE JWT VALIDATION (verify_jwt = false) ──
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('❌ No authorization header');
       return new Response(
         JSON.stringify({ success: false, error: 'Autenticação obrigatória' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    const token = authHeader.replace('Bearer ', '');
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
 
-    if (authError || !user) {
-      console.error('❌ Auth error:', authError?.message);
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error('❌ JWT validation failed:', claimsError?.message);
       return new Response(
-        JSON.stringify({ success: false, error: 'Token inválido ou expirado' }),
+        JSON.stringify({ success: false, error: 'Token inválido ou expirado. Recarregue a página.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const authenticatedUserId = user.id;
+    const authenticatedUserId = claimsData.claims.sub as string;
     console.log(`🔐 Authenticated user: ${authenticatedUserId}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -155,7 +163,7 @@ Deno.serve(async (req: Request) => {
     if (rpcError) {
       console.error('❌ RPC finalize_gallery_payment error:', rpcError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Erro ao finalizar pagamento' }),
+        JSON.stringify({ success: false, error: 'Erro ao finalizar pagamento: ' + rpcError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -163,9 +171,9 @@ Deno.serve(async (req: Request) => {
     const result = rpcResult as Record<string, unknown>;
 
     if (result?.already_paid) {
-      console.log(`✅ Cobrança ${targetCobrancaId} já está paga (idempotente)`);
+      console.log(`✅ Cobrança ${targetCobrancaId} já está paga (idempotente), gallery_synced=${result?.gallery_synced}`);
       return new Response(
-        JSON.stringify({ success: true, alreadyPaid: true, message: 'Pagamento já confirmado' }),
+        JSON.stringify({ success: true, alreadyPaid: true, gallerySynced: result?.gallery_synced, message: 'Pagamento já confirmado' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
