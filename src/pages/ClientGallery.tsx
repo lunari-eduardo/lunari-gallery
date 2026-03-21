@@ -513,8 +513,6 @@ export default function ClientGallery() {
 
       // Checkout externo (InfinitePay/MercadoPago) - redirect immediately
       if (data.requiresPayment && data.checkoutUrl) {
-        // Redirect immediately without intermediate screen
-        setIsConfirmingSelection(true); // keep spinner on button
         window.location.href = data.checkoutUrl;
         return;
       }
