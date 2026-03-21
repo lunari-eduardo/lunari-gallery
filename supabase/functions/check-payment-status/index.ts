@@ -259,13 +259,26 @@ Deno.serve(async (req: Request) => {
       return { success: true, result: rpcResult };
     };
 
-    // If already paid, just return the status
+    // If already paid, auto-heal: ensure gallery/session are synced
     if (cobranca.status === 'pago') {
+      console.log('💳 Cobrança já paga — chamando finalize_gallery_payment para auto-heal de galeria/sessão');
+      const { data: healResult, error: healError } = await supabase.rpc('finalize_gallery_payment', {
+        p_cobranca_id: cobranca.id,
+        p_receipt_url: cobranca.ip_receipt_url || null,
+        p_paid_at: cobranca.data_pagamento || new Date().toISOString(),
+      });
+      if (healError) {
+        console.error('⚠️ Auto-heal RPC error (non-blocking):', healError.message);
+      } else if (healResult?.gallery_synced) {
+        console.log('✅ Auto-heal: galeria sincronizada com sucesso');
+      }
+
       return new Response(
         JSON.stringify({
           found: true,
           status: 'pago',
           foundBy,
+          gallerySynced: healResult?.gallery_synced || false,
           cobranca: {
             id: cobranca.id,
             status: cobranca.status,

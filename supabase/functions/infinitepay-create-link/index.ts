@@ -1,5 +1,5 @@
 /**
- * v1.0.1 — Redeploy forçado + contrato documentado (2026-03-18)
+ * v1.0.2 — Auto-heal + validação defensiva (2026-03-21)
  *
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
