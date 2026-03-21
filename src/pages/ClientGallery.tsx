@@ -1643,7 +1643,7 @@ export default function ClientGallery() {
               const folderPhotos = localPhotos.filter(p => p.folderId === folder.id);
               const coverPhoto = folder.cover_photo_id ? localPhotos.find(p => p.id === folder.cover_photo_id) : null;
               const thumb = coverPhoto || folderPhotos[0];
-              const coverUrl = thumb ? ((thumb as any).coverUrl || thumb.thumbnailUrl) : null;
+              const coverUrl = thumb ? ((thumb as any).coverUrl || (thumb as any).previewUrl || thumb.thumbnailUrl) : null;
               const folderSelectedCount = folderPhotos.filter(p => p.isSelected).length;
               return (
                 <button

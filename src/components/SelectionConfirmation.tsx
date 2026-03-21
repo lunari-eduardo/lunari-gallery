@@ -1,8 +1,6 @@
-import { ArrowLeft, Camera, Check, AlertTriangle, CreditCard, Receipt, Loader2, Image } from 'lucide-react';
+import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Gallery, GalleryPhoto } from '@/types/gallery';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { cn } from '@/lib/utils';
 
@@ -11,9 +9,9 @@ interface SelectionConfirmationProps {
   photos: GalleryPhoto[];
   selectedCount: number;
   extraCount: number;
-  extrasACobrar: number; // extras to charge after credit deduction
-  extrasPagasAnteriormente: number; // extras already paid from previous purchases
-  valorJaPago: number; // total amount already paid (R$)
+  extrasACobrar: number;
+  extrasPagasAnteriormente: number;
+  valorJaPago: number;
   regrasCongeladas?: RegrasCongeladas | null;
   hasPaymentProvider?: boolean;
   isConfirming?: boolean;
@@ -39,31 +37,28 @@ export function SelectionConfirmation({
   themeStyles = {},
   backgroundMode = 'light',
 }: SelectionConfirmationProps) {
-  const currentDate = new Date();
   const { saleSettings } = gallery;
   const isNoSale = saleSettings?.mode === 'no_sale';
   const isWithPayment = saleSettings?.mode === 'sale_with_payment';
   
-  // Get selected photos
-  const selectedPhotos = photos.filter(p => p.isSelected);
-  
-  // Calculate prices using progressive pricing with credit system
-  const { valorUnitario, valorACobrar, valorTotalIdeal, economia, totalExtras } = calcularPrecoProgressivoComCredito(
-    extrasACobrar,              // New extras in this cycle
-    extrasPagasAnteriormente,   // Previously paid extras count
-    valorJaPago,                // Previously paid amount (R$)
+  const { valorUnitario, valorACobrar, valorTotalIdeal, totalExtras } = calcularPrecoProgressivoComCredito(
+    extrasACobrar,
+    extrasPagasAnteriormente,
+    valorJaPago,
     regrasCongeladas,
     gallery.extraPhotoPrice
   );
   
-  // Build priceInfo for template compatibility - use credit-adjusted values
   const priceInfo = {
     chargeableCount: extrasACobrar,
-    total: valorACobrar,         // Use credit-adjusted amount
+    total: valorACobrar,
     pricePerPhoto: valorUnitario,
     valorTotalIdeal,
     totalExtras,
   };
+
+  const hasCharge = !isNoSale && priceInfo.chargeableCount > 0;
+  const isQuited = isNoSale || priceInfo.chargeableCount === 0;
 
   return (
     <div 
@@ -74,242 +69,146 @@ export function SelectionConfirmation({
       style={themeStyles}
     >
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/50">
-        <div className="flex items-center justify-between px-4 py-4">
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/30">
+        <div className="flex items-center justify-between px-4 py-3">
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={onBack}
-            className="gap-2"
+            className="gap-1.5 text-muted-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
           
-          <h1 className="text-lg font-semibold">Confirmar Seleção</h1>
+          <span className="text-sm font-medium tracking-wide">Confirmar Seleção</span>
           
           <div className="w-20" />
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-4 py-6 pb-28 overflow-y-auto">
-        <div className="max-w-2xl mx-auto space-y-6">
+      <main className="flex-1 px-4 py-8 pb-28 overflow-y-auto">
+        <div className="max-w-lg mx-auto">
           
-          {/* Selected Photos Count */}
-          <div className="lunari-card overflow-hidden">
-            <div className="bg-primary/10 p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Image className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Fotos Selecionadas</h3>
-                <p className="text-sm text-muted-foreground">
-                  {selectedCount} fotos • {gallery.includedPhotos} incluídas
-                  {extraCount > 0 && <span className="text-primary font-medium"> • {extraCount} extras</span>}
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Title */}
+          <h2 className="text-xl font-semibold mb-6">Sua seleção</h2>
 
-          {/* Selection Summary Card */}
-          <div className="lunari-card overflow-hidden">
-            {/* Card Header */}
-            <div className="bg-muted/50 p-4 flex items-center gap-3 border-b border-border/50">
-              <div className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center">
-                <Camera className="h-5 w-5 text-foreground" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Resumo da Seleção</h3>
-                <p className="text-sm text-muted-foreground">
-                  {format(currentDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </p>
-              </div>
+          {/* Selection breakdown */}
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Selecionadas</span>
+              <span className="font-medium">{selectedCount}</span>
             </div>
-
-            {/* Client Info */}
-            <div className="p-4 border-b border-border/50 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Cliente</span>
-                <span className="font-medium">{gallery.clientName}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Sessão</span>
-                <span className="font-medium">{gallery.sessionName}</span>
-              </div>
-              {gallery.packageName && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Pacote</span>
-                  <span className="font-medium">{gallery.packageName}</span>
-                </div>
-              )}
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Incluídas no pacote</span>
+              <span className="font-medium">{gallery.includedPhotos}</span>
             </div>
-
-            {/* Photo Breakdown */}
-            <div className="p-4 border-b border-border/50 space-y-3">
+            
+            {extrasPagasAnteriormente > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Fotos incluídas no pacote</span>
-                <span className="font-medium">{gallery.includedPhotos}</span>
+                <span className="text-muted-foreground">Extras já pagas</span>
+                <span className="font-medium text-green-600 dark:text-green-400">+{extrasPagasAnteriormente}</span>
               </div>
-              
-              {/* NEW: Extras already paid from previous purchases */}
-              {extrasPagasAnteriormente > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Fotos extras já pagas</span>
-                  <span className="font-medium text-green-600 dark:text-green-400">+{extrasPagasAnteriormente}</span>
-                </div>
-              )}
-              
+            )}
+            
+            {extraCount > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Fotos selecionadas</span>
-                <span className="font-medium">{selectedCount}</span>
-              </div>
-              
-              {/* Show extras to charge (after credit deduction) */}
-              {!isNoSale && priceInfo.chargeableCount > 0 && (
-                <>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {saleSettings?.chargeType === 'all_selected' ? 'Fotos cobradas' : 'Fotos extras a cobrar'}
-                    </span>
-                    <span className="font-medium text-primary">{priceInfo.chargeableCount}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Valor por foto</span>
-                    <span className="font-medium">R$ {priceInfo.pricePerPhoto.toFixed(2)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Total - Only show if not no_sale and has chargeable photos */}
-            {!isNoSale && priceInfo.chargeableCount > 0 && (
-              <div className="p-4 bg-primary/5">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-lg">Valor Adicional</p>
-                    {valorJaPago > 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        {totalExtras} fotos × R$ {priceInfo.pricePerPhoto.toFixed(2)} - R$ {valorJaPago.toFixed(2)} já pago
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        {priceInfo.chargeableCount} fotos × R$ {priceInfo.pricePerPhoto.toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-2xl font-bold text-primary">
-                    R$ {priceInfo.total.toFixed(2)}
-                  </p>
-                </div>
-                
-                {/* Breakdown when there's prior payment */}
-                {valorJaPago > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border/50 space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Valor total ({totalExtras} fotos)</span>
-                      <span className="font-medium">R$ {priceInfo.valorTotalIdeal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Já pago anteriormente</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">- R$ {valorJaPago.toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-                
+                <span className="text-muted-foreground">Extras</span>
+                <span className="font-medium text-primary">{extraCount}</span>
               </div>
             )}
 
-            {/* No extra charge message */}
-            {(isNoSale || priceInfo.chargeableCount === 0) && (
-              <div className="p-4 bg-green-500/10">
-                <div className="flex items-center gap-3">
-                  <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  <div>
-                    <p className="font-medium text-green-600 dark:text-green-400">
-                      {isNoSale 
-                        ? 'Seleção concluída' 
-                        : extrasPagasAnteriormente > 0 && extraCount > 0
-                          ? 'Seleção dentro do crédito' 
-                          : 'Seleção dentro do pacote'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {isNoSale 
-                        ? 'Sua seleção foi registrada' 
-                        : extrasPagasAnteriormente > 0 && extraCount > 0
-                          ? `Você já tem ${extrasPagasAnteriormente} fotos extras pagas. Sem valor adicional a cobrar.`
-                          : 'Sem valor adicional a cobrar'}
-                    </p>
-                  </div>
-                </div>
+            {hasCharge && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Valor por foto</span>
+                <span className="font-medium">R$ {priceInfo.pricePerPhoto.toFixed(2)}</span>
               </div>
             )}
           </div>
 
-          {/* Payment Notice - Only show if has chargeable photos */}
-          {!isNoSale && priceInfo.chargeableCount > 0 && (
-            <div className="lunari-card p-4 border-primary/30 bg-primary/5">
-              <div className="flex gap-3">
-                {isWithPayment ? (
-                  <CreditCard className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                ) : (
-                  <Receipt className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <p className="font-medium text-sm">
-                    {isWithPayment ? 'Pagamento Online' : 'Cobrança Posterior'}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {isWithPayment 
-                      ? (hasPaymentProvider 
-                          ? 'Você será redirecionado para concluir o pagamento após confirmar.' 
-                          : 'Pagamento online não disponível. O fotógrafo entrará em contato para cobrança.')
-                      : `O valor adicional de R$ ${priceInfo.total.toFixed(2)} será cobrado posteriormente pelo fotógrafo.`
-                    }
-                  </p>
-                </div>
+          {/* Separator */}
+          <div className="border-t border-border/30 my-5" />
+
+          {/* Total or no-charge message */}
+          {hasCharge ? (
+            <div className="space-y-2">
+              <div className="flex justify-between items-baseline">
+                <span className="text-base font-medium">Total adicional</span>
+                <span className="text-xl font-bold text-primary">
+                  R$ {priceInfo.total.toFixed(2)}
+                </span>
               </div>
+              
+              {valorJaPago > 0 && (
+                <div className="space-y-1 mt-2">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Valor total ({totalExtras} fotos)</span>
+                    <span>R$ {priceInfo.valorTotalIdeal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Já pago anteriormente</span>
+                    <span className="text-green-600 dark:text-green-400">- R$ {valorJaPago.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                {isNoSale 
+                  ? 'Seleção concluída' 
+                  : extrasPagasAnteriormente > 0 && extraCount > 0
+                    ? 'Dentro do crédito — sem valor adicional'
+                    : 'Dentro do pacote — sem valor adicional'}
+              </span>
             </div>
           )}
 
-          {/* Warning Notice */}
-          <div className="lunari-card p-4 border-warning/30 bg-warning/5">
-            <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-sm">Atenção</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Após confirmar, você não poderá alterar sua seleção. 
-                  Certifique-se de que escolheu todas as fotos desejadas.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Separator */}
+          <div className="border-t border-border/30 my-5" />
+
+          {/* Payment notice - inline, no card */}
+          {hasCharge && (
+            <p className="text-sm text-muted-foreground mb-3">
+              {isWithPayment 
+                ? (hasPaymentProvider 
+                    ? 'Pagamento online após confirmar.' 
+                    : 'O fotógrafo entrará em contato para cobrança.')
+                : `Valor de R$ ${priceInfo.total.toFixed(2)} será cobrado posteriormente.`
+              }
+            </p>
+          )}
+
+          {/* Warning - inline, short */}
+          <p className="text-sm text-muted-foreground/70">
+            Não será possível alterar após confirmar.
+          </p>
         </div>
       </main>
 
       {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/50 p-4 z-50">
-        <div className="max-w-md mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/30 p-4 z-50">
+        <div className="max-w-lg mx-auto">
           <Button 
             variant="terracotta" 
-            size="xl" 
+            size="lg" 
             className="w-full gap-2"
             onClick={onConfirm}
             disabled={isConfirming}
           >
             {isConfirming ? (
               <>
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Confirmando...
               </>
             ) : (
               <>
-                <Check className="h-5 w-5" />
+                <Check className="h-4 w-4" />
                 {isWithPayment && hasPaymentProvider && priceInfo.chargeableCount > 0
                   ? 'Confirmar e Pagar'
-                  : 'Confirmar Seleção Final'
-                }
+                  : 'Confirmar Seleção'}
               </>
             )}
           </Button>
