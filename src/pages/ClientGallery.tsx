@@ -341,7 +341,7 @@ export default function ClientGallery() {
         };
       })(),
       settings: {
-        welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || 'Olá {cliente}! Bem-vindo à galeria da sua sessão {sessao}.',
+        welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || '',
         deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         deadlinePreset: 7,
         watermark: watermark || { type: 'standard', opacity: 40, position: 'center' },
