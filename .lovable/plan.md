@@ -1,78 +1,166 @@
 
+# Diagnóstico: pagamento InfinitePay confirmado, mas galeria continua pendente
 
-# Diagnóstico: Galerias Pagas mas com Status "Pendente"
+## Do I know what the issue is?
+Sim.
 
-## Causa Raiz (confirmada com dados)
+## O que confirmei com dados reais
+No teste mais recente:
 
-Encontrei **4 galerias afetadas** (Roberta Tomaz, Agatha 5 meses, Cecília Smash, Aurora Páscoa) — todas InfinitePay, todas com cobranças `status = 'pago'` com comprovante, mas galeria `status_pagamento = 'pendente'`.
+- **Galeria** `3493ada1-b5db-4a0b-bfc3-b9fffc5157b0`
+- **Session** `workflow-1774053782993-w64ywy8ypyc`
+- **Cobrança** `f289469f-901d-4a13-95f0-c9977da648e6`
+- **Cobrança está `pago`**, com `data_pagamento` e `ip_receipt_url`
+- **Galeria continua** `status_pagamento='pendente'` e `status_selecao='aguardando_pagamento'`
+- A cobrança foi criada com **`galeria_id = NULL`**
+- O `ip_order_nsu` veio como **UUID da cobrança**, não no padrão do código atual (`gallery-...`)
+- Há `webhook_logs` marcados como **processed**
 
-**Dois problemas encadeados:**
+## Causa raiz
+São **3 falhas encadeadas**:
 
-1. **`galeria_id = NULL` nas cobranças**: O deploy do Gestão sobre `infinitepay-create-link` removeu o campo `galeriaId` da inserção. Nosso redeploy corrigiu o código, mas as cobranças criadas no período já foram inseridas sem `galeria_id`.
+### 1) Drift de deploy nas functions do InfinitePay
+A cobrança criada em produção **não bate com o código atual do repositório**.
 
-2. **Armadilha de idempotência na RPC**: A migration que corrigiu a RPC (`finalize_gallery_payment`) adicionou o fallback session_id, mas as cobranças já tinham sido processadas pela versão ANTIGA da RPC (sem fallback). Agora, ao tentar "Confirmar Pago", a RPC vê `status = 'pago'` e retorna `already_paid = true` **sem verificar se a galeria foi atualizada**. Resultado: a galeria fica permanentemente travada em `pendente`.
+Evidências:
+- o código atual de `infinitepay-create-link` deveria salvar:
+  - `galeria_id`
+  - `qtd_fotos`
+  - `ip_order_nsu = gallery-...`
+- mas a cobrança real foi criada com:
+  - `galeria_id = NULL`
+  - `ip_order_nsu = UUID`
 
-3. **`qtd_fotos = 0`**: O deploy do Gestão também removeu o campo `qtdFotos` da inserção na cobrança. Mesmo que corrijamos o status, o incremento atômico de fotos extras na RPC soma 0.
+Isso indica que **a function publicada foi sobrescrita por outra versão** (provavelmente do Gestão ou deploy antigo).
 
-## Plano de Correção
+### 2) `check-payment-status` não faz auto-correção quando a cobrança já está paga
+Hoje ele faz:
 
-### 1. Corrigir a armadilha de idempotência na RPC
-
-Alterar o bloco `already_paid` para **não retornar imediatamente**. Em vez disso, verificar se a galeria associada ainda precisa ser atualizada:
-
-```sql
-IF v_cobranca.status = 'pago' THEN
-  -- Resolve galeria_id if missing
-  v_galeria_id := v_cobranca.galeria_id;
-  IF v_galeria_id IS NULL AND v_cobranca.session_id IS NOT NULL THEN
-    SELECT id INTO v_galeria_id FROM galerias
-    WHERE session_id = v_cobranca.session_id LIMIT 1;
-    IF v_galeria_id IS NOT NULL THEN
-      UPDATE cobrancas SET galeria_id = v_galeria_id WHERE id = p_cobranca_id;
-    END IF;
-  END IF;
-
-  -- Check if gallery still needs update
-  IF v_galeria_id IS NOT NULL THEN
-    PERFORM 1 FROM galerias
-    WHERE id = v_galeria_id AND status_pagamento != 'pago';
-    IF FOUND THEN
-      -- Gallery out of sync — apply updates
-      UPDATE galerias SET status_pagamento = 'pago', status_selecao = 'selecao_completa',
-        finalized_at = COALESCE(finalized_at, v_cobranca.data_pagamento)
-      WHERE id = v_galeria_id;
-      UPDATE clientes_sessoes SET status_galeria = 'selecao_completa',
-        status_pagamento_fotos_extra = 'pago' WHERE session_id = v_cobranca.session_id;
-      RETURN jsonb_build_object('success', true, 'already_paid', true,
-        'gallery_synced', true, 'galeria_id', v_galeria_id);
-    END IF;
-  END IF;
-
-  RETURN jsonb_build_object('success', true, 'already_paid', true);
-END IF;
+```text
+se cobranca.status === 'pago' → retorna status pago
 ```
 
-Isso garante que "Confirmar Pago" **sempre sincronize a galeria**, mesmo que a cobrança já esteja paga.
+e **não chama a RPC** `finalize_gallery_payment` para re-sincronizar galeria/sessão.
 
-### 2. Corrigir dados das 4 galerias afetadas (na mesma migração)
+Resultado:
+- o checkout confirma
+- o webhook pode até marcar a cobrança como paga
+- mas se a galeria ficou dessincronizada, o retorno do cliente **não corrige mais nada**
 
-- Vincular `galeria_id` nas cobranças órfãs via session_id
-- Atualizar as galerias: `status_pagamento = 'pago'`, `status_selecao = 'selecao_completa'`, `finalized_at = cobranca.data_pagamento`
-- Atualizar `clientes_sessoes` correspondentes
+### 3) `gallery-access` mostra a galeria como pendente só olhando estado da galeria
+Hoje o fluxo de acesso:
+- entra em `aguardando_pagamento`
+- procura cobrança pendente por `galeria_id`
+- como a cobrança órfã está com `galeria_id = NULL`, não encontra
+- mesmo assim mantém o cliente na tela de “aguardando confirmação”
 
-### 3. Prevenir regressão futura
+Resultado:
+- o cliente viu o pagamento aprovado no checkout
+- volta ao link
+- continua vendo galeria pendente
+- isso gera confusão grave
 
-O `qtd_fotos = 0` nas cobranças é um problema menor agora (os valores de `valor_extras` já estão corretos na galeria via `confirm-selection`), mas devemos garantir que o campo seja sempre salvo. Isso já está correto no nosso código atual — o problema foi apenas o deploy do Gestão.
+## Plano de correção
 
-## Arquivos a editar
+### 1. Corrigir e redeployar o contrato InfinitePay
+**Arquivos:**
+- `supabase/functions/infinitepay-create-link/index.ts`
+- `supabase/functions/infinitepay-webhook/index.ts`
 
-| Arquivo | Mudança |
-|---|---|
-| Nova migração SQL | Atualizar RPC (corrigir armadilha idempotência) + corrigir 4 galerias afetadas |
+**Ajustes:**
+- garantir que `infinitepay-create-link` sempre grave:
+  - `galeria_id`
+  - `session_id`
+  - `qtd_fotos`
+  - `ip_order_nsu` no padrão oficial esperado
+- garantir que `infinitepay-webhook` use sempre a lógica oficial atual
+- adicionar um **header de contrato imutável** no topo dessas functions:
+  - “não sobrescrever sem coordenação”
+  - campos obrigatórios
+  - formato de `order_nsu`
+  - obrigação de manter `galeria_id`
 
-## Resultado esperado
+### 2. Tornar `check-payment-status` um auto-heal real
+**Arquivo:**
+- `supabase/functions/check-payment-status/index.ts`
 
-- As 4 galerias passam imediatamente a `status_pagamento = 'pago'`
-- "Confirmar Pago" nunca mais deixa galeria dessincronizada, mesmo para cobranças já pagas
-- Fotógrafos podem usar "Confirmar Pago" como chave mestra confiável em qualquer cenário
+**Mudança principal:**
+quando a cobrança já estiver `pago`, ele deve:
+- chamar `finalize_gallery_payment` novamente **ou**
+- executar um bloco explícito de ressincronização
 
+Objetivo:
+- se webhook marcou só a cobrança, o retorno do checkout corrige galeria e sessão
+- isso vale para redirect, polling e “Verificar agora”
+
+### 3. Blindar `gallery-access` contra galeria presa em pendente
+**Arquivo:**
+- `supabase/functions/gallery-access/index.ts`
+
+**Mudança:**
+antes de retornar `pendingPayment: true`, verificar:
+- se existe cobrança recente da sessão
+- se a cobrança mais recente já está `pago`
+- se estiver `pago`, sincronizar a galeria e retornar estado finalizado
+
+Além disso:
+- procurar cobrança por **`galeria_id` e fallback por `session_id`**
+- não deixar cliente preso em “aguardando confirmação” quando o pagamento já foi confirmado
+
+### 4. Fortalecer o webhook para auto-recuperação
+**Arquivo:**
+- `supabase/functions/infinitepay-webhook/index.ts`
+
+**Mudança:**
+mesmo se identificar cenário “já pago”, ele deve:
+- verificar se a galeria/sessão já foram sincronizadas
+- se não, disparar a correção
+
+Assim evitamos o caso:
+```text
+cobrança = pago
+galeria = pendente
+webhook responde “already processed”
+nada é corrigido
+```
+
+### 5. Corrigir dados já quebrados
+**Banco / migração SQL:**
+- vincular cobranças órfãs usando `session_id`
+- sincronizar galerias com cobrança `pago` mas status pendente
+- sincronizar `clientes_sessoes`
+
+Alvo mínimo:
+- o caso do teste atual
+- e uma varredura de todas as cobranças InfinitePay recentes com:
+  - `status='pago'`
+  - `galeria_id IS NULL`
+  - ou galeria ainda `pendente`
+
+### 6. Criar proteção para o projeto Gestão nunca quebrar isso de novo
+Como esse problema já se repetiu, precisamos de uma regra técnica, não só combinada.
+
+**Proteções propostas:**
+- comentário de contrato obrigatório nas functions compartilhadas
+- regra de revisão: **Gestão não pode alterar `infinitepay-create-link`, `infinitepay-webhook`, `check-payment-status`, `confirm-selection` sem coordenação**
+- adicionar validação defensiva:
+  - se criar cobrança InfinitePay sem `galeria_id` e sem `session_id`, falhar
+  - se `ip_order_nsu` vier fora do contrato, logar erro forte
+- criar um **script/consulta de auditoria** para detectar diariamente:
+  - cobranças pagas com galeria pendente
+  - cobranças órfãs
+  - galerias em `aguardando_pagamento` com comprovante existente
+
+## Arquivos impactados
+- `supabase/functions/infinitepay-create-link/index.ts`
+- `supabase/functions/infinitepay-webhook/index.ts`
+- `supabase/functions/check-payment-status/index.ts`
+- `supabase/functions/gallery-access/index.ts`
+- nova migração em `supabase/migrations/...`
+
+## Critério de aceite
+- pagamento InfinitePay confirmado → cliente volta e **vê galeria finalizada**
+- painel do fotógrafo passa para **Pago** automaticamente
+- se webhook falhar parcialmente, o retorno/polling corrige sozinho
+- cliente nunca fica preso em tela de pendência quando a cobrança já está paga
+- nenhuma nova cobrança InfinitePay é criada sem `galeria_id`/`session_id`
