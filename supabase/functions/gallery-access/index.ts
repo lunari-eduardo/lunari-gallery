@@ -193,6 +193,46 @@ serve(async (req) => {
 
     // 3a. Check if gallery is awaiting payment (selection confirmed but payment pending)
     if (gallery.status_selecao === 'aguardando_pagamento') {
+      // AUTO-HEAL: Check if a paid cobrança exists but gallery wasn't synced
+      const { data: paidCobranca } = await supabase
+        .from("cobrancas")
+        .select("id, status, ip_receipt_url, data_pagamento")
+        .or(`galeria_id.eq.${gallery.id}${gallery.session_id ? `,session_id.eq.${gallery.session_id}` : ''}`)
+        .eq("status", "pago")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (paidCobranca) {
+        console.log('🔄 AUTO-HEAL gallery-access: cobrança já paga, sincronizando galeria', gallery.id);
+        const { data: healResult } = await supabase.rpc('finalize_gallery_payment', {
+          p_cobranca_id: paidCobranca.id,
+          p_receipt_url: paidCobranca.ip_receipt_url || null,
+          p_paid_at: paidCobranca.data_pagamento || new Date().toISOString(),
+        });
+        if (healResult?.gallery_synced || healResult?.already_paid) {
+          console.log('✅ Auto-heal gallery-access: galeria sincronizada, redirecionando para tela finalizada');
+          // Re-fetch gallery to get updated status and continue to finalized flow
+          const { data: updatedGallery } = await supabase
+            .from("galerias")
+            .select("status_selecao, status_pagamento, finalized_at")
+            .eq("id", gallery.id)
+            .single();
+          if (updatedGallery) {
+            gallery.status_selecao = updatedGallery.status_selecao;
+            gallery.status_pagamento = updatedGallery.status_pagamento;
+            gallery.finalized_at = updatedGallery.finalized_at;
+          }
+          // Fall through to finalized check below instead of returning pendingPayment
+          if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
+            // Will be handled by the isFinalized block below
+          }
+        }
+      }
+    }
+
+    // Re-check after auto-heal
+    if (gallery.status_selecao === 'aguardando_pagamento') {
       // Fetch studio settings
       const { data: settings } = await supabase
         .from("gallery_settings")
