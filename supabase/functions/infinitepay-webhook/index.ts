@@ -300,9 +300,22 @@ Deno.serve(async (req: Request) => {
 
     console.log(`💳 Cobrança encontrada por ${foundBy}:`, cobranca.id);
 
-    // Check if already processed
+    // Check if already processed — but auto-heal gallery sync
     if (cobranca.status === 'pago') {
-      console.log('ℹ️ Payment already processed for order_nsu:', orderNsu);
+      console.log('ℹ️ Payment already processed for order_nsu:', orderNsu, '— running auto-heal');
+      
+      // Auto-heal: ensure gallery and session are synced
+      const { data: healResult, error: healError } = await supabase.rpc('finalize_gallery_payment', {
+        p_cobranca_id: cobranca.id,
+        p_receipt_url: cobranca.ip_receipt_url || payload?.receipt_url || null,
+        p_paid_at: cobranca.data_pagamento || new Date().toISOString(),
+      });
+      
+      if (healError) {
+        console.error('⚠️ Auto-heal RPC error:', healError.message);
+      } else if (healResult?.gallery_synced) {
+        console.log('✅ Auto-heal: galeria sincronizada retroativamente');
+      }
       
       if (initialLogId) {
         await supabase.from('webhook_logs')
@@ -314,7 +327,7 @@ Deno.serve(async (req: Request) => {
       }
       
       return new Response(
-        JSON.stringify({ success: true, message: 'Already processed' }),
+        JSON.stringify({ success: true, message: 'Already processed', gallerySynced: healResult?.gallery_synced || false }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
