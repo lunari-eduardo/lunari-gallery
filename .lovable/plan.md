@@ -1,100 +1,54 @@
 
-# Diagnóstico Completo: Galerias Pagas com Status Pendente
 
-## Causa raiz confirmada com evidências do banco
+# Redesign: Telas de Senha e Boas-vindas do Cliente
 
-A **"Antônia 4 anos"** foi paga via PIX InfinitePay (R$ 25,00). O webhook chegou **5 vezes** entre 14:03 e 14:05 UTC. Todas as 5 tentativas falharam com o **mesmo erro**:
+## Problemas identificados
 
-```text
-Could not choose the best candidate function between:
-  finalize_gallery_payment(uuid, text, timestamptz)
-  finalize_gallery_payment(uuid, text, timestamptz, text, text)
-```
+1. **Tela de senha**: Linguagem fria ("Galeria Protegida"), ícone de cadeado grande, microcopy juridiquês
+2. **Tela de boas-vindas**: Fallback genérico hardcoded na linha 344 (`'Olá {cliente}! Bem-vindo...'`) — mesmo quando o fotógrafo desativa a mensagem, o cliente vê texto genérico
+3. **Visual**: Cards com sombras, ícones em círculos coloridos, botões gigantes — não condiz com a proposta minimalista
 
-A migração que adicionou a versão com 5 parâmetros (para pagamento manual) **não removeu a versão antiga com 3 parâmetros**. O PostgreSQL não consegue desambiguar chamadas com 3 args quando a versão de 5 tem `DEFAULT NULL` nos últimos 2 — ambas são candidatas válidas.
+## Alterações
 
-Após a InfinitePay esgotar as 5 tentativas de retry, parou de enviar. A migração seguinte corrigiu a ambiguidade (ficou só 1 versão), mas o dano já estava feito.
+### 1. `PasswordScreen.tsx` — Redesign completo
 
-### Galerias afetadas (3 no total)
+**Mudanças visuais e de copy:**
+- Título: `"Galeria Protegida"` → `"Sua galeria está pronta"`
+- Subtítulo emocional: `"Conteúdo exclusivo da sua sessão fotográfica."`
+- Microcopy: `"A senha foi enviada pelo fotógrafo junto com o link."` → `"Digite a senha enviada para acessar sua sessão."`
+- Remover círculo colorido com ícone de cadeado (substituir por um ícone pequeno e discreto inline, ou remover completamente)
+- Input com bordas retas, sem rounded excessivo
+- Botão com estilo limpo, sem `size="lg"` gigante
+- Sem `lunari-card`, sem sombras, sem `bg-primary/10`
 
-| Galeria | Cobrança | Provedor | Valor | Situação |
-|---|---|---|---|---|
-| Antônia 4 anos | `25b5dfd1` | InfinitePay | R$ 25 | Paga (receipt existe nos webhook_logs), webhook falhou por ambiguidade RPC |
-| Lorena 9 meses | `0ffb440c` | InfinitePay | R$ 92 | ip_order_nsu = UUID (deploy antigo), nenhum webhook recebido |
-| Mensal | `7eb21a3c` | InfinitePay | R$ 138 | ip_order_nsu correto, nenhum webhook recebido |
+### 2. `ClientGallery.tsx` — Tela de boas-vindas (linhas 1420–1515)
 
-A Antônia tem **prova de pagamento** nos logs (receipt_url, paid_amount=2500). As outras duas não têm evidência nos logs — podem estar genuinamente pendentes ou o webhook se perdeu.
+**Lógica da mensagem:**
+- Linha 344: remover fallback genérico — se `mensagem_boas_vindas` é null/empty, manter como string vazia
+- Se `welcomeMessage` está vazio após parse: **não mostrar card de mensagem**; exibir apenas nome da sessão + contagem + botão
+- Se `welcomeMessage` tem conteúdo: mostrar em bloco discreto (não card com sombra)
 
-## O que já está corrigido
+**Mudanças visuais:**
+- Remover círculo com ícone `<Image>` (w-20 h-20 bg-primary/10)
+- Nome da sessão grande no topo (já existe, manter)
+- Contagem de fotos em texto pequeno e discreto abaixo
+- Card de mensagem: trocar `lunari-card` por bloco com borda fina superior (`border-t`) — sem sombra, sem rounded
+- Info de fotos incluídas e prazo: manter mas com estilo mais fino, sem ícones em círculos
+- Botão "Começar Seleção": manter funcional mas com estilo mais contido (sem `size="xl"`)
 
-- A ambiguidade RPC **já foi resolvida** — existe apenas 1 versão da função agora
-- O trigger `sync_gallery_on_cobranca_paid` já existe como rede de segurança
-- Os webhooks futuros vão funcionar normalmente
+### 3. Estilo geral aplicado
 
-## O que falta corrigir
+- Bordas retas (`rounded-none` ou `rounded-sm` máximo)
+- Separadores com linhas finas (`border-t border-border/30`)
+- Sem blocos com sombras (`shadow-*`)
+- Sem círculos coloridos de ícone
+- Espaçamento mais arejado
+- Tipografia hierárquica (nome grande, detalhes pequenos)
 
-### 1. Correção imediata: Antônia 4 anos
-
-Migração SQL para finalizar a cobrança `25b5dfd1` usando os dados do webhook (receipt_url confirmado nos logs):
-
-```sql
--- Atualizar cobrança com dados do pagamento confirmado
-UPDATE cobrancas
-SET ip_receipt_url = 'https://recibo.infinitepay.io/77cc7ac0-baa4-4684-b597-28fd07a89acd',
-    ip_transaction_nsu = '77cc7ac0-baa4-4684-b597-28fd07a89acd'
-WHERE id = '25b5dfd1-d696-4ce8-85d8-ca946cb5e445';
-
--- Chamar RPC para finalizar atomicamente
-SELECT finalize_gallery_payment(
-  '25b5dfd1-d696-4ce8-85d8-ca946cb5e445',
-  'https://recibo.infinitepay.io/77cc7ac0-baa4-4684-b597-28fd07a89acd',
-  '2026-03-21T14:02:14Z'
-);
-```
-
-O trigger `sync_gallery_on_cobranca_paid` cuidará da galeria e sessão automaticamente.
-
-### 2. Proteção: garantir que a ambiguidade nunca volte
-
-Adicionar na mesma migração um `DROP FUNCTION IF EXISTS` explícito da assinatura antiga de 3 args, como segurança caso alguma migração futura recrie a versão antiga:
-
-```sql
-DROP FUNCTION IF EXISTS finalize_gallery_payment(uuid, text, timestamptz);
-```
-
-Isso não afeta a versão de 5 args (que tem assinatura diferente).
-
-### 3. Atualizar webhook_logs das 5 tentativas falhadas
-
-Marcar os 5 registros de erro como `recovered` para auditoria:
-
-```sql
-UPDATE webhook_logs
-SET status = 'recovered', 
-    error_message = error_message || ' [recovered via migration]'
-WHERE order_nsu = 'gallery-1774101734173-jr3t9g' AND status = 'error';
-```
-
-## Detalhes técnicos
-
-### Por que o trigger `sync_gallery_on_cobranca_paid` não salvou?
-
-Porque a cobrança **nunca teve seu status alterado para `pago`**. Todas as 5 tentativas do webhook falharam na chamada RPC, então o `UPDATE cobrancas SET status = 'pago'` nunca foi executado, e o trigger nunca disparou.
-
-### Por que o `check-payment-status` (polling) não salvou?
-
-O polling depende do cliente ficar na página. Se o cliente viu "pagamento confirmado" no checkout InfinitePay e saiu, o polling nunca executou. Além disso, durante o período da ambiguidade, o polling também teria falhado na mesma chamada RPC.
-
-### Por que o `gallery-access` (auto-heal) não salvou?
-
-O auto-heal verifica se existe cobrança com `status IN ('pago', 'pago_manual')`. Como a cobrança ficou em `pendente` (RPC nunca executou), o auto-heal não encontrou nada para corrigir.
-
-### Sobre Lorena e Mensal
-
-Sem evidência de pagamento nos webhook_logs. Se o usuário confirmar que foram pagas, pode usar o botão "Registrar recebimento" que agora funciona corretamente.
-
-## Arquivo a editar
+## Arquivos a editar
 
 | Arquivo | Mudança |
 |---|---|
-| Nova migração SQL | Finalizar Antônia + DROP da assinatura antiga como prevenção + marcar logs como recovered |
+| `src/components/PasswordScreen.tsx` | Redesign completo: copy, visual minimalista |
+| `src/pages/ClientGallery.tsx` | Remover fallback genérico da welcomeMessage (L344); redesign da tela de boas-vindas (L1420–1515) |
+
