@@ -398,7 +398,7 @@ export default function ClientGallery() {
         comment: photo.comment || '',
         order: photo.order_index || 0,
         folderId: photo.pasta_id || null,
-        coverUrl: photo.cover_path ? `${R2_PUBLIC_URL}/${photo.cover_path}` : null,
+        coverUrl: photo.cover_path ? getPhotoUrl({ storageKey: photo.cover_path }, 'thumbnail') : null,
       };
     });
   }, [supabasePhotos, transformedGallery]);
