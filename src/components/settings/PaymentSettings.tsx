@@ -945,9 +945,10 @@ export function PaymentSettings() {
                               maxParcelas: parseInt(asaasMaxParcelas),
                               absorverTaxa: checked,
                               ireiAntecipar: asaasIreiAntecipar,
-                              repassarTaxaAntecipacao: asaasRepassarAntecipacao,
-                              incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
+                              repassarTaxaAntecipacao: checked ? false : asaasRepassarAntecipacao,
+                              incluirTaxaAntecipacao: checked ? false : (asaasIreiAntecipar && asaasRepassarAntecipacao),
                             });
+                            if (checked) setAsaasRepassarAntecipacao(false);
                           } catch {
                             // Revert on failure
                             setAsaasAbsorverTaxa(!checked);
@@ -965,81 +966,80 @@ export function PaymentSettings() {
                   </div>
                 </div>
 
-                {/* Toggle de antecipação - só aparece quando cliente paga juros */}
-                {!asaasAbsorverTaxa && (
-                  <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
-                    {/* Toggle 1: Vou antecipar recebíveis? */}
-                    <div className="flex items-center justify-between">
+                {/* Toggle de antecipação - independente de absorver taxa */}
+                <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                  {/* Toggle 1: Vou antecipar recebíveis? */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="flex items-center gap-2">
+                        Vou antecipar meus recebíveis
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Ative se você pretende antecipar os recebíveis no Asaas
+                      </p>
+                    </div>
+                    <Switch
+                      checked={asaasIreiAntecipar}
+                      onCheckedChange={async (checked) => {
+                        setAsaasIreiAntecipar(checked);
+                        if (!checked) setAsaasRepassarAntecipacao(false);
+                        try {
+                          await updateAsaasSettings.mutateAsync({
+                            ireiAntecipar: checked,
+                            repassarTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
+                            incluirTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
+                          });
+                        } catch {
+                          setAsaasIreiAntecipar(!checked);
+                        }
+                      }}
+                      disabled={updateAsaasSettings.isPending}
+                    />
+                  </div>
+
+                  {/* Toggle 2: Repassar taxa ao cliente — só quando ireiAntecipar E !absorverTaxa */}
+                  {asaasIreiAntecipar && !asaasAbsorverTaxa && (
+                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
                       <div className="space-y-0.5">
                         <Label className="flex items-center gap-2">
-                          Vou antecipar meus recebíveis
+                          Repassar taxa de antecipação ao cliente
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                          Ative se você pretende antecipar os recebíveis no Asaas
+                          O cliente pagará a taxa de antecipação junto com a taxa de processamento
                         </p>
                       </div>
                       <Switch
-                        checked={asaasIreiAntecipar}
+                        checked={asaasRepassarAntecipacao}
                         onCheckedChange={async (checked) => {
-                          setAsaasIreiAntecipar(checked);
-                          // Se desativar antecipação, desativar repasse também
-                          if (!checked) setAsaasRepassarAntecipacao(false);
+                          setAsaasRepassarAntecipacao(checked);
                           try {
                             await updateAsaasSettings.mutateAsync({
-                              ireiAntecipar: checked,
-                              repassarTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
-                              incluirTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
+                              ireiAntecipar: asaasIreiAntecipar,
+                              repassarTaxaAntecipacao: checked,
+                              incluirTaxaAntecipacao: checked,
                             });
                           } catch {
-                            setAsaasIreiAntecipar(!checked);
+                            setAsaasRepassarAntecipacao(!checked);
                           }
                         }}
                         disabled={updateAsaasSettings.isPending}
                       />
                     </div>
+                  )}
 
-                    {/* Toggle 2: Repassar taxa ao cliente? — só aparece se ireiAntecipar */}
-                    {asaasIreiAntecipar && (
-                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                        <div className="space-y-0.5">
-                          <Label className="flex items-center gap-2">
-                            Repassar taxa de antecipação ao cliente
-                          </Label>
-                          <p className="text-sm text-muted-foreground">
-                            O cliente pagará a taxa de antecipação junto com a taxa de processamento
-                          </p>
-                        </div>
-                        <Switch
-                          checked={asaasRepassarAntecipacao}
-                          onCheckedChange={async (checked) => {
-                            setAsaasRepassarAntecipacao(checked);
-                            try {
-                              await updateAsaasSettings.mutateAsync({
-                                ireiAntecipar: asaasIreiAntecipar,
-                                repassarTaxaAntecipacao: checked,
-                                incluirTaxaAntecipacao: checked,
-                              });
-                            } catch {
-                              setAsaasRepassarAntecipacao(!checked);
-                            }
-                          }}
-                          disabled={updateAsaasSettings.isPending}
-                        />
-                      </div>
-                    )}
-
-                    <p className="text-xs text-muted-foreground">
-                      {!asaasIreiAntecipar
-                        ? 'O cliente pagará apenas a taxa de processamento'
+                  <p className="text-xs text-muted-foreground">
+                    {!asaasIreiAntecipar
+                      ? 'Sem antecipação configurada'
+                      : asaasAbsorverTaxa
+                        ? 'Você antecipará e absorverá o custo da antecipação'
                         : asaasRepassarAntecipacao
                           ? 'O cliente pagará taxa de processamento + taxa de antecipação'
                           : 'Você antecipará, mas absorverá o custo da antecipação'}
-                    </p>
-                    {updateAsaasSettings.isPending && (
-                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                    )}
-                  </div>
-                )}
+                  </p>
+                  {updateAsaasSettings.isPending && (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  )}
+                </div>
 
                 {/* Fee info - fetched from Asaas API in real-time */}
                 {!asaasAbsorverTaxa && (
