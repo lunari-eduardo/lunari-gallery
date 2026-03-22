@@ -1,68 +1,62 @@
 
 
-# Redesign: Tela de Confirmação + Remoção de Tela de Redirect + Capa sem Watermark
+# Fix: Antecipação de recebíveis deve ser independente de repasse de taxas
 
-## 3 problemas a resolver
+## Problema
 
-### 1. SelectionConfirmation.tsx — visual pesado e redundante
+Na linha 968 de `PaymentSettings.tsx`, o bloco de antecipação está condicionado a `{!asaasAbsorverTaxa && (...)}`. Quando o fotógrafo marca "Eu absorvo a taxa", os toggles de antecipação desaparecem completamente.
 
-**Estado atual**: 4 cards empilhados (Fotos Selecionadas, Resumo, Pagamento, Atenção), cada um com fundo, borda, sombra, ícones em círculos coloridos. Informação duplicada entre o primeiro card e o resumo.
+Isso é incorreto porque:
+- **Absorver taxa** = o fotógrafo paga a taxa de processamento (o cliente não vê juros)
+- **Antecipar recebíveis** = o fotógrafo pede ao Asaas para receber antecipado (decisão financeira independente)
 
-**Novo layout**: coluna única sem cards, apenas tipografia e linhas finas.
+O fotógrafo pode querer absorver as taxas do cliente E ao mesmo tempo antecipar seus recebíveis.
+
+## Conceitos separados
+
+| Configuração | O que controla | Depende de quê? |
+|---|---|---|
+| `absorverTaxa` | Se o cliente vê taxa de processamento no checkout | Nada |
+| `ireiAntecipar` | Se o fotógrafo vai antecipar no Asaas | Nada |
+| `repassarTaxaAntecipacao` | Se o custo da antecipação é repassado ao cliente | Só faz sentido quando `!absorverTaxa` E `ireiAntecipar` |
+
+## Correção
+
+### `src/components/settings/PaymentSettings.tsx`
+
+1. **Mover o bloco de antecipação para fora** do condicional `!asaasAbsorverTaxa`
+2. O toggle "Vou antecipar meus recebíveis" fica sempre visível quando cartão está habilitado
+3. O toggle "Repassar taxa de antecipação ao cliente" fica visível apenas quando:
+   - `ireiAntecipar === true` **E** `absorverTaxa === false`
+   - Se `absorverTaxa === true`, o repasse é automaticamente `false` (não faz sentido repassar se já absorve tudo)
+4. Quando `absorverTaxa` muda para `true`: forçar `repassarTaxaAntecipacao = false` no save
+
+### Estrutura visual resultante
 
 ```text
-[Header: Voltar | Confirmar Seleção]
-
-Sua seleção
-─────────────────────────────
-Selecionadas          7
-Incluídas             5
-Extras                2
-Valor por foto        R$ 5,00
-─────────────────────────────
-Total adicional       R$ 10,00
-
-Pagamento online após confirmar.
-
-Não será possível alterar após confirmar.
-
-[═══ Confirmar e Pagar ═══]
+Parcelamento
+├── Máximo de parcelas: [Até 6x ▼]
+├── Taxas de parcelamento: [● Eu absorvo a taxa]
+│
+├── Antecipação de recebíveis
+│   ├── Vou antecipar meus recebíveis: [●]     ← SEMPRE VISÍVEL
+│   └── Repassar ao cliente: [○]                ← SÓ quando !absorverTaxa
+│
+└── Taxas do Asaas: [Ver taxas]
 ```
 
-- Remover card "Fotos Selecionadas" (redundante)
-- Remover card "Resumo da Seleção" com header/ícone Camera
-- Remover info de Cliente/Sessão/Pacote (o cliente já sabe quem é)
-- Remover data (desnecessária)
-- Unificar tudo em bloco de texto com separadores `border-t`
-- Aviso de atenção: frase curta inline, sem card
-- Aviso de pagamento: frase curta inline, sem card
+### Lógica no checkout (já correta)
 
-### 2. Eliminar tela intermediária de redirecionamento
+O `AsaasCheckout.tsx` (linha 294-296) já resolve corretamente:
+- Se `ireiAntecipar` + `repassarAntecipacao`: soma taxa de antecipação ao cliente
+- Se `ireiAntecipar` + `!repassarAntecipacao`: antecipa mas absorve o custo
+- Se `absorverTaxa`: não mostra taxas ao cliente
 
-**Estado atual**: Após confirmar, vai para `PaymentRedirect` com countdown de 3s, botão "Ir para pagamento agora", botão "Cancelar", texto de segurança.
+Nenhuma mudança necessária no checkout.
 
-**Novo comportamento**:
-- Em `ClientGallery.tsx` (linhas 515-526): quando `data.requiresPayment && data.checkoutUrl`, redirecionar **imediatamente** com `window.location.href`
-- Remover o toast "Seleção confirmada! Redirecionando..."
-- Se o redirect demorar mais de 1s, mostrar um **overlay leve** sobre a tela atual: "Preparando pagamento..." com spinner
-- Não renderizar mais o componente `PaymentRedirect` para checkouts externos
-
-**Nota**: Manter `PaymentRedirect` como fallback para URLs inválidas (erro), mas nunca como tela intermediária normal.
-
-### 3. Capa do album sem watermark para fotos existentes
-
-**Problema**: O sistema de `cover_path` foi implementado na mensagem anterior, mas só funciona para **novas fotos**. Fotos já existentes não têm `cover_path`, então o fallback usa `thumbnailUrl` (com watermark).
-
-**Solução prática**: Na tela de álbuns, quando `coverUrl` é null (sem cover_path), usar a URL da **preview** em vez do thumbnail. A preview tem watermark mais discreto e qualidade melhor para capa. Isso é um fallback visual imediato sem precisar reprocessar fotos.
-
-Alternativamente, o fotógrafo pode re-enviar as fotos para gerar covers. Mas o fallback para preview é melhor que thumbnail com watermark pesado.
-
-**Mudança**: Linha 1653 — fallback de `thumb.thumbnailUrl` para `thumb.previewUrl || thumb.thumbnailUrl`.
-
-## Arquivos a editar
+## Arquivo a editar
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/SelectionConfirmation.tsx` | Redesign completo: layout flat, sem cards, tipografia + linhas finas |
-| `src/pages/ClientGallery.tsx` | Redirect imediato sem tela intermediária (L515-526); remover toast; fallback overlay; cover fallback para previewUrl (L1653) |
+| `src/components/settings/PaymentSettings.tsx` | Mover bloco de antecipação (L968-1042) para fora do `!asaasAbsorverTaxa`; condicionar "Repassar" a `!absorverTaxa && ireiAntecipar`; forçar `repassarAntecipacao=false` quando `absorverTaxa=true` |
 
