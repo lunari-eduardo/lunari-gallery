@@ -945,9 +945,10 @@ export function PaymentSettings() {
                               maxParcelas: parseInt(asaasMaxParcelas),
                               absorverTaxa: checked,
                               ireiAntecipar: asaasIreiAntecipar,
-                              repassarTaxaAntecipacao: asaasRepassarAntecipacao,
-                              incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
+                              repassarTaxaAntecipacao: checked ? false : asaasRepassarAntecipacao,
+                              incluirTaxaAntecipacao: checked ? false : (asaasIreiAntecipar && asaasRepassarAntecipacao),
                             });
+                            if (checked) setAsaasRepassarAntecipacao(false);
                           } catch {
                             // Revert on failure
                             setAsaasAbsorverTaxa(!checked);
