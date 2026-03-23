@@ -231,8 +231,8 @@ export default function GalleryDetail() {
   // Automatic polling for pending InfinitePay/MercadoPago payments
   useEffect(() => {
     const isPendingExternalPayment = 
-      cobrancaData?.status === 'pendente' && 
-      (cobrancaData?.provedor === 'infinitepay' || cobrancaData?.provedor === 'mercadopago');
+      (cobrancaData?.status === 'pendente' || cobrancaData?.status === 'parcialmente_pago') && 
+      (cobrancaData?.provedor === 'infinitepay' || cobrancaData?.provedor === 'mercadopago' || cobrancaData?.provedor === 'asaas');
     
     if (!isPendingExternalPayment) {
       return;
