@@ -416,7 +416,10 @@ Deno.serve(async (req) => {
       : finalBillingType === 'PIX' ? 'pix' 
       : 'link'; // BOLETO maps to 'link'
 
-    const isConfirmed = paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED';
+    // REGRA IMUTÁVEL: sempre inserir como 'pendente'.
+    // O webhook processará a confirmação e disparará a cadeia de triggers:
+    // webhook → upsert cobranca_parcelas → trigger reconcile → UPDATE status='pago'
+    //   → trigger ensure_transaction → INSERT clientes_transacoes → trigger recompute_session_paid
 
     const cobrancaData: Record<string, unknown> = {
       user_id: userId,
@@ -424,13 +427,16 @@ Deno.serve(async (req) => {
       session_id: sessionId || null,
       galeria_id: galeriaId || null,
       valor: valor,
-      status: isConfirmed ? 'pago' : 'pendente',
+      status: 'pendente',
       provedor: 'asaas',
       tipo_cobranca: tipoCobranca,
       descricao: descricao || 'Pagamento galeria',
       qtd_fotos: qtdFotos || 0,
-      mp_payment_id: paymentData.id, // Reuse mp_payment_id column for Asaas payment ID
-      data_pagamento: isConfirmed ? new Date().toISOString() : null,
+      mp_payment_id: paymentData.id,
+      data_pagamento: null,
+      total_parcelas: (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) 
+        ? Math.min(body.installmentCount, settings.maxParcelas || 12) 
+        : 1,
     };
 
     if (finalBillingType === 'PIX' && pixData) {
