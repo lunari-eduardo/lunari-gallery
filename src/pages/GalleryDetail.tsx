@@ -872,7 +872,7 @@ export default function GalleryDetail() {
             )}
 
             {/* Current Payment Status - for pending payments and actions */}
-            {calculatedExtraTotal > 0 && cobrancaData && cobrancaData.status !== 'pago' && (
+            {calculatedExtraTotal > 0 && cobrancaData && !['pago', 'pago_manual'].includes(cobrancaData.status) && (
               <PaymentStatusCard
                 status={cobrancaData.status}
                 provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
