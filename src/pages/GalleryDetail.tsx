@@ -131,7 +131,7 @@ export default function GalleryDetail() {
           .from('cobrancas')
           .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
           .eq('galeria_id', id)
-          .eq('status', 'pago')
+          .in('status', ['pago', 'pago_manual'])
           .order('created_at', { ascending: false });
         if (byGaleria) results.push(...byGaleria);
       }
