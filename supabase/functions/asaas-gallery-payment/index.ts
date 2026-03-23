@@ -416,7 +416,10 @@ Deno.serve(async (req) => {
       : finalBillingType === 'PIX' ? 'pix' 
       : 'link'; // BOLETO maps to 'link'
 
-    const isConfirmed = paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED';
+    // REGRA IMUTÁVEL: sempre inserir como 'pendente'.
+    // O webhook processará a confirmação e disparará a cadeia de triggers:
+    // webhook → upsert cobranca_parcelas → trigger reconcile → UPDATE status='pago'
+    //   → trigger ensure_transaction → INSERT clientes_transacoes → trigger recompute_session_paid
 
     const cobrancaData: Record<string, unknown> = {
       user_id: userId,
@@ -424,13 +427,16 @@ Deno.serve(async (req) => {
       session_id: sessionId || null,
       galeria_id: galeriaId || null,
       valor: valor,
-      status: isConfirmed ? 'pago' : 'pendente',
+      status: 'pendente',
       provedor: 'asaas',
       tipo_cobranca: tipoCobranca,
       descricao: descricao || 'Pagamento galeria',
       qtd_fotos: qtdFotos || 0,
-      mp_payment_id: paymentData.id, // Reuse mp_payment_id column for Asaas payment ID
-      data_pagamento: isConfirmed ? new Date().toISOString() : null,
+      mp_payment_id: paymentData.id,
+      data_pagamento: null,
+      total_parcelas: (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) 
+        ? Math.min(body.installmentCount, settings.maxParcelas || 12) 
+        : 1,
     };
 
     if (finalBillingType === 'PIX' && pixData) {
@@ -453,21 +459,10 @@ Deno.serve(async (req) => {
       // Payment was created in Asaas but we failed to save locally - log but don't fail
     }
 
-    // 6b. If payment is CONFIRMED immediately (credit card), finalize via RPC
-    if (isConfirmed && cobranca?.id) {
-      console.log(`💰 Payment confirmed immediately, finalizing via RPC for cobrança ${cobranca.id}`);
-
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
-        p_cobranca_id: cobranca.id,
-        p_paid_at: new Date().toISOString(),
-      });
-
-      if (rpcError) {
-        console.error('❌ RPC finalize_gallery_payment error:', rpcError);
-      } else {
-        console.log('✅ RPC finalize_gallery_payment result:', rpcResult);
-      }
-    }
+    // NÃO chamar finalize_gallery_payment aqui.
+    // O webhook do Asaas processará a confirmação e disparará a cadeia de triggers.
+    // Isso garante que ensure_transaction_on_cobranca_paid (AFTER UPDATE) dispare corretamente.
+    console.log(`📋 Cobrança ${cobranca?.id} criada como 'pendente'. Aguardando webhook para finalização.`);
 
     // 7. Build checkout URL for redirect-based flow
     const checkoutUrl = paymentData.invoiceUrl || null;
