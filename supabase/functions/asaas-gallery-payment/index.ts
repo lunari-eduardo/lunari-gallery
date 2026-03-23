@@ -437,6 +437,7 @@ Deno.serve(async (req) => {
       total_parcelas: (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) 
         ? Math.min(body.installmentCount, settings.maxParcelas || 12) 
         : 1,
+      asaas_installment_id: paymentData.installment || null,
     };
 
     if (finalBillingType === 'PIX' && pixData) {

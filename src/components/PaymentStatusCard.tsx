@@ -57,6 +57,7 @@ interface PaymentStatusCardProps {
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle2 }> = {
   sem_vendas: { label: 'Sem cobrança', variant: 'secondary', icon: Banknote },
   pendente: { label: 'Pendente', variant: 'outline', icon: Clock },
+  parcialmente_pago: { label: 'Parcialmente pago', variant: 'outline', icon: Clock },
   aguardando_confirmacao: { label: 'Aguardando confirmação', variant: 'default', icon: AlertCircle },
   pago: { label: 'Pago', variant: 'default', icon: CheckCircle2 },
   pago_manual: { label: 'Pago manualmente', variant: 'default', icon: HandCoins },

@@ -131,7 +131,7 @@ export default function GalleryDetail() {
           .from('cobrancas')
           .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
           .eq('galeria_id', id)
-          .eq('status', 'pago')
+          .in('status', ['pago', 'pago_manual'])
           .order('created_at', { ascending: false });
         if (byGaleria) results.push(...byGaleria);
       }
@@ -143,7 +143,7 @@ export default function GalleryDetail() {
           .from('cobrancas')
           .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
           .eq('session_id', sessionId)
-          .eq('status', 'pago')
+          .in('status', ['pago', 'pago_manual'])
           .order('created_at', { ascending: false });
         if (bySession) results.push(...bySession);
       }
@@ -231,8 +231,8 @@ export default function GalleryDetail() {
   // Automatic polling for pending InfinitePay/MercadoPago payments
   useEffect(() => {
     const isPendingExternalPayment = 
-      cobrancaData?.status === 'pendente' && 
-      (cobrancaData?.provedor === 'infinitepay' || cobrancaData?.provedor === 'mercadopago');
+      (cobrancaData?.status === 'pendente' || cobrancaData?.status === 'parcialmente_pago') && 
+      (cobrancaData?.provedor === 'infinitepay' || cobrancaData?.provedor === 'mercadopago' || cobrancaData?.provedor === 'asaas');
     
     if (!isPendingExternalPayment) {
       return;
@@ -872,7 +872,7 @@ export default function GalleryDetail() {
             )}
 
             {/* Current Payment Status - for pending payments and actions */}
-            {calculatedExtraTotal > 0 && cobrancaData && cobrancaData.status !== 'pago' && (
+            {calculatedExtraTotal > 0 && cobrancaData && !['pago', 'pago_manual'].includes(cobrancaData.status) && (
               <PaymentStatusCard
                 status={cobrancaData.status}
                 provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
