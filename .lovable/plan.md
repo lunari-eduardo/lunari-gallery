@@ -1,59 +1,69 @@
 
 
-# Conformidade com Regras de Integração Gallery ↔ Gestão
+# Diagnóstico: Pagamento Asaas não finaliza — múltiplas falhas identificadas
 
-## Problemas encontrados
+## Evidências do banco
 
-### `asaas-gallery-payment/index.ts` (linha 427)
-```typescript
-status: isConfirmed ? 'pago' : 'pendente', // ← VIOLA REGRA IMUTÁVEL
-```
-Quando cartão de crédito é confirmado imediatamente, insere com `status: 'pago'`. O trigger `ensure_transaction_on_cobranca_paid` é AFTER UPDATE — nunca dispara em INSERT. Resultado: transação financeira não criada, extrato vazio, `valor_pago` da sessão não atualizado.
+A cobrança `06a37968` (R$ 14, cartão 2x) está com `status: parcialmente_pago`:
+- Parcela 1 (`pay_0wbyoglv6q161t6m`, R$ 7) — webhook recebido e processado
+- Parcela 2 — webhook **nunca será encontrado** porque o `asaas_installment_id` não foi salvo
 
-Adicionalmente, na linha 457-470, chama `finalize_gallery_payment` diretamente após INSERT com status já `pago`, o que é redundante e perigoso.
+A galeria `8373d391` está com `status_pagamento: pendente` e `status_selecao: aguardando_pagamento`.
 
-### `asaas-gallery-webhook/index.ts` (linhas 93-98)
-- Não extrai `payment.netValue` do payload
-- Não cria registro em `cobranca_parcelas`
-- Não atualiza `cobrancas.valor_liquido`
-- Perde toda informação de taxas do gateway
+## 5 problemas encontrados
 
-## Correções
+### 1. `asaas_installment_id` não é salvo na criação da cobrança
 
-### 1. `asaas-gallery-payment/index.ts`
+**Arquivo**: `supabase/functions/asaas-gallery-payment/index.ts` (linhas 424-440)
 
-**Linha 427**: Sempre `status: 'pendente'`, nunca `'pago'`
+O campo `asaas_installment_id` **não é incluído** no INSERT de `cobrancas`. Quando o Asaas envia webhook para parcelas 2+, o `payment.id` é diferente. O webhook tenta fallback por `asaas_installment_id` (linha 106), mas esse campo está NULL.
 
-**Linha 433**: Sempre `data_pagamento: null`
+**Resultado**: parcelas 2+ de pagamentos parcelados **nunca são processadas**.
 
-**Linhas 456-470**: Remover bloco `isConfirmed` que chama `finalize_gallery_payment` diretamente. O webhook processará a confirmação e fará a transição correta.
+**Correção**: Salvar `paymentData.installment` em `asaas_installment_id` no INSERT da cobrança.
 
-**Resultado**: INSERT sempre pendente → webhook muda para pago → trigger `ensure_transaction_on_cobranca_paid` dispara → transação criada → `valor_pago` atualizado.
+### 2. `parcialmente_pago` não existe no `statusConfig` do frontend
 
-### 2. `asaas-gallery-webhook/index.ts`
+**Arquivo**: `src/components/PaymentStatusCard.tsx` (linhas 57-63)
 
-Após encontrar a cobrança e antes de chamar a RPC:
+O status `parcialmente_pago` não está mapeado. O fallback é `sem_vendas` → mostra "Sem cobrança".
 
-1. Extrair `payment.netValue` e calcular `taxa_gateway`
-2. Atualizar `cobrancas.valor_liquido`
-3. Criar `cobranca_parcelas` com upsert (idempotente via `asaas_payment_id`)
-4. O trigger `reconcile_cobranca_from_parcelas` atualizará a cobrança automaticamente
-5. Manter chamada a `finalize_gallery_payment` para sincronizar galeria/sessão
-6. Também tratar `PAYMENT_ANTICIPATED` como evento válido
+**Correção**: Adicionar `parcialmente_pago` ao `statusConfig` com label "Parcialmente pago".
 
-```text
-Fluxo resultante:
-webhook → extrai netValue → upsert cobranca_parcelas
-  → trigger reconcile → UPDATE cobrancas (status='pago', valor_liquido)
-    → trigger ensure_transaction → INSERT clientes_transacoes
-      → trigger recompute_session_paid → UPDATE valor_pago
-webhook → RPC finalize_gallery_payment → sincroniza galeria/sessão
-```
+### 3. `cobrancasPagas` só busca `status = 'pago'`
+
+**Arquivo**: `src/pages/GalleryDetail.tsx` (linhas 134 e 146)
+
+A query que alimenta o histórico de pagamentos filtra apenas `status = 'pago'`. Cobranças `pago_manual` não aparecem no histórico.
+
+**Correção**: Usar `.in('status', ['pago', 'pago_manual'])` nas duas queries.
+
+### 4. Polling não roda para Asaas
+
+**Arquivo**: `src/pages/GalleryDetail.tsx` (linhas 233-235)
+
+O polling automático só ativa para `infinitepay` ou `mercadopago`. Pagamentos Asaas pendentes não são verificados periodicamente.
+
+**Correção**: Incluir `asaas` na condição de polling.
+
+### 5. Condição do Detalhes tab não considera `pago_manual` nem `parcialmente_pago`
+
+**Arquivo**: `src/pages/GalleryDetail.tsx` (linha 875)
+
+`cobrancaData.status !== 'pago'` deve também excluir `pago_manual`.
+
+**Correção**: Usar `!['pago', 'pago_manual'].includes(cobrancaData.status)`.
+
+## Correção imediata para a cobrança existente
+
+Migração SQL para salvar o `asaas_installment_id` na cobrança `06a37968` usando o valor do webhook (`8bf21696-9ed0-4f28-b800-c289b6a764eb`), permitindo que a parcela 2 seja processada quando o webhook chegar.
 
 ## Arquivos a editar
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/asaas-gallery-payment/index.ts` | Sempre `status: 'pendente'`; remover bloco `isConfirmed` + `finalize_gallery_payment` |
-| `supabase/functions/asaas-gallery-webhook/index.ts` | Extrair netValue; criar `cobranca_parcelas`; atualizar `valor_liquido`; tratar `PAYMENT_ANTICIPATED` |
+| `supabase/functions/asaas-gallery-payment/index.ts` | Salvar `asaas_installment_id` no INSERT |
+| `src/components/PaymentStatusCard.tsx` | Adicionar `parcialmente_pago` ao statusConfig |
+| `src/pages/GalleryDetail.tsx` | cobrancasPagas incluir `pago_manual`; polling incluir `asaas`; condição detalhes incluir `pago_manual` |
+| Nova migração SQL | Corrigir cobrança `06a37968` com `asaas_installment_id` |
 
