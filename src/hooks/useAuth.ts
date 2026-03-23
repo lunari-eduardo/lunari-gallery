@@ -222,20 +222,20 @@ export function useAuth() {
     localStorage.removeItem('auth_origin');
     
     try {
-      const { error } = await supabase.auth.signOut();
+      // scope: 'global' invalidates ALL sessions server-side,
+      // preventing token refresh from restoring the session on tab focus
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) {
         console.warn('⚠️ Sign out API error (session may already be invalid):', error.message);
-        // Don't return error if it's just "session not found" - we've already cleared local state
         if (error.message?.includes('session_not_found') || error.status === 403) {
           console.log('✅ Local session cleared despite server error');
           return { error: null };
         }
       }
-      console.log('✅ Sign out successful');
+      console.log('✅ Sign out successful (global scope)');
       return { error };
     } catch (err) {
       console.error('❌ Sign out exception:', err);
-      // Still return success since we've cleared local state
       return { error: null };
     }
   };
