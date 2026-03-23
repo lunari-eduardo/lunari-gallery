@@ -143,7 +143,7 @@ export default function GalleryDetail() {
           .from('cobrancas')
           .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
           .eq('session_id', sessionId)
-          .eq('status', 'pago')
+          .in('status', ['pago', 'pago_manual'])
           .order('created_at', { ascending: false });
         if (bySession) results.push(...bySession);
       }
