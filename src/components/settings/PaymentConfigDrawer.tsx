@@ -136,6 +136,8 @@ export function PaymentConfigDrawer({
   asaasRepassarAntecipacao, setAsaasRepassarAntecipacao,
   handleSaveAsaas, handleSaveAsaasSettings, saveAsaasPending, updateAsaasSettings, userId,
   asaasFees, setAsaasFees,
+  // Migration
+  asaasDadosExtrasRaw, mpDadosExtrasRaw, onMigrateFromGestao, migratePending,
 }: PaymentConfigDrawerProps) {
   const [asaasShowKey, setAsaasShowKey] = useState(false);
   const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
