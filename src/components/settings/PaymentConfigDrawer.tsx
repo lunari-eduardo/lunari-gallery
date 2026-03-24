@@ -552,6 +552,16 @@ export function PaymentConfigDrawer({
                 </div>
               )}
 
+              {/* Migration from Gestão */}
+              {asaasDadosExtrasRaw && hasOtherContextSettings(asaasDadosExtrasRaw, 'gestao') && onMigrateFromGestao && (
+                <MigrationSection
+                  dadosExtrasRaw={asaasDadosExtrasRaw}
+                  provider="asaas"
+                  onMigrate={() => onMigrateFromGestao('asaas')}
+                  pending={migratePending}
+                />
+              )}
+
               <Button
                 className="w-full"
                 onClick={isNewAsaas ? handleSaveAsaas : handleSaveAsaasSettings}
