@@ -1,77 +1,52 @@
 
 
-# Redesign: PaymentSettings → Central de Recebimento
+# Configurações de Pagamento Independentes por Projeto (Gallery ↔ Gestão)
 
-## Visao Geral
+## O que será feito
 
-Transformar a tela de 4 cards pesados e redundantes em uma interface limpa com 2 blocos + drawer lateral para configuração.
+Permitir que Gallery e Gestão tenham configurações de pagamento diferentes (parcelas, taxas, antecipação) para o mesmo provedor, com opção de migrar configurações entre projetos a qualquer momento.
 
-## Estrutura Nova
+## Estrutura
 
-```text
-Pagamentos
-─────────────────────────────────────────
+Os dados continuam na mesma coluna `dados_extras` da tabela `usuarios_integracoes`, com sub-objetos `gallery_settings` e `gestao_settings` para isolar configurações por projeto. Campos raiz mantidos como fallback para webhooks.
 
-Recebimento ativo
-  ✔ Asaas (Padrão)          PIX • Cartão 12x        ⚙ ⋯
-  ✔ PIX Manual               Manual                  ⚙ ⋯
+## Arquivos a criar/editar
 
-Outras formas de pagamento
-  + Mercado Pago             Checkout automático
-  + InfinitePay              Checkout automático
-```
+### 1. Criar `src/utils/paymentSettingsContext.ts` (novo)
 
-Clicar em ⚙ ou "+" abre um **Sheet (drawer lateral)** com a configuração completa do gateway — sem expandir na página.
+Copiar exatamente o arquivo do projeto Gestão. Contém:
+- `getContextSettings()` — lê settings do contexto com fallback para raiz
+- `setContextSettings()` — grava no contexto + sincroniza raiz
+- `migrateSettings()` — copia de um projeto para outro
+- `hasOtherContextSettings()` — verifica se outro projeto tem settings
+- `settingsDiverge()` — detecta diferenças entre projetos
+- `getDivergenceSummary()` — lista campos que diferem
 
-## Mudanças Técnicas
+### 2. Editar `src/hooks/usePaymentIntegration.ts`
 
-### 1. Refatorar `PaymentSettings.tsx`
+- Definir `const CONTEXT = 'gallery'`
+- Adicionar `dadosExtrasRaw` ao tipo `PaymentIntegration`
+- **Leitura**: usar `getContextSettings()` no mapeamento para resolver settings do contexto Gallery
+- **Escrita (saveAsaas, updateAsaasSettings, updateMercadoPagoSettings)**: usar `setContextSettings()` em vez de gravar direto
+- **Nova mutation `migrateFromGestao`**: chama `migrateSettings('gestao', 'gallery', provider)` e salva
 
-**Bloco "Recebimento ativo"** (~50 linhas):
-- Lista compacta das integrações ativas (`data.allActiveIntegrations`)
-- Cada linha: logo (24px) + nome + badge "Padrão" + resumo inline (ex: "PIX • Cartão 12x") + botão ⚙ (abre drawer) + menu ⋯ (definir padrão / desativar)
-- Sem cards, sem bordas grossas — apenas linhas separadas por `divide-y`
-- Aviso PIX Manual como texto inline discreto (sem card amarelo)
+### 3. Editar `src/components/settings/PaymentConfigDrawer.tsx`
 
-**Bloco "Outras formas de pagamento"** (~30 linhas):
-- Lista dos gateways **não ativos** com botão `+` que abre o drawer de configuração inicial
-- Estilo minimalista: logo + nome + descrição curta + botão `+`
+- Receber `dadosExtrasRaw` do Asaas e MP via props
+- Receber handler `onMigrateFromGestao`
+- Exibir seção de migração no drawer do Asaas e Mercado Pago:
+  - Só aparece se `hasOtherContextSettings(raw, 'gestao')` for true
+  - Mostra diferenças via `getDivergenceSummary()`
+  - Botão "Copiar configurações do Studio" que executa a migração
 
-### 2. Criar `PaymentConfigDrawer.tsx` (novo componente)
+### 4. Editar `src/components/settings/PaymentSettings.tsx`
 
-Um `Sheet` (do radix, já existe em `ui/sheet.tsx`) que recebe o `provider` e renderiza o formulário de configuração:
+- Passar `dadosExtrasRaw` e handler de migração para o drawer
+- Badge "Config. independente" na lista de integrações ativas quando `settingsDiverge()` retornar true
 
-- **PIX Manual**: tipo chave, chave, nome titular
-- **InfinitePay**: handle
-- **Mercado Pago**: se não conectado → botão OAuth; se conectado → toggles PIX/Cartão, parcelas, absorver taxa
-- **Asaas**: API key (só na primeira vez), ambiente, métodos, parcelamento, antecipação, taxas
+## Sem mudanças necessárias em
 
-Todo o conteúdo de configuração que hoje está inline nos cards será movido para este drawer. A lógica de estado e handlers permanece no `PaymentSettings.tsx` e é passada via props.
-
-### 3. Estados visuais claros
-
-Cada gateway na lista terá um indicador:
-- `✔` verde = conectado e ativo
-- `⚠` amber = precisa reconfigurar (ex: MP com `erro_autenticacao`)
-- `○` cinza = não configurado (aparece em "Outras formas")
-
-### 4. Remover
-
-- Cards `lunari-card` com fundo e borda
-- Blocos informativos redundantes ("Confirmação automática", "Checkout transparente")
-- Botões grandes "Configurar PIX", "Configurar InfinitePay"
-- Ícones genéricos (CreditCard, QrCode, Zap) — usar apenas os logos reais
-
-## Arquivos
-
-| Arquivo | Mudança |
-|---|---|
-| `src/components/settings/PaymentSettings.tsx` | Reescrever: 2 blocos compactos + abrir drawer ao invés de expandir inline |
-| `src/components/settings/PaymentConfigDrawer.tsx` | **Novo**: Sheet lateral com formulários de cada gateway |
-
-## Preservação
-
-- Toda a lógica de negócio (handlers, estados, hooks) permanece intacta
-- `usePaymentIntegration` não muda
-- Formulários internos são os mesmos, apenas movidos para dentro do drawer
+- Schema do banco
+- Edge Functions / Webhooks (continuam lendo campos raiz)
+- Fluxo de checkout
 
