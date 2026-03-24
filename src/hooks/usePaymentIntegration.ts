@@ -281,10 +281,12 @@ export function usePaymentIntegration() {
 
       const { data: existing } = await supabase
         .from('usuarios_integracoes')
-        .select('id')
+        .select('id, dados_extras')
         .eq('user_id', user.id)
         .eq('provedor', 'asaas')
         .maybeSingle();
+
+      const updatedExtras = setContextSettings(existing?.dados_extras || {}, CONTEXT, settings, 'asaas');
 
       if (existing) {
         const { error } = await supabase
@@ -292,7 +294,7 @@ export function usePaymentIntegration() {
           .update({
             status: 'ativo',
             access_token: apiKey,
-            dados_extras: toJsonData(settings),
+            dados_extras: toJsonData(updatedExtras),
             is_default: setAsDefault,
             conectado_em: new Date().toISOString(),
           })
@@ -306,7 +308,7 @@ export function usePaymentIntegration() {
             provedor: 'asaas',
             status: 'ativo',
             access_token: apiKey,
-            dados_extras: toJsonData(settings),
+            dados_extras: toJsonData(updatedExtras),
             is_default: setAsDefault,
             conectado_em: new Date().toISOString(),
           }]);
