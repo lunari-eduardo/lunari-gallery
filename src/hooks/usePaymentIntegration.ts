@@ -55,6 +55,7 @@ export interface PaymentIntegration {
   status: 'ativo' | 'inativo' | 'erro_autenticacao';
   isDefault: boolean;
   dadosExtras: PixManualData | InfinitePayData | MercadoPagoData | AsaasData | null;
+  dadosExtrasRaw: any;
   conectadoEm: string | null;
   mpUserId?: string | null;
   expiraEm?: string | null;
