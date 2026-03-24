@@ -290,12 +290,19 @@ export function PaymentSettings() {
                   />
 
                   {/* Name + badge */}
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <span className="font-medium text-sm truncate">{getProviderLabel(integration.provedor)}</span>
                     {integration.isDefault && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 gap-0.5 flex-shrink-0">
                         <Star className="h-2.5 w-2.5" />
                         Padrão
+                      </Badge>
+                    )}
+                    {(integration.provedor === 'asaas' || integration.provedor === 'mercadopago') &&
+                      integration.dadosExtrasRaw &&
+                      settingsDiverge(integration.dadosExtrasRaw, integration.provedor) && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0 border-primary/30 text-primary">
+                        Config. independente
                       </Badge>
                     )}
                   </div>
