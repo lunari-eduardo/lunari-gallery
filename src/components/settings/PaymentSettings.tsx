@@ -441,6 +441,14 @@ export function PaymentSettings() {
         updateAsaasSettings={updateAsaasSettings}
         userId={user?.id}
         asaasFees={asaasFees} setAsaasFees={setAsaasFees}
+        // Migration
+        asaasDadosExtrasRaw={asaasIntegration?.dadosExtrasRaw}
+        mpDadosExtrasRaw={mpIntegration?.dadosExtrasRaw}
+        onMigrateFromGestao={async (provedor) => {
+          await migrateFromGestao.mutateAsync(provedor);
+          setDrawerOpen(false);
+        }}
+        migratePending={migrateFromGestao.isPending}
       />
     </div>
   );
