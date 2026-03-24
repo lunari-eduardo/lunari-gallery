@@ -86,6 +86,7 @@ export function PaymentSettings() {
     updateMercadoPagoSettings,
     getMercadoPagoOAuthUrl,
     mpAppId,
+    migrateFromGestao,
   } = usePaymentIntegration();
 
   // Drawer state
