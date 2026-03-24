@@ -349,22 +349,13 @@ export function usePaymentIntegration() {
 
       if (!existing) throw new Error('Asaas não configurado');
 
-      const currentSettings = (existing.dados_extras as unknown as AsaasData) || {
-        environment: 'sandbox',
-        habilitarPix: true,
-        habilitarCartao: true,
-        habilitarBoleto: false,
-        maxParcelas: 12,
-        absorverTaxa: false,
-        taxaAntecipacao: false,
-        taxaAntecipacaoCreditoAvista: 0,
-        taxaAntecipacaoCreditoParcelado: 0,
-      };
-      const newSettings = { ...currentSettings, ...settings };
+      const currentContextSettings = getContextSettings<AsaasData>(existing.dados_extras, CONTEXT);
+      const merged = { ...currentContextSettings, ...settings };
+      const updatedExtras = setContextSettings(existing.dados_extras, CONTEXT, merged, 'asaas');
 
       const { error } = await supabase
         .from('usuarios_integracoes')
-        .update({ dados_extras: newSettings as unknown as Json })
+        .update({ dados_extras: updatedExtras as unknown as Json })
         .eq('id', existing.id);
 
       if (error) throw error;
