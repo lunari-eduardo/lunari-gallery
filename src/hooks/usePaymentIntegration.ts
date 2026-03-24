@@ -3,6 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { Json } from '@/integrations/supabase/types';
+import { getContextSettings, setContextSettings, migrateSettings } from '@/utils/paymentSettingsContext';
+
+const CONTEXT = 'gallery' as const;
 
 export type PaymentProvider = 'pix_manual' | 'infinitepay' | 'mercadopago' | 'asaas';
 export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
