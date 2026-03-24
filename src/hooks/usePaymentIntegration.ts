@@ -114,13 +114,21 @@ export function usePaymentIntegration() {
       }
 
       const mappedIntegrations: PaymentIntegration[] = (integrations || []).map((i) => {
-        const extras = i.dados_extras;
+        const rawExtras = i.dados_extras;
+        let resolvedExtras: any = rawExtras;
+
+        // Context-aware reading for providers that support per-project settings
+        if ((i.provedor === 'asaas' || i.provedor === 'mercadopago') && rawExtras) {
+          resolvedExtras = getContextSettings(rawExtras, CONTEXT);
+        }
+
         return {
           id: i.id,
           provedor: i.provedor as PaymentProvider,
           status: i.status as 'ativo' | 'inativo' | 'erro_autenticacao',
           isDefault: i.is_default || false,
-          dadosExtras: extras as unknown as PixManualData | InfinitePayData | MercadoPagoData | AsaasData | null,
+          dadosExtras: resolvedExtras as PixManualData | InfinitePayData | MercadoPagoData | AsaasData | null,
+          dadosExtrasRaw: rawExtras,
           conectadoEm: i.conectado_em,
           mpUserId: i.mp_user_id,
           expiraEm: i.expira_em,
