@@ -21,7 +21,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { hasOtherContextSettings, getDivergenceSummary } from '@/utils/paymentSettingsContext';
-import { ptBR } from 'date-fns/locale';
 
 const providerLogos: Record<PaymentProvider, string> = {
   pix_manual: pixLogo,
