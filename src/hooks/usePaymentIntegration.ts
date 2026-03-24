@@ -502,6 +502,39 @@ export function usePaymentIntegration() {
     return `https://auth.mercadopago.com.br/authorization?client_id=${mpAppId}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirectUri)}`;
   };
 
+  // Mutation to migrate settings from Gestão to Gallery
+  const migrateFromGestao = useMutation({
+    mutationFn: async (provedor: 'asaas' | 'mercadopago') => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: existing } = await supabase
+        .from('usuarios_integracoes')
+        .select('id, dados_extras')
+        .eq('user_id', user.id)
+        .eq('provedor', provedor)
+        .single();
+
+      if (!existing) throw new Error('Integração não encontrada');
+
+      const updatedExtras = migrateSettings(existing.dados_extras, 'gestao', 'gallery', provedor);
+
+      const { error } = await supabase
+        .from('usuarios_integracoes')
+        .update({ dados_extras: updatedExtras as unknown as Json })
+        .eq('id', existing.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
+      toast.success('Configurações migradas do Studio com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Error migrating settings:', error);
+      toast.error('Erro ao migrar configurações');
+    },
+  });
+
   return {
     ...query,
     mpAppId,
@@ -514,6 +547,7 @@ export function usePaymentIntegration() {
     connectMercadoPago,
     updateMercadoPagoSettings,
     getMercadoPagoOAuthUrl,
+    migrateFromGestao,
   };
 }
 
