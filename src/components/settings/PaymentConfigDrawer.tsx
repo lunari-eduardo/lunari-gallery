@@ -108,6 +108,12 @@ interface PaymentConfigDrawerProps {
     };
   } | null;
   setAsaasFees: (v: any) => void;
+
+  // Migration
+  asaasDadosExtrasRaw?: any;
+  mpDadosExtrasRaw?: any;
+  onMigrateFromGestao?: (provedor: 'asaas' | 'mercadopago') => Promise<void>;
+  migratePending?: boolean;
 }
 
 export function PaymentConfigDrawer({
