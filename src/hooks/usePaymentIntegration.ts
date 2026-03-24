@@ -474,17 +474,13 @@ export function usePaymentIntegration() {
 
       if (!existing) throw new Error('Mercado Pago não configurado');
 
-      const currentSettings = (existing.dados_extras as unknown as MercadoPagoData) || {
-        habilitarPix: true,
-        habilitarCartao: true,
-        maxParcelas: 12,
-        absorverTaxa: false,
-      };
-      const newSettings = { ...currentSettings, ...settings };
+      const currentContextSettings = getContextSettings<MercadoPagoData>(existing.dados_extras, CONTEXT);
+      const merged = { ...currentContextSettings, ...settings };
+      const updatedExtras = setContextSettings(existing.dados_extras, CONTEXT, merged, 'mercadopago');
 
       const { error } = await supabase
         .from('usuarios_integracoes')
-        .update({ dados_extras: newSettings as unknown as Json })
+        .update({ dados_extras: updatedExtras as unknown as Json })
         .eq('id', existing.id);
 
       if (error) throw error;
