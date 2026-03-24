@@ -23,6 +23,7 @@ import {
 import { pixLogo, infinitepayLogo, mercadopagoLogo, asaasLogo } from '@/assets/payment-logos';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { PaymentConfigDrawer } from './PaymentConfigDrawer';
+import { settingsDiverge } from '@/utils/paymentSettingsContext';
 
 const providerLogos: Record<PaymentProvider, string> = {
   pix_manual: pixLogo,
