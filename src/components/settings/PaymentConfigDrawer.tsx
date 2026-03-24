@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Eye, EyeOff, ExternalLink, RefreshCw, CheckCircle, AlertTriangle, Link2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ExternalLink, RefreshCw, CheckCircle, AlertTriangle, Link2, ArrowDownToLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { hasOtherContextSettings, getDivergenceSummary } from '@/utils/paymentSettingsContext';
 
 const providerLogos: Record<PaymentProvider, string> = {
   pix_manual: pixLogo,
@@ -107,6 +108,44 @@ interface PaymentConfigDrawerProps {
     };
   } | null;
   setAsaasFees: (v: any) => void;
+
+  // Migration
+  asaasDadosExtrasRaw?: any;
+  mpDadosExtrasRaw?: any;
+  onMigrateFromGestao?: (provedor: 'asaas' | 'mercadopago') => Promise<void>;
+  migratePending?: boolean;
+}
+
+/** Inline migration section shown inside the drawer */
+function MigrationSection({ dadosExtrasRaw, provider, onMigrate, pending }: {
+  dadosExtrasRaw: any;
+  provider: 'asaas' | 'mercadopago';
+  onMigrate: () => void;
+  pending?: boolean;
+}) {
+  const diffs = getDivergenceSummary(dadosExtrasRaw, provider);
+
+  return (
+    <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ArrowDownToLine className="h-4 w-4 text-primary" />
+        Migrar do Studio
+      </div>
+      {diffs.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Diferenças: {diffs.join(', ')}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Copiar configurações do Studio para a Gallery
+        </p>
+      )}
+      <Button variant="outline" size="sm" className="w-full" onClick={onMigrate} disabled={pending}>
+        {pending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ArrowDownToLine className="h-3 w-3 mr-1" />}
+        Copiar configurações do Studio
+      </Button>
+    </div>
+  );
 }
 
 export function PaymentConfigDrawer({
@@ -129,6 +168,8 @@ export function PaymentConfigDrawer({
   asaasRepassarAntecipacao, setAsaasRepassarAntecipacao,
   handleSaveAsaas, handleSaveAsaasSettings, saveAsaasPending, updateAsaasSettings, userId,
   asaasFees, setAsaasFees,
+  // Migration
+  asaasDadosExtrasRaw, mpDadosExtrasRaw, onMigrateFromGestao, migratePending,
 }: PaymentConfigDrawerProps) {
   const [asaasShowKey, setAsaasShowKey] = useState(false);
   const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
@@ -271,6 +312,16 @@ export function PaymentConfigDrawer({
                         <span className="text-sm text-muted-foreground">{mpAbsorverTaxa ? 'Eu absorvo a taxa' : 'Cliente paga juros'}</span>
                       </div>
                     </div>
+                  )}
+
+                  {/* Migration from Gestão */}
+                  {mpDadosExtrasRaw && hasOtherContextSettings(mpDadosExtrasRaw, 'gestao') && onMigrateFromGestao && (
+                    <MigrationSection
+                      dadosExtrasRaw={mpDadosExtrasRaw}
+                      provider="mercadopago"
+                      onMigrate={() => onMigrateFromGestao('mercadopago')}
+                      pending={migratePending}
+                    />
                   )}
 
                   <Button className="w-full" onClick={handleSaveMpSettings} disabled={updateMpPending}>
@@ -531,6 +582,16 @@ export function PaymentConfigDrawer({
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Migration from Gestão */}
+              {asaasDadosExtrasRaw && hasOtherContextSettings(asaasDadosExtrasRaw, 'gestao') && onMigrateFromGestao && (
+                <MigrationSection
+                  dadosExtrasRaw={asaasDadosExtrasRaw}
+                  provider="asaas"
+                  onMigrate={() => onMigrateFromGestao('asaas')}
+                  pending={migratePending}
+                />
               )}
 
               <Button
