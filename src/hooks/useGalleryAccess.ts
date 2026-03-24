@@ -1,26 +1,27 @@
 import { useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { getPlanDisplayName, PLAN_INCLUDES, getHighestActivePlan } from '@/lib/transferPlans';
 
 /**
  * Access levels define FEATURES available, not ACCESS.
  * Gallery access is credit-based, not plan-based.
  * 
  * - admin: Full access, unlimited credits, full Gestão integration
- * - pro_gallery: Credit-based Gallery + Gestão integration
- * - pro: Credit-based Gallery, no Gestão integration (just Gestão access)
- * - starter: Credit-based Gallery, no Gestão integration (limited Gestão)
- * - free: Credit-based Gallery, no Gestão integration, no Gestão access
+ * - pro_gallery: Credit-based Gallery + Gestão integration (combos)
+ * - pro: Credit-based Gallery + Gestão integration (studio_pro or active trial)
+ * - starter: Credit-based Gallery, no Gestão integration
+ * - free: Credit-based Gallery, no Gestão integration
  */
 export type AccessLevel = 'admin' | 'pro_gallery' | 'pro' | 'starter' | 'free';
 
 interface GalleryAccessResult {
-  hasAccess: boolean;           // Always true if logged in
-  accessLevel: AccessLevel;     // Defines features available
+  hasAccess: boolean;
+  accessLevel: AccessLevel;
   planName: string | null;
   isLoading: boolean;
-  hasGestaoIntegration: boolean; // Only true for admin or pro_gallery
-  isAdmin: boolean;             // Helper for admin bypass
+  hasGestaoIntegration: boolean;
+  isAdmin: boolean;
 }
 
 export function useGalleryAccess(user: User | null, session: Session | null): GalleryAccessResult {
@@ -29,7 +30,6 @@ export function useGalleryAccess(user: User | null, session: Session | null): Ga
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // CRITICAL: Only proceed if we have BOTH user AND valid session with token
     if (!user || !session?.access_token) {
       setAccessLevel('free');
       setPlanName(null);
@@ -59,48 +59,58 @@ export function useGalleryAccess(user: User | null, session: Session | null): Ga
           return;
         }
 
-        // 2. Check subscription for plan type (determines Gestão integration only)
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select(`
-            status,
-            plans (
-              code,
-              name
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
+        // 2. Check subscriptions_asaas for active plan
+        const { data: subs } = await supabase
+          .from('subscriptions_asaas')
+          .select('plan_type, status, next_due_date')
+          .eq('user_id', user.id);
 
-        if (subscription?.plans) {
-          const plan = subscription.plans as { code: string; name: string };
-          const planCode = plan.code.toLowerCase();
+        const activeSubs = (subs || []).filter(s => {
+          if (['ACTIVE', 'PENDING', 'OVERDUE'].includes(s.status)) return true;
+          if (s.status === 'CANCELLED' && s.next_due_date && new Date(s.next_due_date) > new Date()) return true;
+          return false;
+        });
+
+        if (activeSubs.length > 0) {
+          const bestPlanType = getHighestActivePlan(activeSubs) || activeSubs[0].plan_type;
+          const includes = PLAN_INCLUDES[bestPlanType];
           
-          console.log('📋 User has active plan:', planCode);
-          
-          if (planCode.includes('galery') || planCode.includes('gallery')) {
-            // Pro + Gallery = Gestão integration enabled
+          console.log('📋 User has active plan:', bestPlanType, includes);
+
+          if (includes?.studio && includes?.select) {
+            // Combo plans with studio + select = full integration
             setAccessLevel('pro_gallery');
-            setPlanName(plan.name);
-          } else if (planCode.includes('pro')) {
-            // Pro only = Gestão access, no Gallery integration
+          } else if (includes?.studio || bestPlanType === 'studio_pro') {
+            // Studio Pro = Gestão integration
             setAccessLevel('pro');
-            setPlanName(plan.name);
-          } else if (planCode.includes('starter')) {
-            // Starter = limited Gestão, no Gallery integration
+          } else if (bestPlanType === 'studio_starter') {
             setAccessLevel('starter');
-            setPlanName(plan.name);
           } else {
+            // Transfer-only plans
             setAccessLevel('free');
-            setPlanName(plan.name);
           }
+          setPlanName(getPlanDisplayName(bestPlanType));
           setIsLoading(false);
           return;
         }
 
-        // 3. No plan = free access (still uses credits for Gallery)
-        console.log('ℹ️ User has no active plan - free tier');
+        // 3. No active subscription — check studio trial
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('studio_trial_ends_at')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (profile?.studio_trial_ends_at && new Date(profile.studio_trial_ends_at) > new Date()) {
+          console.log('🆓 User has active studio trial until', profile.studio_trial_ends_at);
+          setAccessLevel('pro');
+          setPlanName('Período de teste');
+          setIsLoading(false);
+          return;
+        }
+
+        // 4. No plan, no trial = free
+        console.log('ℹ️ User has no active plan or trial - free tier');
         setAccessLevel('free');
         setPlanName(null);
         
@@ -118,10 +128,10 @@ export function useGalleryAccess(user: User | null, session: Session | null): Ga
   }, [user, session]);
 
   const isAdmin = accessLevel === 'admin';
-  const hasGestaoIntegration = isAdmin || accessLevel === 'pro_gallery';
+  const hasGestaoIntegration = isAdmin || accessLevel === 'pro_gallery' || accessLevel === 'pro';
 
   return {
-    hasAccess: user !== null, // Always true if logged in
+    hasAccess: user !== null,
     accessLevel,
     planName,
     isLoading,
