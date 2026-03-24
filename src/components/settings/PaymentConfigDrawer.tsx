@@ -116,6 +116,38 @@ interface PaymentConfigDrawerProps {
   migratePending?: boolean;
 }
 
+/** Inline migration section shown inside the drawer */
+function MigrationSection({ dadosExtrasRaw, provider, onMigrate, pending }: {
+  dadosExtrasRaw: any;
+  provider: 'asaas' | 'mercadopago';
+  onMigrate: () => void;
+  pending?: boolean;
+}) {
+  const diffs = getDivergenceSummary(dadosExtrasRaw, provider);
+
+  return (
+    <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ArrowDownToLine className="h-4 w-4 text-primary" />
+        Migrar do Studio
+      </div>
+      {diffs.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Diferenças: {diffs.join(', ')}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Copiar configurações do Studio para a Gallery
+        </p>
+      )}
+      <Button variant="outline" size="sm" className="w-full" onClick={onMigrate} disabled={pending}>
+        {pending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ArrowDownToLine className="h-3 w-3 mr-1" />}
+        Copiar configurações do Studio
+      </Button>
+    </div>
+  );
+}
+
 export function PaymentConfigDrawer({
   open,
   onOpenChange,
