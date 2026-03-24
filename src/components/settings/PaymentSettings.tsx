@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CreditCard, AlertTriangle, CheckCircle, ExternalLink, Loader2, Star, Edit2, Power, Plus, Link2, RefreshCw, HelpCircle, QrCode, Zap, Building2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Star, Settings, Power, Plus, MoreVertical, CheckCircle, AlertTriangle, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  usePaymentIntegration, 
-  PixManualData, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  usePaymentIntegration,
+  PixManualData,
   InfinitePayData,
   MercadoPagoData,
   AsaasData,
@@ -18,23 +20,63 @@ import {
   getProviderLabel,
   getPixKeyTypeLabel,
 } from '@/hooks/usePaymentIntegration';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { pixLogo, infinitepayLogo, mercadopagoLogo, asaasLogo } from '@/assets/payment-logos';
-import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { PaymentConfigDrawer } from './PaymentConfigDrawer';
+
+const providerLogos: Record<PaymentProvider, string> = {
+  pix_manual: pixLogo,
+  infinitepay: infinitepayLogo,
+  mercadopago: mercadopagoLogo,
+  asaas: asaasLogo,
+};
+
+const providerDescriptions: Record<PaymentProvider, string> = {
+  pix_manual: 'Confirmação manual',
+  infinitepay: 'Checkout automático',
+  mercadopago: 'Checkout automático',
+  asaas: 'Checkout transparente',
+};
+
+const allProviders: PaymentProvider[] = ['asaas', 'mercadopago', 'infinitepay', 'pix_manual'];
+
+function getIntegrationSummary(provider: PaymentProvider, dadosExtras: any): string {
+  if (provider === 'pix_manual') {
+    const d = dadosExtras as PixManualData;
+    return d?.tipoChave ? `${getPixKeyTypeLabel(d.tipoChave)}` : 'Manual';
+  }
+  if (provider === 'infinitepay') {
+    const d = dadosExtras as InfinitePayData;
+    return d?.handle ? `@${d.handle}` : '';
+  }
+  if (provider === 'mercadopago') {
+    const d = dadosExtras as MercadoPagoData;
+    const parts: string[] = [];
+    if (d?.habilitarPix) parts.push('PIX');
+    if (d?.habilitarCartao) parts.push(`Cartão ${d?.maxParcelas || 12}x`);
+    return parts.join(' • ') || 'Configurado';
+  }
+  if (provider === 'asaas') {
+    const d = dadosExtras as AsaasData;
+    const parts: string[] = [];
+    if (d?.habilitarPix) parts.push('PIX');
+    if (d?.habilitarCartao) parts.push(`Cartão ${d?.maxParcelas || 12}x`);
+    if (d?.habilitarBoleto) parts.push('Boleto');
+    return parts.join(' • ') || 'Configurado';
+  }
+  return '';
+}
 
 export function PaymentSettings() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  
-  const { 
-    data, 
-    isLoading, 
-    savePixManual, 
-    saveInfinitePay, 
+
+  const {
+    data,
+    isLoading,
+    savePixManual,
+    saveInfinitePay,
     saveAsaas,
     updateAsaasSettings,
     setAsDefault,
@@ -45,13 +87,10 @@ export function PaymentSettings() {
     mpAppId,
   } = usePaymentIntegration();
 
-  // Form visibility states
-  const [showPixForm, setShowPixForm] = useState(false);
-  const [showIpForm, setShowIpForm] = useState(false);
-  const [showMpSettings, setShowMpSettings] = useState(false);
-  const [showAsaasForm, setShowAsaasForm] = useState(false);
-  const [showAsaasSettings, setShowAsaasSettings] = useState(false);
-  
+  // Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerProvider, setDrawerProvider] = useState<PaymentProvider | null>(null);
+
   // PIX Manual fields
   const [chavePix, setChavePix] = useState('');
   const [tipoChave, setTipoChave] = useState<PixKeyType>('telefone');
@@ -68,7 +107,6 @@ export function PaymentSettings() {
 
   // Asaas fields
   const [asaasApiKey, setAsaasApiKey] = useState('');
-  const [asaasShowKey, setAsaasShowKey] = useState(false);
   const [asaasEnvironment, setAsaasEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [asaasHabilitarPix, setAsaasHabilitarPix] = useState(true);
   const [asaasHabilitarCartao, setAsaasHabilitarCartao] = useState(true);
@@ -77,1169 +115,324 @@ export function PaymentSettings() {
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
   const [asaasIreiAntecipar, setAsaasIreiAntecipar] = useState(false);
   const [asaasRepassarAntecipacao, setAsaasRepassarAntecipacao] = useState(false);
-  
-  // Real-time fees from Asaas API
-  const [asaasFees, setAsaasFees] = useState<{
-    creditCard: {
-      operationValue: number;
-      detachedMonthlyFeeValue: number;
-      installmentMonthlyFeeValue: number;
-      tiers: Array<{ min: number; max: number; percentageFee: number }>;
-    };
-    pix: { fixedFeeValue: number };
-    discount?: {
-      active: boolean;
-      expiration?: string;
-      tiers: Array<{ min: number; max: number; percentageFee: number }>;
-    };
-  } | null>(null);
-  const [asaasFeesLoading, setAsaasFeesLoading] = useState(false);
 
-  // Ref to prevent duplicate OAuth callback processing
+  const [asaasFees, setAsaasFees] = useState<any>(null);
+
+  // OAuth callback
   const hasProcessedCallback = useRef(false);
   const connectMercadoPagoRef = useRef(connectMercadoPago);
   const navigateRef = useRef(navigate);
-  
-  // Keep refs updated
+
   useEffect(() => {
     connectMercadoPagoRef.current = connectMercadoPago;
     navigateRef.current = navigate;
   });
 
-  // Handle OAuth callback - runs only once per code
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const isCallback = params.get('mp_callback');
     const code = params.get('code');
-    
-    // Guard against duplicate processing
-    if (!isCallback || !code || hasProcessedCallback.current) {
-      return;
-    }
-    
+    if (!isCallback || !code || hasProcessedCallback.current) return;
     hasProcessedCallback.current = true;
-    
-    // Always use production domain for OAuth redirect consistency
     const redirectUri = 'https://gallery.lunarihub.com/settings?mp_callback=true';
-    connectMercadoPagoRef.current.mutate({ code, redirect_uri: redirectUri }, {
-      onSettled: () => {
-        // Clean URL after processing
-        navigateRef.current('/settings?tab=payment', { replace: true });
-      },
-    });
+    connectMercadoPagoRef.current.mutate(
+      { code, redirect_uri: redirectUri },
+      { onSettled: () => navigateRef.current('/settings?tab=payment', { replace: true }) }
+    );
   }, [location.search]);
 
-  // Load existing data when available
+  // Sync form state from data
   useEffect(() => {
-    if (data?.allIntegrations) {
-      const pixIntegration = data.allIntegrations.find(i => i.provedor === 'pix_manual');
-      if (pixIntegration?.dadosExtras) {
-        const pixData = pixIntegration.dadosExtras as PixManualData;
-        setChavePix(pixData.chavePix || '');
-        setTipoChave(pixData.tipoChave || 'telefone');
-        setNomeTitular(pixData.nomeTitular || '');
-      }
-      
-      const ipIntegration = data.allIntegrations.find(i => i.provedor === 'infinitepay');
-      if (ipIntegration?.dadosExtras) {
-        const ipData = ipIntegration.dadosExtras as InfinitePayData;
-        setHandle(ipData.handle || '');
-      }
+    if (!data?.allIntegrations) return;
 
-      const mpIntegration = data.allIntegrations.find(i => i.provedor === 'mercadopago');
-      if (mpIntegration?.dadosExtras) {
-        const mpData = mpIntegration.dadosExtras as MercadoPagoData;
-        setMpHabilitarPix(mpData.habilitarPix ?? true);
-        setMpHabilitarCartao(mpData.habilitarCartao ?? true);
-        setMpMaxParcelas(String(mpData.maxParcelas ?? 12));
-        setMpAbsorverTaxa(mpData.absorverTaxa ?? false);
-      }
+    const pix = data.allIntegrations.find(i => i.provedor === 'pix_manual');
+    if (pix?.dadosExtras) {
+      const d = pix.dadosExtras as PixManualData;
+      setChavePix(d.chavePix || '');
+      setTipoChave(d.tipoChave || 'telefone');
+      setNomeTitular(d.nomeTitular || '');
+    }
 
-      const asaasIntegration = data.allIntegrations.find(i => i.provedor === 'asaas');
-      if (asaasIntegration?.dadosExtras) {
-        const asData = asaasIntegration.dadosExtras as AsaasData;
-        setAsaasEnvironment(asData.environment || 'sandbox');
-        setAsaasHabilitarPix(asData.habilitarPix ?? true);
-        setAsaasHabilitarCartao(asData.habilitarCartao ?? true);
-        setAsaasHabilitarBoleto(asData.habilitarBoleto ?? false);
-        setAsaasMaxParcelas(String(asData.maxParcelas ?? 12));
-        setAsaasAbsorverTaxa(asData.absorverTaxa ?? false);
-        // Resolver hierarquia: campos granulares → legacy fallback
-        setAsaasIreiAntecipar(asData.ireiAntecipar ?? asData.incluirTaxaAntecipacao ?? false);
-        setAsaasRepassarAntecipacao(asData.repassarTaxaAntecipacao ?? asData.incluirTaxaAntecipacao ?? false);
-      }
+    const ip = data.allIntegrations.find(i => i.provedor === 'infinitepay');
+    if (ip?.dadosExtras) {
+      setHandle((ip.dadosExtras as InfinitePayData).handle || '');
+    }
+
+    const mp = data.allIntegrations.find(i => i.provedor === 'mercadopago');
+    if (mp?.dadosExtras) {
+      const d = mp.dadosExtras as MercadoPagoData;
+      setMpHabilitarPix(d.habilitarPix ?? true);
+      setMpHabilitarCartao(d.habilitarCartao ?? true);
+      setMpMaxParcelas(String(d.maxParcelas ?? 12));
+      setMpAbsorverTaxa(d.absorverTaxa ?? false);
+    }
+
+    const asaas = data.allIntegrations.find(i => i.provedor === 'asaas');
+    if (asaas?.dadosExtras) {
+      const d = asaas.dadosExtras as AsaasData;
+      setAsaasEnvironment(d.environment || 'sandbox');
+      setAsaasHabilitarPix(d.habilitarPix ?? true);
+      setAsaasHabilitarCartao(d.habilitarCartao ?? true);
+      setAsaasHabilitarBoleto(d.habilitarBoleto ?? false);
+      setAsaasMaxParcelas(String(d.maxParcelas ?? 12));
+      setAsaasAbsorverTaxa(d.absorverTaxa ?? false);
+      setAsaasIreiAntecipar(d.ireiAntecipar ?? d.incluirTaxaAntecipacao ?? false);
+      setAsaasRepassarAntecipacao(d.repassarTaxaAntecipacao ?? d.incluirTaxaAntecipacao ?? false);
     }
   }, [data?.allIntegrations]);
 
+  // Handlers
+  const openDrawer = (provider: PaymentProvider) => {
+    setDrawerProvider(provider);
+    setDrawerOpen(true);
+  };
+
   const handleSavePix = async () => {
     if (!chavePix.trim() || !nomeTitular.trim()) return;
-    
     await savePixManual.mutateAsync({
-      chavePix: chavePix.trim(),
-      tipoChave,
-      nomeTitular: nomeTitular.trim(),
+      chavePix: chavePix.trim(), tipoChave, nomeTitular: nomeTitular.trim(),
       setAsDefault: !data?.hasPayment,
     });
-    setShowPixForm(false);
+    setDrawerOpen(false);
   };
 
   const handleSaveInfinitePay = async () => {
     if (!handle.trim()) return;
-    
     await saveInfinitePay.mutateAsync({
       handle: handle.trim().replace('@', ''),
       setAsDefault: !data?.hasPayment,
     });
-    setShowIpForm(false);
+    setDrawerOpen(false);
   };
 
   const handleConnectMercadoPago = () => {
     const url = getMercadoPagoOAuthUrl();
-    if (url) {
-      window.location.href = url;
-    }
+    if (url) window.location.href = url;
   };
 
   const handleSaveMpSettings = async () => {
     await updateMercadoPagoSettings.mutateAsync({
-      habilitarPix: mpHabilitarPix,
-      habilitarCartao: mpHabilitarCartao,
-      maxParcelas: parseInt(mpMaxParcelas),
-      absorverTaxa: mpAbsorverTaxa,
+      habilitarPix: mpHabilitarPix, habilitarCartao: mpHabilitarCartao,
+      maxParcelas: parseInt(mpMaxParcelas), absorverTaxa: mpAbsorverTaxa,
     });
-    setShowMpSettings(false);
+    setDrawerOpen(false);
   };
 
   const handleSaveAsaas = async () => {
     if (!asaasApiKey.trim()) return;
-    
     await saveAsaas.mutateAsync({
       apiKey: asaasApiKey.trim(),
       settings: {
-        environment: asaasEnvironment,
-        habilitarPix: asaasHabilitarPix,
-        habilitarCartao: asaasHabilitarCartao,
-        habilitarBoleto: asaasHabilitarBoleto,
-        maxParcelas: parseInt(asaasMaxParcelas),
-        absorverTaxa: asaasAbsorverTaxa,
-        ireiAntecipar: asaasIreiAntecipar,
-        repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+        environment: asaasEnvironment, habilitarPix: asaasHabilitarPix,
+        habilitarCartao: asaasHabilitarCartao, habilitarBoleto: asaasHabilitarBoleto,
+        maxParcelas: parseInt(asaasMaxParcelas), absorverTaxa: asaasAbsorverTaxa,
+        ireiAntecipar: asaasIreiAntecipar, repassarTaxaAntecipacao: asaasRepassarAntecipacao,
         incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
       },
       setAsDefault: !data?.hasPayment,
     });
-    setShowAsaasForm(false);
+    setDrawerOpen(false);
   };
 
   const handleSaveAsaasSettings = async () => {
     await updateAsaasSettings.mutateAsync({
-      environment: asaasEnvironment,
-      habilitarPix: asaasHabilitarPix,
-      habilitarCartao: asaasHabilitarCartao,
-      habilitarBoleto: asaasHabilitarBoleto,
-      maxParcelas: parseInt(asaasMaxParcelas),
-      absorverTaxa: asaasAbsorverTaxa,
-      ireiAntecipar: asaasIreiAntecipar,
-      repassarTaxaAntecipacao: asaasRepassarAntecipacao,
+      environment: asaasEnvironment, habilitarPix: asaasHabilitarPix,
+      habilitarCartao: asaasHabilitarCartao, habilitarBoleto: asaasHabilitarBoleto,
+      maxParcelas: parseInt(asaasMaxParcelas), absorverTaxa: asaasAbsorverTaxa,
+      ireiAntecipar: asaasIreiAntecipar, repassarTaxaAntecipacao: asaasRepassarAntecipacao,
       incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
     });
-    setShowAsaasSettings(false);
+    setDrawerOpen(false);
   };
 
-  const getProviderLogo = (provedor: PaymentProvider) => {
-    const logos: Record<string, string> = {
-      pix_manual: pixLogo,
-      infinitepay: infinitepayLogo,
-      mercadopago: mercadopagoLogo,
-      asaas: asaasLogo,
-    };
-    return (
-      <img 
-        src={logos[provedor]} 
-        alt={getProviderLabel(provedor)}
-        className="h-6 w-6 object-contain"
-      />
-    );
-  };
+  // Derived data
+  const activeIntegrations = data?.allActiveIntegrations || [];
+  const activeProviders = new Set(activeIntegrations.map(i => i.provedor));
+  const inactiveProviders = allProviders.filter(p => !activeProviders.has(p));
+
+  const mpIntegration = data?.allIntegrations?.find(i => i.provedor === 'mercadopago');
+  const asaasIntegration = data?.allIntegrations?.find(i => i.provedor === 'asaas');
+
+  // Also show providers with erro_autenticacao in "other" section
+  const errorProviders = (data?.allIntegrations || []).filter(i => i.status === 'erro_autenticacao').map(i => i.provedor);
+  const otherProviders = [...new Set([...inactiveProviders, ...errorProviders])];
 
   if (isLoading || connectMercadoPago.isPending) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        {connectMercadoPago.isPending && (
-          <p className="text-sm text-muted-foreground">Conectando Mercado Pago...</p>
-        )}
+        {connectMercadoPago.isPending && <p className="text-sm text-muted-foreground">Conectando Mercado Pago...</p>}
       </div>
     );
   }
 
-  const pixIntegration = data?.allIntegrations.find(i => i.provedor === 'pix_manual');
-  const ipIntegration = data?.allIntegrations.find(i => i.provedor === 'infinitepay');
-  const mpIntegration = data?.allIntegrations.find(i => i.provedor === 'mercadopago');
-  const asaasIntegration = data?.allIntegrations.find(i => i.provedor === 'asaas');
-
   return (
-    <div className="space-y-6">
-      {/* Active Payment Methods */}
-      {data?.allActiveIntegrations && data.allActiveIntegrations.length > 0 && (
-        <div className="lunari-card p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <CreditCard className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="font-medium">Métodos de Pagamento Ativos</h2>
-              <p className="text-sm text-muted-foreground">
-                Selecione qual será o método padrão para novas galerias
-              </p>
-            </div>
-          </div>
+    <div className="space-y-8">
+      {/* ── Recebimento ativo ── */}
+      {activeIntegrations.length > 0 && (
+        <section>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Recebimento ativo</h3>
+          <div className="divide-y divide-border rounded-lg border border-border">
+            {activeIntegrations.map((integration) => {
+              const summary = getIntegrationSummary(integration.provedor, integration.dadosExtras);
+              return (
+                <div key={integration.id} className="flex items-center gap-3 px-4 py-3">
+                  {/* Status dot */}
+                  <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
 
-          <div className="space-y-4">
-            {data.allActiveIntegrations.map((integration) => (
-              <div
-                key={integration.id}
-                className={cn(
-                  "flex items-center justify-between p-4 rounded-lg border",
-                  integration.isDefault ? "border-primary bg-primary/5" : "border-border"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center p-1.5">
-                    {getProviderLogo(integration.provedor)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{getProviderLabel(integration.provedor)}</span>
-                      {integration.isDefault && (
-                        <Badge variant="default" className="gap-1 text-xs">
-                          <Star className="h-3 w-3" />
-                          Padrão
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {integration.provedor === 'pix_manual' && (integration.dadosExtras as PixManualData)?.nomeTitular}
-                      {integration.provedor === 'infinitepay' && `@${(integration.dadosExtras as InfinitePayData)?.handle}`}
-                      {integration.provedor === 'mercadopago' && integration.mpUserId && `ID: ${integration.mpUserId}`}
-                      {integration.provedor === 'asaas' && ((integration.dadosExtras as AsaasData)?.environment === 'production' ? 'Produção' : 'Sandbox')}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {!integration.isDefault && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setAsDefault.mutate(integration.id)}
-                      disabled={setAsDefault.isPending}
-                    >
-                      <Star className="h-4 w-4 mr-1" />
-                      Definir Padrão
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (integration.provedor === 'pix_manual') setShowPixForm(true);
-                      if (integration.provedor === 'infinitepay') setShowIpForm(true);
-                      if (integration.provedor === 'mercadopago') setShowMpSettings(true);
-                      if (integration.provedor === 'asaas') setShowAsaasSettings(true);
-                    }}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deactivate.mutate(integration.provedor)}
-                    disabled={deactivate.isPending}
-                  >
-                    <Power className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            
-            {data.allActiveIntegrations.some(i => i.provedor === 'pix_manual') && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/50">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>PIX Manual:</strong> Você precisará confirmar manualmente o recebimento dos pagamentos.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Mercado Pago OAuth */}
-      <div className="lunari-card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <CreditCard className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">Mercado Pago</h2>
-            <p className="text-sm text-muted-foreground">
-              Receba pagamentos via PIX e Cartão de Crédito com confirmação automática
-            </p>
-          </div>
-        </div>
-
-          {showMpSettings && mpIntegration ? (
-            <div className="space-y-6">
-              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-700 dark:text-green-300">
-                      Conta conectada
-                    </p>
-                    <p className="text-green-600 dark:text-green-400 mt-1">
-                      O dinheiro vai direto para sua conta Mercado Pago.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-medium">Métodos de Pagamento</h4>
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>PIX</Label>
-                    <p className="text-sm text-muted-foreground">Pagamento instantâneo</p>
-                  </div>
-                  <Switch
-                    checked={mpHabilitarPix}
-                    onCheckedChange={setMpHabilitarPix}
+                  {/* Logo */}
+                  <img
+                    src={providerLogos[integration.provedor]}
+                    alt={getProviderLabel(integration.provedor)}
+                    className="h-6 w-6 object-contain flex-shrink-0"
                   />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Cartão de Crédito</Label>
-                    <p className="text-sm text-muted-foreground">Parcelamento disponível</p>
-                  </div>
-                  <Switch
-                    checked={mpHabilitarCartao}
-                    onCheckedChange={setMpHabilitarCartao}
-                  />
-                </div>
-              </div>
-
-              {mpHabilitarCartao && (
-                <div className="space-y-4 pt-2 border-t">
-                  <h4 className="font-medium">Parcelamento</h4>
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Máximo de parcelas</Label>
-                      <Select value={mpMaxParcelas} onValueChange={setMpMaxParcelas}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">À vista</SelectItem>
-                          <SelectItem value="3">Até 3x</SelectItem>
-                          <SelectItem value="6">Até 6x</SelectItem>
-                          <SelectItem value="12">Até 12x</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Taxas de parcelamento</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={mpAbsorverTaxa}
-                          onCheckedChange={setMpAbsorverTaxa}
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {mpAbsorverTaxa ? 'Eu absorvo a taxa' : 'Cliente paga juros'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSaveMpSettings}
-                  disabled={updateMercadoPagoSettings.isPending}
-                >
-                  {updateMercadoPagoSettings.isPending ? 'Salvando...' : 'Salvar Configurações'}
-                </Button>
-                <Button variant="ghost" onClick={() => setShowMpSettings(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : mpIntegration && mpIntegration.status === 'ativo' ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center p-1.5">
-                    <img src={mercadopagoLogo} alt="Mercado Pago" className="h-full w-full object-contain" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Conta Conectada</p>
-                    <p className="text-sm text-muted-foreground">
-                      {mpIntegration.conectadoEm && `Conectado em ${format(new Date(mpIntegration.conectadoEm), "dd/MM/yyyy", { locale: ptBR })}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowMpSettings(true)}>
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Configurar
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => deactivate.mutate('mercadopago')}
-                    disabled={deactivate.isPending}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Power className="h-4 w-4 mr-2" />
-                    Desconectar
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {(mpIntegration.dadosExtras as MercadoPagoData)?.habilitarPix && (
-                  <Badge variant="secondary">PIX</Badge>
-                )}
-                {(mpIntegration.dadosExtras as MercadoPagoData)?.habilitarCartao && (
-                  <Badge variant="secondary">
-                    Cartão até {(mpIntegration.dadosExtras as MercadoPagoData)?.maxParcelas || 12}x
-                  </Badge>
-                )}
-              </div>
-            </div>
-          ) : mpIntegration && mpIntegration.status === 'erro_autenticacao' ? (
-            <div className="space-y-4">
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
-                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium text-red-700 dark:text-red-300">
-                    Reconexão necessária
-                  </p>
-                  <p className="text-red-600 dark:text-red-400 mt-1">
-                    Sua autorização expirou. Por favor, reconecte sua conta.
-                  </p>
-                </div>
-              </div>
-              <Button onClick={handleConnectMercadoPago} disabled={!mpAppId}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Reconectar Mercado Pago
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-700 dark:text-green-300">
-                      Confirmação automática
-                    </p>
-                    <p className="text-green-600 dark:text-green-400 mt-1">
-                      O sistema libera a galeria automaticamente após o pagamento.
-                      O dinheiro vai diretamente para sua conta.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {!mpAppId ? (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
-                    Integração Mercado Pago não está disponível no momento.
-                  </p>
-                </div>
-              ) : (
-                <Button onClick={handleConnectMercadoPago}>
-                  <Link2 className="h-4 w-4 mr-2" />
-                  Conectar Mercado Pago
-                </Button>
-              )}
-            </div>
-          )}
-      </div>
-
-      {/* Add PIX Manual */}
-      <div className="lunari-card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <QrCode className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">PIX Manual</h2>
-            <p className="text-sm text-muted-foreground">
-              Receba pagamentos via PIX com confirmação manual
-            </p>
-          </div>
-        </div>
-
-          {showPixForm ? (
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-warning-foreground">
-                    <p className="font-medium">Confirmação manual necessária</p>
-                    <p className="text-muted-foreground mt-1">
-                      Você precisará verificar o recebimento e liberar a galeria manualmente.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="pix-tipo">Tipo de Chave</Label>
-                  <Select value={tipoChave} onValueChange={(v) => setTipoChave(v as PixKeyType)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="telefone">Telefone</SelectItem>
-                      <SelectItem value="cpf">CPF</SelectItem>
-                      <SelectItem value="cnpj">CNPJ</SelectItem>
-                      <SelectItem value="email">E-mail</SelectItem>
-                      <SelectItem value="aleatoria">Chave Aleatória</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pix-chave">Chave PIX</Label>
-                  <Input
-                    id="pix-chave"
-                    value={chavePix}
-                    onChange={(e) => setChavePix(e.target.value)}
-                    placeholder="Sua chave PIX"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="pix-nome">Nome do Titular</Label>
-                <Input
-                  id="pix-nome"
-                  value={nomeTitular}
-                  onChange={(e) => setNomeTitular(e.target.value)}
-                  placeholder="Nome que aparecerá para o cliente"
-                />
-              </div>
-              
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSavePix}
-                  disabled={!chavePix.trim() || !nomeTitular.trim() || savePixManual.isPending}
-                >
-                  {savePixManual.isPending ? 'Salvando...' : 'Salvar PIX'}
-                </Button>
-                <Button variant="ghost" onClick={() => setShowPixForm(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : pixIntegration ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-lg flex items-center justify-center p-1.5",
-                  pixIntegration.status === 'ativo' ? "bg-muted/50" : "bg-muted"
-                )}>
-                  <img 
-                    src={pixLogo} 
-                    alt="PIX" 
-                    className={cn(
-                      "h-full w-full object-contain",
-                      pixIntegration.status !== 'ativo' && "opacity-50"
-                    )} 
-                  />
-                </div>
-                <div>
-                  <p className="font-medium">{(pixIntegration.dadosExtras as PixManualData)?.nomeTitular}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {getPixKeyTypeLabel((pixIntegration.dadosExtras as PixManualData)?.tipoChave)} • {(pixIntegration.dadosExtras as PixManualData)?.chavePix}
-                  </p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setShowPixForm(true)}>
-                <Edit2 className="h-4 w-4 mr-2" />
-                Editar
-              </Button>
-            </div>
-          ) : (
-            <Button variant="outline" onClick={() => setShowPixForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Configurar PIX
-            </Button>
-          )}
-      </div>
-
-      {/* Add InfinitePay */}
-      <div className="lunari-card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Zap className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">InfinitePay</h2>
-            <p className="text-sm text-muted-foreground">
-              Receba pagamentos com confirmação automática via checkout
-            </p>
-          </div>
-        </div>
-
-          {showIpForm ? (
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-700 dark:text-green-300">
-                      Confirmação automática
-                    </p>
-                    <p className="text-green-600 dark:text-green-400 mt-1">
-                      O sistema libera a galeria automaticamente após o pagamento.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ip-handle">Handle InfinitePay</Label>
-                <div className="flex">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">
-                    @
-                  </span>
-                  <Input
-                    id="ip-handle"
-                    value={handle}
-                    onChange={(e) => setHandle(e.target.value.replace('@', ''))}
-                    placeholder="seu-handle"
-                    className="rounded-l-none"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  O handle é o identificador único do seu perfil InfinitePay
-                </p>
-              </div>
-
-              <a
-                href="https://infinitepay.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                Não tem conta? Criar conta InfinitePay
-                <ExternalLink className="h-3 w-3" />
-              </a>
-              
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSaveInfinitePay}
-                  disabled={!handle.trim() || saveInfinitePay.isPending}
-                >
-                  {saveInfinitePay.isPending ? 'Salvando...' : 'Salvar InfinitePay'}
-                </Button>
-                <Button variant="ghost" onClick={() => setShowIpForm(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : ipIntegration ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center p-1.5",
-                    ipIntegration.status === 'ativo' ? "bg-muted/50" : "bg-muted"
-                  )}>
-                    <img 
-                      src={infinitepayLogo} 
-                      alt="InfinitePay" 
-                      className={cn(
-                        "h-full w-full object-contain",
-                        ipIntegration.status !== 'ativo' && "opacity-50"
-                      )} 
-                    />
-                  </div>
-                  <div>
-                    <p className="font-medium">@{(ipIntegration.dadosExtras as InfinitePayData)?.handle}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {ipIntegration.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                    </p>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setShowIpForm(true)}>
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Editar
-                </Button>
-              </div>
-
-              {ipIntegration.status === 'ativo' && (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      Quando as taxas da InfinitePay estiverem configuradas para serem absorvidas pelo fotógrafo, 
-                      o sistema exibirá apenas o valor cobrado do cliente. 
-                      O valor líquido recebido deve ser consultado diretamente na InfinitePay.
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <HelpCircle className="h-4 w-4 mr-2" />
-                    Como configurar
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <Button variant="outline" onClick={() => setShowIpForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Configurar InfinitePay
-            </Button>
-          )}
-      </div>
-
-      {/* Asaas */}
-      <div className="lunari-card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center p-1">
-            <img src={asaasLogo} alt="Asaas" className="h-full w-full object-contain" />
-          </div>
-          <div>
-            <h2 className="font-medium">Asaas</h2>
-            <p className="text-sm text-muted-foreground">
-              Receba via PIX, Cartão e Boleto com checkout transparente
-            </p>
-          </div>
-        </div>
-
-        {showAsaasForm || showAsaasSettings ? (
-          <div className="space-y-6">
-            {/* API Key */}
-            {showAsaasForm && (
-              <div className="space-y-2">
-                <Label htmlFor="asaas-key">API Key</Label>
-                <div className="relative">
-                  <Input
-                    id="asaas-key"
-                    type={asaasShowKey ? 'text' : 'password'}
-                    value={asaasApiKey}
-                    onChange={(e) => setAsaasApiKey(e.target.value)}
-                    placeholder="$aact_..."
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3"
-                    onClick={() => setAsaasShowKey(!asaasShowKey)}
-                  >
-                    {asaasShowKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Encontre sua API Key em Asaas {'>'} Integrações {'>'} API
-                </p>
-              </div>
-            )}
-
-            {/* Environment */}
-            <div className="space-y-2">
-              <Label>Ambiente</Label>
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={asaasEnvironment === 'production'}
-                  onCheckedChange={(checked) => setAsaasEnvironment(checked ? 'production' : 'sandbox')}
-                />
-                <span className="text-sm">
-                  {asaasEnvironment === 'production' ? (
-                    <span className="text-green-600 dark:text-green-400 font-medium">Produção</span>
-                  ) : (
-                    <span className="text-amber-600 dark:text-amber-400 font-medium">Sandbox (testes)</span>
-                  )}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Methods */}
-            <div className="space-y-4">
-              <h4 className="font-medium">Métodos de Pagamento</h4>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>PIX</Label>
-                  <p className="text-sm text-muted-foreground">Pagamento instantâneo</p>
-                </div>
-                <Switch checked={asaasHabilitarPix} onCheckedChange={setAsaasHabilitarPix} />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Cartão de Crédito</Label>
-                  <p className="text-sm text-muted-foreground">Parcelamento disponível</p>
-                </div>
-                <Switch checked={asaasHabilitarCartao} onCheckedChange={setAsaasHabilitarCartao} />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Boleto</Label>
-                  <p className="text-sm text-muted-foreground">Vencimento em 3 dias úteis</p>
-                </div>
-                <Switch checked={asaasHabilitarBoleto} onCheckedChange={setAsaasHabilitarBoleto} />
-              </div>
-            </div>
-
-            {/* Installments */}
-            {asaasHabilitarCartao && (
-              <div className="space-y-4 pt-2 border-t">
-                <h4 className="font-medium">Parcelamento</h4>
-                
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Máximo de parcelas</Label>
-                    <Select value={asaasMaxParcelas} onValueChange={setAsaasMaxParcelas}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">À vista</SelectItem>
-                        <SelectItem value="2">Até 2x</SelectItem>
-                        <SelectItem value="3">Até 3x</SelectItem>
-                        <SelectItem value="6">Até 6x</SelectItem>
-                        <SelectItem value="10">Até 10x</SelectItem>
-                        <SelectItem value="12">Até 12x</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Taxas de parcelamento</Label>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={asaasAbsorverTaxa}
-                        onCheckedChange={async (checked) => {
-                          setAsaasAbsorverTaxa(checked);
-                          // Auto-save immediately
-                          try {
-                            await updateAsaasSettings.mutateAsync({
-                              environment: asaasEnvironment,
-                              habilitarPix: asaasHabilitarPix,
-                              habilitarCartao: asaasHabilitarCartao,
-                              habilitarBoleto: asaasHabilitarBoleto,
-                              maxParcelas: parseInt(asaasMaxParcelas),
-                              absorverTaxa: checked,
-                              ireiAntecipar: asaasIreiAntecipar,
-                              repassarTaxaAntecipacao: checked ? false : asaasRepassarAntecipacao,
-                              incluirTaxaAntecipacao: checked ? false : (asaasIreiAntecipar && asaasRepassarAntecipacao),
-                            });
-                            if (checked) setAsaasRepassarAntecipacao(false);
-                          } catch {
-                            // Revert on failure
-                            setAsaasAbsorverTaxa(!checked);
-                          }
-                        }}
-                        disabled={updateAsaasSettings.isPending}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {asaasAbsorverTaxa ? 'Eu absorvo a taxa' : 'Cliente paga juros'}
-                      </span>
-                      {updateAsaasSettings.isPending && (
-                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Toggle de antecipação - independente de absorver taxa */}
-                <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
-                  {/* Toggle 1: Vou antecipar recebíveis? */}
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="flex items-center gap-2">
-                        Vou antecipar meus recebíveis
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Ative se você pretende antecipar os recebíveis no Asaas
-                      </p>
-                    </div>
-                    <Switch
-                      checked={asaasIreiAntecipar}
-                      onCheckedChange={async (checked) => {
-                        setAsaasIreiAntecipar(checked);
-                        if (!checked) setAsaasRepassarAntecipacao(false);
-                        try {
-                          await updateAsaasSettings.mutateAsync({
-                            ireiAntecipar: checked,
-                            repassarTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
-                            incluirTaxaAntecipacao: checked ? asaasRepassarAntecipacao : false,
-                          });
-                        } catch {
-                          setAsaasIreiAntecipar(!checked);
-                        }
-                      }}
-                      disabled={updateAsaasSettings.isPending}
-                    />
-                  </div>
-
-                  {/* Toggle 2: Repassar taxa ao cliente — só quando ireiAntecipar E !absorverTaxa */}
-                  {asaasIreiAntecipar && !asaasAbsorverTaxa && (
-                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                      <div className="space-y-0.5">
-                        <Label className="flex items-center gap-2">
-                          Repassar taxa de antecipação ao cliente
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          O cliente pagará a taxa de antecipação junto com a taxa de processamento
-                        </p>
-                      </div>
-                      <Switch
-                        checked={asaasRepassarAntecipacao}
-                        onCheckedChange={async (checked) => {
-                          setAsaasRepassarAntecipacao(checked);
-                          try {
-                            await updateAsaasSettings.mutateAsync({
-                              ireiAntecipar: asaasIreiAntecipar,
-                              repassarTaxaAntecipacao: checked,
-                              incluirTaxaAntecipacao: checked,
-                            });
-                          } catch {
-                            setAsaasRepassarAntecipacao(!checked);
-                          }
-                        }}
-                        disabled={updateAsaasSettings.isPending}
-                      />
-                    </div>
-                  )}
-
-                  <p className="text-xs text-muted-foreground">
-                    {!asaasIreiAntecipar
-                      ? 'Sem antecipação configurada'
-                      : asaasAbsorverTaxa
-                        ? 'Você antecipará e absorverá o custo da antecipação'
-                        : asaasRepassarAntecipacao
-                          ? 'O cliente pagará taxa de processamento + taxa de antecipação'
-                          : 'Você antecipará, mas absorverá o custo da antecipação'}
-                  </p>
-                  {updateAsaasSettings.isPending && (
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  )}
-                </div>
-
-                {/* Fee info - fetched from Asaas API in real-time */}
-                {!asaasAbsorverTaxa && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Taxas do Asaas</Label>
-                        <p className="text-sm text-muted-foreground">
-                          As taxas são buscadas automaticamente da sua conta Asaas no momento do checkout
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={asaasFeesLoading}
-                        onClick={async () => {
-                          setAsaasFeesLoading(true);
-                          try {
-                            const userId = user?.id;
-                            if (!userId) return;
-                            const res = await fetch(`https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/asaas-fetch-fees`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ userId }),
-                            });
-                            const result = await res.json();
-                            if (result.success && result.accountFees) {
-                              setAsaasFees(result.accountFees);
-                            } else {
-                              toast.error(result.error || 'Erro ao buscar taxas');
-                            }
-                          } catch {
-                            toast.error('Erro ao buscar taxas');
-                          } finally {
-                            setAsaasFeesLoading(false);
-                          }
-                        }}
-                      >
-                        {asaasFeesLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                        Ver taxas
-                      </Button>
-                    </div>
-
-                    {asaasFees && (
-                      <div className="rounded-lg border border-border p-4 bg-muted/30 space-y-3">
-                        {/* Discount banner */}
-                        {asaasFees.discount?.active && (
-                          <div className="flex items-start gap-2 p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm">
-                              <p className="font-medium text-green-700 dark:text-green-300">
-                                Desconto promocional ativo
-                              </p>
-                              {asaasFees.discount.expiration && (
-                                <p className="text-green-600 dark:text-green-400">
-                                  Válido até {format(new Date(asaasFees.discount.expiration), "dd/MM/yyyy", { locale: ptBR })}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        <h5 className="text-sm font-medium">Taxas de Cartão de Crédito</h5>
-                        
-                        {/* Show discount tiers if active, otherwise standard */}
-                        {asaasFees.discount?.active && asaasFees.discount.tiers.length > 0 ? (
-                          <div className="grid gap-1">
-                            {asaasFees.discount.tiers.map((tier, idx) => {
-                              const standardTier = asaasFees.creditCard.tiers[idx];
-                              return (
-                                <div key={idx} className="flex justify-between text-sm text-muted-foreground">
-                                  <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
-                                  <span className="font-medium">
-                                    <span className="text-green-600 dark:text-green-400">{tier.percentageFee}%</span>
-                                    {standardTier && standardTier.percentageFee !== tier.percentageFee && (
-                                      <span className="line-through text-muted-foreground/50 ml-1 text-xs">{standardTier.percentageFee}%</span>
-                                    )}
-                                    <span> + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="grid gap-1">
-                            {asaasFees.creditCard.tiers.map((tier, idx) => (
-                              <div key={idx} className="flex justify-between text-sm text-muted-foreground">
-                                <span>{tier.min === tier.max ? `${tier.min}x` : `${tier.min}x - ${tier.max}x`}</span>
-                                <span className="font-medium">{tier.percentageFee}% + R$ {asaasFees.creditCard.operationValue.toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="pt-2 border-t border-border grid gap-1">
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>Antecipação à vista</span>
-                            <span className="font-medium">{asaasFees.creditCard.detachedMonthlyFeeValue}%/mês</span>
-                          </div>
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>Antecipação parcelado</span>
-                            <span className="font-medium">{asaasFees.creditCard.installmentMonthlyFeeValue}%/mês</span>
-                          </div>
-                        </div>
-                        {asaasFees.pix && (
-                          <div className="pt-2 border-t border-border">
-                            <div className="flex justify-between text-sm text-muted-foreground">
-                              <span>PIX (taxa fixa)</span>
-                              <span className="font-medium">R$ {asaasFees.pix.fixedFeeValue.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                  {/* Name + badge */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-sm truncate">{getProviderLabel(integration.provedor)}</span>
+                    {integration.isDefault && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 gap-0.5 flex-shrink-0">
+                        <Star className="h-2.5 w-2.5" />
+                        Padrão
+                      </Badge>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-            
-            <div className="flex gap-2">
-              <Button
-                onClick={showAsaasForm ? handleSaveAsaas : handleSaveAsaasSettings}
-                disabled={showAsaasForm ? (!asaasApiKey.trim() || saveAsaas.isPending) : updateAsaasSettings.isPending}
-              >
-                {(saveAsaas.isPending || updateAsaasSettings.isPending) ? 'Salvando...' : 'Salvar Configurações'}
-              </Button>
-              <Button variant="ghost" onClick={() => { setShowAsaasForm(false); setShowAsaasSettings(false); }}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        ) : asaasIntegration && asaasIntegration.status === 'ativo' ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center p-1.5">
-                  <img src={asaasLogo} alt="Asaas" className="h-full w-full object-contain" />
-                </div>
-                <div>
-                  <p className="font-medium">Conta Conectada</p>
-                  <p className="text-sm text-muted-foreground">
-                    {(asaasIntegration.dadosExtras as AsaasData)?.environment === 'production' ? 'Produção' : 'Sandbox'}
-                    {asaasIntegration.conectadoEm && ` • ${format(new Date(asaasIntegration.conectadoEm), "dd/MM/yyyy", { locale: ptBR })}`}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowAsaasSettings(true)}>
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Configurar
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => deactivate.mutate('asaas')}
-                  disabled={deactivate.isPending}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Power className="h-4 w-4 mr-2" />
-                  Desconectar
-                </Button>
-              </div>
-            </div>
 
-            <div className="flex flex-wrap gap-2">
-              {(asaasIntegration.dadosExtras as AsaasData)?.habilitarPix && (
-                <Badge variant="secondary">PIX</Badge>
-              )}
-              {(asaasIntegration.dadosExtras as AsaasData)?.habilitarCartao && (
-                <Badge variant="secondary">
-                  Cartão até {(asaasIntegration.dadosExtras as AsaasData)?.maxParcelas || 12}x
-                </Badge>
-              )}
-              {(asaasIntegration.dadosExtras as AsaasData)?.habilitarBoleto && (
-                <Badge variant="secondary">Boleto</Badge>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-              <div className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium text-green-700 dark:text-green-300">
-                    Checkout transparente
-                  </p>
-                  <p className="text-green-600 dark:text-green-400 mt-1">
-                    PIX, Cartão e Boleto com confirmação automática. O dinheiro vai direto para sua conta Asaas.
-                  </p>
+                  {/* Summary */}
+                  <span className="text-xs text-muted-foreground ml-auto mr-2 hidden sm:block truncate max-w-[180px]">
+                    {summary}
+                  </span>
+
+                  {/* Actions */}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={() => openDrawer(integration.provedor)}>
+                    <Settings className="h-4 w-4" />
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {!integration.isDefault && (
+                        <DropdownMenuItem onClick={() => setAsDefault.mutate(integration.id)} disabled={setAsDefault.isPending}>
+                          <Star className="h-4 w-4 mr-2" />
+                          Definir como padrão
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => deactivate.mutate(integration.provedor)}
+                        disabled={deactivate.isPending}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Power className="h-4 w-4 mr-2" />
+                        Desativar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              </div>
-            </div>
-            <Button variant="outline" onClick={() => setShowAsaasForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Configurar Asaas
-            </Button>
+              );
+            })}
           </div>
-        )}
-      </div>
+
+          {/* PIX manual warning - inline and subtle */}
+          {activeIntegrations.some(i => i.provedor === 'pix_manual') && (
+            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+              PIX Manual requer confirmação manual de cada pagamento.
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ── Outras formas de pagamento ── */}
+      {otherProviders.length > 0 && (
+        <section>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Outras formas de pagamento</h3>
+          <div className="divide-y divide-border rounded-lg border border-border">
+            {otherProviders.map((provider) => {
+              const hasError = errorProviders.includes(provider);
+              return (
+                <div key={provider} className="flex items-center gap-3 px-4 py-3">
+                  {/* Status */}
+                  {hasError
+                    ? <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                    : <Circle className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                  }
+
+                  {/* Logo */}
+                  <img
+                    src={providerLogos[provider]}
+                    alt={getProviderLabel(provider)}
+                    className="h-6 w-6 object-contain flex-shrink-0 opacity-60"
+                  />
+
+                  {/* Name */}
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium truncate">{getProviderLabel(provider)}</span>
+                    <p className="text-xs text-muted-foreground">
+                      {hasError ? 'Reconexão necessária' : providerDescriptions[provider]}
+                    </p>
+                  </div>
+
+                  {/* Add button */}
+                  <Button variant="ghost" size="sm" className="ml-auto flex-shrink-0 gap-1.5" onClick={() => openDrawer(provider)}>
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">{hasError ? 'Reconectar' : 'Adicionar'}</span>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Empty state */}
+      {activeIntegrations.length === 0 && otherProviders.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-8">Nenhum método de pagamento disponível.</p>
+      )}
+
+      {/* ── Drawer ── */}
+      <PaymentConfigDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        provider={drawerProvider}
+        // PIX
+        chavePix={chavePix} setChavePix={setChavePix}
+        tipoChave={tipoChave} setTipoChave={setTipoChave}
+        nomeTitular={nomeTitular} setNomeTitular={setNomeTitular}
+        handleSavePix={handleSavePix} savePixPending={savePixManual.isPending}
+        // IP
+        handle={handle} setHandle={setHandle}
+        handleSaveInfinitePay={handleSaveInfinitePay} saveIpPending={saveInfinitePay.isPending}
+        // MP
+        mpIntegrationStatus={mpIntegration?.status || null}
+        mpConnectedAt={mpIntegration?.conectadoEm || null}
+        mpHabilitarPix={mpHabilitarPix} setMpHabilitarPix={setMpHabilitarPix}
+        mpHabilitarCartao={mpHabilitarCartao} setMpHabilitarCartao={setMpHabilitarCartao}
+        mpMaxParcelas={mpMaxParcelas} setMpMaxParcelas={setMpMaxParcelas}
+        mpAbsorverTaxa={mpAbsorverTaxa} setMpAbsorverTaxa={setMpAbsorverTaxa}
+        handleConnectMercadoPago={handleConnectMercadoPago}
+        handleSaveMpSettings={handleSaveMpSettings} updateMpPending={updateMercadoPagoSettings.isPending}
+        mpAppId={mpAppId}
+        // Asaas
+        asaasIntegrationStatus={asaasIntegration?.status || null}
+        asaasApiKey={asaasApiKey} setAsaasApiKey={setAsaasApiKey}
+        asaasEnvironment={asaasEnvironment} setAsaasEnvironment={setAsaasEnvironment}
+        asaasHabilitarPix={asaasHabilitarPix} setAsaasHabilitarPix={setAsaasHabilitarPix}
+        asaasHabilitarCartao={asaasHabilitarCartao} setAsaasHabilitarCartao={setAsaasHabilitarCartao}
+        asaasHabilitarBoleto={asaasHabilitarBoleto} setAsaasHabilitarBoleto={setAsaasHabilitarBoleto}
+        asaasMaxParcelas={asaasMaxParcelas} setAsaasMaxParcelas={setAsaasMaxParcelas}
+        asaasAbsorverTaxa={asaasAbsorverTaxa} setAsaasAbsorverTaxa={setAsaasAbsorverTaxa}
+        asaasIreiAntecipar={asaasIreiAntecipar} setAsaasIreiAntecipar={setAsaasIreiAntecipar}
+        asaasRepassarAntecipacao={asaasRepassarAntecipacao} setAsaasRepassarAntecipacao={setAsaasRepassarAntecipacao}
+        handleSaveAsaas={handleSaveAsaas} handleSaveAsaasSettings={handleSaveAsaasSettings}
+        saveAsaasPending={saveAsaas.isPending}
+        updateAsaasSettings={updateAsaasSettings}
+        userId={user?.id}
+        asaasFees={asaasFees} setAsaasFees={setAsaasFees}
+      />
     </div>
   );
 }
