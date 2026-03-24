@@ -282,6 +282,16 @@ export function PaymentConfigDrawer({
                     </div>
                   )}
 
+                  {/* Migration from Gestão */}
+                  {mpDadosExtrasRaw && hasOtherContextSettings(mpDadosExtrasRaw, 'gestao') && onMigrateFromGestao && (
+                    <MigrationSection
+                      dadosExtrasRaw={mpDadosExtrasRaw}
+                      provider="mercadopago"
+                      onMigrate={() => onMigrateFromGestao('mercadopago')}
+                      pending={migratePending}
+                    />
+                  )}
+
                   <Button className="w-full" onClick={handleSaveMpSettings} disabled={updateMpPending}>
                     {updateMpPending ? 'Salvando...' : 'Salvar Configurações'}
                   </Button>
