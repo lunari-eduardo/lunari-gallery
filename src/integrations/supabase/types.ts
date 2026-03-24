@@ -3527,6 +3527,7 @@ export type Database = {
           data: string | null
           descricao: string | null
           id: string | null
+          meio_pagamento: string | null
           observacoes: string | null
           origem: string | null
           parcela_atual: number | null
