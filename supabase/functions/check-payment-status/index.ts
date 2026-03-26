@@ -17,6 +17,123 @@ interface RequestBody {
 }
 
 // ============================================================
+// VERIFICAÇÃO VIA API ASAAS
+// Consulta GET /v3/payments/{id} com access_token do fotógrafo
+// ============================================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function checkAsaasPaymentStatus(
+  supabase: any,
+  cobranca: any,
+): Promise<{ status: 'paid' | 'pending' | 'error'; netValue?: number; paymentId?: string }> {
+  try {
+    const userId = cobranca.user_id;
+    console.log('🔍 Buscando integração Asaas para user_id:', userId);
+
+    const { data: integracao, error: integError } = await supabase
+      .from('usuarios_integracoes')
+      .select('access_token, dados_extras')
+      .eq('user_id', userId)
+      .eq('provedor', 'asaas')
+      .eq('status', 'ativo')
+      .maybeSingle();
+
+    if (integError || !integracao?.access_token) {
+      console.error('❌ Integração Asaas não encontrada:', integError);
+      return { status: 'error' };
+    }
+
+    const asaasApiKey = integracao.access_token;
+    const settings = (integracao.dados_extras || {}) as { environment?: string };
+    const asaasBaseUrl = settings.environment === 'production'
+      ? 'https://api.asaas.com'
+      : 'https://api-sandbox.asaas.com';
+
+    const paymentId = cobranca.mp_payment_id;
+    if (!paymentId) {
+      console.log('⚠️ Cobrança sem mp_payment_id (asaas payment id)');
+      return { status: 'error' };
+    }
+
+    console.log('🔍 Consultando status Asaas para payment:', paymentId);
+
+    const response = await fetch(`${asaasBaseUrl}/v3/payments/${paymentId}`, {
+      headers: { access_token: asaasApiKey },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('⚠️ Asaas API retornou erro:', response.status, errorText);
+      return { status: 'error' };
+    }
+
+    const data = await response.json();
+    console.log('📊 Resposta Asaas:', JSON.stringify({ id: data.id, status: data.status, netValue: data.netValue, value: data.value }));
+
+    const confirmedStatuses = ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH', 'PAYMENT_ANTICIPATED'];
+    if (confirmedStatuses.includes(data.status)) {
+      console.log('✅ Pagamento CONFIRMADO via API Asaas');
+      return {
+        status: 'paid',
+        netValue: data.netValue,
+        paymentId: data.id,
+      };
+    }
+
+    console.log('⏳ Pagamento ainda PENDENTE no Asaas:', data.status);
+    return { status: 'pending' };
+
+  } catch (error) {
+    console.error('❌ Erro ao consultar Asaas API:', error);
+    return { status: 'error' };
+  }
+}
+
+// Helper: upsert parcela + update valor_liquido for Asaas payments
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function upsertAsaasParcela(
+  supabase: any,
+  cobrancaId: string,
+  paymentId: string,
+  valorBruto: number,
+  netValue: number,
+  numeroParcela: number,
+) {
+  const taxaGateway = Math.round((valorBruto - netValue) * 100) / 100;
+  console.log(`📝 Upsert parcela: cobranca=${cobrancaId}, parcela=${numeroParcela}, bruto=${valorBruto}, liquido=${netValue}, taxa=${taxaGateway}`);
+
+  const { error: parcelaError } = await supabase
+    .from('cobranca_parcelas')
+    .upsert({
+      cobranca_id: cobrancaId,
+      numero_parcela: numeroParcela,
+      asaas_payment_id: paymentId,
+      valor_bruto: valorBruto,
+      valor_liquido: netValue,
+      taxa_gateway: taxaGateway,
+      status: 'confirmado',
+      billing_type: 'card',
+      data_pagamento: new Date().toISOString().split('T')[0],
+    }, { onConflict: 'cobranca_id,numero_parcela' });
+
+  if (parcelaError) {
+    console.error('❌ Erro ao upsert parcela:', parcelaError);
+    return false;
+  }
+
+  // Update cobrancas.valor_liquido
+  const { error: updateError } = await supabase
+    .from('cobrancas')
+    .update({ valor_liquido: netValue })
+    .eq('id', cobrancaId);
+
+  if (updateError) {
+    console.error('❌ Erro ao atualizar valor_liquido:', updateError);
+  }
+
+  return true;
+}
+
+// ============================================================
 // VERIFICAÇÃO VIA ENDPOINT PÚBLICO INFINITEPAY
 // Não requer OAuth - usa apenas o handle do fotógrafo
 // POST https://api.infinitepay.io/invoices/public/checkout/payment_check
@@ -292,7 +409,64 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // LAYER 3: If pending and InfinitePay, check real status via public API
+    // LAYER 3a: If pending and Asaas, check real status via Asaas API
+    if (cobranca.status === 'pendente' && cobranca.provedor === 'asaas' && cobranca.mp_payment_id) {
+      console.log('🔄 Status pendente Asaas - verificando na API...');
+
+      const asaasResult = await checkAsaasPaymentStatus(supabase, cobranca);
+
+      if (asaasResult.status === 'paid' && asaasResult.netValue != null) {
+        console.log('💰 Asaas confirmou pagamento - processando...');
+
+        // Determine valor_bruto per parcela
+        const totalParcelas = cobranca.total_parcelas || 1;
+        const valorBrutoParcela = Math.round((cobranca.valor / totalParcelas) * 100) / 100;
+
+        // Upsert parcela
+        await upsertAsaasParcela(
+          supabase,
+          cobranca.id,
+          asaasResult.paymentId || cobranca.mp_payment_id,
+          valorBrutoParcela,
+          asaasResult.netValue,
+          1, // For single payments or first parcela detected
+        );
+
+        // Finalize via RPC
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
+          p_cobranca_id: cobranca.id,
+          p_receipt_url: null,
+          p_paid_at: new Date().toISOString(),
+        });
+
+        if (rpcError) {
+          console.error('❌ RPC finalize error:', rpcError);
+        } else {
+          console.log('✅ Pagamento Asaas finalizado via polling:', JSON.stringify(rpcResult));
+        }
+
+        return new Response(
+          JSON.stringify({
+            found: true,
+            status: 'pago',
+            updated: true,
+            source: 'asaas_api_polling',
+            foundBy,
+            message: 'Pagamento confirmado via API Asaas',
+            cobranca: {
+              id: cobranca.id,
+              status: 'pago',
+              valor: cobranca.valor,
+              provedor: cobranca.provedor,
+              dataPagamento: new Date().toISOString(),
+            },
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // LAYER 3b: If pending and InfinitePay, check real status via public API
     // Priority: Use redirect parameters (transactionNsu, slug) if available
     if (cobranca.status === 'pendente' && cobranca.provedor === 'infinitepay' && cobranca.ip_order_nsu) {
       console.log('🔄 Status pendente - verificando na API pública InfinitePay...');
