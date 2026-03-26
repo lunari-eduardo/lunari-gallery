@@ -460,15 +460,81 @@ Deno.serve(async (req) => {
       // Payment was created in Asaas but we failed to save locally - log but don't fail
     }
 
-    // NÃO chamar finalize_gallery_payment aqui.
-    // O webhook do Asaas processará a confirmação e disparará a cadeia de triggers.
-    // Isso garante que ensure_transaction_on_cobranca_paid (AFTER UPDATE) dispare corretamente.
-    console.log(`📋 Cobrança ${cobranca?.id} criada como 'pendente'. Aguardando webhook para finalização.`);
+    console.log(`📋 Cobrança ${cobranca?.id} criada como 'pendente'. Processando confirmação...`);
 
-    // 7. Build checkout URL for redirect-based flow
+    // 7. For card payments confirmed immediately: fetch netValue, upsert parcela, finalize
+    let cardConfirmed = false;
+    if (finalBillingType === 'CREDIT_CARD' && cobranca?.id &&
+        (paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED')) {
+      console.log('💳 Cartão confirmado imediatamente - buscando netValue...');
+
+      try {
+        // Fetch full payment details to get netValue
+        const detailResp = await fetch(`${asaasBaseUrl}/v3/payments/${paymentData.id}`, {
+          headers: { access_token: asaasApiKey },
+        });
+
+        if (detailResp.ok) {
+          const detailData = await detailResp.json();
+          const netValue = detailData.netValue;
+          const totalParcelas = (body.installmentCount && body.installmentCount > 1)
+            ? Math.min(body.installmentCount, settings.maxParcelas || 12)
+            : 1;
+          const valorBrutoParcela = Math.round((valorFinal / totalParcelas) * 100) / 100;
+          const taxaGateway = Math.round((valorBrutoParcela - (netValue || valorBrutoParcela)) * 100) / 100;
+
+          console.log(`📊 netValue=${netValue}, valorBruto=${valorBrutoParcela}, taxa=${taxaGateway}`);
+
+          // Upsert parcela
+          const { error: parcelaError } = await supabase
+            .from('cobranca_parcelas')
+            .upsert({
+              cobranca_id: cobranca.id,
+              numero_parcela: 1,
+              asaas_payment_id: paymentData.id,
+              valor_bruto: valorBrutoParcela,
+              valor_liquido: netValue || valorBrutoParcela,
+              taxa_gateway: taxaGateway >= 0 ? taxaGateway : 0,
+              status: 'confirmado',
+              billing_type: 'card',
+              data_pagamento: new Date().toISOString().split('T')[0],
+            }, { onConflict: 'cobranca_id,numero_parcela' });
+
+          if (parcelaError) {
+            console.error('❌ Erro ao upsert parcela:', parcelaError);
+          } else {
+            // Update cobrancas.valor_liquido
+            await supabase
+              .from('cobrancas')
+              .update({ valor_liquido: netValue || valorBrutoParcela })
+              .eq('id', cobranca.id);
+          }
+
+          // Finalize via RPC
+          const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
+            p_cobranca_id: cobranca.id,
+            p_receipt_url: null,
+            p_paid_at: new Date().toISOString(),
+          });
+
+          if (rpcError) {
+            console.error('❌ RPC finalize error:', rpcError);
+          } else {
+            console.log('✅ Pagamento finalizado inline:', JSON.stringify(rpcResult));
+            cardConfirmed = true;
+          }
+        } else {
+          console.warn('⚠️ Falha ao buscar detalhes do pagamento Asaas:', await detailResp.text());
+        }
+      } catch (confirmErr) {
+        console.error('❌ Erro ao confirmar cartão inline:', confirmErr);
+      }
+    }
+
+    // 8. Build checkout URL for redirect-based flow
     const checkoutUrl = paymentData.invoiceUrl || null;
 
-    // 8. Build response
+    // 9. Build response
     const response: Record<string, unknown> = {
       success: true,
       cobrancaId: cobranca?.id,
@@ -495,8 +561,7 @@ Deno.serve(async (req) => {
 
     if (finalBillingType === 'CREDIT_CARD') {
       response.creditCardStatus = paymentData.status;
-      // Credit card payments can be confirmed immediately
-      if (paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED') {
+      if (cardConfirmed || paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED') {
         response.paid = true;
       }
     }
