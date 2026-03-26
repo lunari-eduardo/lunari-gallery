@@ -403,7 +403,61 @@ export function AsaasCheckout({
       if (!res.ok || !result.success) {
         throw new Error(result.error || 'Pagamento recusado');
       }
-      if (result.paid || result.creditCardStatus === 'CONFIRMED' || result.creditCardStatus === 'RECEIVED') {
+      if (result.paid) {
+        // Single payment (à vista) finalized inline by backend
+        setCardSuccess(true);
+        toast.success('Pagamento aprovado!');
+        setTimeout(() => onPaymentConfirmed(), 2000);
+      } else if (result.requiresPolling && result.cobrancaId) {
+        // Installment or async payment — poll check-payment-status
+        toast.info('Processando pagamento...');
+        setCardLoading(true);
+        const cobrancaId = result.cobrancaId;
+        const pollStart = Date.now();
+        const maxPollTime = 2 * 60 * 1000; // 2 minutes
+        const pollInterval = 5000; // 5 seconds
+
+        const poll = async () => {
+          try {
+            const pollRes = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cobrancaId }),
+            });
+            const pollData = await pollRes.json();
+
+            if (pollData.status === 'pago') {
+              setCardSuccess(true);
+              setCardLoading(false);
+              toast.success('Pagamento aprovado!');
+              setTimeout(() => onPaymentConfirmed(), 2000);
+              return;
+            }
+
+            if (Date.now() - pollStart < maxPollTime) {
+              setTimeout(poll, pollInterval);
+            } else {
+              // Timeout — payment may still be processing
+              setCardLoading(false);
+              setCardSuccess(true);
+              toast.success('Pagamento enviado! Aguardando confirmação.');
+              setTimeout(() => onPaymentConfirmed(), 2000);
+            }
+          } catch {
+            if (Date.now() - pollStart < maxPollTime) {
+              setTimeout(poll, pollInterval);
+            } else {
+              setCardLoading(false);
+              setCardSuccess(true);
+              toast.success('Pagamento enviado! Aguardando confirmação.');
+              setTimeout(() => onPaymentConfirmed(), 2000);
+            }
+          }
+        };
+
+        poll();
+      } else if (result.creditCardStatus === 'CONFIRMED' || result.creditCardStatus === 'RECEIVED') {
+        // Fallback: backend said confirmed but didn't set paid flag
         setCardSuccess(true);
         toast.success('Pagamento aprovado!');
         setTimeout(() => onPaymentConfirmed(), 2000);
