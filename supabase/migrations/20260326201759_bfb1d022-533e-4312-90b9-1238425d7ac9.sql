@@ -1,0 +1,3 @@
+ALTER TABLE cobranca_parcelas
+ADD CONSTRAINT cobranca_parcelas_cobranca_id_numero_parcela_key
+UNIQUE (cobranca_id, numero_parcela);

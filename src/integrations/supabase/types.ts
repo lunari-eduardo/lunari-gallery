@@ -667,6 +667,7 @@ export type Database = {
       clientes_transacoes: {
         Row: {
           cliente_id: string
+          cobranca_id: string | null
           created_at: string | null
           data_transacao: string
           data_vencimento: string | null
@@ -684,6 +685,7 @@ export type Database = {
         }
         Insert: {
           cliente_id: string
+          cobranca_id?: string | null
           created_at?: string | null
           data_transacao: string
           data_vencimento?: string | null
@@ -701,6 +703,7 @@ export type Database = {
         }
         Update: {
           cliente_id?: string
+          cobranca_id?: string | null
           created_at?: string | null
           data_transacao?: string
           data_vencimento?: string | null
@@ -722,6 +725,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
             referencedColumns: ["id"]
           },
           {
