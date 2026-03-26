@@ -31,7 +31,6 @@ interface RequestBody {
   qtdFotos?: number;
   galleryToken?: string;
   billingType?: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
-  // For transparent checkout (credit card)
   creditCard?: {
     holderName: string;
     number: string;
@@ -170,13 +169,11 @@ Deno.serve(async (req) => {
           if (searchResp.ok) {
             const searchData = await searchResp.json();
             if (searchData.data && searchData.data.length > 0) {
-              // Find one with matching externalReference, or pick first
               const match = searchData.data.find((c: Record<string, unknown>) => c.externalReference === clienteId) || searchData.data[0];
               asaasCustomerId = match.id;
               const existingName = match.name;
               console.log(`📋 Found Asaas customer by email: ${asaasCustomerId} (name: ${existingName})`);
 
-              // Update name + externalReference if divergent
               const updates: Record<string, string> = {};
               if (existingName !== clienteName) updates.name = clienteName;
               if (match.externalReference !== clienteId) updates.externalReference = clienteId;
@@ -249,13 +246,11 @@ Deno.serve(async (req) => {
     let processingCost = 0;
     let anticipationCost = 0;
 
-    // incluirTaxaAntecipacao defaults to true for backward compatibility
     const incluirAntecipacao = settings.incluirTaxaAntecipacao !== false;
 
     if (finalBillingType === 'CREDIT_CARD' && !settings.absorverTaxa) {
       const installments = body.installmentCount && body.installmentCount > 1 ? body.installmentCount : 1;
 
-      // Fetch real fees from Asaas API
       try {
         const feesResp = await fetch(`${asaasBaseUrl}/v3/myAccount/fees`, {
           headers: { access_token: asaasApiKey },
@@ -267,17 +262,14 @@ Deno.serve(async (req) => {
           const ccFees = payment.creditCard || {};
           const anticipationCC = (feesData.anticipation || {}).creditCard || {};
 
-          // 1. Processing fee (tier-based percentage + fixed operation value)
           const operationValue = ccFees.operationValue ?? 0.49;
           let percentageFee = 0;
 
-          // Check for active promotional discount
           const hasDiscount = ccFees.hasValidDiscount === true;
           const discountExpiration = ccFees.discountExpiration;
           const discountValid = hasDiscount && (!discountExpiration || new Date(discountExpiration) > new Date());
 
           if (discountValid) {
-            // Use discount tiers
             if (installments === 1) {
               percentageFee = ccFees.discountOneInstallmentPercentage ?? ccFees.oneInstallmentPercentage ?? 2.99;
             } else if (installments <= 6) {
@@ -288,7 +280,6 @@ Deno.serve(async (req) => {
               percentageFee = ccFees.discountUpToTwentyOneInstallmentsPercentage ?? ccFees.upToTwentyOneInstallmentsPercentage ?? 4.29;
             }
           } else {
-            // Standard tiers (correct field names without "Fee" suffix)
             if (installments === 1) {
               percentageFee = ccFees.oneInstallmentPercentage ?? 2.99;
             } else if (installments <= 6) {
@@ -303,7 +294,6 @@ Deno.serve(async (req) => {
           processingCost = (valor * percentageFee / 100) + operationValue;
           processingCost = Math.round(processingCost * 100) / 100;
 
-          // 2. Anticipation fee — ONLY if incluirAntecipacao is true
           if (incluirAntecipacao) {
             const detachedMonthlyFee = anticipationCC.detachedMonthlyFeeValue ?? 1.25;
             const installmentMonthlyFee = anticipationCC.installmentMonthlyFeeValue ?? 1.70;
@@ -327,13 +317,12 @@ Deno.serve(async (req) => {
         }
       } catch (feeErr) {
         console.warn('Error fetching Asaas fees:', feeErr);
-        // Continue with original valor - don't block payment
       }
     }
 
     // 4. Create payment in Asaas
     const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 3); // 3 days from now
+    dueDate.setDate(dueDate.getDate() + 3);
 
     const paymentBody: Record<string, unknown> = {
       customer: asaasCustomerId,
@@ -344,20 +333,12 @@ Deno.serve(async (req) => {
       externalReference: galeriaId || undefined,
     };
 
-    // Fee settings
-    if (settings.absorverTaxa) {
-      // When photographer absorbs fees, split settings are not needed
-      // The value charged is the full value
-    }
-
-    // Installment settings for credit card
     if (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) {
       const maxParcelas = settings.maxParcelas || 12;
       paymentBody.installmentCount = Math.min(body.installmentCount, maxParcelas);
       paymentBody.installmentValue = valorFinal / (paymentBody.installmentCount as number);
     }
 
-    // Credit card data for transparent checkout
     if (finalBillingType === 'CREDIT_CARD' && body.creditCard) {
       paymentBody.creditCard = body.creditCard;
       paymentBody.creditCardHolderInfo = body.creditCardHolderInfo;
@@ -390,7 +371,7 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Asaas payment created: ${paymentData.id}, status: ${paymentData.status}`);
 
-    // 4. Get PIX QR code if billing type is PIX
+    // 4b. Get PIX QR code if billing type is PIX
     let pixData: { encodedImage?: string; payload?: string; expirationDate?: string } | null = null;
     if (finalBillingType === 'PIX') {
       const pixResp = await fetch(`${asaasBaseUrl}/v3/payments/${paymentData.id}/pixQrCode`, {
@@ -404,22 +385,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 5. Get boleto URL if billing type is BOLETO
+    // 4c. Get boleto URL
     let boletoUrl: string | null = null;
     if (finalBillingType === 'BOLETO') {
       boletoUrl = paymentData.bankSlipUrl || null;
     }
 
-    // 6. Save cobrança in database
-    // Map billingType to valid tipo_cobranca values: 'pix', 'card', 'link', 'presencial'
+    // 5. Save cobrança in database
     const tipoCobranca = finalBillingType === 'CREDIT_CARD' ? 'card' 
       : finalBillingType === 'PIX' ? 'pix' 
-      : 'link'; // BOLETO maps to 'link'
+      : 'link';
 
     // REGRA IMUTÁVEL: sempre inserir como 'pendente'.
-    // O webhook processará a confirmação e disparará a cadeia de triggers:
-    // webhook → upsert cobranca_parcelas → trigger reconcile → UPDATE status='pago'
-    //   → trigger ensure_transaction → INSERT clientes_transacoes → trigger recompute_session_paid
+    const totalParcelas = (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) 
+      ? Math.min(body.installmentCount, settings.maxParcelas || 12) 
+      : 1;
 
     const cobrancaData: Record<string, unknown> = {
       user_id: userId,
@@ -434,9 +414,7 @@ Deno.serve(async (req) => {
       qtd_fotos: qtdFotos || 0,
       mp_payment_id: paymentData.id,
       data_pagamento: null,
-      total_parcelas: (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) 
-        ? Math.min(body.installmentCount, settings.maxParcelas || 12) 
-        : 1,
+      total_parcelas: totalParcelas,
       asaas_installment_id: paymentData.installment || null,
     };
 
@@ -446,7 +424,7 @@ Deno.serve(async (req) => {
     }
 
     if (finalBillingType === 'BOLETO' && boletoUrl) {
-      cobrancaData.ip_checkout_url = boletoUrl; // Reuse for boleto URL
+      cobrancaData.ip_checkout_url = boletoUrl;
     }
 
     const { data: cobranca, error: cobrancaError } = await supabase
@@ -457,19 +435,22 @@ Deno.serve(async (req) => {
 
     if (cobrancaError) {
       console.error('Error saving cobrança:', cobrancaError);
-      // Payment was created in Asaas but we failed to save locally - log but don't fail
     }
 
-    console.log(`📋 Cobrança ${cobranca?.id} criada como 'pendente'. Processando confirmação...`);
+    console.log(`📋 Cobrança ${cobranca?.id} criada como 'pendente'.`);
 
-    // 7. For card payments confirmed immediately: fetch netValue, upsert parcela, finalize
+    // 6. For SINGLE card payments confirmed immediately: process inline
+    //    For INSTALLMENT payments: DO NOT finalize — let webhook/polling handle all parcelas
     let cardConfirmed = false;
-    if (finalBillingType === 'CREDIT_CARD' && cobranca?.id &&
-        (paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED')) {
-      console.log('💳 Cartão confirmado imediatamente - buscando netValue...');
+    const isInstallment = totalParcelas > 1;
+    const isCardConfirmedImmediately = finalBillingType === 'CREDIT_CARD' && cobranca?.id &&
+      (paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED');
+
+    if (isCardConfirmedImmediately && !isInstallment) {
+      // Single payment (à vista) — safe to finalize inline
+      console.log('💳 Cartão à vista confirmado — processando inline...');
 
       try {
-        // Fetch full payment details to get netValue
         const detailResp = await fetch(`${asaasBaseUrl}/v3/payments/${paymentData.id}`, {
           headers: { access_token: asaasApiKey },
         });
@@ -477,10 +458,7 @@ Deno.serve(async (req) => {
         if (detailResp.ok) {
           const detailData = await detailResp.json();
           const netValue = detailData.netValue;
-          const totalParcelas = (body.installmentCount && body.installmentCount > 1)
-            ? Math.min(body.installmentCount, settings.maxParcelas || 12)
-            : 1;
-          const valorBrutoParcela = Math.round((valorFinal / totalParcelas) * 100) / 100;
+          const valorBrutoParcela = valorFinal;
           const taxaGateway = Math.round((valorBrutoParcela - (netValue || valorBrutoParcela)) * 100) / 100;
 
           console.log(`📊 netValue=${netValue}, valorBruto=${valorBrutoParcela}, taxa=${taxaGateway}`);
@@ -498,12 +476,11 @@ Deno.serve(async (req) => {
               status: 'confirmado',
               billing_type: 'card',
               data_pagamento: new Date().toISOString().split('T')[0],
-            }, { onConflict: 'cobranca_id,numero_parcela' });
+            }, { onConflict: 'asaas_payment_id' });
 
           if (parcelaError) {
             console.error('❌ Erro ao upsert parcela:', parcelaError);
           } else {
-            // Update cobrancas.valor_liquido
             await supabase
               .from('cobrancas')
               .update({ valor_liquido: netValue || valorBrutoParcela })
@@ -520,21 +497,24 @@ Deno.serve(async (req) => {
           if (rpcError) {
             console.error('❌ RPC finalize error:', rpcError);
           } else {
-            console.log('✅ Pagamento finalizado inline:', JSON.stringify(rpcResult));
+            console.log('✅ Pagamento à vista finalizado inline:', JSON.stringify(rpcResult));
             cardConfirmed = true;
           }
-        } else {
-          console.warn('⚠️ Falha ao buscar detalhes do pagamento Asaas:', await detailResp.text());
         }
       } catch (confirmErr) {
         console.error('❌ Erro ao confirmar cartão inline:', confirmErr);
       }
+    } else if (isCardConfirmedImmediately && isInstallment) {
+      // Installment payment — DO NOT finalize inline
+      // The webhook or check-payment-status polling will handle all parcelas
+      console.log(`⏳ Cartão parcelado (${totalParcelas}x) confirmado no Asaas, mas NÃO finalizando inline.`);
+      console.log(`   Installment ID: ${paymentData.installment || 'N/A'}`);
+      console.log(`   O polling/webhook processará todas as parcelas.`);
     }
 
-    // 8. Build checkout URL for redirect-based flow
+    // 7. Build response
     const checkoutUrl = paymentData.invoiceUrl || null;
 
-    // 9. Build response
     const response: Record<string, unknown> = {
       success: true,
       cobrancaId: cobranca?.id,
@@ -561,8 +541,13 @@ Deno.serve(async (req) => {
 
     if (finalBillingType === 'CREDIT_CARD') {
       response.creditCardStatus = paymentData.status;
-      if (cardConfirmed || paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED') {
+      // Only mark as paid if single payment was finalized inline
+      if (cardConfirmed) {
         response.paid = true;
+      } else {
+        // For installments or unconfirmed: frontend should poll
+        response.paid = false;
+        response.requiresPolling = true;
       }
     }
 

@@ -15,22 +15,18 @@ const STORAGE_LIMITS: Record<string, number> = {
   combo_completo: 20 * GB,
 };
 
-// Plans that grant subscription credits per cycle
 const PLAN_SUBSCRIPTION_CREDITS: Record<string, number> = {
   combo_pro_select2k: 2000,
   combo_completo: 2000,
 };
 
 const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
-  // Studio
   studio_starter: { monthly: 1490, yearly: 15198 },
   studio_pro: { monthly: 3590, yearly: 36618 },
-  // Transfer
   transfer_5gb: { monthly: 1290, yearly: 12384 },
   transfer_20gb: { monthly: 2490, yearly: 23904 },
   transfer_50gb: { monthly: 3490, yearly: 33504 },
   transfer_100gb: { monthly: 5990, yearly: 57504 },
-  // Combos
   combo_pro_select2k: { monthly: 4490, yearly: 45259 },
   combo_completo: { monthly: 6490, yearly: 66198 },
 };
@@ -55,7 +51,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
 
   const userId = subscription.user_id;
 
-  // 1. Cancel old subscription in Asaas
   if (subscription.asaas_subscription_id) {
     const cancelRes = await fetch(
       `${ASAAS_BASE_URL}/v3/subscriptions/${subscription.asaas_subscription_id}`,
@@ -66,7 +61,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
     }
   }
 
-  // 2. Mark old subscription as CANCELLED and clear pending
   await adminClient
     .from("subscriptions_asaas")
     .update({
@@ -76,7 +70,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
     })
     .eq("id", subscription.id);
 
-  // 3. Get customer ID
   const { data: account } = await adminClient
     .from("photographer_accounts")
     .select("asaas_customer_id")
@@ -88,7 +81,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
     return;
   }
 
-  // 4. Create new subscription in Asaas with downgraded plan
   const newPrices = PLAN_PRICES[newPlanType];
   if (!newPrices) {
     console.error("Unknown plan type for pricing:", newPlanType);
@@ -97,7 +89,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
   const newValueCents = newCycle === "YEARLY" ? newPrices.yearly : newPrices.monthly;
   const newValueReais = newValueCents / 100;
 
-  // Use creditCardToken from old subscription metadata for auto-renewal
   const creditCardToken = subscription.metadata?.creditCardToken;
 
   const nextDueDate = new Date();
@@ -130,7 +121,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
     return;
   }
 
-  // 5. Insert new subscription in DB
   await adminClient.from("subscriptions_asaas").insert({
     user_id: userId,
     asaas_customer_id: account.asaas_customer_id,
@@ -146,7 +136,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
     },
   });
 
-  // 6. Check if storage exceeds new limit → activate over-limit mode
   const newLimit = STORAGE_LIMITS[newPlanType] || 0;
 
   const { data: storageData } = await adminClient.rpc("get_transfer_storage_bytes", {
@@ -155,12 +144,11 @@ async function applyDowngrade(adminClient: any, subscription: any) {
   const storageUsed = (storageData as number) || 0;
 
   if (storageUsed > newLimit) {
-    console.log(`OVER LIMIT: ${storageUsed} bytes used, limit is ${newLimit} bytes. Activating over-limit mode.`);
+    console.log(`OVER LIMIT: ${storageUsed} bytes used, limit is ${newLimit} bytes.`);
 
     const deletionDate = new Date();
     deletionDate.setDate(deletionDate.getDate() + 30);
 
-    // Set account over-limit flags
     await adminClient
       .from("photographer_accounts")
       .update({
@@ -170,7 +158,6 @@ async function applyDowngrade(adminClient: any, subscription: any) {
       })
       .eq("user_id", userId);
 
-    // Expire all active Transfer galleries
     await adminClient
       .from("galerias")
       .update({ status: "expired_due_to_plan" })
@@ -179,11 +166,136 @@ async function applyDowngrade(adminClient: any, subscription: any) {
       .in("status", ["enviado", "rascunho"]);
 
     console.log(`All Transfer galleries expired. Deletion scheduled for ${deletionDate.toISOString()}`);
-  } else {
-    console.log(`Storage OK: ${storageUsed} bytes used, limit is ${newLimit} bytes.`);
   }
 
   console.log(`Downgrade complete: new subscription ${newSubData.id}, plan ${newPlanType}`);
+}
+
+// ============================================================
+// PROCESS GALLERY PAYMENT via cobranca_parcelas + finalize RPC
+// Follows the shared contract: parcela → reconcile → finalize
+// ============================================================
+async function processGalleryPayment(adminClient: any, payment: any) {
+  console.log(`🔍 Processando pagamento de galeria: ${payment.id}, installment: ${payment.installment || 'N/A'}`);
+
+  // Find cobranca by installment ID or payment ID
+  let cobranca = null;
+
+  if (payment.installment) {
+    const { data } = await adminClient
+      .from("cobrancas")
+      .select("*")
+      .eq("asaas_installment_id", payment.installment)
+      .eq("provedor", "asaas")
+      .maybeSingle();
+    cobranca = data;
+    if (cobranca) console.log(`📋 Cobrança encontrada por installment_id: ${cobranca.id}`);
+  }
+
+  if (!cobranca) {
+    const { data } = await adminClient
+      .from("cobrancas")
+      .select("*")
+      .eq("mp_payment_id", payment.id)
+      .eq("provedor", "asaas")
+      .maybeSingle();
+    cobranca = data;
+    if (cobranca) console.log(`📋 Cobrança encontrada por mp_payment_id: ${cobranca.id}`);
+  }
+
+  if (!cobranca) {
+    console.warn(`⚠️ Nenhuma cobrança encontrada para payment ${payment.id}`);
+    return;
+  }
+
+  if (cobranca.status === 'pago') {
+    console.log(`⏭️ Cobrança ${cobranca.id} já está paga, verificando parcela...`);
+  }
+
+  // Extract payment details
+  const valorBruto = payment.value;
+  const netValue = payment.netValue ?? valorBruto;
+  const taxaGateway = Math.round((valorBruto - netValue) * 100) / 100;
+  const numeroParcela = payment.installmentNumber || 1;
+  const billingType = (payment.billingType || 'CREDIT_CARD').toLowerCase();
+
+  console.log(`📊 Parcela ${numeroParcela}: bruto=${valorBruto}, líquido=${netValue}, taxa=${taxaGateway}`);
+
+  // Upsert into cobranca_parcelas (source of truth)
+  const { error: parcelaError } = await adminClient
+    .from("cobranca_parcelas")
+    .upsert({
+      cobranca_id: cobranca.id,
+      numero_parcela: numeroParcela,
+      asaas_payment_id: payment.id,
+      valor_bruto: valorBruto,
+      valor_liquido: netValue,
+      taxa_gateway: taxaGateway >= 0 ? taxaGateway : 0,
+      taxa_antecipacao: 0,
+      status: 'confirmado',
+      billing_type: billingType === 'credit_card' ? 'card' : billingType,
+      data_pagamento: payment.paymentDate || new Date().toISOString().split('T')[0],
+      data_vencimento: payment.dueDate || null,
+    }, { onConflict: 'asaas_payment_id' });
+
+  if (parcelaError) {
+    console.error(`❌ Erro ao upsert parcela:`, parcelaError);
+    return;
+  }
+
+  console.log(`✅ Parcela ${numeroParcela} registrada para cobrança ${cobranca.id}`);
+
+  // Update cobrancas.valor_liquido (sum of confirmed parcelas)
+  const { data: parcelasSum } = await adminClient
+    .from("cobranca_parcelas")
+    .select("valor_liquido")
+    .eq("cobranca_id", cobranca.id)
+    .eq("status", "confirmado");
+
+  if (parcelasSum && parcelasSum.length > 0) {
+    const totalLiquido = parcelasSum.reduce((sum: number, p: any) => sum + (Number(p.valor_liquido) || 0), 0);
+    const roundedLiquido = Math.round(totalLiquido * 100) / 100;
+    await adminClient
+      .from("cobrancas")
+      .update({ valor_liquido: roundedLiquido })
+      .eq("id", cobranca.id);
+    console.log(`📊 cobrancas.valor_liquido atualizado: ${roundedLiquido}`);
+  }
+
+  // Check if all parcelas are confirmed → re-read cobranca status (trigger may have updated it)
+  const { data: refreshed } = await adminClient
+    .from("cobrancas")
+    .select("status, parcelas_pagas, total_parcelas")
+    .eq("id", cobranca.id)
+    .single();
+
+  if (refreshed && refreshed.status === 'pago') {
+    console.log(`✅ Cobrança ${cobranca.id} está paga — chamando finalize_gallery_payment`);
+
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('finalize_gallery_payment', {
+      p_cobranca_id: cobranca.id,
+      p_receipt_url: null,
+      p_paid_at: new Date().toISOString(),
+    });
+
+    if (rpcError) {
+      console.error('❌ RPC finalize_gallery_payment error:', rpcError);
+    } else {
+      console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
+    }
+  } else {
+    console.log(`⏳ Cobrança ${cobranca.id}: ${refreshed?.parcelas_pagas}/${refreshed?.total_parcelas} parcelas pagas, status=${refreshed?.status}`);
+  }
+
+  // Log action
+  if (cobranca.galeria_id) {
+    await adminClient.from("galeria_acoes").insert({
+      galeria_id: cobranca.galeria_id,
+      tipo: "pagamento_confirmado",
+      descricao: `Parcela ${numeroParcela} confirmada via Asaas (R$ ${valorBruto.toFixed(2)})`,
+      user_id: null,
+    });
+  }
 }
 
 Deno.serve(async (req) => {
@@ -230,10 +342,12 @@ Deno.serve(async (req) => {
       headers: Object.fromEntries(req.headers.entries()),
     }).then(() => {}, (err) => console.error("Log insert error:", err));
 
-    // Handle payment events
-    if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
+    // ============================================================
+    // PAYMENT EVENTS
+    // ============================================================
+    if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED" || event === "PAYMENT_ANTICIPATED") {
       if (payment?.subscription) {
-        // Subscription payment
+        // === SUBSCRIPTION PAYMENT ===
         await adminClient
           .from("subscriptions_asaas")
           .update({
@@ -244,14 +358,13 @@ Deno.serve(async (req) => {
 
         console.log("Subscription activated:", payment.subscription);
 
-        // Get subscription data for bonus and downgrade checks
         const { data: sub } = await adminClient
           .from("subscriptions_asaas")
           .select("*")
           .eq("asaas_subscription_id", payment.subscription)
           .single();
 
-        // Referral Transfer bonus: activate if referred user has a transfer plan
+        // Referral Transfer bonus
         if (sub) {
           const storageForPlan = STORAGE_LIMITS[sub.plan_type] || 0;
           if (storageForPlan > 0) {
@@ -276,100 +389,9 @@ Deno.serve(async (req) => {
           await applyDowngrade(adminClient, sub);
         }
       } else {
-        // Non-subscription payment (gallery payment via PIX async)
-        console.log("🔍 Looking for gallery cobrança for payment:", payment.id);
-
-        const { data: cobranca, error: cobrancaError } = await adminClient
-          .from("cobrancas")
-          .select("*")
-          .eq("mp_payment_id", payment.id)
-          .eq("provedor", "asaas")
-          .maybeSingle();
-
-        if (cobrancaError) {
-          console.error("Error finding cobrança:", cobrancaError);
-        } else if (cobranca && cobranca.status !== "pago") {
-          console.log(`💰 Processing gallery payment for cobrança ${cobranca.id}`);
-
-          // 1. Update cobrança to paid
-          await adminClient
-            .from("cobrancas")
-            .update({
-              status: "pago",
-              data_pagamento: new Date().toISOString(),
-            })
-            .eq("id", cobranca.id);
-
-          // 2. Update gallery if linked
-          if (cobranca.galeria_id) {
-            const { data: galeria } = await adminClient
-              .from("galerias")
-              .select("id, total_fotos_extras_vendidas, valor_total_vendido")
-              .eq("id", cobranca.galeria_id)
-              .maybeSingle();
-
-            if (galeria) {
-              const extrasAtuais = galeria.total_fotos_extras_vendidas || 0;
-              const extrasNovas = cobranca.qtd_fotos || 0;
-              const valorAtual = Number(galeria.valor_total_vendido) || 0;
-              const valorCobranca = Number(cobranca.valor) || 0;
-
-              await adminClient
-                .from("galerias")
-                .update({
-                  total_fotos_extras_vendidas: extrasAtuais + extrasNovas,
-                  valor_total_vendido: valorAtual + valorCobranca,
-                  status_pagamento: "pago",
-                  status_selecao: "selecao_completa",
-                  finalized_at: new Date().toISOString(),
-                })
-                .eq("id", cobranca.galeria_id);
-
-              console.log(`✅ Gallery ${cobranca.galeria_id} finalized via webhook`);
-            }
-          }
-
-          // 3. Update session if linked
-          if (cobranca.session_id) {
-            const { data: sessao } = await adminClient
-              .from("clientes_sessoes")
-              .select("valor_pago")
-              .eq("session_id", cobranca.session_id)
-              .maybeSingle();
-
-            if (sessao) {
-              const valorAtual = Number(sessao.valor_pago) || 0;
-              const valorCobranca = Number(cobranca.valor) || 0;
-
-              await adminClient
-                .from("clientes_sessoes")
-                .update({
-                  valor_pago: valorAtual + valorCobranca,
-                  status_galeria: "selecao_completa",
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("session_id", cobranca.session_id);
-
-              console.log(`✅ Session ${cobranca.session_id} updated via webhook`);
-            }
-          }
-
-          // 4. Log action
-          if (cobranca.galeria_id) {
-            await adminClient.from("galeria_acoes").insert({
-              galeria_id: cobranca.galeria_id,
-              tipo: "pagamento_confirmado",
-              descricao: `Pagamento de R$ ${Number(cobranca.valor).toFixed(2)} confirmado via Asaas`,
-              user_id: null,
-            });
-          }
-
-          console.log(`✅ Asaas webhook processed: cobrança ${cobranca.id} marked as paid`);
-        } else if (cobranca?.status === "pago") {
-          console.log(`⏭️ Cobrança ${cobranca.id} already paid, skipping`);
-        } else {
-          console.warn(`⚠️ No cobrança found for Asaas payment ${payment.id}`);
-        }
+        // === NON-SUBSCRIPTION PAYMENT (gallery fotos extras, etc.) ===
+        // Process via cobranca_parcelas contract
+        await processGalleryPayment(adminClient, payment);
       }
     }
 
@@ -390,11 +412,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Handle subscription events
+    // ============================================================
+    // SUBSCRIPTION EVENTS
+    // ============================================================
     if (event === "SUBSCRIPTION_DELETED" || event === "SUBSCRIPTION_INACTIVATED") {
       const subId = subscription?.id || body.id;
       if (subId) {
-        // Get subscription before updating status to know the plan
         const { data: sub } = await adminClient
           .from("subscriptions_asaas")
           .select("*")
@@ -424,7 +447,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Expire subscription credits if plan included them
+        // Expire subscription credits
         if (sub) {
           const subCredits = PLAN_SUBSCRIPTION_CREDITS[sub.plan_type];
           if (subCredits && subCredits > 0) {
@@ -458,7 +481,6 @@ Deno.serve(async (req) => {
           .single();
 
         if (sub) {
-          // Renew subscription credits if plan includes them
           const subCredits = PLAN_SUBSCRIPTION_CREDITS[sub.plan_type];
           if (subCredits && subCredits > 0) {
             const { error: creditError } = await adminClient.rpc("renew_subscription_credits", {
@@ -472,7 +494,6 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Check for pending downgrade on renewal
           if (sub.pending_downgrade_plan) {
             await applyDowngrade(adminClient, sub);
           }
