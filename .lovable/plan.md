@@ -1,196 +1,85 @@
 
-# Diagnóstico consolidado: sei exatamente onde o fluxo está quebrando
 
-## Problema real
+# Fix: Sessão acumula fotos extras de seleções abandonadas
 
-Não é “um bug isolado”. Hoje existem 3 falhas estruturais se somando:
+## Problema
 
-1. `asaas-gallery-payment` está **confirmando cartão cedo demais**
-   - para cobrança parcelada, ele cria só a **parcela 1**
-   - chama `finalize_gallery_payment` inline
-   - depois o banco recalcula a cobrança como `parcialmente_pago`
-   - resultado: o frontend recebe “pagamento aprovado”, mas o estado oficial continua incompleto
+Quando o cliente faz uma seleção, não paga, o fotógrafo reativa a galeria, e o cliente faz uma nova seleção com quantidade diferente de extras:
 
-2. `check-payment-status` está **cego para `parcialmente_pago`**
-   - ele só faz polling Asaas quando `status = 'pendente'`
-   - no caso atual a cobrança `82f98c25...` ficou:
-     - `status = parcialmente_pago`
-     - `total_parcelas = 2`
-     - `parcelas_pagas = 1`
-   - então o polling nunca mais consulta o Asaas para buscar a parcela 2
+1. **1ª seleção**: 11 extras → session `qtd_fotos_extra = 11`, `valor_total_foto_extra = R$253`
+2. **Reativação**: gallery reseta status, mas session mantém `qtd_fotos_extra = 11`
+3. **2ª seleção**: 4 extras → `atomic_update_session_extras` faz `11 + 4 = 15` extras na sessão
 
-3. `asaas-webhook` compartilhado está **fora do contrato**
-   - o arquivo atual é legado
-   - ele atualiza `cobrancas/galerias/clientes_sessoes` manualmente
-   - não usa `cobranca_parcelas` como fonte de verdade
-   - não segue a cadeia correta: parcela → reconcile → cobrança → transação → sessão
-   - isso explica os loops de taxa / status / sincronização
+Resultado: Gestão mostra 11 extras (da 1ª seleção), valor R$253 "Pago", com R$161 pendente — quando na verdade só foram vendidas 4 extras por R$92.
 
-## Evidências encontradas
+## Causa raiz
 
-### Caso mais recente
-Cobrança do usuário `07diehl`:
-- `cobranca.id = 82f98c25-9136-4623-8398-7ed7efec638a`
-- `status = parcialmente_pago`
-- `total_parcelas = 2`
-- `parcelas_pagas = 1`
-- `valor_liquido = 7.08`
+`confirm-selection` usa update **incremental** na sessão (`qtd_fotos_extra += extrasACobrar`), mas quando uma seleção é abandonada sem pagamento, o valor anterior nunca é subtraído. A sessão acumula fantasmas.
 
-Parcela existente:
-- só existe `numero_parcela = 1`
-- `asaas_payment_id = pay_w11vq6mxjv6n1yzu`
+A galeria em si não tem esse problema porque usa `total_fotos_extras_vendidas` que só é incrementado no `finalize_gallery_payment` (após pagamento real).
 
-Galeria vinculada:
-- `galeria.id = a8df8bee-f935-486e-81f4-28e8f91ae395`
-- `status_selecao = aguardando_pagamento`
-- `status_pagamento = pendente`
+## Solução
 
-Sessão vinculada:
-- `status_galeria = em_selecao`
+### 1. Mudar `confirm-selection` para usar valores absolutos na sessão
 
-Logs:
-- `check-payment-status` está encontrando essa cobrança repetidamente como `parcialmente_pago`
-- não há continuação do processamento
-- isso confirma o gargalo no polling
+Em vez de incrementar (`+= extrasACobrar`), calcular o **total correto** e fazer SET direto:
 
-## Por que o cliente vê “confirmada” e depois volta ao checkout
-
-O fluxo atual faz isso:
-
-```text
-AsaasCheckout (cartão)
-→ recebe result.paid = true
-→ chama onPaymentConfirmed()
-→ UI muda localmente para "confirmed"
-→ 2s depois refetchGallery()
-→ gallery-access devolve "aguardando_pagamento"
-→ ClientGallery renderiza AsaasCheckout de novo
+```
+qtd_fotos_extra = gallery.total_fotos_extras_vendidas + extrasACobrar
+valor_total_foto_extra = gallery.valor_total_vendido + valorTotal
 ```
 
-Ou seja:
-- a UI está otimista
-- o backend não chegou ao estado terminal real
-- a tela “confirmada” é falsa/temporária
+Isso garante que a sessão sempre reflita a realidade: extras já pagas + extras da seleção atual. Se o cliente abandonar e refizer, o valor será sobrescrito corretamente.
 
-## Correção robusta que vou aplicar
+### 2. Criar nova RPC `set_session_extras` (substituir `atomic_update_session_extras`)
 
-### 1. Corrigir `asaas-gallery-payment`
-Remover a finalização inline prematura para cartão parcelado.
+```sql
+CREATE OR REPLACE FUNCTION public.set_session_extras(
+  p_session_id TEXT,
+  p_total_extras INTEGER,      -- valor absoluto, não incremento
+  p_valor_unitario NUMERIC,
+  p_total_valor NUMERIC,       -- valor absoluto, não incremento
+  p_status_galeria TEXT DEFAULT 'em_selecao'
+)
+```
 
-Implementação:
-- continuar inserindo cobrança sempre como `pendente`
-- **não** chamar `finalize_gallery_payment` logo após criar a cobrança parcelada
-- salvar `asaas_installment_id` como já está
-- para cartão:
-  - se não houver parcelamento, pode processar a cobrança individual com segurança
-  - se houver parcelamento, tratar via webhook/polling consultando todas as parcelas do installment
+Faz `SET qtd_fotos_extra = p_total_extras` em vez de `+= increment`.
 
-Objetivo:
-- parar de “mostrar sucesso” antes da cadeia financeira real terminar
+### 3. Atualizar `finalize_gallery_payment` para sincronizar sessão com a galeria
 
-### 2. Reescrever `check-payment-status` para suportar cobrança parcial
-Hoje ele ignora `parcialmente_pago`. Vou ajustar para:
+Após incrementar `total_fotos_extras_vendidas` e `valor_total_vendido` na galeria, propagar esses valores finais para a sessão:
 
-- consultar Asaas quando status for:
-  - `pendente`
-  - `parcialmente_pago`
-- se houver `asaas_installment_id`, consultar:
-  - `GET /v3/installments/{id}/payments`
-- percorrer todas as parcelas retornadas
-- para cada parcela confirmada:
-  - upsert em `cobranca_parcelas`
-  - usando `onConflict: 'asaas_payment_id'`
-- deixar o trigger `reconcile_cobranca_from_parcelas` recalcular:
-  - `parcelas_pagas`
-  - `valor_liquido`
-  - `status` (`parcialmente_pago` → `pago`)
-- só então chamar `finalize_gallery_payment` como sincronização final
+```sql
+UPDATE clientes_sessoes
+SET qtd_fotos_extra = (SELECT total_fotos_extras_vendidas FROM galerias WHERE id = v_galeria_id),
+    valor_total_foto_extra = (SELECT valor_total_vendido FROM galerias WHERE id = v_galeria_id),
+    status_galeria = 'selecao_completa',
+    status_pagamento_fotos_extra = 'pago'
+WHERE session_id = v_cobranca.session_id;
+```
 
-Objetivo:
-- funcionar mesmo sem webhook
-- concluir automaticamente parcelamentos
+Isso garante que mesmo se houver divergência temporária, ao pagar a sessão será corrigida.
 
-### 3. Reescrever `asaas-webhook` compartilhado no padrão correto
-O arquivo atual está incompatível com a documentação do Gestão.
+### 4. Backfill da sessão Ayla
 
-Vou alinhar ao contrato:
-- validar evento relevante:
-  - `PAYMENT_CONFIRMED`
-  - `PAYMENT_RECEIVED`
-  - `PAYMENT_ANTICIPATED`
-- localizar cobrança por:
-  - `asaas_installment_id = payment.installment` quando existir
-  - fallback `mp_payment_id = payment.id`
-- extrair:
-  - `value`
-  - `netValue`
-  - `installmentNumber`
-  - `billingType`
-- fazer upsert em `cobranca_parcelas` com:
-  - `onConflict: 'asaas_payment_id'`
-- atualizar `cobrancas.valor_liquido`
-- chamar `finalize_gallery_payment`
-- remover atualizações manuais diretas de galeria/sessão/cobrança que hoje burlam os triggers
+Corrigir manualmente a sessão do caso atual:
+```sql
+UPDATE clientes_sessoes
+SET qtd_fotos_extra = 4,
+    valor_total_foto_extra = 92
+WHERE session_id = (SELECT session_id FROM galerias WHERE id = 'f9e617b4-8968-4f1b-a5fc-8b8301ff94bb');
+```
 
-Objetivo:
-- unificar Gallery + Gestão no mesmo contrato robusto
-- impedir novas divergências entre webhook e polling
+## Arquivos a editar
 
-### 4. Blindar o frontend para não mentir ao usuário
-No `AsaasCheckout` / `ClientGallery`:
-
-- parar de considerar “aprovado” apenas porque o create-payment retornou `CONFIRMED`
-- após pagamento, a UI deve entrar em “finalizando/verificando”
-- só liberar `onPaymentConfirmed` quando:
-  - `check-payment-status` retornar `pago`
-  - ou Realtime detectar `cobrancas.status = pago`
-- se estiver `parcialmente_pago`, continuar verificando em vez de exibir sucesso final
-
-Objetivo:
-- eliminar o redirecionamento “confirmada → checkout novamente”
-
-### 5. Preservar compatibilidade com o banco e com o contrato compartilhado
-Vou manter:
-- inserção inicial sempre como `pendente`
-- `cobranca_parcelas` como fonte de verdade
-- `finalize_gallery_payment` como sincronização central
-- integridade com Gestão e com os triggers atuais
-
-Também vou revisar para não tocar indevidamente no fluxo da InfinitePay, conforme sua regra de projeto.
-
-## Arquivos a ajustar
-
-| Arquivo | Correção |
+| Arquivo | Mudança |
 |---|---|
-| `supabase/functions/asaas-gallery-payment/index.ts` | remover finalização prematura e ajustar lógica de cartão/parcelamento |
-| `supabase/functions/check-payment-status/index.ts` | suportar `parcialmente_pago`, consultar installment payments e reconciliar todas as parcelas |
-| `supabase/functions/asaas-webhook/index.ts` | reescrever no contrato correto baseado em parcelas + RPC |
-| `src/components/AsaasCheckout.tsx` | remover sucesso otimista e esperar confirmação real |
-| `src/pages/ClientGallery.tsx` | ajustar retorno pós-pagamento para estado de verificação robusto |
+| Nova migração SQL | Criar RPC `set_session_extras`, atualizar `finalize_gallery_payment` para sincronizar sessão com galeria, backfill Ayla |
+| `supabase/functions/confirm-selection/index.ts` | Substituir chamada incremental `atomic_update_session_extras` por `set_session_extras` com valores absolutos |
 
-## Resultado esperado após a correção
+## Impacto
 
-```text
-Cliente paga no Asaas
-→ cobrança continua pendente/parcial até haver evidência real
-→ webhook OU polling busca parcelas no Asaas
-→ cobranca_parcelas recebe todas as parcelas confirmadas
-→ trigger reconcile atualiza cobrança
-→ quando status virar pago, finalize_gallery_payment sincroniza galeria/sessão
-→ frontend só libera a galeria quando o banco estiver realmente pago
-```
+- Não quebra nenhum fluxo existente (InfinitePay, MercadoPago, Asaas)
+- Resolve a divergência entre Gallery e Gestão para qualquer cenário de reativação
+- A sessão sempre reflete a realidade da galeria, não importa quantas vezes o cliente refaça a seleção
 
-## Impacto prático
-
-Com isso, o sistema passa a ser robusto em 4 cenários:
-- cartão à vista
-- cartão parcelado
-- com webhook configurado
-- sem webhook configurado
-
-E elimina o ciclo atual:
-- taxa corrigida mas status quebra
-- status corrigido mas webhook quebra
-- webhook corrigido mas frontend mente
-
-Essa correção trata o fluxo inteiro, não só uma ponta.
