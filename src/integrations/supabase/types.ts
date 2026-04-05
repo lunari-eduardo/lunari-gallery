@@ -3688,16 +3688,18 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
-      finalize_gallery_payment: {
-        Args: {
-          p_cobranca_id: string
-          p_manual_method?: string
-          p_manual_obs?: string
-          p_paid_at?: string
-          p_receipt_url?: string
-        }
-        Returns: Json
-      }
+      finalize_gallery_payment:
+        | { Args: { p_cobranca_id: string }; Returns: undefined }
+        | {
+            Args: {
+              p_cobranca_id: string
+              p_manual_method?: string
+              p_manual_obs?: string
+              p_paid_at?: string
+              p_receipt_url?: string
+            }
+            Returns: Json
+          }
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
@@ -3767,6 +3769,16 @@ export type Database = {
       register_referral: { Args: { _referral_code: string }; Returns: boolean }
       renew_subscription_credits: {
         Args: { _amount: number; _user_id: string }
+        Returns: undefined
+      }
+      set_session_extras: {
+        Args: {
+          p_session_id: string
+          p_status_galeria?: string
+          p_total_extras: number
+          p_total_valor: number
+          p_valor_unitario: number
+        }
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }
