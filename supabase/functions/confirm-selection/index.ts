@@ -669,36 +669,36 @@ Deno.serve(async (req) => {
     }
 
     // 8. Sync with clientes_sessoes if gallery was created from Gestão
-    // Use CUMULATIVE values for session to maintain accurate totals
+    // Use ABSOLUTE values: gallery.total_fotos_extras_vendidas + current extras
+    // This prevents ghost accumulation when selections are abandoned and redone
     if (gallery.session_id) {
-      // ATOMIC INCREMENT: Avoid read-then-write race conditions
-      // Uses COALESCE + direct increment instead of pre-calculated values
-      const sessionUpdateQuery = supabase.rpc('atomic_update_session_extras', {
+      const totalExtrasAbsoluto = (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar;
+      const totalValorAbsoluto = (gallery.valor_total_vendido || 0) + valorTotal;
+
+      const { error: sessionError } = await supabase.rpc('set_session_extras', {
         p_session_id: gallery.session_id,
-        p_extras_increment: extrasACobrar,
+        p_total_extras: totalExtrasAbsoluto,
         p_valor_unitario: valorUnitario,
-        p_valor_increment: valorTotal,
+        p_total_valor: totalValorAbsoluto,
         p_status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
       });
 
-      const { error: sessionError } = await sessionUpdateQuery;
-
       if (sessionError) {
-        console.error('Session atomic update error:', sessionError);
-        // Fallback: try direct update if RPC doesn't exist yet
+        console.error('Session set_session_extras error:', sessionError);
+        // Fallback: direct update with absolute values
         const { error: fallbackError } = await supabase
           .from('clientes_sessoes')
           .update({
-            qtd_fotos_extra: (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar,
+            qtd_fotos_extra: totalExtrasAbsoluto,
             valor_foto_extra: valorUnitario,
-            valor_total_foto_extra: (gallery.valor_total_vendido || 0) + valorTotal,
+            valor_total_foto_extra: totalValorAbsoluto,
             status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
             updated_at: new Date().toISOString(),
           })
           .eq('session_id', gallery.session_id);
         if (fallbackError) console.error('Session fallback update error:', fallbackError);
       } else {
-        console.log(`✅ Session ${gallery.session_id} atomically updated: +${extrasACobrar} extras, R$ ${valorUnitario}/photo, +R$ ${valorTotal}`);
+        console.log(`✅ Session ${gallery.session_id} set to absolute values: ${totalExtrasAbsoluto} extras, R$ ${valorUnitario}/photo, R$ ${totalValorAbsoluto} total`);
       }
     }
 

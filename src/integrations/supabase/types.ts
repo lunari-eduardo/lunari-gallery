@@ -2292,6 +2292,42 @@ export type Database = {
           },
         ]
       }
+      metas_personalizadas: {
+        Row: {
+          ano: number
+          categoria: string
+          created_at: string | null
+          id: string
+          mes: number
+          meta_faturamento: number
+          meta_lucro: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ano: number
+          categoria?: string
+          created_at?: string | null
+          id?: string
+          mes: number
+          meta_faturamento?: number
+          meta_lucro?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ano?: number
+          categoria?: string
+          created_at?: string | null
+          id?: string
+          mes?: number
+          meta_faturamento?: number
+          meta_lucro?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       modelo_de_preco: {
         Row: {
           created_at: string
@@ -2589,8 +2625,10 @@ export type Database = {
           margem_lucro_desejada: number | null
           meta_faturamento_anual: number | null
           meta_lucro_anual: number | null
+          modo_metas: string | null
           percentual_pro_labore: number | null
           updated_at: string | null
+          usar_metas_personalizadas: boolean | null
           user_id: string
         }
         Insert: {
@@ -2602,8 +2640,10 @@ export type Database = {
           margem_lucro_desejada?: number | null
           meta_faturamento_anual?: number | null
           meta_lucro_anual?: number | null
+          modo_metas?: string | null
           percentual_pro_labore?: number | null
           updated_at?: string | null
+          usar_metas_personalizadas?: boolean | null
           user_id: string
         }
         Update: {
@@ -2615,8 +2655,10 @@ export type Database = {
           margem_lucro_desejada?: number | null
           meta_faturamento_anual?: number | null
           meta_lucro_anual?: number | null
+          modo_metas?: string | null
           percentual_pro_labore?: number | null
           updated_at?: string | null
+          usar_metas_personalizadas?: boolean | null
           user_id?: string
         }
         Relationships: []
@@ -3646,16 +3688,18 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
-      finalize_gallery_payment: {
-        Args: {
-          p_cobranca_id: string
-          p_manual_method?: string
-          p_manual_obs?: string
-          p_paid_at?: string
-          p_receipt_url?: string
-        }
-        Returns: Json
-      }
+      finalize_gallery_payment:
+        | { Args: { p_cobranca_id: string }; Returns: undefined }
+        | {
+            Args: {
+              p_cobranca_id: string
+              p_manual_method?: string
+              p_manual_obs?: string
+              p_paid_at?: string
+              p_receipt_url?: string
+            }
+            Returns: Json
+          }
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
@@ -3725,6 +3769,16 @@ export type Database = {
       register_referral: { Args: { _referral_code: string }; Returns: boolean }
       renew_subscription_credits: {
         Args: { _amount: number; _user_id: string }
+        Returns: undefined
+      }
+      set_session_extras: {
+        Args: {
+          p_session_id: string
+          p_status_galeria?: string
+          p_total_extras: number
+          p_total_valor: number
+          p_valor_unitario: number
+        }
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }
