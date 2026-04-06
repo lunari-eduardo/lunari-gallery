@@ -110,7 +110,7 @@ export function ReactivateGalleryDialog({
                   placeholder="7"
                 />
                 <p className="text-xs text-muted-foreground">
-                  O cliente terá {days} dia{days !== 1 ? 's' : ''} para concluir a seleção.
+                  O cliente terá {days || '0'} dia{days !== '1' ? 's' : ''} para concluir a seleção.
                 </p>
               </div>
             </div>
