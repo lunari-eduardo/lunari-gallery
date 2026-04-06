@@ -39,14 +39,15 @@ export function ReactivateGalleryDialog({
   const [copied, setCopied] = useState(false);
 
   const handleReactivate = async () => {
-    if (days < 1 || days > 90) {
+    const parsed = parseInt(days) || 7;
+    if (parsed < 1 || parsed > 90) {
       toast.error('O prazo deve ser entre 1 e 90 dias');
       return;
     }
 
     setIsLoading(true);
     try {
-      await onReactivate(days);
+      await onReactivate(parsed);
       setShowSuccess(true);
     } catch (error) {
       console.error('Error reactivating gallery:', error);
