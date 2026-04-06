@@ -1123,7 +1123,7 @@ export default function GalleryCreate() {
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
-                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={(e) => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
+                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={(e) => setIncludedPhotos(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} className="max-w-[200px]" />
               </div>
 
               {/* Deadline */}
