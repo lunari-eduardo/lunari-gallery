@@ -1,41 +1,51 @@
 
 
-# Fix: Modais cinza no modo light + inputs que não permitem limpar valor
+# Fix: Histórico duplica "Galeria enviada" ao compartilhar
 
-## Problema 1 — Modais cinza
+## Causa raiz
 
-A variável CSS `--popover` no modo light está definida como `30 30% 98% / 0.42` (42% de opacidade). Quando o modal abre sobre o overlay escuro (`bg-black/80`), o fundo semi-transparente mistura com o preto e fica cinza.
+Duas inserções independentes de ação `enviada` em `galeria_acoes`:
 
-No modo dark, `--popover` é opaco (`20 12% 10%` sem alpha) — por isso só o light mode tem esse problema.
+| Momento | Código | Idempotente? |
+|---|---|---|
+| Modal abre | `prepare_gallery_share` RPC (linha 65) | Sim (`WHERE NOT EXISTS`) |
+| Usuário clica Copiar/WhatsApp | `sendGalleryMutation` no `useSupabaseGalleries.ts` (linha 623) | **Não** |
 
-### Solução
+Resultado: sempre 2 registros.
 
-Alterar `--popover` no light mode para opaco: `30 30% 98%` (sem alpha). O efeito glassmorphism dos modais já vem do `backdrop-blur-xl` e da borda translúcida — a opacidade do fundo não contribui para o glass effect em modais (pois estão sobre overlay escuro, não sobre conteúdo).
+## Solução
 
-O `--card` (usado em cards da página, não modais) permanece com alpha para manter o glassmorphism sobre os backgrounds com gradientes.
+### 1. Remover insert de ação do `sendGalleryMutation`
 
-**Arquivo**: `src/index.css` — linha 16, mudar de `30 30% 98% / 0.42` para `30 30% 98%`
+Em `src/hooks/useSupabaseGalleries.ts` (linhas 620-629), remover o bloco que insere `galeria_acoes` com tipo `enviada`. A RPC `prepare_gallery_share` já faz isso de forma idempotente.
 
-## Problema 2 — Inputs numéricos não permitem limpar
+O `sendGalleryMutation` continuará atualizando status da galeria e sessão — apenas deixa de duplicar o log.
 
-Vários inputs usam o padrão `parseInt(e.target.value) || 7` que força um fallback quando o campo fica vazio. Isso impede o usuário de apagar o valor e digitar um novo.
+### 2. Adicionar unique partial index para segurança futura
 
-### Solução
+Nova migração SQL:
 
-Trocar o estado de `number` para `string`, permitir string vazia durante edição, e converter para número apenas na validação/submit.
+```sql
+-- Remove duplicatas existentes
+DELETE FROM galeria_acoes a
+USING galeria_acoes b
+WHERE a.tipo = 'enviada'
+  AND b.tipo = 'enviada'
+  AND a.galeria_id = b.galeria_id
+  AND a.created_at > b.created_at;
 
-**Arquivos afetados**:
-- `src/components/ReactivateGalleryDialog.tsx` — `days` passa a ser string, converte em `handleReactivate`
-- `src/pages/GalleryCreate.tsx` — `includedPhotos`, `customDays` e campos de pacotes de desconto
-- `src/pages/GalleryEdit.tsx` — `fotosIncluidas`
-- `src/components/settings/GeneralSettings.tsx` — `defaultExpirationDays`
-
-Padrão novo para cada input:
-```tsx
-const [days, setDays] = useState('7');
-// ...
-<Input value={days} onChange={(e) => setDays(e.target.value)} />
-// No submit:
-const parsed = parseInt(days) || defaultValue;
+-- Índice único parcial para evitar duplicatas futuras
+CREATE UNIQUE INDEX IF NOT EXISTS idx_galeria_acoes_enviada_unique
+ON galeria_acoes (galeria_id, tipo)
+WHERE tipo = 'enviada';
 ```
+
+**Nota**: este índice impediria logar um novo envio após reativação. Para suportar isso no futuro, a RPC de reativação precisaria deletar o registro antigo de `enviada` antes de reenviar. Mas hoje o comportamento desejado é exatamente 1 registro por galeria.
+
+## Arquivos a editar
+
+| Arquivo | Mudança |
+|---|---|
+| `src/hooks/useSupabaseGalleries.ts` | Remover linhas 620-629 (insert em `galeria_acoes`) |
+| Nova migração SQL | Limpar duplicatas + criar unique partial index |
 
