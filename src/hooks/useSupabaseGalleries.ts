@@ -617,16 +617,7 @@ export function useSupabaseGalleries() {
           .eq('session_id', gallery.sessionId);
       }
 
-      // Log action
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('galeria_acoes').insert({
-          galeria_id: id,
-          user_id: user.id,
-          tipo: 'enviada',
-          descricao: 'Galeria enviada para o cliente',
-        });
-      }
+      // Log action handled by prepare_gallery_share RPC (idempotent)
 
       return { publicToken };
     },
