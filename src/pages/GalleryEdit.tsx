@@ -492,8 +492,8 @@ export default function GalleryEdit() {
                     id="fotosIncluidas"
                     type="number"
                     min="0"
-                    value={fotosIncluidas}
-                    onChange={(e) => setFotosIncluidas(parseInt(e.target.value) || 0)}
+                    value={fotosIncluidas || ''}
+                    onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
                   />
                 </div>
                 
