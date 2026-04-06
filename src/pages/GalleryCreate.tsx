@@ -1133,7 +1133,7 @@ export default function GalleryCreate() {
                   <Label>Prazo de Seleção *</Label>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Input type="number" min={1} max={90} value={customDays} onChange={(e) => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
+                  <Input type="number" min={1} max={90} value={customDays || ''} onChange={(e) => setCustomDays(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} className="w-24" />
                   <span className="text-muted-foreground">dias</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
