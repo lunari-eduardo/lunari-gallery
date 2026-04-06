@@ -70,7 +70,7 @@ export function ReactivateGalleryDialog({
     setOpen(false);
     setTimeout(() => {
       setShowSuccess(false);
-      setDays(7);
+      setDays('7');
       setCopied(false);
     }, 200);
   };
