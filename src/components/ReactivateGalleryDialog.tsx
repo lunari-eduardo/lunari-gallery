@@ -33,20 +33,21 @@ export function ReactivateGalleryDialog({
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? (controlledOnOpenChange || (() => {})) : setInternalOpen;
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState('7');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleReactivate = async () => {
-    if (days < 1 || days > 90) {
+    const parsed = parseInt(days) || 7;
+    if (parsed < 1 || parsed > 90) {
       toast.error('O prazo deve ser entre 1 e 90 dias');
       return;
     }
 
     setIsLoading(true);
     try {
-      await onReactivate(days);
+      await onReactivate(parsed);
       setShowSuccess(true);
     } catch (error) {
       console.error('Error reactivating gallery:', error);
@@ -69,7 +70,7 @@ export function ReactivateGalleryDialog({
     setOpen(false);
     setTimeout(() => {
       setShowSuccess(false);
-      setDays(7);
+      setDays('7');
       setCopied(false);
     }, 200);
   };
@@ -105,11 +106,11 @@ export function ReactivateGalleryDialog({
                   min={1}
                   max={90}
                   value={days}
-                  onChange={(e) => setDays(parseInt(e.target.value) || 7)}
+                  onChange={(e) => setDays(e.target.value)}
                   placeholder="7"
                 />
                 <p className="text-xs text-muted-foreground">
-                  O cliente terá {days} dia{days !== 1 ? 's' : ''} para concluir a seleção.
+                  O cliente terá {days || '0'} dia{days !== '1' ? 's' : ''} para concluir a seleção.
                 </p>
               </div>
             </div>
@@ -130,7 +131,7 @@ export function ReactivateGalleryDialog({
                 Galeria Reativada!
               </DialogTitle>
               <DialogDescription>
-                A seleção foi reaberta com prazo de {days} dias. Envie o link abaixo para o cliente.
+                A seleção foi reaberta com prazo de {days || '7'} dias. Envie o link abaixo para o cliente.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

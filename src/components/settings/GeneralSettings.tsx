@@ -103,12 +103,17 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
               type="number"
               min={1}
               max={90}
-              value={settings.defaultExpirationDays}
+              value={settings.defaultExpirationDays ?? ''}
               onChange={(e) =>
                 updateSettings({
-                  defaultExpirationDays: parseInt(e.target.value) || 10,
+                  defaultExpirationDays: e.target.value === '' ? ('' as any) : (parseInt(e.target.value) || 0),
                 })
               }
+              onBlur={() => {
+                if (!settings.defaultExpirationDays) {
+                  updateSettings({ defaultExpirationDays: 10 });
+                }
+              }}
               className="w-24"
             />
             <span className="text-muted-foreground">dias</span>

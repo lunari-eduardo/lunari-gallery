@@ -492,8 +492,8 @@ export default function GalleryEdit() {
                     id="fotosIncluidas"
                     type="number"
                     min="0"
-                    value={fotosIncluidas}
-                    onChange={(e) => setFotosIncluidas(parseInt(e.target.value) || 0)}
+                    value={fotosIncluidas || ''}
+                    onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
                   />
                 </div>
                 
@@ -504,8 +504,8 @@ export default function GalleryEdit() {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={valorFotoExtra}
-                    onChange={(e) => setValorFotoExtra(parseFloat(e.target.value) || 0)}
+                    value={valorFotoExtra || ''}
+                    onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                   />
                 </div>
               </div>

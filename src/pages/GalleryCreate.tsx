@@ -1123,7 +1123,7 @@ export default function GalleryCreate() {
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="includedPhotos">Fotos Incluídas no Pacote *</Label>
-                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={(e) => setIncludedPhotos(parseInt(e.target.value) || 0)} className="max-w-[200px]" />
+                <Input id="includedPhotos" type="number" min={1} value={includedPhotos} onChange={(e) => setIncludedPhotos(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} className="max-w-[200px]" />
               </div>
 
               {/* Deadline */}
@@ -1133,7 +1133,7 @@ export default function GalleryCreate() {
                   <Label>Prazo de Seleção *</Label>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Input type="number" min={1} max={90} value={customDays} onChange={(e) => setCustomDays(parseInt(e.target.value) || 10)} className="w-24" />
+                  <Input type="number" min={1} max={90} value={customDays || ''} onChange={(e) => setCustomDays(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} className="w-24" />
                   <span className="text-muted-foreground">dias</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1311,7 +1311,7 @@ export default function GalleryCreate() {
                               
                               {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
                                   <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={(e) => e.stopPropagation()} />
+                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice || ''} onChange={(e) => setFixedPrice(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} className="mt-2" onClick={(e) => e.stopPropagation()} />
                                 </div>}
                             </Label>
                           </div>
