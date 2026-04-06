@@ -131,7 +131,7 @@ export function ReactivateGalleryDialog({
                 Galeria Reativada!
               </DialogTitle>
               <DialogDescription>
-                A seleção foi reaberta com prazo de {days} dias. Envie o link abaixo para o cliente.
+                A seleção foi reaberta com prazo de {days || '7'} dias. Envie o link abaixo para o cliente.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

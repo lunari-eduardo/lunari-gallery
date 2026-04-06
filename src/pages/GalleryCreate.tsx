@@ -1311,7 +1311,7 @@ export default function GalleryCreate() {
                               
                               {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
                                   <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice} onChange={(e) => setFixedPrice(parseFloat(e.target.value) || 0)} className="mt-2" onClick={(e) => e.stopPropagation()} />
+                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice || ''} onChange={(e) => setFixedPrice(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} className="mt-2" onClick={(e) => e.stopPropagation()} />
                                 </div>}
                             </Label>
                           </div>
