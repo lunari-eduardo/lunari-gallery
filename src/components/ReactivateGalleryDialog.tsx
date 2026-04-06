@@ -106,7 +106,7 @@ export function ReactivateGalleryDialog({
                   min={1}
                   max={90}
                   value={days}
-                  onChange={(e) => setDays(parseInt(e.target.value) || 7)}
+                  onChange={(e) => setDays(e.target.value)}
                   placeholder="7"
                 />
                 <p className="text-xs text-muted-foreground">
