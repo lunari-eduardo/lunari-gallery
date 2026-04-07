@@ -416,6 +416,10 @@ Deno.serve(async (req) => {
       data_pagamento: null,
       total_parcelas: totalParcelas,
       asaas_installment_id: paymentData.installment || null,
+      dados_extras: {
+        repassarTaxasProcessamento: !settings.absorverTaxa,
+        repassarTaxaAntecipacao: false,
+      },
     };
 
     if (finalBillingType === 'PIX' && pixData) {
