@@ -1,43 +1,64 @@
 
-# Fix: Galeria não atualiza extras/valor quando pagamento Asaas tem parcelas
+
+# Fix: Taxas de gateway registradas como despesa do fotógrafo mesmo quando cliente paga
 
 ## Causa raiz
 
-O fluxo Asaas com parcelas segue este caminho:
+O trigger `ensure_transaction_on_cobranca_paid` lê as flags de repasse de `cobrancas.dados_extras`:
 
-1. `check-payment-status` → upsert parcela(s) na tabela `cobranca_parcelas`
-2. Trigger `reconcile_cobranca_from_parcelas` dispara → atualiza `cobrancas.status = 'pago'`
-3. `check-payment-status` chama `finalize_gallery_payment`
-4. **BUG**: A RPC detecta que parcelas já existem (linha 106-116) e retorna `delegated_to_parcelas: true` **SEM atualizar** `galerias.total_fotos_extras_vendidas` nem `valor_total_vendido`
+```sql
+v_repassar_processamento := COALESCE((NEW.dados_extras->>'repassarTaxasProcessamento')::boolean, false);
+```
 
-O trigger de reconciliação só atualiza a tabela `cobrancas` — não toca na tabela `galerias`. E a RPC retorna cedo demais.
+Porém, **nenhuma das duas Edge Functions** que criam cobranças Asaas salva `dados_extras` com essas flags:
 
-Resultado: cobrança fica "pago" mas galeria mantém `total_fotos_extras_vendidas = 0` e `valor_total_vendido = 0`.
+- `asaas-gallery-payment` (Gallery) — `cobrancaData` não inclui `dados_extras`
+- `gestao-asaas-create-payment` (Gestão) — mesmo problema
+
+Resultado: `dados_extras = NULL` → `repassarTaxasProcessamento = false` → trigger registra taxa de R$1,76 como despesa do fotógrafo, mesmo quando o cliente pagou as taxas (`!absorverTaxa`).
 
 ## Solução
 
-Alterar o branch `delegated_to_parcelas` na RPC `finalize_gallery_payment` para **também** sincronizar a galeria e sessão quando a cobrança já estiver paga pelo trigger.
+Adicionar `dados_extras` com as flags de repasse no INSERT da cobrança, em ambas as functions.
 
-A lógica será:
-1. Detectou que parcelas existem? Re-lê a cobrança (que o trigger pode ter atualizado para `pago`)
-2. Se status = `pago`: atualiza `galerias.total_fotos_extras_vendidas`, `valor_total_vendido`, `status_pagamento`, e sincroniza sessão
-3. Se status ≠ `pago`: retorna sem alterar (parcelas ainda não completaram)
+### 1. `asaas-gallery-payment/index.ts` (Gallery)
 
-Isso é seguro porque a galeria é atualizada com `COALESCE(total_fotos_extras_vendidas, 0) + qtd_fotos` apenas quando o status final é `pago`, e o advisory lock impede dupla execução.
+Após montar `cobrancaData` (linha ~419), adicionar:
 
-## Arquivo a editar
+```typescript
+// Save repasse flags so trigger creates correct transaction
+cobrancaData.dados_extras = {
+  repassarTaxasProcessamento: !settings.absorverTaxa,
+  repassarTaxaAntecipacao: false, // Gallery currently doesn't support anticipation repasse
+};
+```
+
+A lógica já existe: `settings.absorverTaxa` é lido da integração. Se `absorverTaxa = true`, o fotógrafo absorve → `repassar = false` → trigger registra taxa. Se `absorverTaxa = false`, cliente paga → `repassar = true` → trigger NÃO registra taxa.
+
+### 2. Problema no Gestão (notificação)
+
+O mesmo bug existe em `gestao-asaas-create-payment/index.ts` do projeto [Lunari_gestão](/projects/21abfd0b-b5cd-4139-9caf-a27593cb49ee). A function calcula `repassarTaxas` e `repassarAntecipacao` nas linhas 219-221, mas não salva em `dados_extras` da cobrança. **Essa correção precisa ser feita no projeto Gestão também.**
+
+### 3. Correção retroativa
+
+A cobrança `bb08db9d` já foi finalizada com taxa incorreta. Corrigir a transação existente:
+
+```sql
+UPDATE clientes_transacoes
+SET taxa_gateway = 0,
+    valor_liquido = 50
+WHERE cobranca_id = 'bb08db9d-08fc-411b-a725-37dde55b50b4';
+```
+
+## Arquivos a editar
 
 | Arquivo | Mudança |
 |---|---|
-| Nova migração SQL | Alterar a RPC `finalize_gallery_payment` — no branch `v_has_parcelas`, re-ler cobrança e sincronizar galeria/sessão se status=pago |
+| `supabase/functions/asaas-gallery-payment/index.ts` | Adicionar `dados_extras` com flags de repasse no `cobrancaData` |
+| Nova migração SQL | Corrigir transação da cobrança `bb08db9d` |
+| **Gestão** (outro projeto) | Mesmo fix em `gestao-asaas-create-payment/index.ts` — adicionar `dados_extras` com `repassarTaxas` e `repassarAntecipacao` |
 
-Nenhuma mudança em Edge Functions — a RPC será atualizada no banco e todas as funções que a chamam se beneficiam automaticamente.
+## Nota importante
 
-## Correção retroativa
+A correção no projeto Gestão deve ser feita separadamente naquele projeto. Aqui corrigiremos apenas a parte do Gallery e a migração de dados.
 
-Atualizar a galeria `294ab43c` que ficou com valores zerados:
-```sql
-UPDATE galerias
-SET total_fotos_extras_vendidas = 2, valor_total_vendido = 50
-WHERE id = '294ab43c-5078-4ff5-92d9-4649cc5933a1';
-```
