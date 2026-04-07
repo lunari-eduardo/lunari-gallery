@@ -3703,6 +3703,10 @@ export type Database = {
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
       get_access_state: { Args: never; Returns: Json }
+      get_formulario_resposta_publica: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       get_photo_credit_balance: { Args: { _user_id: string }; Returns: number }
       get_photographer_account: {
         Args: { _user_id: string }
