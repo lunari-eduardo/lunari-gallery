@@ -1,64 +1,64 @@
 
 
-# Fix: Taxas de gateway registradas como despesa do fotógrafo mesmo quando cliente paga
+# Fix: Validação de seleção mínima + limpeza de código morto
 
-## Causa raiz
+## Problema 1 — Sem validação de fotos mínimas
 
-O trigger `ensure_transaction_on_cobranca_paid` lê as flags de repasse de `cobrancas.dados_extras`:
+Atualmente, o cliente pode confirmar a seleção com 0 fotos ou menos fotos do que o pacote incluído (ex: pacote de 30, seleciona 5). Não existe nenhum bloqueio ou aviso — nem no frontend nem no backend.
 
-```sql
-v_repassar_processamento := COALESCE((NEW.dados_extras->>'repassarTaxasProcessamento')::boolean, false);
-```
+**Comportamento desejado**: ao clicar em "Confirmar Seleção" com menos fotos do que `includedPhotos`, exibir um dialog elegante informando que o pacote inclui X fotos mas apenas Y foram selecionadas, perguntando se deseja prosseguir mesmo assim. Se o cliente confirmar, a seleção prossegue normalmente.
 
-Porém, **nenhuma das duas Edge Functions** que criam cobranças Asaas salva `dados_extras` com essas flags:
+## Problema 2 — Código morto
 
-- `asaas-gallery-payment` (Gallery) — `cobrancaData` não inclui `dados_extras`
-- `gestao-asaas-create-payment` (Gestão) — mesmo problema
+Encontrei os seguintes itens obsoletos:
 
-Resultado: `dados_extras = NULL` → `repassarTaxasProcessamento = false` → trigger registra taxa de R$1,76 como despesa do fotógrafo, mesmo quando o cliente pagou as taxas (`!absorverTaxa`).
+| Item | Localização | Status |
+|---|---|---|
+| `calculatePhotoPrice()` | `src/hooks/useGalleries.ts` | Nunca importada — 100% dead code |
+| `useGalleries.ts` inteiro | `src/hooks/useGalleries.ts` | Arquivo inteiro é dead code (sem imports) |
 
 ## Solução
 
-Adicionar `dados_extras` com as flags de repasse no INSERT da cobrança, em ambas as functions.
+### 1. Dialog de confirmação de seleção mínima (frontend)
 
-### 1. `asaas-gallery-payment/index.ts` (Gallery)
+Em `src/pages/ClientGallery.tsx`, na função `handleStartConfirmation`:
 
-Após montar `cobrancaData` (linha ~419), adicionar:
+```
+Se selectedCount < gallery.includedPhotos E selectedCount > 0:
+  → Abre AlertDialog com mensagem:
+    "Seu pacote inclui {includedPhotos} fotos, mas você selecionou apenas {selectedCount}."
+    "As fotos não selecionadas não poderão ser recuperadas depois."
+    "Deseja confirmar mesmo assim?"
+  → Botão "Sim, confirmar" → prossegue para step 'confirmation'
+  → Botão "Voltar e selecionar mais" → fecha dialog
 
-```typescript
-// Save repasse flags so trigger creates correct transaction
-cobrancaData.dados_extras = {
-  repassarTaxasProcessamento: !settings.absorverTaxa,
-  repassarTaxaAntecipacao: false, // Gallery currently doesn't support anticipation repasse
-};
+Se selectedCount === 0:
+  → Toast de erro: "Selecione pelo menos uma foto para confirmar"
+  → Não avança
 ```
 
-A lógica já existe: `settings.absorverTaxa` é lido da integração. Se `absorverTaxa = true`, o fotógrafo absorve → `repassar = false` → trigger registra taxa. Se `absorverTaxa = false`, cliente paga → `repassar = true` → trigger NÃO registra taxa.
+O dialog usará `AlertDialog` do shadcn/ui (já existe no projeto), com estilo consistente ao sistema.
 
-### 2. Problema no Gestão (notificação)
+### 2. Validação no backend (segurança)
 
-O mesmo bug existe em `gestao-asaas-create-payment/index.ts` do projeto [Lunari_gestão](/projects/21abfd0b-b5cd-4139-9caf-a27593cb49ee). A function calcula `repassarTaxas` e `repassarAntecipacao` nas linhas 219-221, mas não salva em `dados_extras` da cobrança. **Essa correção precisa ser feita no projeto Gestão também.**
+Em `supabase/functions/confirm-selection/index.ts`, após contar `selectedCount` no servidor (linha ~236):
 
-### 3. Correção retroativa
-
-A cobrança `bb08db9d` já foi finalizada com taxa incorreta. Corrigir a transação existente:
-
-```sql
-UPDATE clientes_transacoes
-SET taxa_gateway = 0,
-    valor_liquido = 50
-WHERE cobranca_id = 'bb08db9d-08fc-411b-a725-37dde55b50b4';
 ```
+Se selectedCount === 0:
+  → rollback + retorna erro 400: "Nenhuma foto selecionada"
+```
+
+Não bloqueia seleção menor que `includedPhotos` no backend (apenas aviso no frontend), porque o fotógrafo pode ter combinado isso com o cliente.
+
+### 3. Remoção de código morto
+
+Deletar `src/hooks/useGalleries.ts` — arquivo inteiro não é importado em lugar nenhum.
 
 ## Arquivos a editar
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/asaas-gallery-payment/index.ts` | Adicionar `dados_extras` com flags de repasse no `cobrancaData` |
-| Nova migração SQL | Corrigir transação da cobrança `bb08db9d` |
-| **Gestão** (outro projeto) | Mesmo fix em `gestao-asaas-create-payment/index.ts` — adicionar `dados_extras` com `repassarTaxas` e `repassarAntecipacao` |
-
-## Nota importante
-
-A correção no projeto Gestão deve ser feita separadamente naquele projeto. Aqui corrigiremos apenas a parte do Gallery e a migração de dados.
+| `src/pages/ClientGallery.tsx` | Adicionar state + AlertDialog para seleção mínima, e check de 0 fotos |
+| `supabase/functions/confirm-selection/index.ts` | Rejeitar `selectedCount === 0` com erro 400 |
+| `src/hooks/useGalleries.ts` | Deletar arquivo |
 
