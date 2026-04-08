@@ -1566,12 +1566,28 @@ export default function GalleryCreate() {
                         </p>
                       </div>
                     </div>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-1" />
-                        {showUploadedPhotos ? 'Ocultar' : 'Ver fotos'}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDeleteAllDialog(true)}
+                        disabled={isDeletingAll || isUploadingPhotos}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                      >
+                        {isDeletingAll ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        {isDeletingAll ? 'Excluindo...' : 'Excluir todas'}
                       </Button>
-                    </CollapsibleTrigger>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Eye className="h-4 w-4 mr-1" />
+                          {showUploadedPhotos ? 'Ocultar' : 'Ver fotos'}
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
                   </div>
                 </div>
                 <CollapsibleContent>
