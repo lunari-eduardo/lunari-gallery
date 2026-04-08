@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
 import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission, PaymentMethod, TitleCaseMode } from '@/types/gallery';
 import { cn } from '@/lib/utils';
@@ -172,6 +173,8 @@ export default function GalleryCreate() {
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [uploadErrorCount, setUploadErrorCount] = useState(0);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   // Folder management
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -213,6 +216,53 @@ export default function GalleryCreate() {
       toast.error('Erro ao excluir foto');
     } finally {
       setDeletingPhotoId(null);
+    }
+  };
+
+  const handleDeleteAllPhotos = async () => {
+    if (!supabaseGalleryId || uploadedPhotos.length === 0 || isDeletingAll) return;
+    setIsDeletingAll(true);
+    setShowDeleteAllDialog(false);
+    const totalPhotos = uploadedPhotos.length;
+    try {
+      const photoIds = uploadedPhotos.map(p => p.id);
+      
+      // Call edge function directly to batch-delete all photos
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+      const response = await fetch(
+        `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/delete-photos`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ galleryId: supabaseGalleryId, photoIds }),
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Falha ao excluir fotos');
+      }
+
+      // Refund credits
+      if (user) {
+        for (let i = 0; i < totalPhotos; i++) {
+          await supabase.rpc('refund_photo_credit' as any, { _user_id: user.id });
+        }
+        queryClient.invalidateQueries({ queryKey: ['photo-credits'] });
+      }
+
+      setUploadedPhotos([]);
+      setUploadedCount(0);
+      setShowUploadedPhotos(false);
+      toast.success(`${totalPhotos} fotos excluídas e créditos devolvidos`);
+    } catch (err) {
+      console.error('Error deleting all photos:', err);
+      toast.error('Erro ao excluir fotos. Tente novamente.');
+    } finally {
+      setIsDeletingAll(false);
     }
   };
 
@@ -1516,12 +1566,28 @@ export default function GalleryCreate() {
                         </p>
                       </div>
                     </div>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-1" />
-                        {showUploadedPhotos ? 'Ocultar' : 'Ver fotos'}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDeleteAllDialog(true)}
+                        disabled={isDeletingAll || isUploadingPhotos}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                      >
+                        {isDeletingAll ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        {isDeletingAll ? 'Excluindo...' : 'Excluir todas'}
                       </Button>
-                    </CollapsibleTrigger>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Eye className="h-4 w-4 mr-1" />
+                          {showUploadedPhotos ? 'Ocultar' : 'Ver fotos'}
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
                   </div>
                 </div>
                 <CollapsibleContent>
@@ -1551,6 +1617,23 @@ export default function GalleryCreate() {
                 </CollapsibleContent>
               </Collapsible>
             )}
+
+            <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir todas as fotos?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja excluir todas as {uploadedCount} fotos desta galeria? Os créditos serão devolvidos automaticamente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAllPhotos} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Excluir todas
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             
           </div>;
