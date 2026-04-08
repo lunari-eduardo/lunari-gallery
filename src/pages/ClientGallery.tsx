@@ -25,6 +25,16 @@ import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { AsaasCheckout, AsaasCheckoutData } from '@/components/AsaasCheckout';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 import { DownloadModal } from '@/components/DownloadModal';
 import { getPhotoUrl, getOriginalPhotoUrl } from '@/lib/photoUrl';
@@ -1225,8 +1235,24 @@ export default function ClientGallery() {
     selectionMutation.mutate({ photoId, action: 'favorite' });
   };
 
+  // State for partial selection warning dialog
+  const [showPartialSelectionDialog, setShowPartialSelectionDialog] = useState(false);
+
   const handleStartConfirmation = () => {
-    // Go directly to unified confirmation screen (skips separate review step)
+    const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
+    
+    // Block empty selection
+    if (currentSelectedCount === 0) {
+      toast.error('Selecione pelo menos uma foto para confirmar');
+      return;
+    }
+    
+    // Warn if selecting fewer than included photos
+    if (currentSelectedCount < gallery.includedPhotos) {
+      setShowPartialSelectionDialog(true);
+      return;
+    }
+    
     setCurrentStep('confirmation');
   };
 
