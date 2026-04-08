@@ -25,6 +25,16 @@ import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
 import { PixPaymentScreen } from '@/components/PixPaymentScreen';
 import { AsaasCheckout, AsaasCheckoutData } from '@/components/AsaasCheckout';
 import { ClientGalleryHeader, FilterMode } from '@/components/ClientGalleryHeader';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 import { DownloadModal } from '@/components/DownloadModal';
 import { getPhotoUrl, getOriginalPhotoUrl } from '@/lib/photoUrl';
@@ -103,6 +113,7 @@ export default function ClientGallery() {
   const [hasAutoOpenedDownload, setHasAutoOpenedDownload] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [folderViewMode, setFolderViewMode] = useState<'albums' | 'grid'>('albums');
+  const [showPartialSelectionDialog, setShowPartialSelectionDialog] = useState(false);
   
   
   // Payment state
@@ -1225,8 +1236,22 @@ export default function ClientGallery() {
     selectionMutation.mutate({ photoId, action: 'favorite' });
   };
 
+
   const handleStartConfirmation = () => {
-    // Go directly to unified confirmation screen (skips separate review step)
+    const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
+    
+    // Block empty selection
+    if (currentSelectedCount === 0) {
+      toast.error('Selecione pelo menos uma foto para confirmar');
+      return;
+    }
+    
+    // Warn if selecting fewer than included photos
+    if (currentSelectedCount < gallery.includedPhotos) {
+      setShowPartialSelectionDialog(true);
+      return;
+    }
+    
     setCurrentStep('confirmation');
   };
 
@@ -1838,6 +1863,29 @@ export default function ClientGallery() {
           />
         );
       })()}
+
+      {/* Partial selection warning dialog */}
+      <AlertDialog open={showPartialSelectionDialog} onOpenChange={setShowPartialSelectionDialog}>
+        <AlertDialogContent style={themeStyles}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Seleção abaixo do pacote</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Seu pacote inclui <strong>{gallery?.includedPhotos}</strong> fotos, mas você selecionou apenas{' '}
+                <strong>{localPhotos.filter(p => p.isSelected).length}</strong>.
+              </p>
+              <p>As fotos não selecionadas não poderão ser recuperadas depois.</p>
+              <p>Deseja confirmar mesmo assim?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar e selecionar mais</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setCurrentStep('confirmation')}>
+              Sim, confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
