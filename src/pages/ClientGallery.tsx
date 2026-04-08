@@ -113,6 +113,7 @@ export default function ClientGallery() {
   const [hasAutoOpenedDownload, setHasAutoOpenedDownload] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [folderViewMode, setFolderViewMode] = useState<'albums' | 'grid'>('albums');
+  const [showPartialSelectionDialog, setShowPartialSelectionDialog] = useState(false);
   
   
   // Payment state
@@ -1235,8 +1236,6 @@ export default function ClientGallery() {
     selectionMutation.mutate({ photoId, action: 'favorite' });
   };
 
-  // State for partial selection warning dialog
-  const [showPartialSelectionDialog, setShowPartialSelectionDialog] = useState(false);
 
   const handleStartConfirmation = () => {
     const currentSelectedCount = localPhotos.filter(p => p.isSelected).length;
