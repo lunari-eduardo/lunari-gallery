@@ -219,6 +219,35 @@ export default function GalleryCreate() {
     }
   };
 
+  const handleDeleteAllPhotos = async () => {
+    if (!supabaseGalleryId || uploadedPhotos.length === 0 || isDeletingAll) return;
+    setIsDeletingAll(true);
+    setShowDeleteAllDialog(false);
+    const totalPhotos = uploadedPhotos.length;
+    try {
+      const photoIds = uploadedPhotos.map(p => p.id);
+      await deletePhoto({ galleryId: supabaseGalleryId, photoId: photoIds[0], photoIds });
+
+      // Refund credits sequentially
+      if (user) {
+        for (let i = 0; i < totalPhotos; i++) {
+          await supabase.rpc('refund_photo_credit' as any, { _user_id: user.id });
+        }
+        queryClient.invalidateQueries({ queryKey: ['photo-credits'] });
+      }
+
+      setUploadedPhotos([]);
+      setUploadedCount(0);
+      setShowUploadedPhotos(false);
+      toast.success(`${totalPhotos} fotos excluídas e créditos devolvidos`);
+    } catch (err) {
+      console.error('Error deleting all photos:', err);
+      toast.error('Erro ao excluir fotos. Tente novamente.');
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   // Step 4: Settings
   const [welcomeMessage, setWelcomeMessage] = useState(defaultWelcomeMessage);
   const [welcomeMessageEnabled, setWelcomeMessageEnabled] = useState(true);
