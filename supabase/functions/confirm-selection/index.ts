@@ -236,6 +236,18 @@ Deno.serve(async (req) => {
     const selectedCount = serverSelectedCount || 0;
     console.log(`🔒 Server-side selected count: ${selectedCount} (frontend sent: ${body.selectedCount})`);
 
+    // Block empty selections
+    if (selectedCount === 0) {
+      await supabase.from('galerias').update({
+        status_selecao: 'selecao_iniciada',
+        updated_at: new Date().toISOString(),
+      }).eq('id', galleryId);
+      return new Response(
+        JSON.stringify({ error: 'Nenhuma foto selecionada' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
 
     // 1. Acquire atomic lock on gallery to prevent concurrent confirmations
     const { data: lockResult, error: lockError } = await supabase.rpc('try_lock_gallery_selection', {
