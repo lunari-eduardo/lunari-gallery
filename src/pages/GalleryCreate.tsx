@@ -173,6 +173,8 @@ export default function GalleryCreate() {
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [uploadErrorCount, setUploadErrorCount] = useState(0);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   // Folder management
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
