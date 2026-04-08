@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { defaultWelcomeMessage } from '@/data/mockData';
 import { DeadlinePreset, WatermarkType, ImageResizeOption, WatermarkDisplay, Client, SaleMode, PricingModel, ChargeType, DiscountPackage, SaleSettings, DiscountPreset, GalleryPermission, PaymentMethod, TitleCaseMode } from '@/types/gallery';
 import { cn } from '@/lib/utils';
