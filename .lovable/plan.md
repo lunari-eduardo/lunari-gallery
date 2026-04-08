@@ -1,39 +1,39 @@
 
-
-# Fix: Substituir "checkout" por linguagem acessível ao cliente final
+# Adicionar "Excluir todas as fotos" na criação de galeria
 
 ## Problema
 
-O cliente final não entende "checkout". Termos técnicos como "Preparando checkout seguro", "Abrir checkout novamente" e "Abrir checkout" aparecem em 3 componentes voltados ao cliente.
+Após o upload ser concluído, o fotógrafo só pode excluir fotos uma a uma. Se enviou as fotos erradas, precisa refazer a galeria inteira — não existe opção de limpar tudo de uma vez.
 
-## Alterações
+## Solução
 
-### 1. `src/components/PaymentRedirect.tsx`
+Adicionar um botão "Excluir todas" ao lado do botão "Ver fotos" / "Ocultar" na seção de fotos enviadas. Ao clicar, abre um `AlertDialog` de confirmação. Após confirmar, a exclusão acontece em background (batch via Edge Function `delete-photos`) com feedback visual de progresso.
 
-| Linha | Antes | Depois |
-|---|---|---|
-| 132 | `Preparando checkout seguro...` | `Preparando seu pagamento...` |
+### Fluxo do usuário
 
-(O botão na linha 144 já diz "Ir para pagamento agora" — está OK.)
+1. Fotos enviadas → seção mostra "5 fotos enviadas" com botões "Ver fotos" e **"Excluir todas"**
+2. Clica em "Excluir todas" → AlertDialog: "Tem certeza que deseja excluir todas as {N} fotos? Os créditos serão devolvidos."
+3. Confirma → botão muda para spinner "Excluindo..." → chama `delete-photos` com todos os IDs de uma vez
+4. Sucesso → toast "X fotos excluídas e créditos devolvidos" → lista limpa, contador zerado
 
-### 2. `src/components/PaymentPendingScreen.tsx`
+### Detalhes técnicos
 
-| Linha | Antes | Depois |
-|---|---|---|
-| 204 | `Verificação automática a cada 30s` | `Verificação automática ativa` |
-| 217 | `Abrir checkout novamente` | `Retomar pagamento` |
-| 279 | `Abrir checkout` | `Retomar pagamento` |
+**`src/pages/GalleryCreate.tsx`**:
+- Novo state: `isDeletingAll` (boolean)
+- Nova função `handleDeleteAllPhotos`:
+  - Coleta todos os IDs de `uploadedPhotos`
+  - Chama `deletePhoto` da Edge Function com todos os photoIds de uma vez (já suporta array)
+  - Chama `refund_photo_credit` N vezes via RPC (ou um novo batch — mas para simplicidade, N chamadas sequenciais)
+  - Limpa `uploadedPhotos` e `uploadedCount`
+- Botão `Trash2` + "Excluir todas" ao lado do CollapsibleTrigger, com `AlertDialog` de confirmação
+- Durante exclusão, botão mostra `Loader2` + "Excluindo..."
 
-### 3. Melhoria extra de UX sugerida
-
-- **Mensagem de polling**: trocar `"Verificação automática a cada 30s (3)"` por `"Verificação automática ativa"` — o contador técnico `(3)` não significa nada para o cliente e gera ansiedade.
+**Observação sobre créditos**: A Edge Function `delete-photos` já deleta múltiplas fotos em batch. Para o estorno de créditos, usaremos N chamadas ao `refund_photo_credit` RPC (já existe e funciona). Alternativa seria criar um `refund_photo_credits_batch`, mas para manter simplicidade e não criar migração desnecessária, N chamadas sequenciais são suficientes (máximo ~200 fotos por galeria na criação).
 
 ## Arquivos a editar
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/PaymentRedirect.tsx` | 1 string |
-| `src/components/PaymentPendingScreen.tsx` | 3 strings |
+| `src/pages/GalleryCreate.tsx` | Adicionar state `isDeletingAll`, função `handleDeleteAllPhotos`, botão + AlertDialog na seção de fotos enviadas |
 
-Nenhuma lógica alterada — apenas textos de interface.
-
+Nenhuma Edge Function ou migração necessária — reutiliza infraestrutura existente.
