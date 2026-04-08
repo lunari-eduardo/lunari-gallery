@@ -226,9 +226,27 @@ export default function GalleryCreate() {
     const totalPhotos = uploadedPhotos.length;
     try {
       const photoIds = uploadedPhotos.map(p => p.id);
-      await deletePhoto({ galleryId: supabaseGalleryId, photoId: photoIds[0], photoIds });
+      
+      // Call edge function directly to batch-delete all photos
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+      const response = await fetch(
+        `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/delete-photos`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ galleryId: supabaseGalleryId, photoIds }),
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Falha ao excluir fotos');
+      }
 
-      // Refund credits sequentially
+      // Refund credits
       if (user) {
         for (let i = 0; i < totalPhotos; i++) {
           await supabase.rpc('refund_photo_credit' as any, { _user_id: user.id });
