@@ -1618,6 +1618,23 @@ export default function GalleryCreate() {
               </Collapsible>
             )}
 
+            <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir todas as fotos?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja excluir todas as {uploadedCount} fotos desta galeria? Os créditos serão devolvidos automaticamente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAllPhotos} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Excluir todas
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             
           </div>;
       case 3:
