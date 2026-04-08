@@ -129,7 +129,7 @@ export function PaymentRedirect({
         {/* Loading indicator */}
         <div className="flex items-center justify-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Preparando checkout seguro...</span>
+          <span>Preparando seu pagamento...</span>
         </div>
 
         {/* Manual redirect button */}

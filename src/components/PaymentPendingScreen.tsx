@@ -201,7 +201,7 @@ export function PaymentPendingScreen({
               ) : (
                 <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
               )}
-              <span>Verificação automática a cada 30s ({pollCount + 1})</span>
+              <span>Verificação automática ativa</span>
             </div>
 
             {/* Optional: open checkout again */}
@@ -214,7 +214,7 @@ export function PaymentPendingScreen({
               >
                 <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4" />
-                  Abrir checkout novamente
+                  Retomar pagamento
                 </a>
               </Button>
             )}
@@ -276,7 +276,7 @@ export function PaymentPendingScreen({
                 <Button variant="outline" className="w-full gap-2" asChild>
                   <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4" />
-                    Abrir checkout
+                    Retomar pagamento
                   </a>
                 </Button>
               )}
