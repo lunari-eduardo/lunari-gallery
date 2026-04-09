@@ -22,12 +22,13 @@ function checkRateLimit(ip: string): boolean {
 }
 
 interface RequestBody {
-  galleryToken: string;    // Required — public_token (UUID access removed)
+  galleryToken: string;
   selectedCount: number;
   extraCount?: number;
   valorUnitario?: number;
   valorTotal?: number;
   requestPayment?: boolean;
+  visitorId?: string;  // Required for public galleries
 }
 
 // Pricing calculation interfaces (mirrored from pricingUtils.ts)
@@ -194,7 +195,7 @@ Deno.serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { extraCount, requestPayment, galleryToken } = body;
+    const { extraCount, requestPayment, galleryToken, visitorId } = body;
 
     // galleryToken is now REQUIRED — UUID access removed
     if (!galleryToken) {
@@ -219,22 +220,40 @@ Deno.serve(async (req) => {
     const galleryId = tokenGallery.id;
 
     // ── SERVER-SIDE COUNT: Never trust frontend selectedCount ──
-    const { count: serverSelectedCount, error: countError } = await supabase
-      .from('galeria_fotos')
-      .select('id', { count: 'exact', head: true })
-      .eq('galeria_id', galleryId)
-      .eq('is_selected', true);
+    // For public galleries with visitor: count from visitante_selecoes
+    // For private galleries: count from galeria_fotos
+    let selectedCount = 0;
 
-    if (countError) {
-      console.error('❌ Error counting selected photos:', countError);
-      return new Response(
-        JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (visitorId) {
+      const { count: visitorCount, error: vCountError } = await supabase
+        .from('visitante_selecoes')
+        .select('id', { count: 'exact', head: true })
+        .eq('visitante_id', visitorId)
+        .eq('is_selected', true);
+      if (vCountError) {
+        console.error('❌ Error counting visitor selections:', vCountError);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      selectedCount = visitorCount || 0;
+    } else {
+      const { count: serverSelectedCount, error: countError } = await supabase
+        .from('galeria_fotos')
+        .select('id', { count: 'exact', head: true })
+        .eq('galeria_id', galleryId)
+        .eq('is_selected', true);
+      if (countError) {
+        console.error('❌ Error counting selected photos:', countError);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      selectedCount = serverSelectedCount || 0;
     }
-
-    const selectedCount = serverSelectedCount || 0;
-    console.log(`🔒 Server-side selected count: ${selectedCount} (frontend sent: ${body.selectedCount})`);
+    console.log(`🔒 Server-side selected count: ${selectedCount} (frontend sent: ${body.selectedCount}, visitorId: ${visitorId || 'none'})`);
 
     // Block empty selections
     if (selectedCount === 0) {

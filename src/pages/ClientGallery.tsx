@@ -19,6 +19,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
 import { PasswordScreen } from '@/components/PasswordScreen';
+import { VisitorIdentificationScreen } from '@/components/VisitorIdentificationScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
@@ -144,15 +145,25 @@ export default function ClientGallery() {
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [isCheckingPassword, setIsCheckingPassword] = useState(false);
   const [sessionPassword, setSessionPassword] = useState<string | null>(() => {
-    // Check sessionStorage for previously entered password
     return sessionStorage.getItem(`gallery_password_${identifier}`);
+  });
+
+  // Visitor state (public galleries)
+  const [requiresVisitor, setRequiresVisitor] = useState(false);
+  const [visitorError, setVisitorError] = useState<string | undefined>();
+  const [isRegisteringVisitor, setIsRegisteringVisitor] = useState(false);
+  const [visitorId, setVisitorId] = useState<string | null>(() => {
+    return localStorage.getItem(`gallery_visitor_${identifier}`);
+  });
+  const [visitorName, setVisitorName] = useState<string | null>(() => {
+    return localStorage.getItem(`gallery_visitor_name_${identifier}`);
   });
 
   // R2 Worker is used for image URLs (no async config needed)
 
   // 1. Fetch gallery via Edge Function (handles token + password validation)
   const { data: galleryResponse, isLoading: isLoadingGallery, error: galleryError, refetch: refetchGallery } = useQuery({
-    queryKey: ['client-gallery', identifier, sessionPassword],
+    queryKey: ['client-gallery', identifier, sessionPassword, visitorId],
     queryFn: async () => {
       if (!identifier) return null;
       
@@ -178,6 +189,7 @@ export default function ClientGallery() {
             password: sessionPassword,
             page,
             limit: 200,
+            visitorId: visitorId || undefined,
           }),
         });
         
