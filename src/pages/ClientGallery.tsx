@@ -145,8 +145,18 @@ export default function ClientGallery() {
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [isCheckingPassword, setIsCheckingPassword] = useState(false);
   const [sessionPassword, setSessionPassword] = useState<string | null>(() => {
-    // Check sessionStorage for previously entered password
     return sessionStorage.getItem(`gallery_password_${identifier}`);
+  });
+
+  // Visitor state (public galleries)
+  const [requiresVisitor, setRequiresVisitor] = useState(false);
+  const [visitorError, setVisitorError] = useState<string | undefined>();
+  const [isRegisteringVisitor, setIsRegisteringVisitor] = useState(false);
+  const [visitorId, setVisitorId] = useState<string | null>(() => {
+    return localStorage.getItem(`gallery_visitor_${identifier}`);
+  });
+  const [visitorName, setVisitorName] = useState<string | null>(() => {
+    return localStorage.getItem(`gallery_visitor_name_${identifier}`);
   });
 
   // R2 Worker is used for image URLs (no async config needed)
