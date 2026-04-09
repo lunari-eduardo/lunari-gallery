@@ -163,7 +163,7 @@ export default function ClientGallery() {
 
   // 1. Fetch gallery via Edge Function (handles token + password validation)
   const { data: galleryResponse, isLoading: isLoadingGallery, error: galleryError, refetch: refetchGallery } = useQuery({
-    queryKey: ['client-gallery', identifier, sessionPassword],
+    queryKey: ['client-gallery', identifier, sessionPassword, visitorId],
     queryFn: async () => {
       if (!identifier) return null;
       
