@@ -527,78 +527,142 @@ serve(async (req) => {
     }
     
     if (isFinalized) {
-      // Fetch studio settings for logo on finalized screen
-      const { data: settings } = await supabase
-        .from("gallery_settings")
-        .select("studio_name, studio_logo_url, favicon_url")
-        .eq("user_id", gallery.user_id)
-        .single();
-      
-      // Build theme data for finalized screen
-      const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
-      const themeId = galleryConfig?.themeId as string | undefined;
-      const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
-      const allowDownload = galleryConfig?.allowDownload === true;
-      
-      let themeData = null;
-      if (themeId) {
-        const { data: theme } = await supabase
-          .from("gallery_themes")
-          .select("*")
-          .eq("id", themeId)
-          .maybeSingle();
-        
-        if (theme) {
-          themeData = {
-            id: theme.id,
-            name: theme.name,
-            backgroundMode: theme.background_mode || 'light',
-            primaryColor: theme.primary_color,
-            accentColor: theme.accent_color,
-            emphasisColor: theme.emphasis_color,
-          };
+      // For public galleries with visitor: check if THIS visitor finalized
+      if (isPublicGallery && resolvedVisitorId) {
+        const { data: visitorCheck } = await supabase
+          .from('galeria_visitantes')
+          .select('status, status_selecao')
+          .eq('id', resolvedVisitorId)
+          .single();
+
+        // If this visitor hasn't finalized, show them the gallery (not finalized screen)
+        if (visitorCheck && visitorCheck.status !== 'finalizado' && visitorCheck.status_selecao !== 'selecao_completa') {
+          // Fall through to normal gallery view below
+        } else {
+          // This visitor IS finalized — show their selected photos
+          const { data: settings } = await supabase
+            .from("gallery_settings")
+            .select("studio_name, studio_logo_url, favicon_url")
+            .eq("user_id", gallery.user_id)
+            .single();
+
+          const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+          const themeId = galleryConfig?.themeId as string | undefined;
+          const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+          const allowDownload = galleryConfig?.allowDownload === true;
+
+          let themeData = null;
+          if (themeId) {
+            const { data: theme } = await supabase
+              .from("gallery_themes").select("*").eq("id", themeId).maybeSingle();
+            if (theme) {
+              themeData = {
+                id: theme.id, name: theme.name,
+                backgroundMode: theme.background_mode || 'light',
+                primaryColor: theme.primary_color, accentColor: theme.accent_color,
+                emphasisColor: theme.emphasis_color,
+              };
+            }
+          }
+          if (!themeData) {
+            themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+          }
+
+          // Fetch selected photos from visitante_selecoes
+          const { data: visitorSelections } = await supabase
+            .from('visitante_selecoes')
+            .select('foto_id')
+            .eq('visitante_id', resolvedVisitorId)
+            .eq('is_selected', true);
+
+          const selectedFotoIds = (visitorSelections || []).map(s => s.foto_id);
+          let selectedPhotos: any[] = [];
+          if (selectedFotoIds.length > 0) {
+            const { data: photos } = await supabase
+              .from("galeria_fotos")
+              .select("id, storage_key, original_path, original_filename, filename")
+              .in("id", selectedFotoIds)
+              .order("original_filename", { ascending: true });
+            selectedPhotos = photos || [];
+          }
+
+          console.log("🔒 Visitor finalized - returning selected photos for preview, count:", selectedPhotos.length);
+
+          return new Response(
+            JSON.stringify({
+              finalized: true,
+              galleryId: gallery.id,
+              allowDownload,
+              sessionName: gallery.nome_sessao,
+              photos: selectedPhotos,
+              studioSettings: settings || null,
+              theme: themeData,
+              clientMode,
+              settings: {
+                sessionFont: galleryConfig?.sessionFont || undefined,
+                titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+              },
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
+      } else {
+        // Private gallery finalized — original flow
+        const { data: settings } = await supabase
+          .from("gallery_settings")
+          .select("studio_name, studio_logo_url, favicon_url")
+          .eq("user_id", gallery.user_id)
+          .single();
+
+        const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+        const themeId = galleryConfig?.themeId as string | undefined;
+        const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+        const allowDownload = galleryConfig?.allowDownload === true;
+
+        let themeData = null;
+        if (themeId) {
+          const { data: theme } = await supabase
+            .from("gallery_themes").select("*").eq("id", themeId).maybeSingle();
+          if (theme) {
+            themeData = {
+              id: theme.id, name: theme.name,
+              backgroundMode: theme.background_mode || 'light',
+              primaryColor: theme.primary_color, accentColor: theme.accent_color,
+              emphasisColor: theme.emphasis_color,
+            };
+          }
+        }
+        if (!themeData) {
+          themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+        }
+
+        const { data: selectedPhotos } = await supabase
+          .from("galeria_fotos")
+          .select("id, storage_key, original_path, original_filename, filename")
+          .eq("galeria_id", gallery.id)
+          .eq("is_selected", true)
+          .order("original_filename", { ascending: true });
+
+        console.log("🔒 Gallery finalized - returning selected photos for preview, allowDownload:", allowDownload);
+
+        return new Response(
+          JSON.stringify({
+            finalized: true,
+            galleryId: gallery.id,
+            allowDownload,
+            sessionName: gallery.nome_sessao,
+            photos: selectedPhotos || [],
+            studioSettings: settings || null,
+            theme: themeData,
+            clientMode,
+            settings: {
+              sessionFont: galleryConfig?.sessionFont || undefined,
+              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+            },
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-      
-      // Use system theme with clientMode if no custom theme
-      if (!themeData) {
-        themeData = {
-          id: 'system',
-          name: 'Sistema',
-          backgroundMode: clientMode,
-          primaryColor: null,
-          accentColor: null,
-          emphasisColor: null,
-        };
-      }
-      
-      // ALWAYS fetch selected photos for preview (regardless of download permission)
-      const { data: selectedPhotos } = await supabase
-        .from("galeria_fotos")
-        .select("id, storage_key, original_path, original_filename, filename")
-        .eq("galeria_id", gallery.id)
-        .eq("is_selected", true)
-        .order("original_filename", { ascending: true });
-      
-      console.log("🔒 Gallery finalized - returning selected photos for preview, allowDownload:", allowDownload);
-      
-      return new Response(
-        JSON.stringify({ 
-          finalized: true,
-          galleryId: gallery.id,
-          allowDownload: allowDownload,
-          sessionName: gallery.nome_sessao,
-          photos: selectedPhotos || [],
-          studioSettings: settings || null,
-          theme: themeData,
-          clientMode: clientMode,
-          settings: {
-            sessionFont: galleryConfig?.sessionFont || undefined,
-            titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-          },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     // 3. Check if gallery is in valid status for selection
