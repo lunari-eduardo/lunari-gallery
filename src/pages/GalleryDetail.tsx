@@ -582,6 +582,12 @@ export default function GalleryDetail() {
         <TabsList>
           <TabsTrigger value="photos">Fotos ({transformedPhotos.length})</TabsTrigger>
           <TabsTrigger value="selection">Seleção ({selectedPhotos.length})</TabsTrigger>
+          {isPublicGallery && (
+            <TabsTrigger value="visitors">
+              <Users className="h-4 w-4 mr-1" />
+              Visitantes ({visitorsData?.visitors?.length || 0})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="details">Detalhes</TabsTrigger>
           <TabsTrigger value="history">Histórico</TabsTrigger>
         </TabsList>
