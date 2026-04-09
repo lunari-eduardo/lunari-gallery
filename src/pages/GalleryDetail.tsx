@@ -108,7 +108,50 @@ export default function GalleryDetail() {
 
   // Visitor states
   const [expandedVisitorId, setExpandedVisitorId] = useState<string | null>(null);
+  const [visitorPhotosMap, setVisitorPhotosMap] = useState<Record<string, GalleryPhoto[]>>({});
+  const [visitorCodesModalId, setVisitorCodesModalId] = useState<string | null>(null);
+  const [loadingVisitorPhotos, setLoadingVisitorPhotos] = useState<string | null>(null);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+  // Fetch visitor photos when expanding
+  const fetchVisitorPhotos = useCallback(async (visitorId: string) => {
+    if (visitorPhotosMap[visitorId]) return; // already cached
+    setLoadingVisitorPhotos(visitorId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gallery-visitors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ galleryId: id, visitorId }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const mapped: GalleryPhoto[] = (data.selectedPhotos || []).map((p: any) => ({
+        id: p.id,
+        filename: p.filename || '',
+        originalFilename: p.original_filename || p.filename || '',
+        thumbnailUrl: '',
+        previewUrl: '',
+        originalUrl: '',
+        width: p.width || 0,
+        height: p.height || 0,
+        isSelected: true,
+        isFavorite: (data.selections || []).find((s: any) => s.foto_id === p.id)?.is_favorite || false,
+        comment: (data.selections || []).find((s: any) => s.foto_id === p.id)?.comment || undefined,
+        order: 0,
+        folderId: null,
+      }));
+      setVisitorPhotosMap(prev => ({ ...prev, [visitorId]: mapped }));
+    } catch (e) {
+      console.error('Error fetching visitor photos:', e);
+    } finally {
+      setLoadingVisitorPhotos(null);
+    }
+  }, [id, visitorPhotosMap]);
 
   // Fetch visitors for public galleries
   const isPublicGallery = supabaseGallery?.permissao === 'public';
@@ -867,7 +910,13 @@ export default function GalleryDetail() {
                   return (
                     <div key={visitor.id} className="lunari-card overflow-hidden">
                       <button
-                        onClick={() => setExpandedVisitorId(isExpanded ? null : visitor.id)}
+                        onClick={() => {
+                          const newId = isExpanded ? null : visitor.id;
+                          setExpandedVisitorId(newId);
+                          if (newId && (visitor.fotos_selecionadas || 0) > 0) {
+                            fetchVisitorPhotos(newId);
+                          }
+                        }}
                         className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -923,6 +972,30 @@ export default function GalleryDetail() {
                             <p className="text-xs text-muted-foreground">
                               Finalizado em {format(new Date(visitor.finalized_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                             </p>
+                          )}
+
+                          {/* Botão de códigos de seleção */}
+                          {(visitor.fotos_selecionadas || 0) > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full gap-2"
+                              disabled={loadingVisitorPhotos === visitor.id}
+                              onClick={() => {
+                                if (!visitorPhotosMap[visitor.id]) {
+                                  fetchVisitorPhotos(visitor.id).then(() => setVisitorCodesModalId(visitor.id));
+                                } else {
+                                  setVisitorCodesModalId(visitor.id);
+                                }
+                              }}
+                            >
+                              {loadingVisitorPhotos === visitor.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileText className="h-4 w-4" />
+                              )}
+                              Copiar códigos de seleção
+                            </Button>
                           )}
                         </div>
                       )}
@@ -1080,6 +1153,16 @@ export default function GalleryDetail() {
         filter={codesFilter}
         folders={galleryFolders}
       />
+
+      {/* Visitor Photo Codes Modal */}
+      {visitorCodesModalId && visitorPhotosMap[visitorCodesModalId] && (
+        <PhotoCodesModal
+          open={!!visitorCodesModalId}
+          onOpenChange={(open) => { if (!open) setVisitorCodesModalId(null); }}
+          photos={visitorPhotosMap[visitorCodesModalId]}
+          clientName={visitorsData?.visitors?.find((v: any) => v.id === visitorCodesModalId)?.nome || 'Visitante'}
+        />
+      )}
 
       {/* Send Gallery Modal */}
       <SendGalleryModal
