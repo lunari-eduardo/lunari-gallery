@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { extraCount, requestPayment, galleryToken } = body;
+    const { extraCount, requestPayment, galleryToken, visitorId } = body;
 
     // galleryToken is now REQUIRED — UUID access removed
     if (!galleryToken) {
