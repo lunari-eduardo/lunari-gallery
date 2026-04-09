@@ -1118,7 +1118,8 @@ export default function ClientGallery() {
           headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ 
             galleryToken: identifier,
-            action: 'finalize_payment' 
+            action: 'finalize_payment',
+            visitorId: visitorId || undefined,
           }),
         });
         
@@ -1654,7 +1655,8 @@ export default function ClientGallery() {
           headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ 
             galleryToken: identifier,
-            action: 'finalize_payment' 
+            action: 'finalize_payment',
+            visitorId: visitorId || undefined,
           }),
         });
         
