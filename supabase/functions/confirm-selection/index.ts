@@ -582,6 +582,7 @@ Deno.serve(async (req) => {
               galleryToken: gallery.public_token,
               galeriaId: galleryId,
               qtdFotos: extrasACobrar,
+              visitorId: visitorId || undefined,
             }),
           });
 
