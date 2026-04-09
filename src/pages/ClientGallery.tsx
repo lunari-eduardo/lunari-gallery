@@ -242,6 +242,27 @@ export default function ClientGallery() {
     if (galleryResponse?.requiresPassword) {
       setRequiresPassword(true);
     }
+    if (galleryResponse?.requiresVisitor) {
+      setRequiresVisitor(true);
+    }
+    // Recover visitor info from response
+    if (galleryResponse?.visitorId && !visitorId) {
+      setVisitorId(galleryResponse.visitorId);
+      setVisitorName(galleryResponse.visitorName || null);
+      localStorage.setItem(`gallery_visitor_${identifier}`, galleryResponse.visitorId);
+      if (galleryResponse.visitorName) {
+        localStorage.setItem(`gallery_visitor_name_${identifier}`, galleryResponse.visitorName);
+      }
+    }
+    // Also check gallery.visitorId (nested in gallery object)
+    if (galleryResponse?.gallery?.visitorId && !visitorId) {
+      setVisitorId(galleryResponse.gallery.visitorId);
+      setVisitorName(galleryResponse.gallery.visitorName || null);
+      localStorage.setItem(`gallery_visitor_${identifier}`, galleryResponse.gallery.visitorId);
+      if (galleryResponse.gallery.visitorName) {
+        localStorage.setItem(`gallery_visitor_name_${identifier}`, galleryResponse.gallery.visitorName);
+      }
+    }
   }, [galleryResponse]);
 
   // Extract gallery data from response (handle both legacy and new format)
@@ -432,7 +453,7 @@ export default function ClientGallery() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ galleryToken: identifier, photoId, action, comment }),
+        body: JSON.stringify({ galleryToken: identifier, photoId, action, comment, visitorId: visitorId || undefined }),
       });
       
       if (!response.ok) {
@@ -497,6 +518,7 @@ export default function ClientGallery() {
           valorUnitario: pricingData.valorUnitario,
           valorTotal: pricingData.valorTotal,
           requestPayment: shouldRequestPayment,
+          visitorId: visitorId || undefined,
         }),
       });
       
@@ -901,7 +923,75 @@ export default function ClientGallery() {
     );
   }
 
-  // Deliver gallery - completely different product
+  // Handle visitor identification for public galleries
+  const handleVisitorSubmit = async (data: { nome: string; contato: string; contatoTipo: 'email' | 'whatsapp' }) => {
+    setIsRegisteringVisitor(true);
+    setVisitorError(undefined);
+    
+    try {
+      // Generate simple device hash
+      const deviceHash = btoa(`${data.contato}:${navigator.userAgent}`).slice(0, 64);
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/gallery-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: identifier, 
+          password: sessionPassword,
+          visitorData: {
+            nome: data.nome,
+            contato: data.contato,
+            contatoTipo: data.contatoTipo,
+            deviceHash,
+          },
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        setVisitorError(result.error || 'Erro ao registrar');
+        return;
+      }
+      
+      // Extract visitor info
+      const newVisitorId = result.visitorId || result.gallery?.visitorId;
+      const newVisitorName = result.visitorName || result.gallery?.visitorName;
+      
+      if (newVisitorId) {
+        setVisitorId(newVisitorId);
+        setVisitorName(newVisitorName || data.nome);
+        localStorage.setItem(`gallery_visitor_${identifier}`, newVisitorId);
+        localStorage.setItem(`gallery_visitor_name_${identifier}`, newVisitorName || data.nome);
+        setRequiresVisitor(false);
+        await refetchGallery();
+      } else {
+        setVisitorError('Erro ao criar sessão do visitante');
+      }
+    } catch (error) {
+      setVisitorError('Erro ao conectar');
+    } finally {
+      setIsRegisteringVisitor(false);
+    }
+  };
+
+  // Visitor identification screen - for public galleries
+  if (requiresVisitor && !gallery) {
+    return (
+      <VisitorIdentificationScreen
+        sessionName={galleryResponse?.sessionName}
+        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
+        onSubmit={handleVisitorSubmit}
+        error={visitorError}
+        isLoading={isRegisteringVisitor}
+        themeStyles={themeStyles}
+        backgroundMode={effectiveBackgroundMode}
+      />
+    );
+  }
   if (galleryResponse?.deliver) {
     return <ClientDeliverGallery data={galleryResponse} />;
   }
@@ -1028,7 +1118,8 @@ export default function ClientGallery() {
           headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ 
             galleryToken: identifier,
-            action: 'finalize_payment' 
+            action: 'finalize_payment',
+            visitorId: visitorId || undefined,
           }),
         });
         
@@ -1564,7 +1655,8 @@ export default function ClientGallery() {
           headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ 
             galleryToken: identifier,
-            action: 'finalize_payment' 
+            action: 'finalize_payment',
+            visitorId: visitorId || undefined,
           }),
         });
         
@@ -1763,6 +1855,15 @@ export default function ClientGallery() {
         onFilterChange={setFilterMode}
         favoritesCount={localPhotos.filter(p => p.isFavorite).length}
       />
+
+      {/* Visitor banner for public galleries */}
+      {visitorName && (
+        <div className="bg-primary/5 border-b border-primary/10 px-4 py-2 text-center">
+          <p className="text-xs text-muted-foreground">
+            Olá, <span className="font-medium text-foreground">{visitorName}</span> — você está selecionando suas fotos
+          </p>
+        </div>
+      )}
 
       {/* Folder navigation bar */}
       {hasFolders && activeFolderId && (
