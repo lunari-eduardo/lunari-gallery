@@ -22,10 +22,11 @@ function checkRateLimit(ip: string): boolean {
 }
 
 interface RequestBody {
-  galleryToken: string;    // Required — public_token (UUID access removed)
+  galleryToken: string;
   photoId?: string;
   action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment';
   comment?: string;
+  visitorId?: string;  // Required for public galleries
 }
 
 Deno.serve(async (req) => {
