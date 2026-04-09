@@ -1856,6 +1856,15 @@ export default function ClientGallery() {
         favoritesCount={localPhotos.filter(p => p.isFavorite).length}
       />
 
+      {/* Visitor banner for public galleries */}
+      {visitorName && (
+        <div className="bg-primary/5 border-b border-primary/10 px-4 py-2 text-center">
+          <p className="text-xs text-muted-foreground">
+            Olá, <span className="font-medium text-foreground">{visitorName}</span> — você está selecionando suas fotos
+          </p>
+        </div>
+      )}
+
       {/* Folder navigation bar */}
       {hasFolders && activeFolderId && (
         <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border/30 px-3 py-2">
