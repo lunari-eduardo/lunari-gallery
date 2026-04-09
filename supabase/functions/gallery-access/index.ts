@@ -29,7 +29,7 @@ serve(async (req) => {
   }
 
   try {
-    const { token, password, page, limit: rawLimit } = await req.json();
+    const { token, password, page, limit: rawLimit, visitorId, visitorData } = await req.json();
 
     // Rate limit check
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
