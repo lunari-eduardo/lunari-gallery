@@ -179,12 +179,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Check if selection is already confirmed
-    if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
-      return new Response(
-        JSON.stringify({ error: 'A seleção desta galeria já foi confirmada' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // 3. For PUBLIC galleries with visitor, check visitor-level finalization instead
+    const isPublicGallery = gallery.permissao === 'public';
+    
+    if (!isPublicGallery) {
+      // PRIVATE gallery: original check
+      if (gallery.status_selecao === 'selecao_completa' || gallery.finalized_at) {
+        return new Response(
+          JSON.stringify({ error: 'A seleção desta galeria já foi confirmada' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (visitorId) {
+      // PUBLIC gallery: check visitor's own status
+      const { data: visitor } = await supabase
+        .from('galeria_visitantes')
+        .select('status')
+        .eq('id', visitorId)
+        .eq('galeria_id', galleryId)
+        .single();
+      if (visitor?.status === 'finalizado') {
+        return new Response(
+          JSON.stringify({ error: 'Sua seleção já foi confirmada' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // 4. Check if deadline has passed
@@ -198,7 +217,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 5. Fetch current photo state
+    // 5. Verify photo exists in gallery
     const { data: photo, error: photoError } = await supabase
       .from('galeria_fotos')
       .select('id, is_selected, is_favorite, comment')
@@ -213,6 +232,70 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── PUBLIC GALLERY: Use visitante_selecoes ──
+    if (isPublicGallery && visitorId) {
+      // Get current visitor selection for this photo
+      const { data: existingSel } = await supabase
+        .from('visitante_selecoes')
+        .select('is_selected, is_favorite, comment')
+        .eq('visitante_id', visitorId)
+        .eq('foto_id', photoId)
+        .maybeSingle();
+
+      const currentSel = existingSel || { is_selected: false, is_favorite: false, comment: null };
+
+      let upsertData: { is_selected?: boolean; is_favorite?: boolean; comment?: string } = {};
+
+      switch (action) {
+        case 'toggle': upsertData.is_selected = !currentSel.is_selected; break;
+        case 'select': upsertData.is_selected = true; break;
+        case 'deselect': upsertData.is_selected = false; break;
+        case 'comment': upsertData.comment = comment || ''; break;
+        case 'favorite': upsertData.is_favorite = !currentSel.is_favorite; break;
+        default:
+          return new Response(JSON.stringify({ error: 'Ação inválida' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const { error: upsertError } = await supabase
+        .from('visitante_selecoes')
+        .upsert({
+          visitante_id: visitorId,
+          foto_id: photoId,
+          is_selected: upsertData.is_selected ?? currentSel.is_selected,
+          is_favorite: upsertData.is_favorite ?? currentSel.is_favorite,
+          comment: upsertData.comment ?? currentSel.comment,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'visitante_id,foto_id' });
+
+      if (upsertError) {
+        console.error('Visitor selection upsert error:', upsertError);
+        return new Response(JSON.stringify({ error: 'Erro ao atualizar seleção' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Update gallery status to selecao_iniciada if needed
+      if (gallery.status === 'enviado') {
+        await supabase.from('galerias')
+          .update({ status: 'selecao_iniciada', updated_at: new Date().toISOString() })
+          .eq('id', galleryId);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          photo: {
+            id: photoId,
+            is_selected: upsertData.is_selected ?? currentSel.is_selected,
+            is_favorite: upsertData.is_favorite ?? currentSel.is_favorite,
+            comment: upsertData.comment ?? currentSel.comment,
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── PRIVATE GALLERY: Original flow ──
     // 6. Prepare update based on action
     let updateData: { is_selected?: boolean; is_favorite?: boolean; comment?: string; updated_at?: string } = {
       updated_at: new Date().toISOString()
@@ -263,7 +346,6 @@ Deno.serve(async (req) => {
         .update({ status: 'selecao_iniciada', updated_at: new Date().toISOString() })
         .eq('id', galleryId);
       
-      // Log selection started event
       await supabase.from('galeria_acoes').insert({
         galeria_id: galleryId,
         tipo: 'selecao_iniciada',
@@ -271,20 +353,15 @@ Deno.serve(async (req) => {
         user_id: null,
       });
       
-      // Update session status if linked
       if (gallery.session_id) {
         await supabase
           .from('clientes_sessoes')
-          .update({ 
-            status_galeria: 'em_selecao', 
-            updated_at: new Date().toISOString() 
-          })
+          .update({ status_galeria: 'em_selecao', updated_at: new Date().toISOString() })
           .eq('session_id', gallery.session_id);
-        console.log(`Session ${gallery.session_id} status updated to em_selecao`);
       }
     }
 
-    // 9. Log action (user_id is null for anonymous client actions)
+    // 9. Log action
     const actionType = action === 'comment' 
       ? 'comment_added' 
       : action === 'favorite'
@@ -300,7 +377,7 @@ Deno.serve(async (req) => {
       galeria_id: galleryId,
       tipo: actionType,
       descricao: actionDesc,
-      user_id: null, // Anonymous client action
+      user_id: null,
     });
 
     return new Response(
