@@ -1002,6 +1002,8 @@ serve(async (req) => {
           extrasPagasTotal: gallery.total_fotos_extras_vendidas || 0,
           // Include amount already paid for credit calculation
           valorTotalVendido: gallery.valor_total_vendido || 0,
+          // Visitor info for public galleries
+          ...(resolvedVisitorId ? { visitorId: resolvedVisitorId, visitorName: resolvedVisitorName } : {}),
         },
         photos: photos || [],
         pagination: {
@@ -1012,9 +1014,10 @@ serve(async (req) => {
         },
         folders: folders || [],
         studioSettings: settings || null,
-        // Theme data for client gallery appearance
         theme: themeData,
         clientMode: clientMode,
+        // Top-level visitor info for easy access
+        ...(resolvedVisitorId ? { visitorId: resolvedVisitorId, visitorName: resolvedVisitorName } : {}),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
