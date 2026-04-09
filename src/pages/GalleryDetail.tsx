@@ -106,6 +106,34 @@ export default function GalleryDetail() {
     enabled: !!id,
   });
 
+  // Visitor states
+  const [expandedVisitorId, setExpandedVisitorId] = useState<string | null>(null);
+
+  // Fetch visitors for public galleries
+  const isPublicGallery = supabaseGallery?.permissao === 'public';
+  const { data: visitorsData, isLoading: isLoadingVisitors, refetch: refetchVisitors } = useQuery({
+    queryKey: ['galeria-visitantes', id],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { visitors: [] };
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/gallery-visitors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ galleryId: id }),
+      });
+      
+      if (!response.ok) return { visitors: [] };
+      return response.json();
+    },
+    enabled: !!id && !!isPublicGallery,
+  });
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
 
   const { data: galleryActions = [] } = useQuery({
     queryKey: ['galeria-acoes', id],
