@@ -839,6 +839,7 @@ export default function GalleryDetail() {
               )}
             </div>
           </div>
+          )}
         </TabsContent>
 
         {/* Visitors Tab - Public galleries only */}
