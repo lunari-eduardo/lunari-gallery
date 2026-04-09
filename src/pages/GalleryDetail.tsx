@@ -1154,6 +1154,16 @@ export default function GalleryDetail() {
         folders={galleryFolders}
       />
 
+      {/* Visitor Photo Codes Modal */}
+      {visitorCodesModalId && visitorPhotosMap[visitorCodesModalId] && (
+        <PhotoCodesModal
+          open={!!visitorCodesModalId}
+          onOpenChange={(open) => { if (!open) setVisitorCodesModalId(null); }}
+          photos={visitorPhotosMap[visitorCodesModalId]}
+          clientName={visitorsData?.visitors?.find((v: any) => v.id === visitorCodesModalId)?.nome || 'Visitante'}
+        />
+      )}
+
       {/* Send Gallery Modal */}
       <SendGalleryModal
         isOpen={isSendModalOpen}
