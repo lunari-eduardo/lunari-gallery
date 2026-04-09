@@ -268,10 +268,19 @@ Deno.serve(async (req) => {
     }
 
 
-    // 1. Acquire atomic lock on gallery to prevent concurrent confirmations
-    const { data: lockResult, error: lockError } = await supabase.rpc('try_lock_gallery_selection', {
-      p_gallery_id: galleryId,
-    });
+    // 1. Acquire atomic lock — visitor-level for public galleries, gallery-level for private
+    let lockResult: any;
+    let lockError: any;
+
+    if (visitorId) {
+      const res = await supabase.rpc('try_lock_visitor_selection', { p_visitor_id: visitorId });
+      lockResult = res.data;
+      lockError = res.error;
+    } else {
+      const res = await supabase.rpc('try_lock_gallery_selection', { p_gallery_id: galleryId });
+      lockResult = res.data;
+      lockError = res.error;
+    }
 
     if (lockError) {
       console.error('Lock RPC error:', lockError);
@@ -283,9 +292,9 @@ Deno.serve(async (req) => {
 
     if (!lockResult?.locked) {
       const reason = lockResult?.reason || 'unknown';
-      console.log(`🔒 Gallery ${galleryId} lock denied: ${reason}`);
+      console.log(`🔒 Lock denied (visitor=${visitorId || 'none'}, gallery=${galleryId}): ${reason}`);
       return new Response(
-        JSON.stringify({ error: 'A seleção desta galeria já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
+        JSON.stringify({ error: 'A seleção já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -293,13 +302,21 @@ Deno.serve(async (req) => {
     // ── ROLLBACK HELPER: Reset status on any failure after lock ──
     const rollbackGalleryStatus = async () => {
       try {
-        await supabase.from('galerias').update({
-          status_selecao: 'selecao_iniciada',
-          updated_at: new Date().toISOString(),
-        }).eq('id', galleryId);
-        console.log(`🔓 Rollback: Gallery ${galleryId} status_selecao reset to selecao_iniciada`);
+        if (visitorId) {
+          await supabase.from('galeria_visitantes').update({
+            status_selecao: 'selecao_iniciada',
+            updated_at: new Date().toISOString(),
+          }).eq('id', visitorId);
+          console.log(`🔓 Rollback: Visitor ${visitorId} status_selecao reset to selecao_iniciada`);
+        } else {
+          await supabase.from('galerias').update({
+            status_selecao: 'selecao_iniciada',
+            updated_at: new Date().toISOString(),
+          }).eq('id', galleryId);
+          console.log(`🔓 Rollback: Gallery ${galleryId} status_selecao reset to selecao_iniciada`);
+        }
       } catch (rollbackErr) {
-        console.error(`❌ Rollback failed for gallery ${galleryId}:`, rollbackErr);
+        console.error(`❌ Rollback failed:`, rollbackErr);
       }
     };
 
