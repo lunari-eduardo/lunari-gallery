@@ -268,10 +268,19 @@ Deno.serve(async (req) => {
     }
 
 
-    // 1. Acquire atomic lock on gallery to prevent concurrent confirmations
-    const { data: lockResult, error: lockError } = await supabase.rpc('try_lock_gallery_selection', {
-      p_gallery_id: galleryId,
-    });
+    // 1. Acquire atomic lock — visitor-level for public galleries, gallery-level for private
+    let lockResult: any;
+    let lockError: any;
+
+    if (visitorId) {
+      const res = await supabase.rpc('try_lock_visitor_selection', { p_visitor_id: visitorId });
+      lockResult = res.data;
+      lockError = res.error;
+    } else {
+      const res = await supabase.rpc('try_lock_gallery_selection', { p_gallery_id: galleryId });
+      lockResult = res.data;
+      lockError = res.error;
+    }
 
     if (lockError) {
       console.error('Lock RPC error:', lockError);
@@ -283,9 +292,9 @@ Deno.serve(async (req) => {
 
     if (!lockResult?.locked) {
       const reason = lockResult?.reason || 'unknown';
-      console.log(`🔒 Gallery ${galleryId} lock denied: ${reason}`);
+      console.log(`🔒 Lock denied (visitor=${visitorId || 'none'}, gallery=${galleryId}): ${reason}`);
       return new Response(
-        JSON.stringify({ error: 'A seleção desta galeria já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
+        JSON.stringify({ error: 'A seleção já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -293,13 +302,21 @@ Deno.serve(async (req) => {
     // ── ROLLBACK HELPER: Reset status on any failure after lock ──
     const rollbackGalleryStatus = async () => {
       try {
-        await supabase.from('galerias').update({
-          status_selecao: 'selecao_iniciada',
-          updated_at: new Date().toISOString(),
-        }).eq('id', galleryId);
-        console.log(`🔓 Rollback: Gallery ${galleryId} status_selecao reset to selecao_iniciada`);
+        if (visitorId) {
+          await supabase.from('galeria_visitantes').update({
+            status_selecao: 'selecao_iniciada',
+            updated_at: new Date().toISOString(),
+          }).eq('id', visitorId);
+          console.log(`🔓 Rollback: Visitor ${visitorId} status_selecao reset to selecao_iniciada`);
+        } else {
+          await supabase.from('galerias').update({
+            status_selecao: 'selecao_iniciada',
+            updated_at: new Date().toISOString(),
+          }).eq('id', galleryId);
+          console.log(`🔓 Rollback: Gallery ${galleryId} status_selecao reset to selecao_iniciada`);
+        }
       } catch (rollbackErr) {
-        console.error(`❌ Rollback failed for gallery ${galleryId}:`, rollbackErr);
+        console.error(`❌ Rollback failed:`, rollbackErr);
       }
     };
 
@@ -499,6 +516,7 @@ Deno.serve(async (req) => {
             clienteId: gallery.cliente_id,
             sessionId: sessionIdTexto,
             galleryToken: gallery.public_token,
+            visitorId: visitorId || undefined,
             enabledMethods: {
               pix: asaasSettings.habilitarPix !== false,
               creditCard: asaasSettings.habilitarCartao !== false,
@@ -564,6 +582,7 @@ Deno.serve(async (req) => {
               galleryToken: gallery.public_token,
               galeriaId: galleryId,
               qtdFotos: extrasACobrar,
+              visitorId: visitorId || undefined,
             }),
           });
 
@@ -642,49 +661,97 @@ Deno.serve(async (req) => {
 
     // 6. NOW it's safe to confirm selection - payment was created successfully (if required)
     // CONDITIONAL FINALIZATION: Only finalize immediately if no payment is required
-    // For PIX Manual, InfinitePay, MercadoPago: set aguardando_pagamento, finalize later
     const shouldFinalizeNow = !shouldCreatePayment;
-    
-    const updateData: Record<string, unknown> = {
-      status: 'selecao_completa',
-      status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
-      finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
-      fotos_selecionadas: selectedCount || 0,
-      valor_extras: valorTotal,
-      status_pagamento: statusPagamento,
-      updated_at: new Date().toISOString(),
-    };
 
-    // Add PIX data to configuracoes if PIX Manual
-    if (paymentResponse?.provedor === 'pix_manual') {
-      const integracao = await supabase
-        .from('usuarios_integracoes')
-        .select('dados_extras')
-        .eq('user_id', gallery.user_id)
-        .eq('provedor', 'pix_manual')
-        .eq('status', 'ativo')
-        .maybeSingle();
-      
-      if (integracao.data) {
-        updateData.configuracoes = {
-          ...gallery.configuracoes,
-          pixDados: integracao.data.dados_extras
-        };
+    if (visitorId) {
+      // ── PUBLIC GALLERY: Update visitor, NOT the gallery status ──
+      const visitorUpdateData: Record<string, unknown> = {
+        status: shouldFinalizeNow ? 'finalizado' : 'em_andamento',
+        status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
+        fotos_selecionadas: selectedCount || 0,
+        finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: visitorUpdateError } = await supabase
+        .from('galeria_visitantes')
+        .update(visitorUpdateData)
+        .eq('id', visitorId);
+
+      if (visitorUpdateError) {
+        console.error('Visitor update error:', visitorUpdateError);
+        await rollbackGalleryStatus();
+        return new Response(
+          JSON.stringify({ error: 'Erro ao confirmar seleção' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-    }
 
-    const { error: updateError } = await supabase
-      .from('galerias')
-      .update(updateData)
-      .eq('id', galleryId);
+      // Update gallery aggregated totals (extras + valor) atomically
+      if (shouldFinalizeNow && extrasACobrar > 0) {
+        await supabase.from('galerias').update({
+          total_fotos_extras_vendidas: (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar,
+          valor_total_vendido: (gallery.valor_total_vendido || 0) + valorTotal,
+          updated_at: new Date().toISOString(),
+        }).eq('id', galleryId);
+      }
 
-    if (updateError) {
-      console.error('Gallery update error:', updateError);
-      await rollbackGalleryStatus();
-      return new Response(
-        JSON.stringify({ error: 'Erro ao confirmar seleção' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Add PIX data to gallery configuracoes if PIX Manual
+      if (paymentResponse?.provedor === 'pix_manual') {
+        const integracaoPixManual = await supabase
+          .from('usuarios_integracoes')
+          .select('dados_extras')
+          .eq('user_id', gallery.user_id)
+          .eq('provedor', 'pix_manual')
+          .eq('status', 'ativo')
+          .maybeSingle();
+        if (integracaoPixManual.data) {
+          await supabase.from('galerias').update({
+            configuracoes: { ...gallery.configuracoes, pixDados: integracaoPixManual.data.dados_extras },
+          }).eq('id', galleryId);
+        }
+      }
+
+      console.log(`✅ Visitor ${visitorId} selection confirmed: ${selectedCount} photos, finalize=${shouldFinalizeNow}`);
+    } else {
+      // ── PRIVATE GALLERY: Original flow — update gallery directly ──
+      const updateData: Record<string, unknown> = {
+        status: 'selecao_completa',
+        status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
+        finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
+        fotos_selecionadas: selectedCount || 0,
+        valor_extras: valorTotal,
+        status_pagamento: statusPagamento,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Add PIX data to configuracoes if PIX Manual
+      if (paymentResponse?.provedor === 'pix_manual') {
+        const integracao = await supabase
+          .from('usuarios_integracoes')
+          .select('dados_extras')
+          .eq('user_id', gallery.user_id)
+          .eq('provedor', 'pix_manual')
+          .eq('status', 'ativo')
+          .maybeSingle();
+        if (integracao.data) {
+          updateData.configuracoes = { ...gallery.configuracoes, pixDados: integracao.data.dados_extras };
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from('galerias')
+        .update(updateData)
+        .eq('id', galleryId);
+
+      if (updateError) {
+        console.error('Gallery update error:', updateError);
+        await rollbackGalleryStatus();
+        return new Response(
+          JSON.stringify({ error: 'Erro ao confirmar seleção' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // 7. Log action in history

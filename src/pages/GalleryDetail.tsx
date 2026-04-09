@@ -657,6 +657,17 @@ export default function GalleryDetail() {
         </TabsContent>
 
         <TabsContent value="selection" className="space-y-6">
+          {isPublicGallery ? (
+            <div className="text-center py-16 lunari-card">
+              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground mb-2">
+                Em galerias públicas, cada visitante possui sua própria seleção.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Acesse a aba <strong>Visitantes</strong> para ver as seleções individuais.
+              </p>
+            </div>
+          ) : (
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-4">
               {/* Resumo com badges */}
@@ -828,6 +839,7 @@ export default function GalleryDetail() {
               )}
             </div>
           </div>
+          )}
         </TabsContent>
 
         {/* Visitors Tab - Public galleries only */}

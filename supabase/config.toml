@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.record-auth-fingerprint]
 verify_jwt = false
+
+[functions.gallery-visitors]
+verify_jwt = false

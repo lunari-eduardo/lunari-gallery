@@ -31,6 +31,7 @@ interface RequestBody {
   qtdFotos?: number;
   galleryToken?: string;
   billingType?: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
+  visitorId?: string;
   creditCard?: {
     holderName: string;
     number: string;
@@ -406,6 +407,7 @@ Deno.serve(async (req) => {
       cliente_id: clienteId || null,
       session_id: sessionId || null,
       galeria_id: galeriaId || null,
+      visitor_id: body.visitorId || null,
       valor: valor,
       status: 'pendente',
       provedor: 'asaas',
