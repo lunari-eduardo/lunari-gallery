@@ -1,178 +1,90 @@
 
 
-# Galerias Públicas Multiusuário — Plano por Etapas
+# Fix: Galerias públicas multiusuário — Problemas de concorrência, contabilização e tela finalizada
 
-## Contexto atual
+## Problemas identificados
 
-Hoje, galerias públicas compartilham `is_selected`, `is_favorite` e `comment` diretamente na tabela `galeria_fotos`. Qualquer visitante vê e modifica a mesma seleção. Não existe conceito de "visitante" — apenas fotos com flags globais. Existem 10 galerias públicas no banco (vs 124 privadas).
+### 1. Race condition no lock da galeria (causa raiz principal)
+A RPC `try_lock_gallery_selection` usa um lock **na galeria inteira** (`status_selecao = processando_selecao`). Quando dois visitantes confirmam simultaneamente, o segundo é **bloqueado** porque a galeria já está em `processando_selecao`. Porém, como o segundo conseguiu confirmar (ambas cobranças existem com status `pago`), significa que o lock foi burlado por timing.
 
-Galerias **privadas** continuam funcionando como hoje: 1 cliente = 1 seleção direta em `galeria_fotos`. A mudança afeta **apenas** galerias com `permissao = 'public'`.
+**Pior**: após o primeiro visitante finalizar, o status da galeria muda para `selecao_completa`, e o lock impede qualquer outro visitante de confirmar (`already_finalized`).
 
-## Visão geral da solução
+**Causa**: para galerias públicas, o lock deveria ser **por visitante**, não por galeria. Cada visitante tem ciclo de vida independente.
 
-```text
-┌──────────────────────────────────────────────┐
-│                  galeria_fotos                │
-│  (fotos da galeria — sem seleção p/ públicas) │
-└──────────────┬───────────────────────────────┘
-               │ 1:N
-┌──────────────▼───────────────────────────────┐
-│            galeria_visitantes                 │
-│  id, galeria_id, nome, contato, contato_tipo, │
-│  device_hash, status, created_at              │
-└──────────────┬───────────────────────────────┘
-               │ 1:N
-┌──────────────▼───────────────────────────────┐
-│         visitante_selecoes                    │
-│  id, visitante_id, foto_id, is_selected,      │
-│  is_favorite, comment, updated_at             │
-└──────────────────────────────────────────────┘
-               │
-┌──────────────▼───────────────────────────────┐
-│            cobrancas                          │
-│  + visitor_id (UUID nullable, FK)             │
-└──────────────────────────────────────────────┘
+### 2. `visitor_id` não é passado nas cobranças
+Na tabela `cobrancas`, ambas cobranças têm `visitor_id = NULL`. O `confirm-selection` não popula `visitor_id` ao criar cobranças (nem no body para asaas-gallery-payment, nem nos dados para infinitepay/mercadopago).
+
+### 3. `galeria_visitantes` não é atualizado
+- `fotos_selecionadas = 0` para ambos visitantes
+- `status = 'em_andamento'` para ambos (deveria ser `finalizado` após confirmar)
+- `status_selecao = 'selecao_iniciada'` (deveria ser `selecao_completa`)
+
+O `confirm-selection` atualiza apenas `galerias.fotos_selecionadas` e `galerias.status_selecao`, mas **nunca** atualiza `galeria_visitantes`.
+
+### 4. Tela finalizada mostra "0 fotos selecionadas"
+A rota `isFinalized` em `gallery-access` (linha 576-581) busca fotos com `galeria_fotos.is_selected = true`. Para galerias públicas, as seleções estão em `visitante_selecoes`, não em `galeria_fotos`. Resultado: retorna array vazio.
+
+### 5. `galerias.total_fotos_extras_vendidas = 0` e `valor_total_vendido = 0`
+O `confirm-selection` não atualiza esses campos para galerias públicas — a lógica de galeria única sobrescreveu os contadores.
+
+### 6. Aba Seleção no painel do fotógrafo mostra dados globais
+A aba "Seleção (0)" em `GalleryDetail` usa `galeria_fotos.is_selected` — que para galerias públicas está sempre `false`. Para galerias públicas, deveria mostrar um resumo agregado dos visitantes.
+
+---
+
+## Plano de correção (por etapas)
+
+### Etapa 1 — Migração SQL: Lock por visitante + trigger de sync
+
+1. **Nova RPC `try_lock_visitor_selection`**: Lock advisory por `visitante_id` em vez de `galeria_id`. Verifica `galeria_visitantes.status_selecao` em vez de `galerias.status_selecao`.
+
+2. **Trigger na `galeria_visitantes`**: Ao atualizar `status` para `finalizado`, recalcular `galerias.total_fotos_extras_vendidas` e `valor_total_vendido` como soma de todos os visitantes.
+
+### Etapa 2 — Edge Function `confirm-selection`: Branch visitante
+
+Quando `visitorId` está presente:
+
+| Aspecto | Antes | Depois |
+|---|---|---|
+| Lock | `try_lock_gallery_selection(galleryId)` | `try_lock_visitor_selection(visitorId)` |
+| Update galeria | `galerias.status_selecao = selecao_completa` | **Não altera** status da galeria |
+| Update visitante | Nada | `galeria_visitantes.status = 'finalizado'`, `status_selecao`, `fotos_selecionadas` |
+| Cobrança `visitor_id` | NULL | `visitorId` passado no insert/body |
+| Asaas checkout data | Sem `visitorId` | `visitorId` incluído no `asaasCheckoutData` |
+
+### Etapa 3 — Edge Function `gallery-access`: Tela finalizada por visitante
+
+Para galerias públicas com `isFinalized` (ou visitante com `status = 'finalizado'`):
+
+- Se `visitorId` presente → buscar fotos de `visitante_selecoes WHERE visitante_id = X AND is_selected = true`
+- Retornar `finalized: true` apenas quando o **visitante** finalizou, não quando a galeria finalizou
+- Para visitantes que ainda não finalizaram, continuar mostrando a galeria normalmente
+
+### Etapa 4 — Edge Function `asaas-gallery-payment`: Aceitar `visitor_id`
+
+- Receber `visitorId` no body
+- Popular `visitor_id` na cobrança criada
+
+### Etapa 5 — Frontend `GalleryDetail.tsx`: Aba Seleção para públicas
+
+Para galerias públicas, a aba "Seleção" não faz sentido como seleção global. Duas opções:
+- Redirecionar para aba "Visitantes" como padrão
+- Mostrar resumo agregado (total selecionadas por todos os visitantes)
+
+### Etapa 6 — Correção retroativa dos dados de teste
+
+```sql
+-- Atualizar visitantes com contagem real
+UPDATE galeria_visitantes SET fotos_selecionadas = 6, status = 'finalizado', status_selecao = 'selecao_completa' WHERE id = '4f7ee6bf-3641-4d8e-93ea-7b9f5d20291a';
+UPDATE galeria_visitantes SET fotos_selecionadas = 3, status = 'finalizado', status_selecao = 'selecao_completa' WHERE id = 'ae688254-7c1d-4787-8698-0f75d733c538';
+
+-- Associar cobranças aos visitantes corretos
+UPDATE cobrancas SET visitor_id = '4f7ee6bf-3641-4d8e-93ea-7b9f5d20291a' WHERE id = '594ea992-8a89-4fae-b5fa-73126256835d';
+UPDATE cobrancas SET visitor_id = 'ae688254-7c1d-4787-8698-0f75d733c538' WHERE id = '0fe53d0f-45b0-4db5-80b0-7647701d5201';
+
+-- Atualizar galeria com totais corretos (9 extras, R$ 90)
+UPDATE galerias SET total_fotos_extras_vendidas = 9, valor_total_vendido = 90 WHERE id = '151b6963-952b-4fea-9ffa-3a12377851fa';
 ```
-
----
-
-## ETAPA 1 — Banco de dados (migração SQL)
-
-### Novas tabelas
-
-**`galeria_visitantes`**
-- `id` UUID PK
-- `galeria_id` UUID FK → galerias
-- `nome` TEXT NOT NULL
-- `contato` TEXT NOT NULL (email ou whatsapp)
-- `contato_tipo` TEXT NOT NULL ('email' | 'whatsapp')
-- `device_hash` TEXT — hash do dispositivo para sessão persistente
-- `status` TEXT DEFAULT 'em_andamento' ('em_andamento' | 'finalizado')
-- `status_selecao` TEXT DEFAULT 'selecao_iniciada'
-- `fotos_selecionadas` INTEGER DEFAULT 0
-- `finalized_at` TIMESTAMPTZ
-- `created_at` / `updated_at`
-- UNIQUE(galeria_id, contato) — um visitante por contato por galeria
-
-**`visitante_selecoes`**
-- `id` UUID PK
-- `visitante_id` UUID FK → galeria_visitantes
-- `foto_id` UUID FK → galeria_fotos
-- `is_selected` BOOLEAN DEFAULT false
-- `is_favorite` BOOLEAN DEFAULT false
-- `comment` TEXT
-- `updated_at`
-- UNIQUE(visitante_id, foto_id)
-
-### Alteração em tabela existente
-
-**`cobrancas`** — adicionar coluna:
-- `visitor_id` UUID nullable FK → galeria_visitantes
-
-### RLS
-
-- `galeria_visitantes`: fotógrafo (user_id via galerias) pode SELECT; anon pode INSERT (registro) e SELECT próprio via device_hash
-- `visitante_selecoes`: acesso apenas via Edge Functions (service role)
-- `cobrancas.visitor_id`: RLS existente já cobre (user_id based)
-
----
-
-## ETAPA 2 — Tela de Identificação do Visitante (Frontend)
-
-### Novo componente: `VisitorIdentificationScreen`
-
-Exibido **antes** de mostrar as fotos, apenas para galerias públicas (`permissao = 'public'`). Mesma estética do `PasswordScreen`.
-
-- Campos: Nome (obrigatório), WhatsApp ou E-mail (obrigatório, com toggle)
-- Botão: "Entrar na galeria"
-- Ao submeter: chama Edge Function que cria/recupera visitante
-- Gera `device_hash` (fingerprint simples: contato + user-agent hash)
-- Salva `visitor_id` em `localStorage` keyed por token da galeria
-- Se visitante já existir (mesmo contato na galeria): recupera sessão e seleção
-
-### Persistência de sessão
-
-- `localStorage.getItem(`gallery_visitor_${token}`)` → se existir, pula tela de identificação
-- Edge Function valida que o visitor_id existe e pertence àquela galeria
-
----
-
-## ETAPA 3 — Edge Functions (client-selection + confirm-selection + gallery-access)
-
-### `client-selection` — adaptar para visitantes
-
-- Novo campo opcional no body: `visitorId`
-- Se galeria é pública:
-  - `visitorId` obrigatório
-  - Operações de select/deselect/favorite/comment atuam em `visitante_selecoes` (INSERT ON CONFLICT UPDATE) em vez de `galeria_fotos`
-  - `galeria_fotos.is_selected` **não é tocado** para galerias públicas
-- Se galeria é privada: comportamento atual inalterado
-
-### `confirm-selection` — adaptar para visitantes
-
-- Novo campo opcional: `visitorId`
-- Se galeria pública + visitorId:
-  - Conta `selectedCount` de `visitante_selecoes WHERE visitante_id = X AND is_selected = true`
-  - Cria cobrança com `visitor_id` preenchido
-  - Atualiza `galeria_visitantes.status = 'finalizado'`
-  - **NÃO** atualiza `galerias.status_selecao` (cada visitante tem ciclo independente)
-- Se galeria privada: fluxo atual inalterado
-
-### `gallery-access` — adaptar resposta
-
-- Se galeria pública e `visitorId` informado no body:
-  - Retorna fotos com seleção do visitante (JOIN com `visitante_selecoes`)
-  - Retorna `visitorId` e `visitorName` na resposta
-- Novo endpoint/action: `register-visitor` (ou embutido no gallery-access)
-  - Recebe nome + contato → cria/recupera visitante → retorna `visitorId`
-
-### Nova Edge Function: `gallery-visitors`
-
-- Endpoint autenticado (fotógrafo) para listar visitantes de uma galeria
-- Retorna: nome, contato, fotos selecionadas (count), status, status pagamento
-- Retorna seleção detalhada de um visitante específico (com query param)
-
----
-
-## ETAPA 4 — Frontend: Galeria Pública com Seleção por Visitante
-
-### `ClientGallery.tsx` — mudanças
-
-1. Após carregar galeria, verificar se `permissao === 'public'`
-2. Se pública: verificar `localStorage` para `visitor_id`
-   - Sem visitor: mostrar `VisitorIdentificationScreen`
-   - Com visitor: carregar fotos com seleção do visitante
-3. `selectionMutation` passa `visitorId` no body
-4. `confirmMutation` passa `visitorId` no body
-5. Banner sutil no topo: "Olá, {nome} — você está selecionando suas fotos"
-6. Pricing/contagem usa `visitante_selecoes` em vez de `galeria_fotos`
-
----
-
-## ETAPA 5 — Painel do Fotógrafo: Visualização de Visitantes
-
-### `GalleryDetail.tsx` — nova aba "Visitantes"
-
-Visível apenas para galerias públicas. Exibe:
-
-| Nome | Contato | Fotos selecionadas | Status | Pagamento |
-|---|---|---|---|---|
-| João | (11) 99999 | 15 | Finalizado | Pago |
-| Maria | maria@... | 8 | Em andamento | — |
-
-**Ao clicar em um visitante**: expande ou navega para detalhe mostrando:
-- Grid das fotos selecionadas por aquele visitante
-- Resumo financeiro (extras, valor, pagamento)
-- Ações: marcar como finalizado, reenviar link
-
----
-
-## ETAPA 6 — Pagamentos por Visitante
-
-- `cobrancas` passa a ter `visitor_id` para galerias públicas
-- Webhooks (InfinitePay, MercadoPago, Asaas) não mudam — já identificam por `cobranca_id`
-- `finalize_gallery_payment` RPC: se cobrança tem `visitor_id`, atualiza `galeria_visitantes.status` em vez de `galerias.status_selecao`
-- `PaymentPendingScreen` e `PaymentRedirect` passam `visitorId` nas requisições
 
 ---
 
@@ -180,32 +92,12 @@ Visível apenas para galerias públicas. Exibe:
 
 | Arquivo | Ação | Etapa |
 |---|---|---|
-| Nova migração SQL | Criar tabelas + coluna visitor_id | 1 |
-| `src/components/VisitorIdentificationScreen.tsx` | Criar | 2 |
-| `supabase/functions/client-selection/index.ts` | Editar — branch público/privado | 3 |
-| `supabase/functions/confirm-selection/index.ts` | Editar — branch público/privado | 3 |
-| `supabase/functions/gallery-access/index.ts` | Editar — aceitar visitorId, retornar seleção do visitante | 3 |
-| `supabase/functions/gallery-visitors/index.ts` | Criar | 3 |
-| `src/pages/ClientGallery.tsx` | Editar — tela de identificação + visitorId em mutations | 4 |
-| `src/pages/GalleryDetail.tsx` | Editar — nova aba "Visitantes" | 5 |
-| `supabase/functions/finalize-gallery-payment` (RPC SQL) | Editar — branch visitor_id | 6 |
-| `supabase/functions/asaas-gallery-payment/index.ts` | Editar — passar visitor_id | 6 |
-| `supabase/functions/gallery-create-payment/index.ts` | Editar — passar visitor_id | 6 |
+| Nova migração SQL | RPC `try_lock_visitor_selection` + correção retroativa | 1, 6 |
+| `supabase/functions/confirm-selection/index.ts` | Branch completo para visitantes (lock, update, cobrança) | 2 |
+| `supabase/functions/gallery-access/index.ts` | Tela finalizada busca de `visitante_selecoes` para públicas | 3 |
+| `supabase/functions/asaas-gallery-payment/index.ts` | Aceitar e popular `visitor_id` | 4 |
+| `src/pages/GalleryDetail.tsx` | Aba Seleção adaptada para galerias públicas | 5 |
 
-## Ordem de implementação recomendada
-
-1. **Etapa 1** — Migração SQL (tabelas + coluna) — base segura sem impacto
-2. **Etapa 2** — Tela de identificação (componente isolado)
-3. **Etapa 3** — Edge Functions (branch condicional — galerias privadas não são afetadas)
-4. **Etapa 4** — Integração no ClientGallery
-5. **Etapa 5** — Painel do fotógrafo
-6. **Etapa 6** — Pagamentos por visitante
-
-Cada etapa pode ser implementada e testada independentemente sem quebrar o fluxo existente de galerias privadas.
-
-## Riscos e mitigações
-
-- **Galerias públicas existentes com seleção global**: as 10 galerias públicas atuais terão suas seleções em `galeria_fotos` preservadas. Após a migração, novas seleções usarão `visitante_selecoes`. Não há migração retroativa necessária.
-- **InfinitePay/MercadoPago webhooks**: não são afetados — continuam usando `cobranca_id` para resolver pagamento. O `visitor_id` é apenas metadata adicional.
-- **Performance**: `visitante_selecoes` terá índice em `(visitante_id, foto_id)` UNIQUE + índice em `foto_id` para JOINs.
+### Impacto em galerias privadas
+Zero. Todas as mudanças são condicionais: `if (visitorId) { ... }`. O fluxo privado permanece inalterado.
 
