@@ -3901,6 +3901,10 @@ export type Database = {
         Args: { p_gallery_id: string }
         Returns: Json
       }
+      try_lock_visitor_selection: {
+        Args: { p_visitor_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       account_status: "active" | "suspended" | "canceled"
