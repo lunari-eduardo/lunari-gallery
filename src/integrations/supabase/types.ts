@@ -564,6 +564,7 @@ export type Database = {
           status_financeiro: string | null
           status_galeria: string | null
           status_pagamento_fotos_extra: string | null
+          tipo_registro: string
           updated_at: string | null
           updated_by: string | null
           user_id: string
@@ -597,6 +598,7 @@ export type Database = {
           status_financeiro?: string | null
           status_galeria?: string | null
           status_pagamento_fotos_extra?: string | null
+          tipo_registro?: string
           updated_at?: string | null
           updated_by?: string | null
           user_id: string
@@ -630,6 +632,7 @@ export type Database = {
           status_financeiro?: string | null
           status_galeria?: string | null
           status_pagamento_fotos_extra?: string | null
+          tipo_registro?: string
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string
