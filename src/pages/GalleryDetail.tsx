@@ -967,6 +967,30 @@ export default function GalleryDetail() {
                               Finalizado em {format(new Date(visitor.finalized_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                             </p>
                           )}
+
+                          {/* Botão de códigos de seleção */}
+                          {(visitor.fotos_selecionadas || 0) > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full gap-2"
+                              disabled={loadingVisitorPhotos === visitor.id}
+                              onClick={() => {
+                                if (!visitorPhotosMap[visitor.id]) {
+                                  fetchVisitorPhotos(visitor.id).then(() => setVisitorCodesModalId(visitor.id));
+                                } else {
+                                  setVisitorCodesModalId(visitor.id);
+                                }
+                              }}
+                            >
+                              {loadingVisitorPhotos === visitor.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileText className="h-4 w-4" />
+                              )}
+                              Copiar códigos de seleção
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
