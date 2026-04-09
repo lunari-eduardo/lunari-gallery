@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
     // 1. Fetch gallery to validate status
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, status, status_selecao, prazo_selecao, finalized_at, session_id')
+      .select('id, status, status_selecao, prazo_selecao, finalized_at, session_id, permissao')
       .eq('id', galleryId)
       .single();
 
