@@ -108,6 +108,7 @@ export default function GalleryDetail() {
 
   // Visitor states
   const [expandedVisitorId, setExpandedVisitorId] = useState<string | null>(null);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   // Fetch visitors for public galleries
   const isPublicGallery = supabaseGallery?.permissao === 'public';
@@ -131,8 +132,6 @@ export default function GalleryDetail() {
     },
     enabled: !!id && !!isPublicGallery,
   });
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
 
   const { data: galleryActions = [] } = useQuery({
