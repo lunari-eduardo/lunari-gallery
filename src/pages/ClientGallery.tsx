@@ -432,7 +432,7 @@ export default function ClientGallery() {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ galleryToken: identifier, photoId, action, comment }),
+        body: JSON.stringify({ galleryToken: identifier, photoId, action, comment, visitorId: visitorId || undefined }),
       });
       
       if (!response.ok) {
@@ -497,6 +497,7 @@ export default function ClientGallery() {
           valorUnitario: pricingData.valorUnitario,
           valorTotal: pricingData.valorTotal,
           requestPayment: shouldRequestPayment,
+          visitorId: visitorId || undefined,
         }),
       });
       
