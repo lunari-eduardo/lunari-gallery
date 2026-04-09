@@ -922,6 +922,7 @@ export default function GalleryDetail() {
           </TabsContent>
         )}
 
+        <TabsContent value="details">
           <div className="grid gap-6 md:grid-cols-2">
             <div className="lunari-card p-5 space-y-4">
               <h3 className="font-medium">Informações do Cliente</h3>
