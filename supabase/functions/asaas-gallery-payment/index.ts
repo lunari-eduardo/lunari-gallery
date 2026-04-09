@@ -31,6 +31,7 @@ interface RequestBody {
   qtdFotos?: number;
   galleryToken?: string;
   billingType?: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
+  visitorId?: string;
   creditCard?: {
     holderName: string;
     number: string;
