@@ -242,6 +242,27 @@ export default function ClientGallery() {
     if (galleryResponse?.requiresPassword) {
       setRequiresPassword(true);
     }
+    if (galleryResponse?.requiresVisitor) {
+      setRequiresVisitor(true);
+    }
+    // Recover visitor info from response
+    if (galleryResponse?.visitorId && !visitorId) {
+      setVisitorId(galleryResponse.visitorId);
+      setVisitorName(galleryResponse.visitorName || null);
+      localStorage.setItem(`gallery_visitor_${identifier}`, galleryResponse.visitorId);
+      if (galleryResponse.visitorName) {
+        localStorage.setItem(`gallery_visitor_name_${identifier}`, galleryResponse.visitorName);
+      }
+    }
+    // Also check gallery.visitorId (nested in gallery object)
+    if (galleryResponse?.gallery?.visitorId && !visitorId) {
+      setVisitorId(galleryResponse.gallery.visitorId);
+      setVisitorName(galleryResponse.gallery.visitorName || null);
+      localStorage.setItem(`gallery_visitor_${identifier}`, galleryResponse.gallery.visitorId);
+      if (galleryResponse.gallery.visitorName) {
+        localStorage.setItem(`gallery_visitor_name_${identifier}`, galleryResponse.gallery.visitorName);
+      }
+    }
   }, [galleryResponse]);
 
   // Extract gallery data from response (handle both legacy and new format)
