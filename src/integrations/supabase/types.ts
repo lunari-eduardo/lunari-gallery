@@ -855,6 +855,7 @@ export type Database = {
           user_id: string
           valor: number
           valor_liquido: number | null
+          visitor_id: string | null
         }
         Insert: {
           asaas_installment_id?: string | null
@@ -889,6 +890,7 @@ export type Database = {
           user_id: string
           valor: number
           valor_liquido?: number | null
+          visitor_id?: string | null
         }
         Update: {
           asaas_installment_id?: string | null
@@ -923,6 +925,7 @@ export type Database = {
           user_id?: string
           valor?: number
           valor_liquido?: number | null
+          visitor_id?: string | null
         }
         Relationships: [
           {
@@ -937,6 +940,13 @@ export type Database = {
             columns: ["galeria_id"]
             isOneToOne: false
             referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "galeria_visitantes"
             referencedColumns: ["id"]
           },
         ]
@@ -1802,6 +1812,59 @@ export type Database = {
           },
           {
             foreignKeyName: "galeria_pastas_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      galeria_visitantes: {
+        Row: {
+          contato: string
+          contato_tipo: string
+          created_at: string
+          device_hash: string | null
+          finalized_at: string | null
+          fotos_selecionadas: number
+          galeria_id: string
+          id: string
+          nome: string
+          status: string
+          status_selecao: string
+          updated_at: string
+        }
+        Insert: {
+          contato: string
+          contato_tipo: string
+          created_at?: string
+          device_hash?: string | null
+          finalized_at?: string | null
+          fotos_selecionadas?: number
+          galeria_id: string
+          id?: string
+          nome: string
+          status?: string
+          status_selecao?: string
+          updated_at?: string
+        }
+        Update: {
+          contato?: string
+          contato_tipo?: string
+          created_at?: string
+          device_hash?: string | null
+          finalized_at?: string | null
+          fotos_selecionadas?: number
+          galeria_id?: string
+          id?: string
+          nome?: string
+          status?: string
+          status_selecao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "galeria_visitantes_galeria_id_fkey"
             columns: ["galeria_id"]
             isOneToOne: false
             referencedRelation: "galerias"
@@ -3524,6 +3587,51 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      visitante_selecoes: {
+        Row: {
+          comment: string | null
+          foto_id: string
+          id: string
+          is_favorite: boolean
+          is_selected: boolean
+          updated_at: string
+          visitante_id: string
+        }
+        Insert: {
+          comment?: string | null
+          foto_id: string
+          id?: string
+          is_favorite?: boolean
+          is_selected?: boolean
+          updated_at?: string
+          visitante_id: string
+        }
+        Update: {
+          comment?: string | null
+          foto_id?: string
+          id?: string
+          is_favorite?: boolean
+          is_selected?: boolean
+          updated_at?: string
+          visitante_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visitante_selecoes_foto_id_fkey"
+            columns: ["foto_id"]
+            isOneToOne: false
+            referencedRelation: "galeria_fotos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitante_selecoes_visitante_id_fkey"
+            columns: ["visitante_id"]
+            isOneToOne: false
+            referencedRelation: "galeria_visitantes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_logs: {
         Row: {
