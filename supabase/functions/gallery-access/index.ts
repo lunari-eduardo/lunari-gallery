@@ -734,6 +734,111 @@ serve(async (req) => {
       }
     }
 
+    // 3.7. PUBLIC GALLERY: Visitor identification gate
+    const isPublicGallery = gallery.permissao === 'public';
+    let resolvedVisitorId: string | null = null;
+    let resolvedVisitorName: string | null = null;
+
+    if (isPublicGallery) {
+      // Register new visitor
+      if (visitorData && visitorData.nome && visitorData.contato) {
+        const deviceHash = visitorData.deviceHash || null;
+        
+        // Upsert visitor (same contact = same visitor)
+        const { data: visitor, error: visitorError } = await supabase
+          .from('galeria_visitantes')
+          .upsert({
+            galeria_id: gallery.id,
+            nome: visitorData.nome,
+            contato: visitorData.contato,
+            contato_tipo: visitorData.contatoTipo || 'whatsapp',
+            device_hash: deviceHash,
+          }, { onConflict: 'galeria_id,contato' })
+          .select('id, nome, status, status_selecao')
+          .single();
+
+        if (visitorError) {
+          console.error('Visitor upsert error:', visitorError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao registrar visitante' }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        resolvedVisitorId = visitor.id;
+        resolvedVisitorName = visitor.nome;
+        console.log(`👤 Visitor registered/recovered: ${visitor.nome} (${visitor.id})`);
+      }
+      // Recover existing visitor
+      else if (visitorId) {
+        const { data: visitor, error: visitorError } = await supabase
+          .from('galeria_visitantes')
+          .select('id, nome, status, status_selecao')
+          .eq('id', visitorId)
+          .eq('galeria_id', gallery.id)
+          .single();
+
+        if (!visitorError && visitor) {
+          resolvedVisitorId = visitor.id;
+          resolvedVisitorName = visitor.nome;
+          console.log(`👤 Visitor recovered: ${visitor.nome} (${visitor.id})`);
+        } else {
+          console.warn(`⚠️ Visitor ${visitorId} not found for gallery ${gallery.id}`);
+        }
+      }
+
+      // For public galleries, require visitor identification
+      if (!resolvedVisitorId) {
+        const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+        const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+        
+        // Build theme data for identification screen
+        const themeId = galleryConfig?.themeId as string | undefined;
+        let idThemeData = null;
+        if (themeId) {
+          const { data: theme } = await supabase
+            .from("gallery_themes")
+            .select("*")
+            .eq("id", themeId)
+            .maybeSingle();
+          if (theme) {
+            idThemeData = {
+              id: theme.id, name: theme.name,
+              backgroundMode: theme.background_mode || 'light',
+              primaryColor: theme.primary_color, accentColor: theme.accent_color,
+              emphasisColor: theme.emphasis_color,
+            };
+          }
+        }
+        if (!idThemeData) {
+          idThemeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
+        }
+
+        // Fetch studio settings for branding
+        const { data: idSettings } = await supabase
+          .from("gallery_settings")
+          .select("studio_name, studio_logo_url, favicon_url")
+          .eq("user_id", gallery.user_id)
+          .single();
+
+        return new Response(
+          JSON.stringify({
+            requiresVisitor: true,
+            galleryId: gallery.id,
+            sessionName: gallery.nome_sessao,
+            clientMode,
+            theme: idThemeData,
+            studioSettings: idSettings || null,
+            settings: {
+              sessionFont: galleryConfig?.sessionFont || undefined,
+              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+            },
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // 4. Fetch pricing rules from session (source of truth) if gallery is linked
     let regrasCongeladas = gallery.regras_congeladas;
     
@@ -757,6 +862,42 @@ serve(async (req) => {
       .eq("galeria_id", gallery.id)
       .order("original_filename", { ascending: true })
       .range(photoOffset, photoOffset + photoLimit - 1);
+
+    // 5.1 For PUBLIC galleries with visitor: overlay visitor's selections onto photos
+    if (isPublicGallery && resolvedVisitorId && photos) {
+      const photoIds = photos.map((p: any) => p.id);
+      if (photoIds.length > 0) {
+        const { data: visitorSelections } = await supabase
+          .from('visitante_selecoes')
+          .select('foto_id, is_selected, is_favorite, comment')
+          .eq('visitante_id', resolvedVisitorId)
+          .in('foto_id', photoIds);
+
+        if (visitorSelections) {
+          const selMap = new Map(visitorSelections.map(s => [s.foto_id, s]));
+          for (const photo of photos as any[]) {
+            const sel = selMap.get(photo.id);
+            if (sel) {
+              photo.is_selected = sel.is_selected;
+              photo.is_favorite = sel.is_favorite;
+              photo.comment = sel.comment || photo.comment;
+            } else {
+              // No visitor selection = not selected for this visitor
+              photo.is_selected = false;
+              photo.is_favorite = false;
+              photo.comment = null;
+            }
+          }
+        } else {
+          // No selections at all — clear all
+          for (const photo of photos as any[]) {
+            photo.is_selected = false;
+            photo.is_favorite = false;
+            photo.comment = null;
+          }
+        }
+      }
+    }
 
     if (photosError) {
       console.error("Error fetching photos:", photosError);
