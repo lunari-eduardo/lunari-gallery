@@ -407,6 +407,7 @@ Deno.serve(async (req) => {
       cliente_id: clienteId || null,
       session_id: sessionId || null,
       galeria_id: galeriaId || null,
+      visitor_id: body.visitorId || null,
       valor: valor,
       status: 'pendente',
       provedor: 'asaas',
