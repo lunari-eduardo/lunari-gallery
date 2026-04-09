@@ -22,12 +22,13 @@ function checkRateLimit(ip: string): boolean {
 }
 
 interface RequestBody {
-  galleryToken: string;    // Required — public_token (UUID access removed)
+  galleryToken: string;
   selectedCount: number;
   extraCount?: number;
   valorUnitario?: number;
   valorTotal?: number;
   requestPayment?: boolean;
+  visitorId?: string;  // Required for public galleries
 }
 
 // Pricing calculation interfaces (mirrored from pricingUtils.ts)
