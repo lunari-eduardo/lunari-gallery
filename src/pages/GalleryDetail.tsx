@@ -9,6 +9,7 @@ import {
   EyeOff,
   FileText,
   User,
+  Users,
   Calendar,
   Image,
   AlertCircle,
@@ -18,7 +19,12 @@ import {
   Clock,
   RefreshCw,
   MessageSquare,
-  Heart
+  Heart,
+  Phone,
+  Mail,
+  ChevronDown,
+  ChevronUp,
+  CreditCard,
 } from 'lucide-react';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
