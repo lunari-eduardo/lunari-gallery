@@ -516,6 +516,7 @@ Deno.serve(async (req) => {
             clienteId: gallery.cliente_id,
             sessionId: sessionIdTexto,
             galleryToken: gallery.public_token,
+            visitorId: visitorId || undefined,
             enabledMethods: {
               pix: asaasSettings.habilitarPix !== false,
               creditCard: asaasSettings.habilitarCartao !== false,
