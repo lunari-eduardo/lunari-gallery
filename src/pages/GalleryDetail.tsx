@@ -830,7 +830,98 @@ export default function GalleryDetail() {
           </div>
         </TabsContent>
 
-        <TabsContent value="details">
+        {/* Visitors Tab - Public galleries only */}
+        {isPublicGallery && (
+          <TabsContent value="visitors" className="space-y-4">
+            {isLoadingVisitors ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !visitorsData?.visitors?.length ? (
+              <div className="text-center py-16 lunari-card">
+                <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">Nenhum visitante acessou esta galeria ainda</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {visitorsData.visitors.map((visitor: any) => {
+                  const isExpanded = expandedVisitorId === visitor.id;
+                  const statusLabel = visitor.status === 'finalizado' ? 'Finalizado' : 'Em andamento';
+                  const statusColor = visitor.status === 'finalizado' ? 'text-primary' : 'text-muted-foreground';
+                  const paymentLabel = visitor.status_pagamento === 'pago' || visitor.status_pagamento === 'pago_manual'
+                    ? 'Pago' : visitor.status_pagamento === 'pendente' ? 'Pendente' : '—';
+                  const paymentColor = paymentLabel === 'Pago' ? 'text-primary' : paymentLabel === 'Pendente' ? 'text-amber-600' : 'text-muted-foreground';
+
+                  return (
+                    <div key={visitor.id} className="lunari-card overflow-hidden">
+                      <button
+                        onClick={() => setExpandedVisitorId(isExpanded ? null : visitor.id)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="text-left min-w-0">
+                            <p className="font-medium text-sm truncate">{visitor.nome}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              {visitor.contato_tipo === 'whatsapp' ? <Phone className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+                              {visitor.contato}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 flex-shrink-0">
+                          <div className="text-right hidden sm:block">
+                            <p className="text-sm font-medium">{visitor.fotos_selecionadas || 0} fotos</p>
+                            <p className={cn("text-xs", statusColor)}>{statusLabel}</p>
+                          </div>
+                          <span className={cn("text-xs font-medium hidden sm:block", paymentColor)}>{paymentLabel}</span>
+                          {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                      </button>
+
+                      {/* Mobile stats */}
+                      <div className="sm:hidden px-4 pb-2 flex items-center gap-3 text-xs">
+                        <span className="font-medium">{visitor.fotos_selecionadas || 0} fotos</span>
+                        <span className={statusColor}>{statusLabel}</span>
+                        <span className={paymentColor}>{paymentLabel}</span>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="border-t border-border p-4 space-y-3 bg-muted/30">
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Acesso em</span>
+                              <p className="font-medium">{format(new Date(visitor.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Status</span>
+                              <p className={cn("font-medium", statusColor)}>{statusLabel}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Fotos selecionadas</span>
+                              <p className="font-medium">{visitor.fotos_selecionadas || 0}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Pagamento</span>
+                              <p className={cn("font-medium", paymentColor)}>{paymentLabel}</p>
+                            </div>
+                          </div>
+                          {visitor.finalized_at && (
+                            <p className="text-xs text-muted-foreground">
+                              Finalizado em {format(new Date(visitor.finalized_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+        )}
+
           <div className="grid gap-6 md:grid-cols-2">
             <div className="lunari-card p-5 space-y-4">
               <h3 className="font-medium">Informações do Cliente</h3>
