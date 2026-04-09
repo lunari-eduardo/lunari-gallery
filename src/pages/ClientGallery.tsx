@@ -189,6 +189,7 @@ export default function ClientGallery() {
             password: sessionPassword,
             page,
             limit: 200,
+            visitorId: visitorId || undefined,
           }),
         });
         
