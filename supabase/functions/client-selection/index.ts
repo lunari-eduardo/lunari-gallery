@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { galleryToken, photoId, action, comment } = body;
+    const { galleryToken, photoId, action, comment, visitorId } = body;
 
     // Validate required fields
     if (!action) {
