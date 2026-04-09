@@ -910,7 +910,13 @@ export default function GalleryDetail() {
                   return (
                     <div key={visitor.id} className="lunari-card overflow-hidden">
                       <button
-                        onClick={() => setExpandedVisitorId(isExpanded ? null : visitor.id)}
+                        onClick={() => {
+                          const newId = isExpanded ? null : visitor.id;
+                          setExpandedVisitorId(newId);
+                          if (newId && (visitor.fotos_selecionadas || 0) > 0) {
+                            fetchVisitorPhotos(newId);
+                          }
+                        }}
                         className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
