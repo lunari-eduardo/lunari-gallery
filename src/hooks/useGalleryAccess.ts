@@ -59,6 +59,33 @@ export function useGalleryAccess(user: User | null, session: Session | null): Ga
           return;
         }
 
+        // 1.5. Check allowed_emails (admin-authorized users)
+        const { data: allowedEmail } = await supabase
+          .from('allowed_emails')
+          .select('plan_code')
+          .eq('email', user.email!)
+          .maybeSingle();
+
+        if (allowedEmail) {
+          const planCode = allowedEmail.plan_code || 'combo_completo';
+          const includes = PLAN_INCLUDES[planCode];
+          
+          console.log('✅ User authorized via allowed_emails with plan:', planCode);
+
+          if (includes?.studio && includes?.select) {
+            setAccessLevel('pro_gallery');
+          } else if (includes?.studio) {
+            setAccessLevel('pro');
+          } else if (planCode === 'studio_starter') {
+            setAccessLevel('starter');
+          } else {
+            setAccessLevel('free');
+          }
+          setPlanName(getPlanDisplayName(planCode));
+          setIsLoading(false);
+          return;
+        }
+
         // 2. Check subscriptions_asaas for active plan
         const { data: subs } = await supabase
           .from('subscriptions_asaas')
