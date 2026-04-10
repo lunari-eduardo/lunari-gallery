@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGalleryCredits } from '@/hooks/useGalleryCredits';
+import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { useSupabaseGalleries, Galeria } from '@/hooks/useSupabaseGalleries';
 import { supabase } from '@/integrations/supabase/client';
@@ -220,7 +220,7 @@ function DashboardBackground() {
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  const { credits, isLoading: creditsLoading } = useGalleryCredits();
+  const { photoCredits: credits, isLoading: creditsLoading } = usePhotoCredits();
   const { storageUsedBytes, storageLimitBytes, storageUsedPercent, planName, isLoading: storageLoading } = useTransferStorage();
   const { galleries, isLoading: galleriesLoading } = useSupabaseGalleries();
 
