@@ -1,54 +1,40 @@
 
 
-# Fix: Usuários autorizados pelo admin não recebem integração Gestão
+# Melhorias no Modal de Códigos de Fotos
 
-## Problema
+## Problemas identificados
 
-O hook `useGalleryAccess` verifica apenas `user_roles` (admin), `subscriptions_asaas` (assinatura ativa) e `profiles.studio_trial_ends_at` (trial). A tabela `allowed_emails` — onde o admin autoriza usuários com planos específicos — não é consultada. Resultado: usuários como `eduardo22diehl@gmail.com` (autorizado com `combo_completo`) recebem `accessLevel: 'free'`, sem integração Gestão.
+1. **Dois campos quando só há uma pasta**: Quando todas as fotos estão em uma única pasta, o modal mostra o bloco da pasta E o bloco "Todos juntos" — redundante, pois o conteúdo é idêntico.
+
+2. **Botão "Copiar" por pasta com pouco destaque**: O botão `variant="ghost"` é quase invisível, difícil de notar.
+
+3. **"Copiar Todos" inclui cabeçalho da pasta no código**: O `generateAllCode()` adiciona `── Pasta (N) ──` ao código, o que não funciona na busca do Windows/Mac/Lightroom.
 
 ## Solução
 
-Adicionar verificação de `allowed_emails` no `useGalleryAccess`, entre a checagem de admin e de `subscriptions_asaas`.
+### `src/components/PhotoCodesModal.tsx`
 
-## Mudança
+**1. Pasta única = sem separação por pasta**
+- Se `photosByFolder` tem apenas 1 entrada, tratar como se não houvesse pastas (mostrar apenas um bloco único sem cabeçalho de pasta).
+- Condição: `const showFolderSections = hasFolders && photosByFolder.length > 1;`
 
-| Arquivo | O que muda |
-|---|---|
-| `src/hooks/useGalleryAccess.ts` | Após checar admin, consultar `allowed_emails` pelo email do usuário. Se encontrado, usar `plan_code` para determinar `accessLevel` via `PLAN_INCLUDES`, igual à lógica de assinaturas |
+**2. Botão de copiar por pasta com mais destaque**
+- Trocar `variant="ghost"` para `variant="outline"` com cores mais visíveis.
 
-### Lógica adicionada (~15 linhas)
+**3. "Copiar Todos" gera código limpo sem cabeçalhos**
+- O `generateAllCode()` vai gerar apenas os códigos separados por quebra de linha dupla, sem a linha `── Nome (N) ──`.
+- Alterar de:
+  ```typescript
+  return `── ${g.folder.nome} (${g.photos.length}) ──\n${code}`;
+  ```
+  Para:
+  ```typescript
+  return code;
+  ```
+- Os cabeçalhos de pasta continuam visíveis na UI (labels acima de cada textarea), mas não são incluídos no código copiado.
 
-```typescript
-// 1.5. Check allowed_emails (admin-authorized users)
-const { data: allowedEmail } = await supabase
-  .from('allowed_emails')
-  .select('plan_code')
-  .eq('email', user.email)
-  .maybeSingle();
-
-if (allowedEmail) {
-  const planCode = allowedEmail.plan_code || 'combo_completo';
-  const includes = PLAN_INCLUDES[planCode];
-  
-  if (includes?.studio && includes?.select) {
-    setAccessLevel('pro_gallery');
-  } else if (includes?.studio) {
-    setAccessLevel('pro');
-  } else if (planCode === 'studio_starter') {
-    setAccessLevel('starter');
-  } else {
-    setAccessLevel('free');
-  }
-  setPlanName(getPlanDisplayName(planCode));
-  setIsLoading(false);
-  return;
-}
-```
-
-`PLAN_INCLUDES` já possui `combo_completo: { studio: true, select: true, transfer: true }`, então o resultado será `pro_gallery` → `hasGestaoIntegration: true` → modo assistido funciona.
-
-### Impacto
-- Zero impacto em usuários com assinatura ativa (a checagem de `allowed_emails` só é alcançada se não houver role admin)
-- Prioridade: admin > allowed_emails > assinatura > trial > free
-- Nenhuma migração SQL necessária
+## Resultado
+- 1 pasta → 1 campo único, sem redundância
+- Múltiplas pastas → campos separados + botão "Copiar Todos" (código limpo)
+- Botões de copiar com melhor visibilidade
 
