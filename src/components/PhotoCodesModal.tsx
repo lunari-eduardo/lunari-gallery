@@ -69,6 +69,8 @@ export function PhotoCodesModal({
         photos: selectedPhotos.filter(p => p.folderId === folder.id),
       })).filter(g => g.photos.length > 0)
     : [];
+
+  const showFolderSections = hasFolders && photosByFolder.length > 1;
   
   const generateCodeForPhotos = (photoList: GalleryPhoto[]): string => {
     if (photoList.length === 0) return 'Nenhuma foto selecionada';
@@ -92,10 +94,7 @@ export function PhotoCodesModal({
   const generateAllCode = (): string => {
     if (!hasFolders) return generateCodeForPhotos(selectedPhotos);
     
-    return photosByFolder.map(g => {
-      const code = generateCodeForPhotos(g.photos);
-      return `── ${g.folder.nome} (${g.photos.length}) ──\n${code}`;
-    }).join('\n\n');
+    return photosByFolder.map(g => generateCodeForPhotos(g.photos)).join('\n\n');
   };
 
   const handleCopy = (code: string, label: string) => {
@@ -138,7 +137,7 @@ export function PhotoCodesModal({
           </div>
 
           {/* Per-folder codes */}
-          {hasFolders && photosByFolder.length > 0 && (
+          {showFolderSections && (
             <div className="space-y-4">
               {photosByFolder.map(({ folder, photos: folderPhotos }) => {
                 const code = generateCodeForPhotos(folderPhotos);
@@ -154,7 +153,7 @@ export function PhotoCodesModal({
                         </span>
                       </Label>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         className="h-7 text-xs gap-1"
                         onClick={() => handleCopy(code, copyLabel)}
@@ -177,18 +176,18 @@ export function PhotoCodesModal({
           {/* All together (or single block if no folders) */}
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs">
-              {hasFolders ? 'Todos juntos — ' : ''}
+              {showFolderSections ? 'Todos juntos — ' : ''}
               {selectedPhotos.length} foto{selectedPhotos.length !== 1 ? 's' : ''} selecionada{selectedPhotos.length !== 1 ? 's' : ''}
             </Label>
             <Textarea
               readOnly
-              value={hasFolders ? generateAllCode() : generateCodeForPhotos(selectedPhotos)}
+              value={showFolderSections ? generateAllCode() : generateCodeForPhotos(selectedPhotos)}
               className="font-mono text-sm min-h-[120px] resize-none bg-muted/50"
             />
           </div>
 
           <Button 
-            onClick={() => handleCopy(hasFolders ? generateAllCode() : generateCodeForPhotos(selectedPhotos), 'all')}
+            onClick={() => handleCopy(showFolderSections ? generateAllCode() : generateCodeForPhotos(selectedPhotos), 'all')}
             variant="terracotta"
             className="w-full"
             disabled={selectedPhotos.length === 0}
@@ -201,7 +200,7 @@ export function PhotoCodesModal({
             ) : (
               <>
                 <Copy className="h-4 w-4 mr-2" />
-                {hasFolders ? 'Copiar Todos os Códigos' : 'Copiar Código'}
+                {showFolderSections ? 'Copiar Todos os Códigos' : 'Copiar Código'}
               </>
             )}
           </Button>
