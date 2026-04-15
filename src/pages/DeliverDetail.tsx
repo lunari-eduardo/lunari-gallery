@@ -222,8 +222,10 @@ export default function DeliverDetail() {
               const newExpiration = addDays(new Date(), days);
               await updateGallery({ id: id!, data: {
                 prazoSelecao: newExpiration,
-                status: 'enviado',
               }});
+              // Also update status back to published
+              const { supabase } = await import('@/integrations/supabase/client');
+              await supabase.from('galerias').update({ status: 'enviado', updated_at: new Date().toISOString() }).eq('id', id!);
               setExpirationDate(newExpiration);
               setShowReactivateDialog(false);
             }}
