@@ -631,12 +631,24 @@ export default function Dashboard() {
       {reactivateGalleryId && (() => {
         const galeria = supabaseGalleries.find(g => g.id === reactivateGalleryId);
         const clientLink = galeria?.publicToken ? getGalleryUrl(galeria.publicToken) : null;
+        const isTransfer = galeria?.tipo === 'entrega';
         return (
           <ReactivateGalleryDialog
             galleryName={galeria?.nomeSessao || 'Esta galeria'}
             clientLink={clientLink}
             onReactivate={async (days) => {
-              await reopenSelection({ id: reactivateGalleryId, days });
+              if (isTransfer) {
+                const prazoSelecao = new Date();
+                prazoSelecao.setDate(prazoSelecao.getDate() + days);
+                await supabase.from('galerias').update({
+                  status: 'enviado',
+                  prazo_selecao: prazoSelecao.toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq('id', reactivateGalleryId);
+                refetch();
+              } else {
+                await reopenSelection({ id: reactivateGalleryId, days });
+              }
               setReactivateGalleryId(null);
             }}
             open={true}
