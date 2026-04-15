@@ -1,28 +1,34 @@
 
 
-# Ajustes na Galeria do Cliente
+# Tela de galeria finalizada: diferenciar com/sem download
 
-## Mudança 1: "fotos incluídas" → "fotos contratadas"
+## Problema
 
-Na tela de acesso (welcome screen), linha 1603 de `ClientGallery.tsx`:
-```
-"{gallery.includedPhotos} fotos incluídas" → "{gallery.includedPhotos} fotos contratadas"
-```
+Após finalização + pagamento, galerias sem download ativo mostram a `FinalizedPreviewScreen` com fotos em preview (marcas d'água) sem opção de download — experiência confusa. O usuário quer:
 
-## Mudança 2: Barra de pastas não-fixa
+1. **Sem download ativo**: Mensagem clara "Sua galeria já foi finalizada, para acessá-la novamente, entre em contato com o(a) fotógrafo(a)"
+2. **Com download ativo**: Manter comportamento atual (fotos + botão download)
 
-Na barra de navegação de pastas (linha 1890 de `ClientGallery.tsx`), remover `sticky top-0 z-30` para que ela role junto com o conteúdo:
-```
-"sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border/30 px-3 py-2"
-→
-"bg-background border-b border-border/30 px-3 py-2"
-```
+## Solução
 
-Remove `sticky`, `top-0`, `z-30` e `backdrop-blur` (não necessário sem sticky). Mantém o fundo e borda para separação visual.
+### 1. `FinalizedPreviewScreen.tsx` — Bifurcar exibição
 
-## Arquivos
+Quando `allowDownload === false`, renderizar uma tela simples com:
+- Logo do estúdio (se disponível)
+- Ícone de check
+- "Seleção Confirmada" + contagem de fotos
+- Mensagem: "Sua galeria já foi finalizada. Para acessá-la novamente, entre em contato com o(a) fotógrafo(a)."
+- SEM grid de fotos, SEM lightbox
+
+Quando `allowDownload === true`, manter o comportamento atual completo (grid + download).
+
+### 2. Sem mudanças no backend
+
+O `gallery-access` já retorna `finalized: true` com `allowDownload` correto. O `ClientGallery.tsx` já passa `allowDownload` para o componente. A mudança é 100% no componente de apresentação.
+
+## Arquivo alterado
 
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/ClientGallery.tsx` | Linha 1603: texto "contratadas"; Linha 1890: remover sticky |
+| `src/components/FinalizedPreviewScreen.tsx` | Quando `allowDownload=false`, mostrar tela de mensagem em vez do grid de fotos |
 
