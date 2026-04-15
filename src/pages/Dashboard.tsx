@@ -507,17 +507,21 @@ export default function Dashboard() {
           ) : filteredDeliverGalleries.length > 0 ? (
             <div className="space-y-4">
               <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                {paginatedDeliverGalleries.map((gallery) => (
-                  <DeliverGalleryCard
-                    key={gallery.id}
-                    gallery={gallery}
-                    totalPhotos={gallery.totalFotos}
-                    onClick={() => navigate(`/deliver/${gallery.id}`)}
-                    onEdit={() => navigate(`/deliver/${gallery.id}`)}
-                    onShare={() => setShareGalleryId(gallery.id)}
-                    onDelete={() => setDeleteGalleryId(gallery.id)}
-                  />
-                ))}
+                {paginatedDeliverGalleries.map((gallery) => {
+                  const canReactivate = gallery.status === 'expired';
+                  return (
+                    <DeliverGalleryCard
+                      key={gallery.id}
+                      gallery={gallery}
+                      totalPhotos={gallery.totalFotos}
+                      onClick={() => navigate(`/deliver/${gallery.id}`)}
+                      onEdit={() => navigate(`/deliver/${gallery.id}`)}
+                      onShare={() => setShareGalleryId(gallery.id)}
+                      onDelete={() => setDeleteGalleryId(gallery.id)}
+                      onReactivate={canReactivate ? () => setReactivateGalleryId(gallery.id) : undefined}
+                    />
+                  );
+                })}
               </div>
               {totalDeliverPages > 1 && (
                 <div className="flex items-center justify-center gap-2 pt-2">
@@ -627,12 +631,24 @@ export default function Dashboard() {
       {reactivateGalleryId && (() => {
         const galeria = supabaseGalleries.find(g => g.id === reactivateGalleryId);
         const clientLink = galeria?.publicToken ? getGalleryUrl(galeria.publicToken) : null;
+        const isTransfer = galeria?.tipo === 'entrega';
         return (
           <ReactivateGalleryDialog
             galleryName={galeria?.nomeSessao || 'Esta galeria'}
             clientLink={clientLink}
             onReactivate={async (days) => {
-              await reopenSelection({ id: reactivateGalleryId, days });
+              if (isTransfer) {
+                const prazoSelecao = new Date();
+                prazoSelecao.setDate(prazoSelecao.getDate() + days);
+                await supabase.from('galerias').update({
+                  status: 'enviado',
+                  prazo_selecao: prazoSelecao.toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq('id', reactivateGalleryId);
+                refetch();
+              } else {
+                await reopenSelection({ id: reactivateGalleryId, days });
+              }
               setReactivateGalleryId(null);
             }}
             open={true}

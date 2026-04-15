@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save
+  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
+import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
@@ -54,6 +55,7 @@ export default function DeliverDetail() {
   const [photosLoading, setPhotosLoading] = useState(true);
   const [showUploader, setShowUploader] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showReactivateDialog, setShowReactivateDialog] = useState(false);
 
   // Editable fields
   const [sessionName, setSessionName] = useState('');
@@ -109,6 +111,7 @@ export default function DeliverDetail() {
 
   const statusInfo = getDeliverStatusInfo(gallery.status, gallery.prazoSelecao);
   const isDraft = statusInfo.label === 'Rascunho';
+  const isExpired = statusInfo.label === 'Expirada';
   const galleryUrl = gallery.publicToken ? getGalleryUrl(gallery.publicToken) : '';
 
   const handleSave = async () => {
@@ -192,6 +195,12 @@ export default function DeliverDetail() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {isExpired && (
+              <Button variant="outline" onClick={() => setShowReactivateDialog(true)} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Reativar
+              </Button>
+            )}
             {isDraft && (
               <Button onClick={handlePublish} className="gap-2">
                 <Send className="h-4 w-4" />
@@ -204,6 +213,25 @@ export default function DeliverDetail() {
             </Button>
             <DeleteGalleryDialog galleryName={gallery.nomeSessao || 'esta galeria'} onDelete={handleDelete} />
           </div>
+
+          {/* Reactivate Dialog */}
+          <ReactivateGalleryDialog
+            galleryName={gallery.nomeSessao || 'esta galeria'}
+            clientLink={galleryUrl || null}
+            onReactivate={async (days) => {
+              const newExpiration = addDays(new Date(), days);
+              await updateGallery({ id: id!, data: {
+                prazoSelecao: newExpiration,
+              }});
+              // Also update status back to published
+              const { supabase } = await import('@/integrations/supabase/client');
+              await supabase.from('galerias').update({ status: 'enviado', updated_at: new Date().toISOString() }).eq('id', id!);
+              setExpirationDate(newExpiration);
+              setShowReactivateDialog(false);
+            }}
+            open={showReactivateDialog}
+            onOpenChange={setShowReactivateDialog}
+          />
         </div>
       </div>
 

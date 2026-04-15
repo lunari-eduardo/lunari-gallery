@@ -1,4 +1,4 @@
-import { Image, User, Clock, MoreHorizontal, Pencil, Share2, Trash2 } from 'lucide-react';
+import { Image, User, Clock, MoreHorizontal, Pencil, Share2, Trash2, RotateCcw } from 'lucide-react';
 import { Gallery } from '@/types/gallery';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -17,6 +18,7 @@ interface DeliverGalleryCardProps {
   onEdit?: () => void;
   onShare?: () => void;
   onDelete?: () => void;
+  onReactivate?: () => void;
 }
 
 function getDeliverStatus(gallery: Gallery): { label: string; variant: 'default' | 'destructive' | 'secondary' } {
@@ -25,7 +27,7 @@ function getDeliverStatus(gallery: Gallery): { label: string; variant: 'default'
   return { label: 'Rascunho', variant: 'secondary' };
 }
 
-export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onShare, onDelete }: DeliverGalleryCardProps) {
+export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onShare, onDelete, onReactivate }: DeliverGalleryCardProps) {
   const isExpired = gallery.status === 'expired';
   const status = getDeliverStatus(gallery);
 
@@ -75,6 +77,16 @@ export function DeliverGalleryCard({ gallery, totalPhotos, onClick, onEdit, onSh
                 <Share2 className="h-3.5 w-3.5 mr-2" />
                 Compartilhar
               </DropdownMenuItem>
+              {onReactivate && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onReactivate(); }}>
+                    <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                    Reativar
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem 
                 onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
                 className="text-destructive focus:text-destructive"
