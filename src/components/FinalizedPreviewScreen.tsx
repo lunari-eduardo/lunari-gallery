@@ -115,6 +115,52 @@ export function FinalizedPreviewScreen({
     ? Math.round((downloadProgress.current / downloadProgress.total) * 100) 
     : 0;
 
+  // === SEM DOWNLOAD: tela simples de mensagem ===
+  if (!allowDownload) {
+    return (
+      <div 
+        className={cn("min-h-screen bg-background text-foreground flex flex-col", backgroundMode === 'dark' && 'dark')} 
+        style={themeStyles}
+      >
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
+          {studioLogoUrl && (
+            <img 
+              src={studioLogoUrl} 
+              alt={studioName || 'Logo do estúdio'} 
+              className="h-[100px] sm:h-[120px] md:h-[150px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] object-contain mb-8" 
+            />
+          )}
+
+          <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center mb-5">
+            <Check className="h-7 w-7 text-primary" />
+          </div>
+
+          <h2 className="text-xl font-semibold text-foreground mb-2">
+            Seleção Confirmada
+          </h2>
+
+          <p className="text-sm text-muted-foreground mb-6">
+            {photos.length} {photos.length === 1 ? 'foto selecionada' : 'fotos selecionadas'}
+          </p>
+
+          {sessionName && (
+            <p 
+              className="text-base font-normal text-muted-foreground mb-8"
+              style={{ fontFamily: sessionFont || '"Inter", sans-serif' }}
+            >
+              {applyTitleCase(sessionName, titleCaseMode)}
+            </p>
+          )}
+
+          <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+            Sua galeria já foi finalizada. Para acessá-la novamente, entre em contato com o(a) fotógrafo(a).
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // === COM DOWNLOAD: tela completa com grid + download ===
   return (
     <div 
       className={cn("min-h-screen bg-background text-foreground", backgroundMode === 'dark' && 'dark')} 
@@ -148,7 +194,6 @@ export function FinalizedPreviewScreen({
           {photos.length} {photos.length === 1 ? 'foto selecionada' : 'fotos selecionadas'}
         </p>
         
-        {/* Nome da sessão */}
         {sessionName && (
           <p 
             className="text-base sm:text-lg font-normal text-muted-foreground mb-4"
@@ -158,8 +203,7 @@ export function FinalizedPreviewScreen({
           </p>
         )}
         
-        {/* Botão de download - apenas se permitido E há fotos com originalPath */}
-        {allowDownload && hasDownloadablePhotos && (
+        {hasDownloadablePhotos && (
           <Button 
             onClick={handleDownloadAll} 
             disabled={isDownloading}
@@ -180,8 +224,7 @@ export function FinalizedPreviewScreen({
           </Button>
         )}
         
-        {/* Warning if download is allowed but no originals exist */}
-        {allowDownload && !hasDownloadablePhotos && photos.length > 0 && (
+        {!hasDownloadablePhotos && photos.length > 0 && (
           <p className="text-sm text-muted-foreground italic">
             Download não disponível para estas fotos
           </p>
@@ -205,7 +248,6 @@ export function FinalizedPreviewScreen({
                       className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" 
                       loading="lazy"
                     />
-                    {/* Overlay com ícone de selecionada */}
                     <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
                       <Check className="h-3.5 w-3.5 text-primary-foreground" />
                     </div>
@@ -221,9 +263,8 @@ export function FinalizedPreviewScreen({
         )}
       </main>
 
-      {/* Lightbox */}
       {lightboxIndex !== null && (
-      <Lightbox
+        <Lightbox
           photos={transformedPhotos}
           currentIndex={lightboxIndex}
           allowComments={false}
@@ -233,7 +274,7 @@ export function FinalizedPreviewScreen({
           galleryId={galleryId}
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}
-          onSelect={() => {}} // No-op - selection disabled
+          onSelect={() => {}}
         />
       )}
     </div>
