@@ -55,6 +55,7 @@ export default function DeliverDetail() {
   const [photosLoading, setPhotosLoading] = useState(true);
   const [showUploader, setShowUploader] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showReactivateDialog, setShowReactivateDialog] = useState(false);
 
   // Editable fields
   const [sessionName, setSessionName] = useState('');
@@ -110,6 +111,7 @@ export default function DeliverDetail() {
 
   const statusInfo = getDeliverStatusInfo(gallery.status, gallery.prazoSelecao);
   const isDraft = statusInfo.label === 'Rascunho';
+  const isExpired = statusInfo.label === 'Expirada';
   const galleryUrl = gallery.publicToken ? getGalleryUrl(gallery.publicToken) : '';
 
   const handleSave = async () => {
