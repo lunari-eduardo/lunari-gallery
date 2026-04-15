@@ -738,13 +738,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "clientes_transacoes_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "clientes_sessoes"
-            referencedColumns: ["session_id"]
-          },
-          {
             foreignKeyName: "fk_transacoes_session_id"
             columns: ["session_id"]
             isOneToOne: false
