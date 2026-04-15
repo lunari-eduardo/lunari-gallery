@@ -1,40 +1,29 @@
 
 
-# Melhorias no Modal de Códigos de Fotos
+# Fix: Pagamentos manuais não contabilizados no perfil do cliente
 
-## Problemas identificados
+## Problema
 
-1. **Dois campos quando só há uma pasta**: Quando todas as fotos estão em uma única pasta, o modal mostra o bloco da pasta E o bloco "Todos juntos" — redundante, pois o conteúdo é idêntico.
+A query de pagamentos em `useClientProfile.ts` filtra apenas `status = 'pago'`. Pagamentos confirmados manualmente têm status `pago_manual` — portanto são excluídos das métricas (Total pago, Fotos extras) e da aba Pagamentos.
 
-2. **Botão "Copiar" por pasta com pouco destaque**: O botão `variant="ghost"` é quase invisível, difícil de notar.
-
-3. **"Copiar Todos" inclui cabeçalho da pasta no código**: O `generateAllCode()` adiciona `── Pasta (N) ──` ao código, o que não funciona na busca do Windows/Mac/Lightroom.
+Dados confirmados no banco:
+- `ccd34b88...` → R$138, 6 fotos, status=`pago_manual` (galeria circulada em vermelho)
+- `2e63ba6f...` → R$115, 5 fotos, status=`pago` (galeria circulada em verde — única contabilizada)
 
 ## Solução
 
-### `src/components/PhotoCodesModal.tsx`
+No `useClientProfile.ts`, trocar `.eq('status', 'pago')` por `.in('status', ['pago', 'pago_manual'])` na query de cobrancas.
 
-**1. Pasta única = sem separação por pasta**
-- Se `photosByFolder` tem apenas 1 entrada, tratar como se não houvesse pastas (mostrar apenas um bloco único sem cabeçalho de pasta).
-- Condição: `const showFolderSections = hasFolders && photosByFolder.length > 1;`
+## Mudança
 
-**2. Botão de copiar por pasta com mais destaque**
-- Trocar `variant="ghost"` para `variant="outline"` com cores mais visíveis.
+| Arquivo | O que muda |
+|---|---|
+| `src/hooks/useClientProfile.ts` | Linha 108: `.eq('status', 'pago')` → `.in('status', ['pago', 'pago_manual'])` |
 
-**3. "Copiar Todos" gera código limpo sem cabeçalhos**
-- O `generateAllCode()` vai gerar apenas os códigos separados por quebra de linha dupla, sem a linha `── Nome (N) ──`.
-- Alterar de:
-  ```typescript
-  return `── ${g.folder.nome} (${g.photos.length}) ──\n${code}`;
-  ```
-  Para:
-  ```typescript
-  return code;
-  ```
-- Os cabeçalhos de pasta continuam visíveis na UI (labels acima de cada textarea), mas não são incluídos no código copiado.
+Alteração de 1 linha. Nenhuma migração necessária.
 
 ## Resultado
-- 1 pasta → 1 campo único, sem redundância
-- Múltiplas pastas → campos separados + botão "Copiar Todos" (código limpo)
-- Botões de copiar com melhor visibilidade
+- Métricas do cliente passam a somar R$253 (115+138) e 11 fotos extras (5+6)
+- Aba Pagamentos mostra ambas as transações
+- Provider label para `pago_manual` já funciona (mapeia pelo campo `provedor`)
 
