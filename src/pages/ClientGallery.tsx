@@ -449,7 +449,12 @@ export default function ClientGallery() {
 
   // 5. Mutation for toggling selection via Edge Function
   const selectionMutation = useMutation({
-    mutationFn: async ({ photoId, action, comment }: { photoId: string; action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite'; comment?: string }) => {
+    mutationFn: async ({ photoId, action, comment, previousState }: { 
+      photoId: string; 
+      action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite'; 
+      comment?: string;
+      previousState?: { isSelected: boolean; isFavorite: boolean; comment: string | null };
+    }) => {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -463,6 +468,7 @@ export default function ClientGallery() {
       
       return response.json();
     },
+    retry: 2,
     onSuccess: (data) => {
       // 1. Atualizar estado local para feedback visual imediato
       setLocalPhotos(prev => prev.map(p => 
@@ -491,9 +497,18 @@ export default function ClientGallery() {
         );
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables) => {
       toast.error(error.message);
-      queryClient.invalidateQueries({ queryKey: ['client-gallery-photos', galleryId] });
+      // Rollback optimistic state to previous value
+      if (variables.previousState) {
+        setLocalPhotos(prev => prev.map(p =>
+          p.id === variables.photoId
+            ? { ...p, isSelected: variables.previousState!.isSelected, isFavorite: variables.previousState!.isFavorite, comment: variables.previousState!.comment }
+            : p
+        ));
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['client-gallery-photos', galleryId] });
+      }
     },
   });
 
