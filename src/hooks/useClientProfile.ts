@@ -105,7 +105,7 @@ export function useClientProfile(clientId: string | undefined) {
         `)
         .eq('cliente_id', clientId)
         .eq('user_id', user.id)
-        .eq('status', 'pago')
+        .in('status', ['pago', 'pago_manual'])
         .order('data_pagamento', { ascending: false });
       
       if (error) throw error;
