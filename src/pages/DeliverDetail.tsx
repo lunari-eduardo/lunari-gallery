@@ -195,6 +195,12 @@ export default function DeliverDetail() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {isExpired && (
+              <Button variant="outline" onClick={() => setShowReactivateDialog(true)} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Reativar
+              </Button>
+            )}
             {isDraft && (
               <Button onClick={handlePublish} className="gap-2">
                 <Send className="h-4 w-4" />
@@ -207,6 +213,23 @@ export default function DeliverDetail() {
             </Button>
             <DeleteGalleryDialog galleryName={gallery.nomeSessao || 'esta galeria'} onDelete={handleDelete} />
           </div>
+
+          {/* Reactivate Dialog */}
+          <ReactivateGalleryDialog
+            galleryName={gallery.nomeSessao || 'esta galeria'}
+            clientLink={galleryUrl || null}
+            onReactivate={async (days) => {
+              const newExpiration = addDays(new Date(), days);
+              await updateGallery({ id: id!, data: {
+                prazoSelecao: newExpiration,
+                status: 'enviado',
+              }});
+              setExpirationDate(newExpiration);
+              setShowReactivateDialog(false);
+            }}
+            open={showReactivateDialog}
+            onOpenChange={setShowReactivateDialog}
+          />
         </div>
       </div>
 
