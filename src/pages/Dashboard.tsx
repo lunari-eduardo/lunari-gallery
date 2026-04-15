@@ -507,17 +507,21 @@ export default function Dashboard() {
           ) : filteredDeliverGalleries.length > 0 ? (
             <div className="space-y-4">
               <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                {paginatedDeliverGalleries.map((gallery) => (
-                  <DeliverGalleryCard
-                    key={gallery.id}
-                    gallery={gallery}
-                    totalPhotos={gallery.totalFotos}
-                    onClick={() => navigate(`/deliver/${gallery.id}`)}
-                    onEdit={() => navigate(`/deliver/${gallery.id}`)}
-                    onShare={() => setShareGalleryId(gallery.id)}
-                    onDelete={() => setDeleteGalleryId(gallery.id)}
-                  />
-                ))}
+                {paginatedDeliverGalleries.map((gallery) => {
+                  const canReactivate = gallery.status === 'expired';
+                  return (
+                    <DeliverGalleryCard
+                      key={gallery.id}
+                      gallery={gallery}
+                      totalPhotos={gallery.totalFotos}
+                      onClick={() => navigate(`/deliver/${gallery.id}`)}
+                      onEdit={() => navigate(`/deliver/${gallery.id}`)}
+                      onShare={() => setShareGalleryId(gallery.id)}
+                      onDelete={() => setDeleteGalleryId(gallery.id)}
+                      onReactivate={canReactivate ? () => setReactivateGalleryId(gallery.id) : undefined}
+                    />
+                  );
+                })}
               </div>
               {totalDeliverPages > 1 && (
                 <div className="flex items-center justify-center gap-2 pt-2">
