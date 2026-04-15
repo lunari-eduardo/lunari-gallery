@@ -1417,7 +1417,57 @@ export default function ClientGallery() {
   // sempre mostrem apenas fotos selecionadas, independente do estado de welcome
   if (isConfirmed && currentStep !== 'confirmation' && currentStep !== 'payment') {
     const confirmedSelectedPhotos = localPhotos.filter(p => p.isSelected);
+    const allowDownload = gallery.settings.allowDownload;
+
+    // === SEM DOWNLOAD: tela simples de mensagem ===
+    if (!allowDownload) {
+      return (
+        <div 
+          className={cn(
+            "min-h-screen flex flex-col bg-background text-foreground",
+            effectiveBackgroundMode === 'dark' && 'dark'
+          )}
+          style={themeStyles}
+        >
+          <div className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
+            {galleryResponse?.studioSettings?.studio_logo_url && (
+              <img 
+                src={galleryResponse.studioSettings.studio_logo_url} 
+                alt={galleryResponse?.studioSettings?.studio_name || 'Logo do estúdio'} 
+                className="h-[100px] sm:h-[120px] md:h-[150px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] object-contain mb-8" 
+              />
+            )}
+
+            <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center mb-5">
+              <Check className="h-7 w-7 text-primary" />
+            </div>
+
+            <h2 className="text-xl font-semibold text-foreground mb-2">
+              Seleção Confirmada
+            </h2>
+
+            <p className="text-sm text-muted-foreground mb-6">
+              {confirmedSelectedPhotos.length} {confirmedSelectedPhotos.length === 1 ? 'foto selecionada' : 'fotos selecionadas'}
+            </p>
+
+            {gallery.sessionName && (
+              <p 
+                className="text-base font-normal text-muted-foreground mb-8"
+                style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
+              >
+                {gallery.sessionName}
+              </p>
+            )}
+
+            <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+              Sua galeria já foi finalizada. Para acessá-la novamente, entre em contato com o(a) fotógrafo(a).
+            </p>
+          </div>
+        </div>
+      );
+    }
     
+    // === COM DOWNLOAD: tela completa com grid + download ===
     return (
       <div 
         className={cn(
@@ -1461,8 +1511,7 @@ export default function ClientGallery() {
               Para alterações, entre em contato com o fotógrafo.
             </p>
             
-            {/* Download button - only if allowDownload is enabled */}
-            {gallery.settings.allowDownload && confirmedSelectedPhotos.length > 0 && (
+            {confirmedSelectedPhotos.length > 0 && (
               <Button
                 onClick={() => setShowDownloadModal(true)}
                 className="mt-4 gap-2"
@@ -1491,11 +1540,9 @@ export default function ClientGallery() {
                           loading="lazy"
                         />
                       </div>
-                      {/* Indicador de seleção */}
                       <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-md">
                         <Check className="h-4 w-4 text-primary-foreground" />
                       </div>
-                      {/* Indicador de favorito */}
                       {photo.isFavorite && (
                         <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-destructive flex items-center justify-center shadow-md">
                           <svg className="h-3 w-3 text-destructive-foreground fill-current" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1503,7 +1550,6 @@ export default function ClientGallery() {
                           </svg>
                         </div>
                       )}
-                      {/* Indicador de comentário */}
                       {photo.comment && !photo.isFavorite && (
                         <div className="absolute top-2 right-2 bg-background/90 rounded-full p-1.5 shadow-sm">
                           <svg className="h-3 w-3 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
