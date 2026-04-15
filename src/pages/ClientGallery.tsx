@@ -1331,27 +1331,32 @@ export default function ClientGallery() {
     
     const photo = localPhotos.find(p => p.id === photoId);
     if (photo) {
+      const previousState = { isSelected: photo.isSelected, isFavorite: photo.isFavorite, comment: photo.comment };
       // Optimistic update
       setLocalPhotos(prev => prev.map(p => 
         p.id === photoId ? { ...p, isSelected: !p.isSelected } : p
       ));
-      selectionMutation.mutate({ photoId, action: 'toggle' });
+      selectionMutation.mutate({ photoId, action: 'toggle', previousState });
     }
   };
 
   const handleComment = (photoId: string, comment: string) => {
+    const photo = localPhotos.find(p => p.id === photoId);
+    const previousState = photo ? { isSelected: photo.isSelected, isFavorite: photo.isFavorite, comment: photo.comment } : undefined;
     setLocalPhotos(prev => prev.map(p => 
       p.id === photoId ? { ...p, comment } : p
     ));
-    selectionMutation.mutate({ photoId, action: 'comment', comment });
+    selectionMutation.mutate({ photoId, action: 'comment', comment, previousState });
     toast.success('Comentário salvo!');
   };
 
   const handleFavorite = (photoId: string) => {
+    const photo = localPhotos.find(p => p.id === photoId);
+    const previousState = photo ? { isSelected: photo.isSelected, isFavorite: photo.isFavorite, comment: photo.comment } : undefined;
     setLocalPhotos(prev => prev.map(p => 
       p.id === photoId ? { ...p, isFavorite: !p.isFavorite } : p
     ));
-    selectionMutation.mutate({ photoId, action: 'favorite' });
+    selectionMutation.mutate({ photoId, action: 'favorite', previousState });
   };
 
 
