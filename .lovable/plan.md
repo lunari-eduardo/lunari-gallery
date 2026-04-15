@@ -1,34 +1,56 @@
 
 
-# Tela de galeria finalizada: diferenciar com/sem download
+# Fix: Tela pós-confirmação mostrando fotos em vez de mensagem
 
-## Problema
+## Problema identificado
 
-Após finalização + pagamento, galerias sem download ativo mostram a `FinalizedPreviewScreen` com fotos em preview (marcas d'água) sem opção de download — experiência confusa. O usuário quer:
+Existem **duas telas distintas** para o estado "confirmado":
 
-1. **Sem download ativo**: Mensagem clara "Sua galeria já foi finalizada, para acessá-la novamente, entre em contato com o(a) fotógrafo(a)"
-2. **Com download ativo**: Manter comportamento atual (fotos + botão download)
+1. **In-session (linhas 1418-1520 do `ClientGallery.tsx`)**: Renderizada logo após o cliente confirmar a seleção na mesma sessão. **Sempre mostra grid de fotos com watermark**, independente de `allowDownload`. É o que aparece na imagem-614.
 
-## Solução
+2. **`FinalizedPreviewScreen`**: Renderizada quando o cliente re-acessa a galeria (via `galleryResponse?.finalized`). Já foi corrigida para mostrar mensagem quando `allowDownload=false`.
 
-### 1. `FinalizedPreviewScreen.tsx` — Bifurcar exibição
+O problema está na **tela 1**: o bloco de confirmação in-session (linhas 1418-1520) nunca verifica `allowDownload`. Sempre mostra banner + grid de fotos selecionadas com watermark — experiência confusa quando não há download.
 
-Quando `allowDownload === false`, renderizar uma tela simples com:
-- Logo do estúdio (se disponível)
-- Ícone de check
-- "Seleção Confirmada" + contagem de fotos
-- Mensagem: "Sua galeria já foi finalizada. Para acessá-la novamente, entre em contato com o(a) fotógrafo(a)."
-- SEM grid de fotos, SEM lightbox
+## Sobre "Galeria não encontrada"
 
-Quando `allowDownload === true`, manter o comportamento atual completo (grid + download).
+O token `vd2zupjtbENx` retornou 404 do `gallery-access` (lookup por `public_token` falhou). Isso indica token inválido ou URL incorreta — **não é um bug de lógica** do fluxo de finalização. O fluxo `gallery-access` para galerias finalizadas (`isFinalized = true` na linha 538) funciona corretamente e retorna `finalized: true`.
 
-### 2. Sem mudanças no backend
+## Correção
 
-O `gallery-access` já retorna `finalized: true` com `allowDownload` correto. O `ClientGallery.tsx` já passa `allowDownload` para o componente. A mudança é 100% no componente de apresentação.
+### `src/pages/ClientGallery.tsx` — Bloco de confirmação in-session (linhas 1418-1520)
+
+Quando `isConfirmed && !allowDownload`:
+- Remover header com logo e nome da sessão
+- Remover grid de fotos selecionadas
+- Mostrar tela centralizada com:
+  - Logo do estúdio (se disponível)
+  - Ícone de check
+  - "Seleção Confirmada"
+  - Contagem de fotos selecionadas
+  - Mensagem: "Sua galeria já foi finalizada. Para acessá-la novamente, entre em contato com o(a) fotógrafo(a)."
+
+Quando `isConfirmed && allowDownload`:
+- Manter o comportamento atual (banner + grid + botão download)
+
+A lógica fica:
+```tsx
+if (isConfirmed && currentStep !== 'confirmation' && currentStep !== 'payment') {
+  const allowDownload = gallery.settings.allowDownload;
+  
+  if (!allowDownload) {
+    // Tela simples de mensagem (mesma da FinalizedPreviewScreen sem download)
+    return ( /* mensagem centralizada */ );
+  }
+  
+  // Código existente com grid de fotos selecionadas
+  return ( /* grid atual */ );
+}
+```
 
 ## Arquivo alterado
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/FinalizedPreviewScreen.tsx` | Quando `allowDownload=false`, mostrar tela de mensagem em vez do grid de fotos |
+| `src/pages/ClientGallery.tsx` | Bifurcar bloco de confirmação in-session baseado em `allowDownload` |
 
