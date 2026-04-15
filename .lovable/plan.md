@@ -1,48 +1,127 @@
 
 
-# Melhorias em Galerias Transfer: Reativação Rápida + Calendário
+# Fix: Inconsistências críticas no ciclo de reabertura de seleção e pagamento
 
-## Problema 1: Sem botão de reativar em Transfer
+## Problemas identificados (análise do banco de dados)
 
-Galerias Select possuem o componente `ReactivateGalleryDialog` no card e na página de detalhe. Galerias Transfer não têm nenhum atalho — o usuário precisa navegar até Detalhes > Data de expiração e selecionar manualmente uma nova data.
+**Galeria Aurora - Newborn (1bca90ca)**:
+- 1ª confirmação (18:30): servidor contou 12 fotos selecionadas (frontend enviou 14). Cobrou 2 extras → R$50 via InfinitePay → **pago**
+- Reabertura (18:38): fotógrafo reabriu seleção
+- 2ª confirmação (19:06): servidor contou 14 fotos. Cobrou 2 extras → R$42 via InfinitePay → **pendente** (nunca pago)
+- Estado atual: `total_fotos_extras_vendidas=4`, `valor_total_vendido=100` — **ERRADO**, deveria ser 2 e 50
 
-## Problema 2: Calendário confuso
+### Causa raiz 1: Auto-heal reutiliza cobrança antiga
 
-O `day_today` usa `bg-accent` e o `day_selected` usa `bg-primary`. Como ambas as cores são variações de marrom (`--accent: 19 49% 45%`, `--primary: 19 49% 45%`), o dia atual e o dia selecionado ficam praticamente iguais.
+Quando o cliente acessa a galeria após a 2ª confirmação (`status_selecao='aguardando_pagamento'`), o `gallery-access` procura cobranças com status `pago`/`pago_manual`:
 
-## Solução
+```sql
+.in("status", ["pago", "pago_manual"])
+```
 
-### 1. Botão de reativar no `DeliverGalleryCard` (card na listagem)
+Encontra a **primeira cobrança** (R$50, já paga no ciclo anterior). Chama `finalize_gallery_payment` que:
+1. **Soma os valores novamente** (+=) à galeria: `total_fotos_extras_vendidas += 2` (era 2, vira 4)
+2. **Marca galeria como finalizada** prematuramente (`status_selecao='selecao_completa'`, `finalized_at` set)
+3. A 2ª cobrança (R$42) fica pendente para sempre
+4. Painel do fotógrafo mostra R$100 pago, mas só R$50 foi efetivamente pago
 
-- Adicionar prop `onReactivate` ao componente
-- Quando a galeria está expirada, mostrar opção "Reativar" no dropdown menu (mesmo padrão do `GalleryCard` de Select)
+### Causa raiz 2: Reabertura não cancela cobranças pendentes anteriores nem reseta status de pagamento
 
-### 2. Botão de reativar no `DeliverDetail` (página de detalhe)
+O `reopenSelectionMutation` reseta `status`, `status_selecao`, `finalized_at` mas:
+- **Não reseta `status_pagamento`** (fica como `pago` do ciclo anterior)
+- **Não cancela cobranças pendentes** de ciclos anteriores
 
-- Quando a galeria está expirada, exibir um banner/botão proeminente no header (ao lado de "Salvar" e "Excluir") com ícone `RotateCcw` e texto "Reativar"
-- Ao clicar, abre o `ReactivateGalleryDialog` existente, que define novo prazo em dias
-- O `onReactivate` calcula a nova data de expiração e salva via `updateGallery`
+### Causa raiz 3: Seleções perdidas (12 de 14)
 
-### 3. Calendário — diferenciar "hoje" de "selecionado"
+O `selectionMutation` usa `useMutation` sem fila — múltiplos toggles rápidos disparam requisições paralelas que podem colidir ou falhar silenciosamente. O `onError` mostra um toast mas **não reverte** o estado otimista corretamente (faz `invalidateQueries` que pode não refletir o estado real se a foto nunca foi persistida).
 
-- No `calendar.tsx`, alterar `day_today` de `bg-accent text-accent-foreground` para um estilo com apenas borda/outline, sem preenchimento:
+### Causa raiz 4: "Galeria não encontrada" após reabertura
+
+Provavelmente causado pelo auto-heal que finaliza prematuramente a galeria. Quando o cliente volta ao link após a finalização espúria, o frontend mostra a tela de "finalized" — mas se houve algum timing issue ou o token teve problemas, aparece "não encontrada".
+
+## Plano de correção
+
+### 1. `gallery-access` — Auto-heal com filtro temporal (Edge Function)
+
+Na seção de auto-heal (linhas 195-232), ao buscar cobranças pagas, **verificar se existe cobrança pendente mais recente**. Se sim, a cobrança paga é de um ciclo anterior e não deve disparar auto-heal.
+
+```typescript
+// Antes do auto-heal, verificar se há cobrança pendente mais nova
+const { data: newerPending } = await supabase
+  .from("cobrancas")
+  .select("id")
+  .eq("galeria_id", gallery.id)
+  .eq("status", "pendente")
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+// Se existe cobrança pendente mais recente que a paga, NÃO auto-heal
+if (newerPending) {
+  // Pular auto-heal — pagamento pendente é do ciclo atual
+}
+```
+
+Aplicar o mesmo filtro na seção de recovery (linhas 385-527).
+
+### 2. `finalize_gallery_payment` RPC — Idempotência por cobrança (Migração SQL)
+
+Adicionar coluna `gallery_synced_at` na tabela `cobrancas`. O RPC verifica se já sincronizou antes de somar valores:
+
+```sql
+ALTER TABLE public.cobrancas ADD COLUMN IF NOT EXISTS gallery_synced_at timestamptz;
+
+-- Na RPC, antes de atualizar galeria:
+IF v_cobranca.gallery_synced_at IS NOT NULL THEN
+  -- Já sincronizado, não somar novamente
+  RETURN ...;
+END IF;
+
+-- Após sincronizar, marcar:
+UPDATE cobrancas SET gallery_synced_at = now() WHERE id = p_cobranca_id;
+```
+
+### 3. Reabertura de seleção — Reset completo (Frontend)
+
+No `reopenSelectionMutation` (`useSupabaseGalleries.ts`):
+
+- **Resetar `status_pagamento`** para `'sem_vendas'`
+- **Cancelar cobranças pendentes** do ciclo anterior:
+  ```typescript
+  await supabase.from('cobrancas')
+    .update({ status: 'cancelada', updated_at: new Date().toISOString() })
+    .eq('galeria_id', id)
+    .eq('status', 'pendente');
   ```
-  day_today: "border border-primary text-foreground"
-  ```
-- Assim o dia atual fica com anel/borda e o selecionado com fundo sólido — visualmente distintos
+
+### 4. Seleção resiliente — Fila de mutações (Frontend)
+
+No `ClientGallery.tsx`, trocar `useMutation` simples por uma abordagem com **retry automático e fila sequencial**:
+
+- Usar `retry: 2` na configuração do mutation
+- No `onError`, **reverter o estado otimista** para o valor anterior (em vez de invalidar queries inteiro)
+- Adicionar debounce visual para feedback
+
+### 5. Correção manual do dado atual (Migração SQL)
+
+Corrigir a galeria Aurora - Newborn para refletir o valor real pago:
+
+```sql
+UPDATE galerias
+SET total_fotos_extras_vendidas = 2, 
+    valor_total_vendido = 50
+WHERE id = '1bca90ca-feb8-45f6-a1ad-3dbf6c7fdd1e';
+
+UPDATE cobrancas
+SET status = 'cancelada'
+WHERE id = '079bc3d4-1594-49c3-8820-7b82a2c8589a';
+```
 
 ## Arquivos alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/ui/calendar.tsx` | `day_today` → borda em vez de fundo preenchido |
-| `src/components/DeliverGalleryCard.tsx` | Adicionar `onReactivate` prop + item no dropdown |
-| `src/pages/DeliverDetail.tsx` | Botão "Reativar" no header para galerias expiradas usando `ReactivateGalleryDialog` |
-| `src/pages/Dashboard.tsx` (ou onde os cards Transfer são renderizados) | Passar `onReactivate` para `DeliverGalleryCard` |
-
-## Detalhes técnicos
-
-- A reativação em Transfer = atualizar `prazo_selecao` para `now() + N dias` via `updateGallery`, mesmo mecanismo que alterar a data de expiração manualmente
-- O `ReactivateGalleryDialog` já existente será reutilizado com as props corretas
-- O status da galeria pode precisar ser atualizado de `expirado` para `publicada` ao reativar — verificar se o `updateGallery` já faz isso ou se precisa incluir `status: 'enviado'`
+| `supabase/functions/gallery-access/index.ts` | Auto-heal com filtro de cobrança pendente mais recente |
+| `supabase/migrations/new_migration.sql` | Coluna `gallery_synced_at`, RPC atualizada, fix dados |
+| `src/hooks/useSupabaseGalleries.ts` | Reabertura reseta status_pagamento e cancela pendentes |
+| `src/pages/ClientGallery.tsx` | Mutation com retry:2 e rollback otimista correto |
 
