@@ -1600,7 +1600,7 @@ export default function ClientGallery() {
             )}
 
             <div className="border-t border-border/30 pt-5 flex items-center justify-center gap-6 text-sm text-muted-foreground">
-              <span>{gallery.includedPhotos} fotos incluídas</span>
+              <span>{gallery.includedPhotos} fotos contratadas</span>
               {hasDeadline && (
                 <span>
                   até {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
@@ -1887,7 +1887,7 @@ export default function ClientGallery() {
 
       {/* Folder navigation bar */}
       {hasFolders && activeFolderId && (
-        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border/30 px-3 py-2">
+        <div className="bg-background border-b border-border/30 px-3 py-2">
           <div className="flex items-center gap-2 overflow-x-auto">
             <button
               onClick={() => {
