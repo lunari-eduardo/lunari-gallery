@@ -672,6 +672,7 @@ export function useSupabaseGalleries() {
         .update({
           status: 'selecao_iniciada',
           status_selecao: 'em_andamento',
+          status_pagamento: 'sem_vendas',
           prazo_selecao: prazoSelecao.toISOString(),
           prazo_selecao_dias: days,
           finalized_at: null,
@@ -680,6 +681,13 @@ export function useSupabaseGalleries() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Cancel any pending charges from the previous cycle
+      await supabase
+        .from('cobrancas')
+        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+        .eq('galeria_id', id)
+        .eq('status', 'pendente');
 
       // Sync clientes_sessoes so Gestão sees the reactivation
       const { data: gallery } = await supabase
@@ -691,7 +699,11 @@ export function useSupabaseGalleries() {
       if (gallery?.session_id) {
         await supabase
           .from('clientes_sessoes')
-          .update({ status_galeria: 'em_selecao', updated_at: new Date().toISOString() })
+          .update({ 
+            status_galeria: 'em_selecao', 
+            status_pagamento_fotos_extra: 'sem_vendas',
+            updated_at: new Date().toISOString() 
+          })
           .eq('session_id', gallery.session_id);
       }
 
