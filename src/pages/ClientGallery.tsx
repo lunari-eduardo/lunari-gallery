@@ -743,7 +743,7 @@ export default function ClientGallery() {
                 const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/check-payment-status`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ sessionId, orderNsu, forceUpdate: false }),
+                  body: JSON.stringify({ sessionId, visitorId: visitorId || undefined, orderNsu, forceUpdate: false }),
                 });
                 const retryResult = await retryResponse.json();
                 if (retryResult.status === 'pago' || retryResult.updated) {
