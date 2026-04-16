@@ -125,17 +125,22 @@ export function SendGalleryModal({
     return message;
   }, [gallerySentTemplate, clientLink, gallery, settings.studioName]);
 
-  // Mark gallery as sent (only once per modal open) — uses onSendGallery if provided, otherwise RPC already handled it
+  // Mark gallery as sent (only once per modal open)
+  // prepare_gallery_share RPC already set status to 'enviado', so onSendGallery
+  // is only needed if caller wants additional side effects (e.g. toast).
+  // We no longer call sendGalleryMutation here to avoid token overwrites.
   const markAsSent = async () => {
     if (hasSentRef.current) return;
     hasSentRef.current = true;
     
+    // Only call onSendGallery for side effects if gallery wasn't already sent
+    // The RPC already handled status + token atomically
     if (onSendGallery && gallery.status !== 'enviado') {
       try {
         await onSendGallery();
       } catch (e) {
-        console.error('Error marking gallery as sent:', e);
-        hasSentRef.current = false;
+        console.error('Error in onSendGallery callback:', e);
+        // Don't reset hasSentRef - the RPC already did the real work
       }
     }
   };
