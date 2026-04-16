@@ -94,7 +94,7 @@ export function PhotoCard({
           'absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
           isSelected 
             ? 'bg-primary border-primary text-primary-foreground' 
-            : 'border-white/80 bg-black/20 hover:border-white hover:bg-black/40 opacity-0 group-hover:opacity-100',
+            : 'border-white/80 bg-black/30 hover:border-white hover:bg-black/50',
           disabled && 'pointer-events-none'
         )}
       >
