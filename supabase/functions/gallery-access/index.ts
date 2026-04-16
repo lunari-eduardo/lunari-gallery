@@ -269,6 +269,54 @@ serve(async (req) => {
       }
     }
 
+    // 3a-VISITOR: For public galleries, check visitor-level payment status BEFORE gallery-level
+    if (isPublicGallery && resolvedVisitorId) {
+      const { data: visitorStatus } = await supabase
+        .from('galeria_visitantes')
+        .select('status, status_selecao, finalized_at')
+        .eq('id', resolvedVisitorId)
+        .single();
+
+      if (visitorStatus) {
+        // Visitor already finalized — show finalized screen
+        if (visitorStatus.status === 'finalizado' || visitorStatus.status_selecao === 'selecao_completa') {
+          console.log('✅ Visitor already finalized, showing finalized screen');
+          // Jump to the isFinalized block by updating gallery state for this request
+          gallery.status_selecao = 'selecao_completa';
+          gallery.finalized_at = visitorStatus.finalized_at || new Date().toISOString();
+        }
+        // Visitor has pending payment — check for auto-heal then show payment screen
+        else if (visitorStatus.status_selecao === 'aguardando_pagamento') {
+          console.log('⏳ Visitor awaiting payment, checking for auto-heal...');
+          
+          // Auto-heal: check if cobrança was already paid
+          const { data: paidVisitorCobranca } = await supabase
+            .from('cobrancas')
+            .select('id, status, ip_receipt_url, data_pagamento')
+            .eq('visitor_id', resolvedVisitorId)
+            .in('status', ['pago', 'pago_manual'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (paidVisitorCobranca) {
+            console.log('🔄 AUTO-HEAL: visitor cobrança paid, finalizing visitor');
+            await supabase.rpc('finalize_gallery_payment', {
+              p_cobranca_id: paidVisitorCobranca.id,
+              p_receipt_url: paidVisitorCobranca.ip_receipt_url || null,
+              p_paid_at: paidVisitorCobranca.data_pagamento || new Date().toISOString(),
+            });
+            // Update local state to finalized
+            gallery.status_selecao = 'selecao_completa';
+            gallery.finalized_at = paidVisitorCobranca.data_pagamento || new Date().toISOString();
+          } else {
+            // Force gallery-level status to match visitor for the payment screen logic below
+            gallery.status_selecao = 'aguardando_pagamento';
+          }
+        }
+      }
+    }
+
     // 3a. Check if gallery is awaiting payment (selection confirmed but payment pending)
     if (gallery.status_selecao === 'aguardando_pagamento') {
       // AUTO-HEAL: Check if a paid cobrança exists but gallery wasn't synced
