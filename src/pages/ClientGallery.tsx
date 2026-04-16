@@ -693,6 +693,7 @@ export default function ClientGallery() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               sessionId: sessionId,
+              visitorId: visitorId || undefined,
               orderNsu, transactionNsu, slug, receiptUrl,
               forceUpdate: true,
             }),

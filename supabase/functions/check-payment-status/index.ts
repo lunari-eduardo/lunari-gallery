@@ -9,6 +9,7 @@ interface RequestBody {
   cobrancaId?: string;
   orderNsu?: string;
   sessionId?: string;
+  visitorId?: string;
   forceUpdate?: boolean;
   transactionNsu?: string;
   slug?: string;
@@ -368,9 +369,9 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { cobrancaId, orderNsu, sessionId, forceUpdate, transactionNsu, slug, receiptUrl } = body;
+    const { cobrancaId, orderNsu, sessionId, visitorId, forceUpdate, transactionNsu, slug, receiptUrl } = body;
 
-    console.log('🔍 Verificando status de pagamento:', { cobrancaId, orderNsu, sessionId, forceUpdate });
+    console.log('🔍 Verificando status de pagamento:', { cobrancaId, orderNsu, sessionId, visitorId, forceUpdate });
 
     let cobranca = null;
     let cobrancaError = null;
@@ -401,9 +402,20 @@ Deno.serve(async (req: Request) => {
       cobranca = data;
       cobrancaError = error;
       if (cobranca) foundBy = 'sessionId';
+    } else if (visitorId) {
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('visitor_id', visitorId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      cobranca = data;
+      cobrancaError = error;
+      if (cobranca) foundBy = 'visitorId';
     } else {
       return new Response(
-        JSON.stringify({ error: 'Informe cobrancaId, orderNsu ou sessionId' }),
+        JSON.stringify({ error: 'Informe cobrancaId, orderNsu, sessionId ou visitorId' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
