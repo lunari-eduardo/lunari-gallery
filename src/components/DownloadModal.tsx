@@ -93,21 +93,6 @@ export function DownloadModal({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Warning */}
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-            <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  Importante
-                </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  Este é o momento para baixar suas fotos em alta resolução sem marca d'água. 
-                  Guarde-as com carinho!
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Photo count */}
           <div className="flex items-center justify-center gap-2 py-2">
