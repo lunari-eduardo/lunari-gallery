@@ -299,9 +299,13 @@ Deno.serve(async (req) => {
     }
 
     if (lockError) {
-      console.error('Lock RPC error:', lockError);
+      console.error('Lock RPC error:', JSON.stringify({ message: lockError.message, code: lockError.code, details: lockError.details, hint: lockError.hint }));
       return new Response(
-        JSON.stringify({ error: 'Erro ao processar seleção' }),
+        JSON.stringify({ 
+          error: 'Erro ao processar seleção', 
+          code: lockError.code || 'LOCK_ERROR',
+          details: lockError.message,
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
