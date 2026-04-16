@@ -202,6 +202,9 @@ export default function ClientGallery() {
             throw new Error('GALLERY_PUBLISHING');
           }
           if (result.code === 'NOT_AVAILABLE') throw new Error('Galeria não disponível');
+          if (result.code === 'INTERNAL_ERROR' || response.status >= 500) {
+            throw new Error('GALLERY_SERVER_ERROR');
+          }
           throw new Error(result.error || 'Erro ao acessar galeria');
         }
         

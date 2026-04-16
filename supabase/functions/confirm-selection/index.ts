@@ -205,13 +205,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: tokenGallery, error: tokenError } = await supabase
+    let tokenGallery: { id: string } | null = null;
+    const { data: primaryGallery, error: tokenError } = await supabase
       .from('galerias')
       .select('id')
       .eq('public_token', galleryToken)
       .single();
 
-    if (tokenError || !tokenGallery) {
+    if (!tokenError && primaryGallery) {
+      tokenGallery = primaryGallery;
+    } else {
+      // Fallback: check token aliases for old/rotated tokens
+      const { data: alias } = await supabase
+        .from('gallery_token_aliases')
+        .select('gallery_id')
+        .eq('old_token', galleryToken)
+        .single();
+      if (alias?.gallery_id) {
+        tokenGallery = { id: alias.gallery_id };
+        console.log(`[confirm-selection] Resolved via token alias: ${galleryToken} -> ${alias.gallery_id}`);
+      }
+    }
+
+    if (!tokenGallery) {
       return new Response(
         JSON.stringify({ error: 'Galeria não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

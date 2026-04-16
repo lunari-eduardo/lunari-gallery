@@ -68,14 +68,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Resolve galleryId from token (ONLY method — UUID access removed)
-    const { data: tokenGallery, error: tokenError } = await supabase
+    // Resolve galleryId from token (primary) or alias (fallback)
+    let tokenGallery: { id: string } | null = null;
+    const { data: primaryGallery, error: tokenError } = await supabase
       .from('galerias')
       .select('id')
       .eq('public_token', galleryToken)
       .single();
 
-    if (tokenError || !tokenGallery) {
+    if (!tokenError && primaryGallery) {
+      tokenGallery = primaryGallery;
+    } else {
+      // Fallback: check token aliases for old/rotated tokens
+      const { data: alias } = await supabase
+        .from('gallery_token_aliases')
+        .select('gallery_id')
+        .eq('old_token', galleryToken)
+        .single();
+      if (alias?.gallery_id) {
+        tokenGallery = { id: alias.gallery_id };
+        console.log(`[client-selection] Resolved via token alias: ${galleryToken} -> ${alias.gallery_id}`);
+      }
+    }
+
+    if (!tokenGallery) {
       return new Response(
         JSON.stringify({ error: 'Galeria não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -535,39 +535,31 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Publish gallery - generates token and deadline WITHOUT marking as sent
+  // Publish gallery - uses prepare_gallery_share RPC (never generates token client-side)
   const publishGalleryMutation = useMutation({
     mutationFn: async (id: string) => {
       const gallery = getGallery(id);
       if (!gallery) throw new Error('Galeria não encontrada');
 
-      const publicToken = gallery.publicToken || generatePublicToken();
-      
-      const prazoSelecao = new Date();
-      prazoSelecao.setDate(prazoSelecao.getDate() + (gallery.prazoSelecaoDias || 7));
+      // If already has a token, just return it (never overwrite)
+      if (gallery.publicToken) {
+        return { publicToken: gallery.publicToken };
+      }
 
-      const isDeliver = gallery.tipo === 'entrega';
-
-      const { error } = await supabase
-        .from('galerias')
-        .update({
-          // Keep status as 'rascunho' - not sent yet
-          prazo_selecao: prazoSelecao.toISOString(),
-          public_token: publicToken,
-          published_at: new Date().toISOString(),
-          ...(isDeliver && {
-            finalized_at: new Date().toISOString(),
-            configuracoes: {
-              ...((gallery.configuracoes || {}) as Record<string, any>),
-              allowDownload: true,
-            },
-          }),
-        })
-        .eq('id', id);
+      // Use prepare_gallery_share RPC as single source of truth
+      const { data, error } = await supabase.rpc('prepare_gallery_share', {
+        p_gallery_id: id,
+      });
 
       if (error) throw error;
 
-      return { publicToken };
+      const result = data as { token?: string; status?: string; ready?: boolean; error?: string };
+
+      if (!result?.ready) {
+        throw new Error(result?.error || 'Erro ao preparar galeria');
+      }
+
+      return { publicToken: result.token! };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
