@@ -57,12 +57,37 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Find gallery by public_token
-    const { data: gallery, error: galleryError } = await supabase
+    // 1. Find gallery by public_token (primary lookup)
+    const gallerySelect = "id, user_id, tipo, status, status_selecao, status_pagamento, permissao, gallery_password, public_token, session_id, cliente_id, cliente_nome, cliente_email, cliente_telefone, nome_sessao, nome_pacote, mensagem_boas_vindas, fotos_incluidas, fotos_selecionadas, total_fotos, total_fotos_extras_vendidas, valor_foto_extra, valor_extras, valor_total_vendido, prazo_selecao, prazo_selecao_dias, configuracoes, regras_congeladas, regras_selecao, finalized_at, enviado_em, origin, orcamento_id, created_at, updated_at, published_at";
+
+    let { data: gallery, error: galleryError } = await supabase
       .from("galerias")
-      .select("id, user_id, tipo, status, status_selecao, status_pagamento, permissao, gallery_password, public_token, session_id, cliente_id, cliente_nome, cliente_email, cliente_telefone, nome_sessao, nome_pacote, mensagem_boas_vindas, fotos_incluidas, fotos_selecionadas, total_fotos, total_fotos_extras_vendidas, valor_foto_extra, valor_extras, valor_total_vendido, prazo_selecao, prazo_selecao_dias, configuracoes, regras_congeladas, regras_selecao, finalized_at, enviado_em, origin, orcamento_id, created_at, updated_at, published_at")
+      .select(gallerySelect)
       .eq("public_token", token)
       .single();
+
+    // Fallback: check token aliases for old/rotated tokens
+    if ((galleryError || !gallery)) {
+      const { data: alias } = await supabase
+        .from("gallery_token_aliases")
+        .select("gallery_id")
+        .eq("old_token", token)
+        .single();
+
+      if (alias?.gallery_id) {
+        const { data: aliasGallery, error: aliasError } = await supabase
+          .from("galerias")
+          .select(gallerySelect)
+          .eq("id", alias.gallery_id)
+          .single();
+
+        if (!aliasError && aliasGallery) {
+          gallery = aliasGallery;
+          galleryError = null;
+          console.log(`[gallery-access] Resolved via token alias: ${token} -> gallery ${alias.gallery_id}`);
+        }
+      }
+    }
 
     if (galleryError || !gallery) {
       return new Response(
