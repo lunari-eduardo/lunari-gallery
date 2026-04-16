@@ -202,6 +202,9 @@ export default function ClientGallery() {
             throw new Error('GALLERY_PUBLISHING');
           }
           if (result.code === 'NOT_AVAILABLE') throw new Error('Galeria não disponível');
+          if (result.code === 'INTERNAL_ERROR' || response.status >= 500) {
+            throw new Error('GALLERY_SERVER_ERROR');
+          }
           throw new Error(result.error || 'Erro ao acessar galeria');
         }
         
@@ -231,6 +234,8 @@ export default function ClientGallery() {
     retry: (failureCount, error) => {
       // Retry up to 3 times for galleries that are being published (transitional state)
       if (error?.message === 'GALLERY_PUBLISHING' && failureCount < 3) return true;
+      // Retry server errors up to 2 times
+      if (error?.message === 'GALLERY_SERVER_ERROR' && failureCount < 2) return true;
       return false;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
