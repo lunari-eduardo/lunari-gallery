@@ -34,6 +34,7 @@ interface RequestBody {
   galleryToken?: string;
   galeriaId?: string;
   qtdFotos?: number;
+  visitorId?: string;
 }
 
 // --- Retry + Timeout helpers ---
@@ -93,7 +94,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, qtdFotos }: RequestBody = await req.json();
+    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, qtdFotos, visitorId }: RequestBody = await req.json();
 
     // Validate required fields - userId is always required (passed in body, no JWT needed)
     if (!valor || !userId) {
@@ -220,6 +221,7 @@ Deno.serve(async (req) => {
         ip_order_nsu: orderNsu,
         galeria_id: galeriaId || null,
         qtd_fotos: qtdFotos || 0,
+        visitor_id: visitorId || null,
       })
       .select('id')
       .single();
