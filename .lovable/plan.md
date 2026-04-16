@@ -1,78 +1,66 @@
 
 
-# Plano: Corrigir redirecionamento pós-pagamento em galerias públicas
+# Plano: Corrigir pagamento em galerias públicas multiusuário
 
-## Problema identificado
+## Problema raiz
 
-Após pagamento em galeria pública, o visitante volta à tela de seleção em vez de ver suas fotos pagas. Causa raiz em 3 pontos:
+O `visitor_id` nunca chega à tabela `cobrancas`. Sem ele, `finalize_gallery_payment` não consegue finalizar o visitante correto, e `gallery-access` não consegue encontrar a cobrança certa para cada visitante.
 
-### 1. `finalize_gallery_payment` nunca atualiza `galeria_visitantes`
-A RPC marca `galerias.status_selecao = 'selecao_completa'` e `finalized_at`, mas ignora completamente `galeria_visitantes`. O visitante permanece com `status = 'em_andamento'` e `status_selecao = 'aguardando_pagamento'` mesmo após pagamento confirmado.
+**Evidência direta do banco:**
+- Galeria `941a498d`: 2 cobranças com status `pago`, ambas com `visitor_id = NULL`
+- 2 visitantes (Lise e Edu) presos em `status_selecao = 'aguardando_pagamento'`
 
-### 2. `gallery-access` não verifica status do visitante para `aguardando_pagamento`
-A verificação de `aguardando_pagamento` (linha 273) só checa o status da galeria. Para galerias públicas, `confirm-selection` atualiza o visitante mas NÃO a galeria. Resultado: o fluxo de "pagamento pendente" nunca é ativado para visitantes.
+### 3 pontos de falha identificados:
 
-Quando o pagamento é confirmado e `finalize_gallery_payment` marca a galeria como `selecao_completa`, o bloco `isFinalized` (linha 614) verifica o visitante e encontra `status !== 'finalizado'` → cai no fallback da galeria ativa, mostrando a tela de seleção novamente.
+1. **`AsaasCheckout.tsx`** — interface `AsaasCheckoutData` não tem campo `visitorId`, e os fetch para `asaas-gallery-payment` nunca enviam `visitorId` no body (PIX e Cartão)
+2. **`infinitepay-create-link` e `mercadopago-create-link`** — recebem `visitorId` no body mas ignoram na hora do INSERT na `cobrancas`
+3. **`finalize_gallery_payment` RPC** — a migração anterior (que adiciona visitor update) não foi aplicada ao banco; a versão em produção não tem nenhum bloco de visitor update
+4. **`gallery-access` pending payment** — busca cobrança pendente por `galeria_id` sem filtrar `visitor_id`, retornando a cobrança do visitante errado em cenários multiusuário
 
-### 3. Retorno de pagamento (`?payment=success`) usa `sessionId` que pode ser nulo
-Para galerias públicas standalone (sem sessão), `check-payment-status` não encontra cobrança porque usa `sessionId` como chave primária.
+### Resposta à pergunta sobre login de clientes
+
+**Não é necessário criar um sistema de login.** O sistema de visitantes (`galeria_visitantes`) já isola corretamente cada usuário. O problema é puramente de propagação do `visitor_id` na cadeia de pagamento. O identificador do visitante já existe e funciona — só precisa fluir até a cobrança.
 
 ## Correções
 
-### Arquivo 1: `supabase/migrations/...fix_visitor_payment_finalization.sql`
-Recriar `finalize_gallery_payment` para, quando `cobrancas.visitor_id` estiver preenchido, também finalizar o visitante:
-```sql
--- Dentro do bloco de finalização:
-IF v_cobranca.visitor_id IS NOT NULL THEN
-  UPDATE galeria_visitantes
-  SET status = 'finalizado',
-      status_selecao = 'selecao_completa',
-      finalized_at = p_paid_at,
-      updated_at = now()
-  WHERE id = v_cobranca.visitor_id;
-END IF;
-```
-Isso se aplica em todos os 3 caminhos de finalização da RPC (já pago + sync, parcelas resolvidas, pagamento novo).
+### 1. Frontend: `AsaasCheckout.tsx`
+- Adicionar `visitorId?: string` à interface `AsaasCheckoutData`
+- Incluir `visitorId: data.visitorId` nos 2 fetch para `asaas-gallery-payment` (PIX linha 229 e Cartão linha 372)
 
-### Arquivo 2: `supabase/functions/gallery-access/index.ts`
-Após resolver o visitante (linha ~270), adicionar verificação de `aguardando_pagamento` a nível de visitante ANTES do check a nível de galeria:
-```
-Se isPublicGallery && resolvedVisitorId:
-  - Buscar visitor.status_selecao
-  - Se 'aguardando_pagamento': auto-heal (verificar cobrança paga com visitor_id) e retornar pendingPayment ou finalized
-  - Se 'selecao_completa' / status='finalizado': retornar finalized com fotos selecionadas
-```
-Isso garante que o visitante com pagamento pendente veja a tela de pagamento, e com pagamento confirmado veja as fotos.
+### 2. Edge Function: `infinitepay-create-link`
+- Extrair `visitorId` do body da request
+- Incluir `visitor_id: visitorId || null` no INSERT de `cobrancas` (linha 210-223)
 
-### Arquivo 3: `src/pages/ClientGallery.tsx`
-No handler de `?payment=success` (linha 677+), quando `sessionId` for nulo, usar `galleryId` + `visitorId` para buscar a cobrança no `check-payment-status`. Enviar também `visitorId` no payload.
+### 3. Edge Function: `mercadopago-create-link`
+- Extrair `visitorId` do body da request
+- Incluir `visitor_id: body.visitorId || null` no INSERT de `cobrancas` (linha 114-125)
 
-### Arquivo 4: `supabase/functions/check-payment-status/index.ts`
-Aceitar `visitorId` como parâmetro alternativo para localizar cobrança pendente. Fallback: `cobrancas.visitor_id = visitorId` quando `sessionId` e `orderNsu` não existirem.
+### 4. Migração SQL: Recriar `finalize_gallery_payment`
+- A migração `20260416140746` já tem o código correto mas não foi aplicada
+- Criar nova migração que force a recriação da RPC com os 3 blocos de visitor update
+- Incluir backfill para os 2 visitantes presos: buscar cobranças pagas pela `galeria_id`, cruzar com `galeria_visitantes` da mesma galeria, e finalizar
 
-## Detalhes técnicos
+### 5. Edge Function: `gallery-access` — filtrar cobrança por visitor
+- No bloco `aguardando_pagamento` (linha 414-432): quando `resolvedVisitorId` existir, adicionar `.eq('visitor_id', resolvedVisitorId)` na query de cobrança pendente
+- Isso evita que um visitante veja a cobrança do outro
 
-### Migração SQL
-- `finalize_gallery_payment`: Adicionar `UPDATE galeria_visitantes SET status='finalizado', status_selecao='selecao_completa'` nos 3 caminhos de pagamento confirmado.
-- Backfill: Atualizar visitantes com cobrança `pago`/`pago_manual` que ainda estão `em_andamento`.
+### 6. Backfill dos visitantes presos
+- Na migração: atualizar `galeria_visitantes` onde existe cobrança `pago` na mesma `galeria_id` mas sem `visitor_id` (caso atual)
+- Para a galeria de teste específica: tentar inferir o visitante pela ordem temporal (cobrança R$50 = Lise com 2 fotos, R$75 = Edu com 3 fotos)
 
-### gallery-access — novo bloco para visitante
-Inserir entre a resolução de visitante (linha ~270) e o check de `aguardando_pagamento` da galeria (linha 273):
-1. Se `isPublicGallery && resolvedVisitorId`, buscar `galeria_visitantes.status_selecao`
-2. Se `aguardando_pagamento` → auto-heal com `cobrancas.visitor_id`, retornar `pendingPayment` ou `finalized`
-3. Se `selecao_completa` / `finalizado` → retornar `finalized` com fotos do `visitante_selecoes`
-4. Se nenhum dos dois, cair no fluxo normal da galeria
+## Arquivos modificados
 
-### check-payment-status
-Adicionar `visitorId` ao `RequestBody`. Na busca de cobrança, incluir filtro por `visitor_id` quando `sessionId` estiver vazio.
-
-### ClientGallery.tsx
-Na detecção de `?payment=success`, incluir `visitorId` no payload para `check-payment-status`.
+| Arquivo | Mudança |
+|---|---|
+| `src/components/AsaasCheckout.tsx` | Adicionar `visitorId` à interface e aos 2 fetch |
+| `supabase/functions/infinitepay-create-link/index.ts` | Salvar `visitor_id` no INSERT |
+| `supabase/functions/mercadopago-create-link/index.ts` | Salvar `visitor_id` no INSERT |
+| `supabase/functions/gallery-access/index.ts` | Filtrar cobrança por `visitor_id` |
+| `supabase/migrations/...sql` | Recriar RPC + backfill |
 
 ## Resultado esperado
-- Pagamento confirmado → visitante vê tela finalizada com fotos selecionadas
-- Pagamento pendente → visitante vê tela de pagamento
-- Sem pagamento (pulou) → visitante pode reabrir e refazer seleção
-- Fluxo privado continua inalterado
-- Webhooks de todos os provedores sincronizam visitante automaticamente
+- Cada visitante tem sua própria cobrança com `visitor_id` preenchido
+- Pagamento confirmado → visitante finalizado automaticamente
+- Visitantes simultâneos não interferem entre si
+- Sem necessidade de login — o sistema de visitantes é suficiente
 
