@@ -1,59 +1,68 @@
-<final-text>Do I know what the issue is? Sim.
 
-Problema exato:
-- A tela de “seleção finalizada” já existe no frontend.
-- Ela não aparece nesse link porque o app nem chega ao estado `finalized`: o `gallery-access` está devolvendo `NOT_FOUND` para o token `vd2zupjtbENx`.
-- O erro mais provável e consistente no código é um bug de troca de token no compartilhamento:
-  1. `SendGalleryModal.tsx` chama `prepare_gallery_share` e recebe um token.
-  2. Ao copiar/enviar, `markAsSent()` chama `onSendGallery()`.
-  3. `sendGalleryMutation` em `useSupabaseGalleries.ts` usa a galeria do cache local.
-  4. Se esse cache ainda está sem `publicToken`, ele gera outro token e sobrescreve `galerias.public_token`.
-  5. Resultado: o cliente recebe um token antigo, mas o banco passa a aceitar outro. O link vira 404 e a tela finalizada nunca renderiza.
+Do I know what the issue is? Sim.
 
-Arquivos críticos:
-- `src/components/SendGalleryModal.tsx`
-- `src/hooks/useSupabaseGalleries.ts`
-- `src/pages/GalleryDetail.tsx`
-- `src/pages/Dashboard.tsx`
+O erro que faltou revisar não está mais na tela em si. A UI de “seleção finalizada” já existe em 2 pontos do frontend. O problema real está no fluxo de acesso:
+
+1. `gallery-access` quebra exatamente no caminho de galeria finalizada:
+- o bloco `if (isFinalized)` usa `isPublicGallery` e `resolvedVisitorId` antes dessas variáveis serem declaradas.
+- isso pode gerar erro em runtime no backend.
+- no frontend, esse 500 acaba sendo mascarado como “Galeria não encontrada”.
+
+2. A resolução de token ainda está inconsistente:
+- `gallery-access` já tenta alias (`gallery_token_aliases`).
+- `confirm-selection` e `client-selection` ainda buscam só por `galerias.public_token`.
+- se o link for antigo/rotacionado, seleção, reabertura e fluxos de pagamento podem cair em 404 mesmo com a galeria existindo.
+
+3. Ainda existe risco estrutural de sobrescrita de token:
+- `publishGalleryMutation` em `useSupabaseGalleries.ts` ainda gera `public_token` no cliente.
+- isso viola a regra imutável do projeto e pode recriar links quebrados.
+
+O que vou corrigir:
+1. Reestruturar `gallery-access` para virar uma máquina de estados segura
+- resolver token atual/alias primeiro;
+- resolver senha e visitante antes;
+- só depois decidir entre `deliver`, `pendingPayment`, `finalized`, `expired` e `active`;
+- garantir que galeria finalizada sempre responda com `finalized: true` e `allowDownload` correto, sem crash.
+
+2. Unificar a resolução de token público
+- criar uma função/RPC única de resolução de token (token atual + aliases);
+- usar essa mesma resolução em `gallery-access`, `confirm-selection` e `client-selection`;
+- revisar outras funções públicas que recebem `galleryToken` para não existir mais comportamento divergente.
+
+3. Eliminar geração client-side de token
+- remover a geração/sobrescrita em `publishGalleryMutation`;
+- manter `prepare_gallery_share` como única fonte de verdade para `public_token`;
+- revisar criação/publicação para garantir que o token nunca mude depois de compartilhado.
+
+4. Reparar links já afetados
+- usar a tabela de aliases já criada para restaurar compatibilidade do token quebrado;
+- fazer backfill manual do alias da galeria afetada, se a quebra aconteceu antes do trigger atual;
+- validar que o link antigo e o link canônico apontam para a mesma galeria.
+
+5. Blindar a UX de erro
+- ajustar `ClientGallery.tsx` para não chamar 500 de “Galeria não encontrada”;
+- 404 real continua 404;
+- erro interno vira estado temporário com retry, para não confundir cliente/fotógrafo.
+
+Arquivos que precisam entrar nessa revisão final:
 - `supabase/functions/gallery-access/index.ts`
-
-Plano de correção segura:
-1. Unificar a publicação em uma única fonte de verdade
-- Fazer `sendGalleryMutation` parar de gerar token no cliente.
-- Usar apenas a RPC `prepare_gallery_share` para token + status de envio.
-- Remover a segunda “publicação” disparada pelo modal.
-
-2. Blindar o modal de compartilhamento
-- O link exibido/copiado no `SendGalleryModal` deve ser exatamente o token retornado pela RPC.
-- Após preparar a galeria, invalidar/refetchar as queries para sincronizar painel e detalhe.
-- Em `GalleryDetail.tsx`, adicionar refresh pós-compartilhamento, como já existe no `Dashboard`.
-
-3. Reparar links já quebrados
-- Criar uma migração com tabela de aliases de token público para aceitar tokens antigos e atuais.
-- Atualizar `gallery-access` para resolver primeiro por alias e depois por `galerias.public_token`.
-- Inserir `vd2zupjtbENx` como alias da galeria afetada, para esse link voltar a funcionar.
-
-4. Manter a regra imutável da galeria finalizada
-- Com o token resolvendo corretamente, o fluxo volta ao comportamento certo:
-  - `allowDownload = false` → mensagem “Seleção finalizada com sucesso, para acessá-la novamente, entre em contato com o(a) fotógrafo(a)”
-  - `allowDownload = true` → preview final com fotos para download
-- Revisar `gallery-access` para garantir `finalized: true` + `allowDownload` consistente.
-
-5. QA ponta a ponta
-- Testar primeira publicação de galeria sem token prévio.
-- Testar cópia de link, WhatsApp e reabertura do modal.
-- Testar galeria finalizada sem download: nunca pode cair em “Galeria não encontrada”.
-- Testar galeria finalizada com download.
-- Testar o link histórico `vd2zupjtbENx` após o reparo.
-
-Implementação prevista:
-- `src/components/SendGalleryModal.tsx`
+- `supabase/functions/confirm-selection/index.ts`
+- `supabase/functions/client-selection/index.ts`
 - `src/hooks/useSupabaseGalleries.ts`
-- `src/pages/GalleryDetail.tsx`
-- `supabase/functions/gallery-access/index.ts`
+- `src/pages/ClientGallery.tsx`
 - `supabase/migrations/...sql`
 
-Resultado esperado:
-- o token não muda mais depois de ser compartilhado,
-- links antigos podem continuar válidos,
-- e a tela finalizada correta passa a aparecer em todos os cenários.</final-text>
+Resultado esperado após a correção:
+- finalizar seleção com ou sem pagamento não pode mais cair em “galeria não encontrada”;
+- reabrir o mesmo link precisa cair sempre na tela final correta;
+- `allowDownload=false` mostra a mensagem de seleção finalizada;
+- `allowDownload=true` mostra a tela final com fotos e download;
+- links antigos continuam funcionando sem inconsistência.
+
+QA obrigatório:
+- finalizar sem pagamento e reabrir o link;
+- finalizar com pagamento e voltar pelo redirect;
+- testar link antigo/alias;
+- testar sem download;
+- testar com download;
+- confirmar que nenhuma galeria finalizada vira “não encontrada” sem 404 real.
