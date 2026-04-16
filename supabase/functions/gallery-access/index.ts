@@ -476,6 +476,7 @@ serve(async (req) => {
             clienteId: gallery.cliente_id,
             sessionId: sessionIdTexto,
             galleryToken: gallery.public_token,
+            visitorId: resolvedVisitorId || undefined,
             enabledMethods: {
               pix: s.habilitarPix !== false,
               creditCard: s.habilitarCartao !== false,
