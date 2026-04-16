@@ -40,6 +40,7 @@ export interface AsaasCheckoutData {
   clienteId?: string;
   sessionId?: string;
   galleryToken?: string;
+  visitorId?: string;
   enabledMethods: { pix: boolean; creditCard: boolean; boleto?: boolean };
   maxParcelas: number;
   absorverTaxa: boolean;
@@ -235,6 +236,7 @@ export function AsaasCheckout({
           galeriaId: data.galeriaId,
           qtdFotos: data.qtdFotos,
           galleryToken: data.galleryToken,
+          visitorId: data.visitorId,
           billingType: 'PIX',
         }),
       });
@@ -378,6 +380,7 @@ export function AsaasCheckout({
           galeriaId: data.galeriaId,
           qtdFotos: data.qtdFotos,
           galleryToken: data.galleryToken,
+          visitorId: data.visitorId,
           billingType: 'CREDIT_CARD',
           installmentCount: parseInt(cardInstallments),
           // Let backend recalculate with real fees - but hint the frontend-calculated total
