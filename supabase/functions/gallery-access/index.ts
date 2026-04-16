@@ -412,16 +412,24 @@ serve(async (req) => {
       let pendingValor: number | null = null;
 
       if (paymentMethod !== 'pix_manual') {
-        // Search by galeria_id AND fallback by session_id
-        const orFilter = `galeria_id.eq.${gallery.id}${gallery.session_id ? `,session_id.eq.${gallery.session_id}` : ''}`;
-        const { data: pendingCobranca } = await supabase
+        // Build query - filter by visitor_id when available for multi-user isolation
+        let cobrancaQuery = supabase
           .from("cobrancas")
           .select("id, ip_checkout_url, mp_payment_link, provedor, valor, status")
-          .or(orFilter)
           .eq("status", "pendente")
           .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+
+        if (resolvedVisitorId) {
+          // Multi-user safe: only show this visitor's pending charge
+          cobrancaQuery = cobrancaQuery.eq('visitor_id', resolvedVisitorId);
+        } else {
+          // Fallback: search by galeria_id / session_id
+          const orFilter = `galeria_id.eq.${gallery.id}${gallery.session_id ? `,session_id.eq.${gallery.session_id}` : ''}`;
+          cobrancaQuery = cobrancaQuery.or(orFilter);
+        }
+
+        const { data: pendingCobranca } = await cobrancaQuery.maybeSingle();
 
         if (pendingCobranca) {
           pendingCheckoutUrl = pendingCobranca.ip_checkout_url || pendingCobranca.mp_payment_link;

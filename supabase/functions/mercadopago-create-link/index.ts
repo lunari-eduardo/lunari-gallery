@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
         .from('cobrancas')
         .insert({
           user_id: photographerId,
-          cliente_id: body.clienteId || null, // Permite NULL para galerias públicas
+          cliente_id: body.clienteId || null,
           galeria_id: body.galeriaId,
           session_id: body.sessionId || null,
           valor: body.valor,
@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
           qtd_fotos: body.qtdFotos || 0,
           status: 'pendente',
           provedor: 'mercadopago',
+          visitor_id: body.visitorId || null,
         })
         .select('id')
         .single();
