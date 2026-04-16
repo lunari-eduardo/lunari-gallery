@@ -216,6 +216,59 @@ serve(async (req) => {
       );
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // EARLY RESOLUTION: Determine gallery type and resolve visitor
+    // These must be available BEFORE finalized/payment checks
+    // ══════════════════════════════════════════════════════════════
+    const isPublicGallery = gallery.permissao === 'public';
+    let resolvedVisitorId: string | null = null;
+    let resolvedVisitorName: string | null = null;
+
+    // Resolve visitor for public galleries early (needed by finalized check)
+    if (isPublicGallery) {
+      if (visitorData && visitorData.nome && visitorData.contato) {
+        const deviceHash = visitorData.deviceHash || null;
+        const { data: visitor, error: visitorError } = await supabase
+          .from('galeria_visitantes')
+          .upsert({
+            galeria_id: gallery.id,
+            nome: visitorData.nome,
+            contato: visitorData.contato,
+            contato_tipo: visitorData.contatoTipo || 'whatsapp',
+            device_hash: deviceHash,
+          }, { onConflict: 'galeria_id,contato' })
+          .select('id, nome, status, status_selecao')
+          .single();
+
+        if (visitorError) {
+          console.error('Visitor upsert error:', visitorError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao registrar visitante' }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        resolvedVisitorId = visitor.id;
+        resolvedVisitorName = visitor.nome;
+        console.log(`👤 Visitor registered/recovered: ${visitor.nome} (${visitor.id})`);
+      } else if (visitorId) {
+        const { data: visitor, error: visitorError } = await supabase
+          .from('galeria_visitantes')
+          .select('id, nome, status, status_selecao')
+          .eq('id', visitorId)
+          .eq('galeria_id', gallery.id)
+          .single();
+
+        if (!visitorError && visitor) {
+          resolvedVisitorId = visitor.id;
+          resolvedVisitorName = visitor.nome;
+          console.log(`👤 Visitor recovered: ${visitor.nome} (${visitor.id})`);
+        } else {
+          console.warn(`⚠️ Visitor ${visitorId} not found for gallery ${gallery.id}`);
+        }
+      }
+    }
+
     // 3a. Check if gallery is awaiting payment (selection confirmed but payment pending)
     if (gallery.status_selecao === 'aguardando_pagamento') {
       // AUTO-HEAL: Check if a paid cobrança exists but gallery wasn't synced
@@ -424,8 +477,6 @@ serve(async (req) => {
     if (needsPaymentRecovery) {
       console.log("🔄 AUTO-RECOVERY: Gallery marked as selecao_completa but payment is still pending. Redirecting to payment flow.");
       
-      // Re-route to the pending payment handler by overriding status_selecao temporarily
-      // We reuse the exact same logic from section 3a (aguardando_pagamento)
       const { data: recoverySettings } = await supabase
         .from("gallery_settings")
         .select("studio_name, studio_logo_url, favicon_url")
@@ -812,8 +863,7 @@ serve(async (req) => {
             requiresPassword: true, 
             galleryId: gallery.id,
             sessionName: gallery.nome_sessao,
-            clientMode: clientMode,  // Include for password screen theming
-            // Include font settings for password screen styling
+            clientMode: clientMode,
             settings: {
               sessionFont: galleryConfig?.sessionFont || undefined,
               titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
@@ -833,108 +883,55 @@ serve(async (req) => {
     }
 
     // 3.7. PUBLIC GALLERY: Visitor identification gate
-    const isPublicGallery = gallery.permissao === 'public';
-    let resolvedVisitorId: string | null = null;
-    let resolvedVisitorName: string | null = null;
-
-    if (isPublicGallery) {
-      // Register new visitor
-      if (visitorData && visitorData.nome && visitorData.contato) {
-        const deviceHash = visitorData.deviceHash || null;
-        
-        // Upsert visitor (same contact = same visitor)
-        const { data: visitor, error: visitorError } = await supabase
-          .from('galeria_visitantes')
-          .upsert({
-            galeria_id: gallery.id,
-            nome: visitorData.nome,
-            contato: visitorData.contato,
-            contato_tipo: visitorData.contatoTipo || 'whatsapp',
-            device_hash: deviceHash,
-          }, { onConflict: 'galeria_id,contato' })
-          .select('id, nome, status, status_selecao')
-          .single();
-
-        if (visitorError) {
-          console.error('Visitor upsert error:', visitorError);
-          return new Response(
-            JSON.stringify({ error: 'Erro ao registrar visitante' }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        resolvedVisitorId = visitor.id;
-        resolvedVisitorName = visitor.nome;
-        console.log(`👤 Visitor registered/recovered: ${visitor.nome} (${visitor.id})`);
-      }
-      // Recover existing visitor
-      else if (visitorId) {
-        const { data: visitor, error: visitorError } = await supabase
-          .from('galeria_visitantes')
-          .select('id, nome, status, status_selecao')
-          .eq('id', visitorId)
-          .eq('galeria_id', gallery.id)
-          .single();
-
-        if (!visitorError && visitor) {
-          resolvedVisitorId = visitor.id;
-          resolvedVisitorName = visitor.nome;
-          console.log(`👤 Visitor recovered: ${visitor.nome} (${visitor.id})`);
-        } else {
-          console.warn(`⚠️ Visitor ${visitorId} not found for gallery ${gallery.id}`);
+    // (visitor was already resolved early, just check if identification is needed)
+    if (isPublicGallery && !resolvedVisitorId) {
+      const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
+      const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+      
+      // Build theme data for identification screen
+      const themeId = galleryConfig?.themeId as string | undefined;
+      let idThemeData = null;
+      if (themeId) {
+        const { data: theme } = await supabase
+          .from("gallery_themes")
+          .select("*")
+          .eq("id", themeId)
+          .maybeSingle();
+        if (theme) {
+          idThemeData = {
+            id: theme.id, name: theme.name,
+            backgroundMode: theme.background_mode || 'light',
+            primaryColor: theme.primary_color, accentColor: theme.accent_color,
+            emphasisColor: theme.emphasis_color,
+          };
         }
       }
-
-      // For public galleries, require visitor identification
-      if (!resolvedVisitorId) {
-        const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
-        const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
-        
-        // Build theme data for identification screen
-        const themeId = galleryConfig?.themeId as string | undefined;
-        let idThemeData = null;
-        if (themeId) {
-          const { data: theme } = await supabase
-            .from("gallery_themes")
-            .select("*")
-            .eq("id", themeId)
-            .maybeSingle();
-          if (theme) {
-            idThemeData = {
-              id: theme.id, name: theme.name,
-              backgroundMode: theme.background_mode || 'light',
-              primaryColor: theme.primary_color, accentColor: theme.accent_color,
-              emphasisColor: theme.emphasis_color,
-            };
-          }
-        }
-        if (!idThemeData) {
-          idThemeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
-        }
-
-        // Fetch studio settings for branding
-        const { data: idSettings } = await supabase
-          .from("gallery_settings")
-          .select("studio_name, studio_logo_url, favicon_url")
-          .eq("user_id", gallery.user_id)
-          .single();
-
-        return new Response(
-          JSON.stringify({
-            requiresVisitor: true,
-            galleryId: gallery.id,
-            sessionName: gallery.nome_sessao,
-            clientMode,
-            theme: idThemeData,
-            studioSettings: idSettings || null,
-            settings: {
-              sessionFont: galleryConfig?.sessionFont || undefined,
-              titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-            },
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (!idThemeData) {
+        idThemeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null };
       }
+
+      // Fetch studio settings for branding
+      const { data: idSettings } = await supabase
+        .from("gallery_settings")
+        .select("studio_name, studio_logo_url, favicon_url")
+        .eq("user_id", gallery.user_id)
+        .single();
+
+      return new Response(
+        JSON.stringify({
+          requiresVisitor: true,
+          galleryId: gallery.id,
+          sessionName: gallery.nome_sessao,
+          clientMode,
+          theme: idThemeData,
+          studioSettings: idSettings || null,
+          settings: {
+            sessionFont: galleryConfig?.sessionFont || undefined,
+            titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // 4. Fetch pricing rules from session (source of truth) if gallery is linked
@@ -980,14 +977,12 @@ serve(async (req) => {
               photo.is_favorite = sel.is_favorite;
               photo.comment = sel.comment || photo.comment;
             } else {
-              // No visitor selection = not selected for this visitor
               photo.is_selected = false;
               photo.is_favorite = false;
               photo.comment = null;
             }
           }
         } else {
-          // No selections at all — clear all
           for (const photo of photos as any[]) {
             photo.is_selected = false;
             photo.is_favorite = false;
@@ -1029,7 +1024,6 @@ serve(async (req) => {
         .maybeSingle();
       
       if (theme) {
-        // Updated schema: background_mode instead of background_color, emphasis_color instead of text_color
         themeData = {
           id: theme.id,
           name: theme.name,
@@ -1042,14 +1036,12 @@ serve(async (req) => {
       }
     }
     
-    // CRITICAL: Always provide a theme object, using clientMode when no custom theme exists
-    // This ensures the frontend consistently receives backgroundMode for all screens
     if (!themeData) {
       themeData = {
         id: 'system',
         name: 'Sistema',
-        backgroundMode: clientMode, // Use photographer's chosen mode
-        primaryColor: null,         // System defaults
+        backgroundMode: clientMode,
+        primaryColor: null,
         accentColor: null,
         emphasisColor: null,
       };
@@ -1062,7 +1054,7 @@ serve(async (req) => {
         galeria_id: gallery.id,
         tipo: 'cliente_acessou',
         descricao: 'Cliente acessou a galeria pela primeira vez',
-        user_id: null, // Anonymous client action
+        user_id: null,
       },
       { onConflict: 'galeria_id,tipo', ignoreDuplicates: true }
     );
@@ -1076,12 +1068,11 @@ serve(async (req) => {
         success: true,
         gallery: {
           id: gallery.id,
-          // userId removed — not needed by frontend, reduces public data exposure
-          sessionId: gallery.session_id,  // Include session_id for client-side
+          sessionId: gallery.session_id,
           sessionName: gallery.nome_sessao,
           packageName: gallery.nome_pacote,
           clientName: gallery.cliente_nome,
-          clienteId: gallery.cliente_id, // Include cliente_id for payment creation
+          clienteId: gallery.cliente_id,
           includedPhotos: gallery.fotos_incluidas,
           extraPhotoPrice: gallery.valor_foto_extra,
           welcomeMessage: gallery.mensagem_boas_vindas,
@@ -1092,15 +1083,10 @@ serve(async (req) => {
           totalPhotos: gallery.total_fotos,
           settings: gallery.configuracoes,
           permissao: gallery.permissao,
-          // Include frozen pricing rules (from session if available, else gallery)
           regrasCongeladas,
-          // Include sale settings explicitly for payment flow
           saleSettings,
-          // Include extras already paid for credit system
           extrasPagasTotal: gallery.total_fotos_extras_vendidas || 0,
-          // Include amount already paid for credit calculation
           valorTotalVendido: gallery.valor_total_vendido || 0,
-          // Visitor info for public galleries
           ...(resolvedVisitorId ? { visitorId: resolvedVisitorId, visitorName: resolvedVisitorName } : {}),
         },
         photos: photos || [],
@@ -1114,7 +1100,6 @@ serve(async (req) => {
         studioSettings: settings || null,
         theme: themeData,
         clientMode: clientMode,
-        // Top-level visitor info for easy access
         ...(resolvedVisitorId ? { visitorId: resolvedVisitorId, visitorName: resolvedVisitorName } : {}),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1122,7 +1107,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Gallery access error:", error);
     return new Response(
-      JSON.stringify({ error: "Erro interno do servidor" }),
+      JSON.stringify({ error: "Erro interno do servidor", code: "INTERNAL_ERROR" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
