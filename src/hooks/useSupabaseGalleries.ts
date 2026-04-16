@@ -578,35 +578,32 @@ export function useSupabaseGalleries() {
     },
   });
 
-  // Send gallery to client - marks as sent and logs action
+  // Send gallery to client - delegates entirely to prepare_gallery_share RPC
+  // IMPORTANT: Never generate tokens client-side to avoid token overwrites
   const sendGalleryMutation = useMutation({
     mutationFn: async (id: string) => {
       const gallery = getGallery(id);
       if (!gallery) throw new Error('Galeria não encontrada');
 
-      // If already sent, don't re-send
-      if (gallery.status === 'enviado') {
+      // If already sent, just return current token
+      if (gallery.status === 'enviado' && gallery.publicToken) {
         return { publicToken: gallery.publicToken };
       }
 
-      // Generate token if somehow missing
-      const publicToken = gallery.publicToken || generatePublicToken();
-      
-      const prazoSelecao = gallery.prazoSelecao || new Date(Date.now() + (gallery.prazoSelecaoDias || 7) * 86400000);
-
-      const { error } = await supabase
-        .from('galerias')
-        .update({
-          status: 'enviado',
-          enviado_em: new Date().toISOString(),
-          prazo_selecao: prazoSelecao instanceof Date ? prazoSelecao.toISOString() : prazoSelecao,
-          public_token: publicToken,
-        })
-        .eq('id', id);
+      // Use prepare_gallery_share RPC as single source of truth for token + status
+      const { data, error } = await supabase.rpc('prepare_gallery_share', {
+        p_gallery_id: id,
+      });
 
       if (error) throw error;
 
-      // Update session status
+      const result = data as { token?: string; status?: string; ready?: boolean; error?: string };
+
+      if (!result?.ready) {
+        throw new Error(result?.error || 'Erro ao preparar galeria');
+      }
+
+      // Update session status if applicable
       if (gallery.sessionId) {
         await supabase
           .from('clientes_sessoes')
@@ -617,9 +614,7 @@ export function useSupabaseGalleries() {
           .eq('session_id', gallery.sessionId);
       }
 
-      // Log action handled by prepare_gallery_share RPC (idempotent)
-
-      return { publicToken };
+      return { publicToken: result.token! };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });

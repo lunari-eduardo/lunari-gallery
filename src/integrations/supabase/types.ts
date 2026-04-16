@@ -2184,6 +2184,35 @@ export type Database = {
         }
         Relationships: []
       }
+      gallery_token_aliases: {
+        Row: {
+          created_at: string
+          gallery_id: string
+          id: string
+          old_token: string
+        }
+        Insert: {
+          created_at?: string
+          gallery_id: string
+          id?: string
+          old_token: string
+        }
+        Update: {
+          created_at?: string
+          gallery_id?: string
+          id?: string
+          old_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_token_aliases_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_follow_up_config: {
         Row: {
           ativo: boolean | null

@@ -427,7 +427,10 @@ export default function GalleryDetail() {
 
   const handleSendGallery = async () => {
     try {
+      // sendGallery now uses prepare_gallery_share RPC internally (no client-side token gen)
       await sendSupabaseGallery(supabaseGallery.id);
+      // Refresh gallery data to pick up the token set by RPC
+      queryClient.invalidateQueries({ queryKey: ['galerias'] });
       toast.success('Galeria enviada!', {
         description: `Galeria publicada e pronta para o cliente`,
       });
