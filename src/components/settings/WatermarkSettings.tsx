@@ -3,6 +3,7 @@ import { Shield, ShieldOff, ImageIcon, Info } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WatermarkUploader } from './WatermarkUploader';
 import { useWatermarkSettings, WatermarkMode } from '@/hooks/useWatermarkSettings';
@@ -131,19 +132,43 @@ export function WatermarkSettings() {
 
       {/* Custom Watermark Upload */}
       {settings.mode === 'custom' && (
-        <div className="space-y-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+        <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
           <Label className="text-sm">Sua marca d'água</Label>
           <WatermarkUploader
             currentPath={settings.path}
             onUpload={uploadWatermark}
             onDelete={deleteWatermark}
             disabled={isSaving}
+            opacity={localOpacity}
+            scale={settings.scale}
           />
+
+          {/* Tile size selector */}
+          {settings.path && (
+            <div className="space-y-2">
+              <Label className="text-sm">Tamanho da marca</Label>
+              <ToggleGroup
+                type="single"
+                value={settings.scale === 15 ? 'small' : settings.scale === 40 ? 'large' : 'medium'}
+                onValueChange={(value) => {
+                  if (!value) return;
+                  const scaleMap = { small: 15, medium: 25, large: 40 };
+                  saveSettings({ scale: scaleMap[value as 'small' | 'medium' | 'large'] });
+                }}
+                disabled={isSaving}
+                className="justify-start w-fit border border-border rounded-md p-1 bg-background"
+              >
+                <ToggleGroupItem value="small" size="sm" className="px-3 text-xs">Pequeno</ToggleGroupItem>
+                <ToggleGroupItem value="medium" size="sm" className="px-3 text-xs">Médio</ToggleGroupItem>
+                <ToggleGroupItem value="large" size="sm" className="px-3 text-xs">Grande</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          )}
+
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <p>
-              Use PNG com fundo transparente. Recomendado: 2560x1707px (horizontal) 
-              ou 1707x2560px (vertical). A marca será aplicada no centro da foto.
+              Use PNG com fundo transparente. A marca será aplicada em padrão repetido cobrindo toda a imagem.
             </p>
           </div>
         </div>
