@@ -159,19 +159,18 @@ async function applyWatermark(
 
     const startX = -spacingX;
     const startY = -spacingY;
-    const endX = width + spacingX * 2;
+    const endX = width + spacingX;
     const endY = height + spacingY;
 
     let rowIndex = 0;
     for (let ty = startY; ty < endY; ty += spacingY) {
-      // Brick offset on alternate rows + progressive diagonal drift
-      const brickOffset = (rowIndex % 2 === 0) ? 0 : spacingX / 2;
-      const diagonalOffset = (ty / spacingY) * (spacingX * 0.3);
+      // Brick offset puro: linhas pares começam em 0, ímpares deslocam metade
+      const xOffset = (rowIndex % 2 === 0) ? 0 : spacingX / 2;
 
-      for (let tx = startX - spacingX; tx < endX + spacingX; tx += spacingX) {
+      for (let tx = startX; tx < endX; tx += spacingX) {
         ctx.drawImage(
           watermarkImg,
-          tx + brickOffset + diagonalOffset,
+          tx + xOffset,
           ty,
           tileWidth,
           tileHeight
