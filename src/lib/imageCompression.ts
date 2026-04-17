@@ -112,16 +112,12 @@ async function applyWatermark(
   let watermarkUrl: string;
   
   if (config.mode === 'system') {
-    // System watermarks: orientation-specific high-res assets
     const suffix = orientation === 'horizontal' ? 'h' : 'v';
     watermarkUrl = `${R2_PUBLIC_URL}/system-assets/default-watermark-${suffix}.png`;
   } else if (config.mode === 'custom') {
-    // Custom watermarks: photographer's uploaded assets
     const customPath = orientation === 'horizontal' 
       ? config.customPathHorizontal 
       : config.customPathVertical;
-    
-    // Fallback: if only one orientation is uploaded, use it for both
     const fallbackPath = config.customPathHorizontal || config.customPathVertical;
     const pathToUse = customPath || fallbackPath;
     
@@ -131,28 +127,58 @@ async function applyWatermark(
     
     watermarkUrl = `${R2_PUBLIC_URL}/${pathToUse}`;
   } else {
-    return; // Unknown mode, skip
+    return;
   }
 
   // Load watermark image - MUST succeed
   const watermarkImg = await loadImageFromUrl(watermarkUrl);
 
-  // Apply watermark with opacity using globalAlpha
   ctx.globalAlpha = config.opacity / 100;
 
-  // Calculate dimensions to fit watermark (contain mode)
-  const scale = Math.min(width / watermarkImg.width, height / watermarkImg.height);
-  const wmWidth = watermarkImg.width * scale;
-  const wmHeight = watermarkImg.height * scale;
-  
-  // Center the watermark
-  const x = (width - wmWidth) / 2;
-  const y = (height - wmHeight) / 2;
+  if (config.mode === 'system') {
+    // System mode: centered, covering the full image (original behavior)
+    const scale = Math.min(width / watermarkImg.width, height / watermarkImg.height);
+    const wmWidth = watermarkImg.width * scale;
+    const wmHeight = watermarkImg.height * scale;
+    const x = (width - wmWidth) / 2;
+    const y = (height - wmHeight) / 2;
+    ctx.drawImage(watermarkImg, x, y, wmWidth, wmHeight);
+  } else {
+    // Custom mode: tiled pattern rotated -45°
+    const tileScale = config.tileScale || 'medium';
+    const shortEdge = Math.min(width, height);
+    const scaleFactor = tileScale === 'small' ? 0.12 : tileScale === 'large' ? 0.26 : 0.18;
+    
+    const tileHeight = shortEdge * scaleFactor;
+    const tileWidth = (watermarkImg.width / watermarkImg.height) * tileHeight;
+    
+    const spacingX = tileWidth * 1.6;
+    const spacingY = tileHeight * 2.0;
+    
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const diagonal = Math.sqrt(width * width + height * height);
+    const extend = diagonal * 0.7; // extend beyond bounds to cover corners after rotation
+    
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(-45 * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+    
+    const startX = centerX - extend;
+    const startY = centerY - extend;
+    const endX = centerX + extend;
+    const endY = centerY + extend;
+    
+    for (let ty = startY; ty < endY; ty += spacingY) {
+      for (let tx = startX; tx < endX; tx += spacingX) {
+        ctx.drawImage(watermarkImg, tx, ty, tileWidth, tileHeight);
+      }
+    }
+    
+    ctx.restore();
+  }
 
-  // Draw watermark onto canvas
-  ctx.drawImage(watermarkImg, x, y, wmWidth, wmHeight);
-
-  // Restore full opacity for any subsequent operations
   ctx.globalAlpha = 1;
 }
 
