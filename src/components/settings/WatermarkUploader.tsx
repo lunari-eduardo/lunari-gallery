@@ -80,8 +80,7 @@ export function WatermarkUploader({
   const displayUrl = preview || getPreviewUrl(currentPath);
 
   // Map scale (15/25/40) to background-size in px for tile preview
-  // Smaller % → smaller tile in preview
-  const tilePx = scale <= 15 ? 60 : scale >= 40 ? 130 : 90;
+  const tilePx = scale <= 15 ? 80 : scale >= 40 ? 170 : 110;
 
   return (
     <div className="space-y-4">
@@ -103,14 +102,13 @@ export function WatermarkUploader({
                 backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
               }}
             />
-            {/* Tiled watermark */}
+            {/* Tiled watermark — logo upright, no rotation */}
             <div
-              className="absolute -inset-[40%]"
+              className="absolute inset-0"
               style={{
                 backgroundImage: `url(${displayUrl})`,
                 backgroundRepeat: 'repeat',
                 backgroundSize: `${tilePx}px auto`,
-                transform: 'rotate(-45deg)',
                 opacity: opacity / 100,
               }}
             />
