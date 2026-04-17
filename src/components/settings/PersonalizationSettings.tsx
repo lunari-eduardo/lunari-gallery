@@ -47,16 +47,19 @@ export function PersonalizationSettings() {
         <h3 className="text-lg font-medium text-muted-foreground">Identidade Visual</h3>
         
         {/* Logo + Favicon */}
-        <div className="lunari-card p-6 space-y-6">
-          <LogoUploader
-            logo={settings.studioLogo}
-            onLogoChange={(logo) => updateSettings({ studioLogo: logo })}
-          />
-          <div className="border-t border-border" />
-          <FaviconUploader
-            favicon={settings.faviconUrl}
-            onFaviconChange={(favicon) => updateSettings({ faviconUrl: favicon })}
-          />
+        <div className="lunari-card p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            <LogoUploader
+              logo={settings.studioLogo}
+              onLogoChange={(logo) => updateSettings({ studioLogo: logo })}
+            />
+            <div className="md:border-l md:border-border md:pl-8 pt-6 md:pt-0 border-t md:border-t-0">
+              <FaviconUploader
+                favicon={settings.faviconUrl}
+                onFaviconChange={(favicon) => updateSettings({ faviconUrl: favicon })}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
