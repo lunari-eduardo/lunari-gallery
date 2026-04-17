@@ -19,6 +19,8 @@ export interface WatermarkConfig {
   customPathVertical?: string | null;
   /** Opacity from 0 to 100 (default: 40) */
   opacity: number;
+  /** Tile size for custom mode (default: 'medium') */
+  tileScale?: 'small' | 'medium' | 'large';
 }
 
 export interface CompressedImage {
