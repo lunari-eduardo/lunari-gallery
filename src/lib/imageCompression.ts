@@ -144,39 +144,41 @@ async function applyWatermark(
     const y = (height - wmHeight) / 2;
     ctx.drawImage(watermarkImg, x, y, wmWidth, wmHeight);
   } else {
-    // Custom mode: tiled pattern rotated -45°
+    // Custom mode: tiled pattern with diagonal offset (logo stays upright at 0°)
     const tileScale = config.tileScale || 'medium';
     const shortEdge = Math.min(width, height);
-    const scaleFactor = tileScale === 'small' ? 0.12 : tileScale === 'large' ? 0.26 : 0.18;
-    
+    // Larger base sizes: small=base, medium=+30%, large=+60%
+    const scaleFactor = tileScale === 'small' ? 0.16 : tileScale === 'large' ? 0.34 : 0.21;
+
     const tileHeight = shortEdge * scaleFactor;
     const tileWidth = (watermarkImg.width / watermarkImg.height) * tileHeight;
-    
-    const spacingX = tileWidth * 1.6;
-    const spacingY = tileHeight * 2.0;
-    
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const diagonal = Math.sqrt(width * width + height * height);
-    const extend = diagonal * 0.7; // extend beyond bounds to cover corners after rotation
-    
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(-45 * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-    
-    const startX = centerX - extend;
-    const startY = centerY - extend;
-    const endX = centerX + extend;
-    const endY = centerY + extend;
-    
+
+    // Denser spacing to avoid empty visual gaps
+    const spacingX = tileWidth * 1.25;
+    const spacingY = tileHeight * 1.5;
+
+    const startX = -spacingX;
+    const startY = -spacingY;
+    const endX = width + spacingX * 2;
+    const endY = height + spacingY;
+
+    let rowIndex = 0;
     for (let ty = startY; ty < endY; ty += spacingY) {
-      for (let tx = startX; tx < endX; tx += spacingX) {
-        ctx.drawImage(watermarkImg, tx, ty, tileWidth, tileHeight);
+      // Brick offset on alternate rows + progressive diagonal drift
+      const brickOffset = (rowIndex % 2 === 0) ? 0 : spacingX / 2;
+      const diagonalOffset = (ty / spacingY) * (spacingX * 0.3);
+
+      for (let tx = startX - spacingX; tx < endX + spacingX; tx += spacingX) {
+        ctx.drawImage(
+          watermarkImg,
+          tx + brickOffset + diagonalOffset,
+          ty,
+          tileWidth,
+          tileHeight
+        );
       }
+      rowIndex++;
     }
-    
-    ctx.restore();
   }
 
   ctx.globalAlpha = 1;
