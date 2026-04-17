@@ -1532,7 +1532,8 @@ export default function GalleryCreate() {
               mode: watermarkType === 'standard' ? 'system' : watermarkType === 'custom' ? 'custom' : 'none',
               customPathHorizontal: watermarkSettings.path,
               customPathVertical: watermarkSettings.path,
-              opacity: watermarkOpacity
+              opacity: watermarkOpacity,
+              tileScale: watermarkSettings.scale === 15 ? 'small' : watermarkSettings.scale === 40 ? 'large' : 'medium'
             }}
             allowDownload={allowDownload}
             onUploadComplete={handlePhotoUploadComplete}
