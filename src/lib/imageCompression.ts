@@ -3,6 +3,8 @@
  * Compresses images before upload to R2 and optionally applies watermark (burn-in)
  */
 
+import { computeWatermarkLayout } from './watermarkLayout';
+
 const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || 'https://media.lunarihub.com';
 
 export interface CompressionOptions {
@@ -144,39 +146,17 @@ async function applyWatermark(
     const y = (height - wmHeight) / 2;
     ctx.drawImage(watermarkImg, x, y, wmWidth, wmHeight);
   } else {
-    // Custom mode: tiled pattern with diagonal offset (logo stays upright at 0°)
-    const tileScale = config.tileScale || 'medium';
-    const shortEdge = Math.min(width, height);
-    // Larger base sizes: small=base, medium=+30%, large=+60%
-    const scaleFactor = tileScale === 'small' ? 0.16 : tileScale === 'large' ? 0.34 : 0.21;
+    // Custom mode: diagonal 45° interleaved mesh; each logo stays upright (0°)
+    const layout = computeWatermarkLayout({
+      canvasWidth: width,
+      canvasHeight: height,
+      watermarkWidth: watermarkImg.width,
+      watermarkHeight: watermarkImg.height,
+      tileScale: config.tileScale || 'medium',
+    });
 
-    const tileHeight = shortEdge * scaleFactor;
-    const tileWidth = (watermarkImg.width / watermarkImg.height) * tileHeight;
-
-    // Denser spacing to avoid empty visual gaps
-    const spacingX = tileWidth * 1.25;
-    const spacingY = tileHeight * 1.5;
-
-    const startX = -spacingX;
-    const startY = -spacingY;
-    const endX = width + spacingX;
-    const endY = height + spacingY;
-
-    let rowIndex = 0;
-    for (let ty = startY; ty < endY; ty += spacingY) {
-      // Brick offset puro: linhas pares começam em 0, ímpares deslocam metade
-      const xOffset = (rowIndex % 2 === 0) ? 0 : spacingX / 2;
-
-      for (let tx = startX; tx < endX; tx += spacingX) {
-        ctx.drawImage(
-          watermarkImg,
-          tx + xOffset,
-          ty,
-          tileWidth,
-          tileHeight
-        );
-      }
-      rowIndex++;
+    for (const tile of layout.tiles) {
+      ctx.drawImage(watermarkImg, tile.x, tile.y, tile.width, tile.height);
     }
   }
 
