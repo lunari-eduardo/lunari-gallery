@@ -1,55 +1,87 @@
 
+# Plano: fazer a “Minha Marca” ficar realmente intercalada em 45° com o logo reto
 
-# Plano: Corrigir alinhamento do brick offset (intercalar linhas)
+## Diagnóstico
+O comportamento atual continua “reto” porque a lógica usa apenas `brickOffset` em linhas horizontais. Isso cria um padrão intercalado simples, mas não um padrão diagonal real a 45°.
 
-## Problema
+Para ficar como você pediu, não basta deslocar meia coluna: é preciso mudar a malha de posicionamento inteira para um eixo rotacionado em 45°, mantendo cada logo sem rotação.
 
-Na imagem enviada, todos os logos estão alinhados verticalmente (em colunas), formando um grid reto. O brick offset (deslocamento de meia-coluna em linhas alternadas) não está aparecendo.
+## O que vou ajustar
 
-## Causa raiz
+### 1. Corrigir o algoritmo da distribuição no upload
+**Arquivo:** `src/lib/imageCompression.ts`
 
-Em `src/lib/imageCompression.ts`, o loop interno começa em `startX - spacingX` e itera em todas as linhas com o mesmo passo `spacingX`. O `brickOffset` (0 ou `spacingX/2`) é aplicado, mas como o `diagonalOffset` cresce linearmente em **todas** as linhas pelo mesmo incremento, ele anula visualmente a alternância — todos os logos acabam recaindo no mesmo grid.
+No modo `custom`:
+- remover a ideia de grid horizontal com offset simples
+- calcular as posições em uma malha diagonal de 45°
+- manter o logo em `0°`
+- aplicar o intercalamento por linha nessa malha diagonal
 
-Além disso, o `diagonalOffset` somado em cada linha está empurrando todo o padrão para a direita, desalinhando o efeito brick.
+Abordagem:
+- definir um ângulo fixo de 45°
+- gerar linhas/colunas em um “espaço rotacionado”
+- converter cada ponto para coordenadas reais do canvas
+- desenhar o logo reto em cada ponto calculado
 
-## Correção
-
-Em `src/lib/imageCompression.ts`, dentro do bloco `mode === 'custom'` da função `applyWatermark`:
-
-1. **Remover o `diagonalOffset` progressivo** — ele está mascarando o brick offset e empurrando tudo para um lado
-2. **Manter apenas o `brickOffset`** alternando por linha (`rowIndex % 2`)
-3. Ajustar bounds para garantir cobertura nas bordas mesmo com o offset de meia-coluna
-
-```typescript
-let rowIndex = 0;
-for (let ty = startY; ty < endY; ty += spacingY) {
-  // Brick offset puro: linhas pares começam em 0, ímpares deslocam metade
-  const xOffset = (rowIndex % 2 === 0) ? 0 : spacingX / 2;
-
-  for (let tx = startX; tx < endX; tx += spacingX) {
-    ctx.drawImage(watermarkImg, tx + xOffset, ty, tileWidth, tileHeight);
-  }
-  rowIndex++;
-}
+Em termos práticos:
+```ts
+screenX = centerX + rotatedX * cos - rotatedY * sin
+screenY = centerY + rotatedX * sin + rotatedY * cos
 ```
 
-E ajustar bounds:
-```typescript
-const startX = -spacingX;       // garante cobertura à esquerda mesmo com offset
-const startY = -spacingY;
-const endX = width + spacingX;  // sem multiplicar por 2 (não há mais drift)
-const endY = height + spacingY;
-```
+Com isso:
+- o padrão fica diagonal de verdade
+- o logo continua reto
+- o intercalamento aparece visualmente
 
-## Resultado
+### 2. Preservar escala e densidade já aprovadas
+Ainda em `src/lib/imageCompression.ts`:
+- manter os tamanhos base atuais (`small`, `medium`, `large`)
+- manter a densidade mais fechada
+- ajustar apenas o espaçamento fino se necessário para o 45° não abrir “buracos” visuais
 
-- Padrão **brick/intercalado real** (linhas pares vs ímpares deslocadas em meia-coluna)
-- Logos retos (0°), tamanho e densidade preservados
-- Cobertura uniforme borda a borda
+### 3. Garantir cobertura total das bordas
+O grid diagonal precisa de área extra de desenho.
+Vou ampliar os limites de geração das marcas para cobrir:
+- cantos
+- laterais
+- topo e base
 
-## Arquivo modificado
+Isso evita que o padrão fique “cortado” nas bordas após a rotação da malha.
 
-| Arquivo | Mudança |
-|---|---|
-| `src/lib/imageCompression.ts` | Remover `diagonalOffset` progressivo; manter apenas `brickOffset` alternado por linha |
+### 4. Corrigir o preview para refletir o resultado real
+**Arquivo:** `src/components/settings/WatermarkUploader.tsx`
 
+O preview atual com `background-repeat` nunca vai representar corretamente:
+- intercalamento
+- diagonal real em 45°
+- distribuição equivalente ao canvas
+
+Então vou substituir o preview visual por renderização real dos tiles no componente:
+- container com `position: relative`
+- vários elementos/imagens absolutas
+- mesmas posições calculadas pelo algoritmo do upload
+- opacidade e tamanho sincronizados com os controles
+
+## Melhor abordagem de UX
+Para evitar divergência entre preview e upload real, vou centralizar a matemática de layout em uma função reutilizável, por exemplo:
+- `getWatermarkTileLayout(...)`
+
+Essa função será usada por:
+- `imageCompression.ts` para gravar na foto
+- `WatermarkUploader.tsx` para mostrar o preview
+
+Assim o usuário vê exatamente o mesmo padrão que será aplicado no upload.
+
+## Arquivos envolvidos
+- `src/lib/imageCompression.ts` — trocar grid horizontal por malha diagonal 45° com logos retos
+- `src/components/settings/WatermarkUploader.tsx` — substituir preview por renderização real intercalada
+- opcionalmente um util compartilhado, se fizer sentido:
+  - `src/lib/watermarkLayout.ts`
+
+## Resultado esperado
+- logos retos, sem distorção
+- distribuição realmente diagonal em 45°
+- linhas intercaladas visivelmente
+- sem alinhamento “lado a lado” em colunas retas
+- preview fiel ao resultado final do upload
