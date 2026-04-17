@@ -20,6 +20,8 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
     position: 'center',
   },
   faviconUrl: undefined,
+  defaultSaleMode: 'sale_without_payment',
+  defaultImageResize: 1920,
 };
 
 const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
@@ -84,6 +86,8 @@ function rowsToSettings(
     lastSessionFont: settingsRow.last_session_font || undefined,
     defaultWelcomeMessage: settingsRow.default_welcome_message || undefined,
     welcomeMessageEnabled: settingsRow.welcome_message_enabled ?? true,
+    defaultSaleMode: (settingsRow.default_sale_mode as GlobalSettings['defaultSaleMode']) ?? 'sale_without_payment',
+    defaultImageResize: (settingsRow.default_image_resize as GlobalSettings['defaultImageResize']) ?? 1920,
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -243,6 +247,12 @@ export function useGallerySettings() {
       }
       if (data.welcomeMessageEnabled !== undefined) {
         updateData.welcome_message_enabled = data.welcomeMessageEnabled;
+      }
+      if (data.defaultSaleMode !== undefined) {
+        updateData.default_sale_mode = data.defaultSaleMode;
+      }
+      if (data.defaultImageResize !== undefined) {
+        updateData.default_image_resize = data.defaultImageResize;
       }
 
       // Nothing to update

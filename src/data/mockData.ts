@@ -46,6 +46,8 @@ export const mockGlobalSettings: GlobalSettings = {
   faviconUrl: undefined,
   discountPresets: [],
   welcomeMessageEnabled: true,
+  defaultSaleMode: 'sale_without_payment',
+  defaultImageResize: 1920,
 };
 
 export const defaultWelcomeMessage = `Olá {cliente}! 💕

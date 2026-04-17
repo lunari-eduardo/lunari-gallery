@@ -170,6 +170,10 @@ export interface GlobalSettings {
   lastSessionFont?: string;
   defaultWelcomeMessage?: string;
   welcomeMessageEnabled?: boolean;
+
+  // Defaults aplicados automaticamente em novas galerias
+  defaultSaleMode?: SaleMode;
+  defaultImageResize?: ImageResizeOption;
 }
 
 export interface ExportData {

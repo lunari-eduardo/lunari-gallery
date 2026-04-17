@@ -2093,6 +2093,8 @@ export type Database = {
           created_at: string | null
           default_expiration_days: number | null
           default_gallery_permission: string | null
+          default_image_resize: number
+          default_sale_mode: string
           default_watermark: Json | null
           default_welcome_message: string | null
           favicon_url: string | null
@@ -2110,6 +2112,8 @@ export type Database = {
           created_at?: string | null
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
+          default_image_resize?: number
+          default_sale_mode?: string
           default_watermark?: Json | null
           default_welcome_message?: string | null
           favicon_url?: string | null
@@ -2127,6 +2131,8 @@ export type Database = {
           created_at?: string | null
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
+          default_image_resize?: number
+          default_sale_mode?: string
           default_watermark?: Json | null
           default_welcome_message?: string | null
           favicon_url?: string | null
