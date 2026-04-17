@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Palette, Sun, Moon, Check } from 'lucide-react';
+import { Palette, Sun, Moon } from 'lucide-react';
 import { CustomTheme, ThemeType } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface ThemeConfigProps {
   themeType: ThemeType;
@@ -22,14 +22,12 @@ export function ThemeConfig({
   onSaveCustomTheme,
   onDeleteCustomTheme,
 }: ThemeConfigProps) {
-  // Local state for editing
   const [backgroundMode, setBackgroundMode] = useState<'light' | 'dark'>(customTheme?.backgroundMode || 'light');
   const [primaryColor, setPrimaryColor] = useState(customTheme?.primaryColor || '#B87333');
   const [accentColor, setAccentColor] = useState(customTheme?.accentColor || '#8B9A7D');
   const [emphasisColor, setEmphasisColor] = useState(customTheme?.emphasisColor || '#2D2A26');
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Sync local state when customTheme changes
   useEffect(() => {
     if (customTheme) {
       setBackgroundMode(customTheme.backgroundMode);
@@ -40,10 +38,9 @@ export function ThemeConfig({
     }
   }, [customTheme]);
 
-  // Track changes
   useEffect(() => {
     if (customTheme) {
-      const changed = 
+      const changed =
         backgroundMode !== customTheme.backgroundMode ||
         primaryColor !== customTheme.primaryColor ||
         accentColor !== customTheme.accentColor ||
@@ -66,153 +63,100 @@ export function ThemeConfig({
     setHasChanges(false);
   };
 
-  // Preview colors based on mode
-  const previewBg = backgroundMode === 'dark' ? '#1C1917' : '#FAF9F7';
-  const previewText = backgroundMode === 'dark' ? '#F5F5F4' : '#2D2A26';
+  const isCustom = themeType === 'custom';
+
+  // Preview colors
+  const previewBg = isCustom
+    ? (backgroundMode === 'dark' ? '#1C1917' : '#FAF9F7')
+    : '#FAF9F7';
+  const previewText = isCustom
+    ? (backgroundMode === 'dark' ? '#F5F5F4' : '#2D2A26')
+    : '#2D2A26';
+  const previewPrimary = isCustom ? primaryColor : '#B87333';
+  const previewAccent = isCustom ? accentColor : '#8B9A7D';
+  const previewEmphasis = isCustom ? emphasisColor : '#2D2A26';
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Palette className="h-5 w-5 text-primary" />
+    <div className="space-y-5">
+      {/* Header + Switch */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <Palette className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-medium">Tema da Galeria do Cliente</h3>
+            <p className="text-sm text-muted-foreground">
+              {isCustom ? 'Sua marca, suas cores' : 'Usando cores padrão do Lunari'}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-medium">Tema da Galeria do Cliente</h3>
-          <p className="text-sm text-muted-foreground">
-            Escolha como sua galeria será exibida para os clientes
-          </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <Label htmlFor="theme-custom-toggle" className="text-sm cursor-pointer">
+            Personalizar
+          </Label>
+          <Switch
+            id="theme-custom-toggle"
+            checked={isCustom}
+            onCheckedChange={(checked) => onThemeTypeChange(checked ? 'custom' : 'system')}
+          />
         </div>
       </div>
 
-      {/* Theme Type Selection */}
-      <div className="space-y-3">
-        <Label className="text-base font-medium">Tipo de Tema</Label>
-        <RadioGroup 
-          value={themeType} 
-          onValueChange={(v) => onThemeTypeChange(v as ThemeType)}
-          className="flex gap-4"
+      {/* Preview - sempre visível */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Preview</Label>
+        <div
+          className="h-32 rounded-xl p-4 flex flex-col items-center justify-center gap-3 border"
+          style={{ backgroundColor: previewBg }}
         >
-          <div className="flex items-center">
-            <RadioGroupItem value="system" id="theme-system" className="peer sr-only" />
-            <Label 
-              htmlFor="theme-system" 
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all",
-                "hover:border-primary/50 hover:bg-muted/50",
-                themeType === 'system' 
-                  ? "border-primary bg-primary/5" 
-                  : "border-border"
-              )}
+          <p className="text-lg font-semibold" style={{ color: previewEmphasis }}>
+            Sua Galeria
+          </p>
+          <div className="flex gap-2 flex-wrap justify-center">
+            <div
+              className="px-4 py-2 rounded-full text-sm text-white font-medium"
+              style={{ backgroundColor: previewPrimary }}
             >
-              <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center",
-                themeType === 'system' ? "bg-primary/20" : "bg-muted"
-              )}>
-                <Sun className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="font-medium">Sistema (Padrão)</p>
-                <p className="text-xs text-muted-foreground">Usa cores padrão do Lunari</p>
-              </div>
-            </Label>
-          </div>
-          
-          <div className="flex items-center">
-            <RadioGroupItem value="custom" id="theme-custom" className="peer sr-only" />
-            <Label 
-              htmlFor="theme-custom" 
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all",
-                "hover:border-primary/50 hover:bg-muted/50",
-                themeType === 'custom' 
-                  ? "border-primary bg-primary/5" 
-                  : "border-border"
-              )}
+              Botão Principal
+            </div>
+            <div
+              className="px-4 py-2 rounded-full text-sm border-2"
+              style={{ borderColor: previewAccent, color: previewText }}
             >
-              <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center",
-                themeType === 'custom' ? "bg-primary/20" : "bg-muted"
-              )}>
-                <Palette className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="font-medium">Personalizado</p>
-                <p className="text-xs text-muted-foreground">Sua marca, suas cores</p>
-              </div>
-            </Label>
+              Selecionado
+            </div>
           </div>
-        </RadioGroup>
+        </div>
       </div>
 
-      {/* Custom Theme Editor - Only show if custom selected */}
-      {themeType === 'custom' && (
-        <div className="space-y-6 pt-4 border-t border-border">
-          {/* Background Mode */}
-          <div className="space-y-3">
+      {/* Custom controls */}
+      {isCustom && (
+        <div className="space-y-5 pt-4 border-t border-border">
+          {/* Background Mode - compact toggle */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <Label className="text-sm font-medium">Fundo</Label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setBackgroundMode('light')}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all flex-1",
-                  backgroundMode === 'light' 
-                    ? "border-primary bg-primary/5" 
-                    : "border-border hover:border-primary/50"
-                )}
-              >
-                <Sun className={cn("h-5 w-5", backgroundMode === 'light' ? "text-primary" : "text-muted-foreground")} />
-                <span className={backgroundMode === 'light' ? 'font-medium' : ''}>Claro</span>
-                {backgroundMode === 'light' && <Check className="h-4 w-4 text-primary ml-auto" />}
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setBackgroundMode('dark')}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all flex-1",
-                  backgroundMode === 'dark' 
-                    ? "border-primary bg-primary/5" 
-                    : "border-border hover:border-primary/50"
-                )}
-              >
-                <Moon className={cn("h-5 w-5", backgroundMode === 'dark' ? "text-primary" : "text-muted-foreground")} />
-                <span className={backgroundMode === 'dark' ? 'font-medium' : ''}>Escuro</span>
-                {backgroundMode === 'dark' && <Check className="h-4 w-4 text-primary ml-auto" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Preview */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Preview</Label>
-            <div
-              className="h-32 rounded-xl p-4 flex flex-col items-center justify-center gap-3 border"
-              style={{ backgroundColor: previewBg }}
+            <ToggleGroup
+              type="single"
+              value={backgroundMode}
+              onValueChange={(v) => v && setBackgroundMode(v as 'light' | 'dark')}
+              variant="outline"
+              size="sm"
+              className="w-fit"
             >
-              <p className="text-lg font-semibold" style={{ color: emphasisColor }}>
-                Sua Galeria
-              </p>
-              <div className="flex gap-2">
-                <div
-                  className="px-4 py-2 rounded-full text-sm text-white font-medium"
-                  style={{ backgroundColor: primaryColor }}
-                >
-                  Botão Principal
-                </div>
-                <div
-                  className="px-4 py-2 rounded-full text-sm border-2"
-                  style={{ borderColor: accentColor, color: previewText }}
-                >
-                  Selecionado
-                </div>
-              </div>
-            </div>
+              <ToggleGroupItem value="light" aria-label="Modo claro" className="gap-1.5">
+                <Sun className="h-4 w-4" />
+                Claro
+              </ToggleGroupItem>
+              <ToggleGroupItem value="dark" aria-label="Modo escuro" className="gap-1.5">
+                <Moon className="h-4 w-4" />
+                Escuro
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
           {/* Color Pickers */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="primaryColor" className="text-sm">Cor Primária</Label>
               <p className="text-xs text-muted-foreground">Botões e CTAs</p>
@@ -222,7 +166,7 @@ export function ThemeConfig({
                   id="primaryColor"
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="h-10 w-10 rounded-lg cursor-pointer border-0"
+                  className="h-10 w-10 rounded-lg cursor-pointer border-0 shrink-0"
                 />
                 <Input
                   value={primaryColor}
@@ -241,7 +185,7 @@ export function ThemeConfig({
                   id="accentColor"
                   value={accentColor}
                   onChange={(e) => setAccentColor(e.target.value)}
-                  className="h-10 w-10 rounded-lg cursor-pointer border-0"
+                  className="h-10 w-10 rounded-lg cursor-pointer border-0 shrink-0"
                 />
                 <Input
                   value={accentColor}
@@ -260,7 +204,7 @@ export function ThemeConfig({
                   id="emphasisColor"
                   value={emphasisColor}
                   onChange={(e) => setEmphasisColor(e.target.value)}
-                  className="h-10 w-10 rounded-lg cursor-pointer border-0"
+                  className="h-10 w-10 rounded-lg cursor-pointer border-0 shrink-0"
                 />
                 <Input
                   value={emphasisColor}
@@ -272,22 +216,24 @@ export function ThemeConfig({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              variant="terracotta"
-              onClick={handleSave}
-              disabled={!hasChanges}
-              className="flex-1"
-            >
-              {customTheme ? 'Salvar Alterações' : 'Criar Tema'}
-            </Button>
-            
-            {customTheme && onDeleteCustomTheme && (
-              <Button
-                variant="outline"
+          <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
+            {customTheme && onDeleteCustomTheme ? (
+              <button
+                type="button"
                 onClick={onDeleteCustomTheme}
+                className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
               >
-                Usar Sistema
+                Voltar para o tema do sistema
+              </button>
+            ) : <span />}
+
+            {hasChanges && (
+              <Button
+                variant="terracotta"
+                onClick={handleSave}
+                className="ml-auto"
+              >
+                {customTheme ? 'Salvar Alterações' : 'Criar Tema'}
               </Button>
             )}
           </div>
