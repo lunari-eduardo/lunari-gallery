@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon, Eye, X, Loader2 } from 'lucide-react';
@@ -285,6 +285,11 @@ export default function GalleryCreate() {
   // Read global watermark settings from photographer_accounts
   const { settings: watermarkGlobalSettings } = useWatermarkSettings();
 
+  // Tracks whether the user manually changed defaults — prevents async settings
+  // from overwriting user choices when they load after the user already interacted.
+  const userTouchedSaleModeRef = useRef(false);
+  const userTouchedImageResizeRef = useRef(false);
+
   // Initialize from settings
   useEffect(() => {
     if (settings) {
@@ -312,8 +317,26 @@ export default function GalleryCreate() {
       } else if (!globalEnabled) {
         setWelcomeMessage('');
       }
+
+      // Hydrate sale mode default from photographer settings — but never override
+      // assisted mode (Gestão has priority) or a value the user already touched.
+      if (
+        !hasGestaoParams &&
+        !userTouchedSaleModeRef.current &&
+        settings.defaultSaleMode
+      ) {
+        setSaleMode(settings.defaultSaleMode);
+      }
+
+      // Hydrate image resize default
+      if (
+        !userTouchedImageResizeRef.current &&
+        settings.defaultImageResize
+      ) {
+        setImageResizeOption(settings.defaultImageResize);
+      }
     }
-  }, [settings]);
+  }, [settings, hasGestaoParams]);
 
   // Initialize watermark from global personalization settings (photographer_accounts)
   useEffect(() => {
