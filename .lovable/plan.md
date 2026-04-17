@@ -1,80 +1,100 @@
 
 
-# Plano: Marca d'água personalizada em padrão repetido (tile)
+# Plano: Corrigir rotação, escala e densidade da marca d'água tile
 
-## Mudanças no algoritmo (`src/lib/imageCompression.ts`)
+## Problema
+Atualmente o logo é rotacionado individualmente em -45°, distorcendo a identidade visual. Além disso, marca pequena e espaços vazios entre repetições.
 
-**Função `applyWatermark`** — quando `mode === 'custom'`, substituir o desenho centralizado por padrão tile rotacionado:
+## Correção em `src/lib/imageCompression.ts`
 
-1. Carregar a imagem da marca (mesma lógica atual, mas usar **um único path** — sem distinção horizontal/vertical, já que o tile cobre tudo)
-2. Calcular tamanho do tile baseado em `scale`:
-   - `pequeno` → 12% da menor dimensão da foto
-   - `medio` → 18% (padrão)
-   - `grande` → 26%
-3. Renderizar tile com:
-   - `ctx.save()` + `ctx.translate(centerX, centerY)` + `ctx.rotate(-45°)` + `ctx.translate(-centerX, -centerY)`
-   - Loop duplo desenhando a marca em grade
-   - Espaçamento automático = `tileWidth * 1.6` (gap horizontal) e `tileHeight * 2.0` (gap vertical) — densidade que evita áreas limpas grandes
-   - Offset diagonal para cobrir cantos após rotação (estender bounds em ~40% além das dimensões)
-   - `ctx.restore()` ao final
-4. `mode === 'system'` permanece inalterado (centralizado, padrão original)
+### 1. Rotação: padrão diagonal, logo reto
 
-## Tipos e estado
+Trocar a abordagem atual (rotacionar o canvas inteiro antes de desenhar) por **offset diagonal por linha**, mantendo `ctx.rotate(0)`:
 
-**`WatermarkConfig` em `imageCompression.ts`:**
-- Adicionar `tileScale?: 'small' | 'medium' | 'large'` (default `medium`)
-- Manter `customPathHorizontal/Vertical` para retrocompat, mas usar apenas o primeiro disponível
+- Remover `ctx.rotate(-45 * Math.PI / 180)` 
+- Para cada linha do grid, aplicar offset horizontal incremental criando padrão diagonal natural
+- Cada `drawImage` desenha o logo na orientação original (0°)
 
-**`useWatermarkSettings.ts`:**
-- Reaproveitar coluna existente `watermark_scale` (integer) mapeando: 15 → small, 25 → medium, 40 → large
-- Não precisa migração de banco
+**Lógica:**
+```typescript
+// Sem rotação do canvas - logo permanece reto
+let rowIndex = 0;
+for (let ty = startY; ty < endY; ty += spacingY) {
+  // Offset diagonal: cada linha desloca pela metade do spacingX
+  const xOffset = (rowIndex % 2 === 0) ? 0 : spacingX / 2;
+  // Offset progressivo adicional para padrão diagonal contínuo
+  const diagonalOffset = (ty / spacingY) * (spacingX * 0.3);
+  
+  for (let tx = startX - spacingX; tx < endX + spacingX; tx += spacingX) {
+    ctx.drawImage(watermarkImg, tx + xOffset + diagonalOffset, ty, tileWidth, tileHeight);
+  }
+  rowIndex++;
+}
+```
 
-**`GalleryCreate.tsx`:**
-- Passar `tileScale` derivado de `watermarkSettings.scale` no `watermarkConfig`
+Isso gera um padrão visual diagonal (mais bonito que grid reto), com o logo sempre reto.
 
-## UI (`src/components/settings/WatermarkSettings.tsx`)
+### 2. Aumentar tamanho base
 
-Quando `mode === 'custom'`:
+Atualizar `scaleFactor`:
+```typescript
+// Antes: small=0.12, medium=0.18, large=0.26
+// Depois: tamanho base aumentado conforme regra (+30%, +60%)
+const scaleFactor = 
+  tileScale === 'small'  ? 0.16 :   // base
+  tileScale === 'large'  ? 0.34 :   // +60% sobre médio (~0.21 base)
+                            0.21;   // medium = small +30%
+```
 
-1. **Texto informativo** — substituir:
-   > "A marca será aplicada em padrão repetido cobrindo toda a imagem."
-2. **Novo controle "Tamanho da marca"** logo abaixo do uploader, antes do slider de opacidade:
-   - `ToggleGroup` compacto com 3 opções: Pequeno · Médio · Grande
-   - Default Médio
-   - Salva via `saveSettings({ scale: 15|25|40 })`
-3. **Opacidade** — slider permanece igual
+### 3. Densidade: reduzir espaçamento
 
-## Preview (`WatermarkUploader.tsx`)
+Atualizar multiplicadores de espaçamento para evitar buracos visuais:
+```typescript
+// Antes: spacingX = tileWidth * 1.6, spacingY = tileHeight * 2.0
+const spacingX = tileWidth * 1.25;   // mais denso horizontal
+const spacingY = tileHeight * 1.5;   // mais denso vertical
+```
 
-Substituir o `<img>` único por um preview tile real:
+### 4. Cobertura de bordas
 
-- Container fixo (~120px altura) com fundo neutro (foto placeholder cinza claro)
-- `<div>` com `backgroundImage: url(watermark)`, `backgroundRepeat: 'repeat'`, `backgroundSize` baseado em `scale`, `transform: rotate(-45deg) scale(1.4)` (scale extra para cobrir cantos), `opacity: opacity/100`
-- Receber `opacity` e `scale` como novas props vindas do `WatermarkSettings`
-- Mostra fielmente como ficará nas fotos
+Como removemos a rotação do canvas, não precisamos mais estender bounds em ~70% da diagonal. Basta:
+```typescript
+const startX = -spacingX;
+const startY = -spacingY;
+const endX = width + spacingX * 2;   // margem extra para offset diagonal
+const endY = height + spacingY;
+```
 
-## Detalhes técnicos invisíveis
+Garante que as marcas cubram da borda esquerda à direita, incluindo o offset diagonal progressivo.
 
-- Rotação fixa **-45°**
-- Espaçamento horizontal: `tileWidth * 1.6`
-- Espaçamento vertical: `tileHeight * 2.0`
-- Bounds estendidos em ~40% para garantir cobertura de cantos pós-rotação
-- Densidade calibrada para resoluções 1024/1920/2560 (já que `maxLongEdge` varia)
+## Atualização do preview em `WatermarkUploader.tsx`
+
+Replicar o mesmo comportamento via CSS para fidelidade total:
+- Remover `transform: rotate(-45deg)` do elemento com `backgroundImage`
+- Usar `background-image` com `background-repeat: repeat` (logo reto)
+- Adicionar `background-position` calculado para simular o offset diagonal: usar `transform: skewY(-15deg)` leve OU manter `repeat` simples (CSS não consegue replicar offset progressivo perfeitamente, mas o `repeat` reto com tile maior será visualmente próximo)
+
+Decisão pragmática: preview usa `background-repeat: repeat` sem rotação, com `backgroundSize` baseado no scale. É uma aproximação fiel suficiente — o resultado real (canvas) é o que importa.
+
+Atualizar mapeamento de `tilePx` no preview:
+```typescript
+// Antes: small=60, medium=90, large=130
+const tilePx = scale <= 15 ? 80 : scale >= 40 ? 170 : 110;
+```
+
+## Resultado esperado
+
+- Logo **sempre reto** (orientação original preservada)
+- Padrão **diagonal natural** via offset progressivo entre linhas
+- Marca **maior e mais presente** (Pequeno = atual, Médio +30%, Grande +60%)
+- **Sem áreas vazias grandes** (espaçamento reduzido para 1.25x e 1.5x)
+- Cobertura **borda a borda** garantida
+- Modo `system` (centralizado) **inalterado**
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/lib/imageCompression.ts` | Algoritmo tile rotacionado para `mode === 'custom'`; novo campo `tileScale` no `WatermarkConfig` |
-| `src/components/settings/WatermarkSettings.tsx` | Remover texto antigo; adicionar `ToggleGroup` Tamanho; passar opacity+scale ao uploader |
-| `src/components/settings/WatermarkUploader.tsx` | Preview tile real (CSS `repeat` + rotação) refletindo opacity e scale |
-| `src/pages/GalleryCreate.tsx` | Repassar `tileScale` derivado de `watermarkSettings.scale` |
-
-## Resultado
-
-- "Minha Marca" → sempre tile rotacionado cobrindo a foto inteira
-- Usuário escolhe apenas opacidade e tamanho (3 opções)
-- Preview mostra exatamente como ficará
-- Modo `system` (centralizado) inalterado
-- Nenhuma migração de banco necessária
+| `src/lib/imageCompression.ts` | Remover rotação do canvas; offset diagonal por linha; novos `scaleFactor` e `spacing` |
+| `src/components/settings/WatermarkUploader.tsx` | Remover `rotate(-45deg)` do preview; aumentar `tilePx` |
 
