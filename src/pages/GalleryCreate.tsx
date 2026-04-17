@@ -1236,7 +1236,7 @@ export default function GalleryCreate() {
               {/* Left Block - Sale Mode */}
               <div className="space-y-4">
                 <Label className="text-base font-medium">Configurar venda de fotos?</Label>
-                <RadioGroup value={saleMode} onValueChange={(v) => setSaleMode(v as SaleMode)} className="flex flex-col gap-4">
+                <RadioGroup value={saleMode} onValueChange={(v) => { userTouchedSaleModeRef.current = true; setSaleMode(v as SaleMode); }} className="flex flex-col gap-4">
                   {/* No Sale */}
                   <div>
                     <RadioGroupItem value="no_sale" id="sale-no" className="peer sr-only" />
@@ -1680,7 +1680,7 @@ export default function GalleryCreate() {
                     <Image className="h-4 w-4 text-primary" />
                     <Label>Tamanho das Imagens</Label>
                   </div>
-                  <Select value={String(imageResizeOption)} onValueChange={(v) => setImageResizeOption(parseInt(v) as ImageResizeOption)}>
+                  <Select value={String(imageResizeOption)} onValueChange={(v) => { userTouchedImageResizeRef.current = true; setImageResizeOption(parseInt(v) as ImageResizeOption); }}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
