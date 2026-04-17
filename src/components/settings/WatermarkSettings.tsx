@@ -3,6 +3,7 @@ import { Shield, ShieldOff, ImageIcon, Info } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WatermarkUploader } from './WatermarkUploader';
 import { useWatermarkSettings, WatermarkMode } from '@/hooks/useWatermarkSettings';
