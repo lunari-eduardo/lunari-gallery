@@ -1,87 +1,118 @@
 
-# Plano: fazer a “Minha Marca” ficar realmente intercalada em 45° com o logo reto
+
+# Plano: Padrões de "Modo de Venda" e "Tamanho de Imagens" nas Configurações
 
 ## Diagnóstico
-O comportamento atual continua “reto” porque a lógica usa apenas `brickOffset` em linhas horizontais. Isso cria um padrão intercalado simples, mas não um padrão diagonal real a 45°.
 
-Para ficar como você pediu, não basta deslocar meia coluna: é preciso mudar a malha de posicionamento inteira para um eixo rotacionado em 45°, mantendo cada logo sem rotação.
+Hoje na criação de galeria (`GalleryCreate.tsx`):
+- `saleMode` inicia hardcoded como `'sale_without_payment'` (linha 155)
+- `imageResizeOption` inicia hardcoded como `1920` (linha 273)
 
-## O que vou ajustar
+Usuário precisa reescolher manualmente toda vez. Vamos transformar isso em **defaults configuráveis** por fotógrafo, lidos das Configurações.
 
-### 1. Corrigir o algoritmo da distribuição no upload
-**Arquivo:** `src/lib/imageCompression.ts`
+## 1. Schema do banco
 
-No modo `custom`:
-- remover a ideia de grid horizontal com offset simples
-- calcular as posições em uma malha diagonal de 45°
-- manter o logo em `0°`
-- aplicar o intercalamento por linha nessa malha diagonal
+Adicionar duas colunas em `gallery_settings` via migração:
 
-Abordagem:
-- definir um ângulo fixo de 45°
-- gerar linhas/colunas em um “espaço rotacionado”
-- converter cada ponto para coordenadas reais do canvas
-- desenhar o logo reto em cada ponto calculado
+| Coluna | Tipo | Default |
+|---|---|---|
+| `default_sale_mode` | `text` | `'sale_without_payment'` |
+| `default_image_resize` | `int` | `1920` |
 
-Em termos práticos:
+Constraint check em `default_sale_mode`: `IN ('no_sale', 'sale_with_payment', 'sale_without_payment')`.
+Constraint check em `default_image_resize`: `IN (1024, 1920, 2560)`.
+
+## 2. Tipos (`src/types/gallery.ts`)
+
+Adicionar em `GlobalSettings`:
 ```ts
-screenX = centerX + rotatedX * cos - rotatedY * sin
-screenY = centerY + rotatedX * sin + rotatedY * cos
+defaultSaleMode?: SaleMode;
+defaultImageResize?: ImageResizeOption;
 ```
 
-Com isso:
-- o padrão fica diagonal de verdade
-- o logo continua reto
-- o intercalamento aparece visualmente
+## 3. Hook `useGallerySettings.ts`
 
-### 2. Preservar escala e densidade já aprovadas
-Ainda em `src/lib/imageCompression.ts`:
-- manter os tamanhos base atuais (`small`, `medium`, `large`)
-- manter a densidade mais fechada
-- ajustar apenas o espaçamento fino se necessário para o 45° não abrir “buracos” visuais
+- `rowsToSettings`: ler `default_sale_mode` e `default_image_resize`
+- `defaultSettings`: incluir `defaultSaleMode: 'sale_without_payment'` e `defaultImageResize: 1920`
+- `updateSettings`: mapear novos campos para colunas do BD (snake_case)
+- `initializeSettings`: gravar defaults na criação inicial
 
-### 3. Garantir cobertura total das bordas
-O grid diagonal precisa de área extra de desenho.
-Vou ampliar os limites de geração das marcas para cobrir:
-- cantos
-- laterais
-- topo e base
+## 4. UI — `GeneralSettings.tsx` (aba Geral)
 
-Isso evita que o padrão fique “cortado” nas bordas após a rotação da malha.
+Adicionar **dois novos cards** seguindo o padrão visual existente:
 
-### 4. Corrigir o preview para refletir o resultado real
-**Arquivo:** `src/components/settings/WatermarkUploader.tsx`
+### Card "Modo de Venda Padrão" (ícone `Tag`)
+RadioGroup com 3 opções (mesmo conteúdo da Etapa 2 da galeria):
+- **Não, sem venda** — cliente não vê preços
+- **Sim, COM pagamento** — cliente é cobrado ao finalizar
+- **Sim, SEM pagamento** — cliente é apenas informado dos preços
 
-O preview atual com `background-repeat` nunca vai representar corretamente:
-- intercalamento
-- diagonal real em 45°
-- distribuição equivalente ao canvas
+### Card "Tamanho Padrão das Imagens" (ícone `Image`)
+RadioGroup ou Select com 3 opções:
+- **1024 px** — leve, ideal para web
+- **1920 px** (recomendado) — equilíbrio qualidade/peso
+- **2560 px** — alta resolução
 
-Então vou substituir o preview visual por renderização real dos tiles no componente:
-- container com `position: relative`
-- vários elementos/imagens absolutas
-- mesmas posições calculadas pelo algoritmo do upload
-- opacidade e tamanho sincronizados com os controles
+Ambos chamam `updateSettings({ defaultSaleMode: ... })` / `updateSettings({ defaultImageResize: ... })`.
 
-## Melhor abordagem de UX
-Para evitar divergência entre preview e upload real, vou centralizar a matemática de layout em uma função reutilizável, por exemplo:
-- `getWatermarkTileLayout(...)`
+## 5. Aplicar defaults em `GalleryCreate.tsx`
 
-Essa função será usada por:
-- `imageCompression.ts` para gravar na foto
-- `WatermarkUploader.tsx` para mostrar o preview
+Trocar inicializações hardcoded:
+```ts
+const { settings } = useSettings();
 
-Assim o usuário vê exatamente o mesmo padrão que será aplicado no upload.
+const [saleMode, setSaleMode] = useState<SaleMode>(
+  settings?.defaultSaleMode ?? 'sale_without_payment'
+);
+const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(
+  settings?.defaultImageResize ?? 1920
+);
+```
 
-## Arquivos envolvidos
-- `src/lib/imageCompression.ts` — trocar grid horizontal por malha diagonal 45° com logos retos
-- `src/components/settings/WatermarkUploader.tsx` — substituir preview por renderização real intercalada
-- opcionalmente um util compartilhado, se fizer sentido:
-  - `src/lib/watermarkLayout.ts`
+**Importante** — como `settings` chega async, adicionar `useEffect` para hidratar quando settings carregar (se o usuário ainda não interagiu):
 
-## Resultado esperado
-- logos retos, sem distorção
-- distribuição realmente diagonal em 45°
-- linhas intercaladas visivelmente
-- sem alinhamento “lado a lado” em colunas retas
-- preview fiel ao resultado final do upload
+```ts
+useEffect(() => {
+  if (settings?.defaultSaleMode) setSaleMode(settings.defaultSaleMode);
+  if (settings?.defaultImageResize) setImageResizeOption(settings.defaultImageResize);
+}, [settings?.defaultSaleMode, settings?.defaultImageResize]);
+// Apenas no mount — não sobrescrever após o usuário interagir
+```
+
+Usaremos uma flag `userTouchedRef` para impedir sobrescrita após o usuário ter alterado manualmente nessa sessão.
+
+**Não aplicar** quando vier do Modo Assistido (`gestaoParams.modelo_de_cobranca` tem prioridade — já existe lógica para isso).
+
+## 6. Integração com Modo Assistido
+
+A hierarquia continua:
+1. `regras_congeladas` da sessão (Modo Assistido) — prioridade máxima
+2. Defaults do fotógrafo (novo)
+3. Fallback hardcoded
+
+Nada a alterar na lógica do `useGestaoParams` — apenas garantir que o `useEffect` de hidratação **não rode** se `hasGestaoParams === true`.
+
+## 7. UX
+
+- Toast confirmando alteração (já tem via `updateSettings` existente)
+- Adicionar texto auxiliar pequeno em cada card explicando "Aplicado automaticamente em novas galerias"
+- Manter padrão visual de cards `lunari-card p-6 space-y-6` com ícone redondo
+
+## Arquivos modificados
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/migrations/<novo>.sql` | Adicionar colunas `default_sale_mode` e `default_image_resize` |
+| `src/types/gallery.ts` | Adicionar campos em `GlobalSettings` |
+| `src/data/mockData.ts` | Defaults no mock |
+| `src/hooks/useGallerySettings.ts` | Ler/gravar novas colunas |
+| `src/components/settings/GeneralSettings.tsx` | Dois novos cards |
+| `src/pages/GalleryCreate.tsx` | Hidratar `saleMode` e `imageResizeOption` dos settings |
+
+## Resultado
+
+- Fotógrafo configura "modo de venda padrão" e "tamanho padrão" uma vez
+- Toda nova galeria já abre com esses valores pré-selecionados
+- Modo Assistido continua tendo prioridade sobre os defaults
+- Persistência por usuário no banco
+
