@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { computeWatermarkLayout, type TileScale } from '@/lib/watermarkLayout';
 
 interface WatermarkUploaderProps {
   currentPath: string | null;
@@ -79,15 +80,55 @@ export function WatermarkUploader({
 
   const displayUrl = preview || getPreviewUrl(currentPath);
 
-  // Map scale (15/25/40) to background-size in px for tile preview
-  const tilePx = scale <= 15 ? 80 : scale >= 40 ? 170 : 110;
+  // Map opacity slider (0-100) and scale slider (15/25/40) to layout inputs
+  const tileScale: TileScale = scale <= 15 ? 'small' : scale >= 40 ? 'large' : 'medium';
+
+  // Measure container + watermark natural size to compute the real tile layout
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 160 });
+  const [wmNatural, setWmNatural] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0].contentRect;
+      setContainerSize({ width: r.width, height: r.height });
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [displayUrl]);
+
+  useEffect(() => {
+    if (!displayUrl) {
+      setWmNatural(null);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setWmNatural({ w: img.naturalWidth, h: img.naturalHeight });
+    img.src = displayUrl;
+  }, [displayUrl]);
+
+  const layout =
+    displayUrl && wmNatural && containerSize.width > 0
+      ? computeWatermarkLayout({
+          canvasWidth: containerSize.width,
+          canvasHeight: containerSize.height,
+          watermarkWidth: wmNatural.w,
+          watermarkHeight: wmNatural.h,
+          tileScale,
+        })
+      : null;
 
   return (
     <div className="space-y-4">
       {displayUrl ? (
         <div className="relative">
           {/* Tile preview over a neutral photo-like backdrop */}
-          <div className="relative bg-gradient-to-br from-muted to-muted/60 rounded-lg overflow-hidden h-[160px]">
+          <div
+            ref={containerRef}
+            className="relative bg-gradient-to-br from-muted to-muted/60 rounded-lg overflow-hidden h-[160px]"
+          >
             {/* Checkerboard for context */}
             <div 
               className="absolute inset-0 opacity-30"
@@ -102,16 +143,26 @@ export function WatermarkUploader({
                 backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
               }}
             />
-            {/* Tiled watermark — logo upright, no rotation */}
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url(${displayUrl})`,
-                backgroundRepeat: 'repeat',
-                backgroundSize: `${tilePx}px auto`,
-                opacity: opacity / 100,
-              }}
-            />
+            {/* Real tile layout — diagonal 45° mesh, logos upright */}
+            {layout && (
+              <div className="absolute inset-0" style={{ opacity: opacity / 100 }}>
+                {layout.tiles.map((tile, i) => (
+                  <img
+                    key={i}
+                    src={displayUrl}
+                    alt=""
+                    draggable={false}
+                    className="absolute pointer-events-none select-none"
+                    style={{
+                      left: `${tile.x}px`,
+                      top: `${tile.y}px`,
+                      width: `${tile.width}px`,
+                      height: `${tile.height}px`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
             {isUploading && (
               <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
