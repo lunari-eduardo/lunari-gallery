@@ -130,9 +130,9 @@ export default function DeliverDetail() {
         },
         prazoSelecao: expirationDate,
       }});
-      toast.success('Alterações salvas');
-    } catch {
-      toast.error('Erro ao salvar');
+      navigate('/galleries/deliver');
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
     } finally {
       setSaving(false);
     }
@@ -204,7 +204,7 @@ export default function DeliverDetail() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-24">
       {/* Header */}
       <div className="flex flex-col gap-4">
         <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/galleries/deliver')}>
@@ -235,10 +235,6 @@ export default function DeliverDetail() {
                 Publicar entrega
               </Button>
             )}
-            <Button variant="outline" onClick={handleSave} disabled={saving} className="gap-2">
-              <Save className="h-4 w-4" />
-              {saving ? 'Salvando...' : 'Salvar'}
-            </Button>
             <DeleteGalleryDialog galleryName={gallery.nomeSessao || 'esta galeria'} onDelete={handleDelete} />
           </div>
 
@@ -538,8 +534,22 @@ export default function DeliverDetail() {
               <Download className="h-4 w-4 text-primary" />
             </div>
           </div>
-        </TabsContent>
+      </TabsContent>
       </Tabs>
+
+      {/* Floating Save Button */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          variant="terracotta"
+          size="lg"
+          className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Salvando...' : 'Salvar Alterações'}
+        </Button>
+      </div>
     </div>
   );
 }

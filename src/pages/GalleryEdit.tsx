@@ -278,7 +278,7 @@ export default function GalleryEdit() {
           prazoSelecao,  // Now saving the deadline
         }
       });
-      toast.success('Galeria atualizada!');
+      navigate(`/gallery/${gallery.id}`);
     } catch (error) {
       console.error('Error updating gallery:', error);
     }
@@ -323,7 +323,7 @@ export default function GalleryEdit() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-24">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -339,25 +339,6 @@ export default function GalleryEdit() {
             </p>
           </div>
         </div>
-        
-        {/* Save button in header */}
-        <Button 
-          onClick={handleSave}
-          disabled={isUpdating}
-          variant="terracotta"
-        >
-          {isUpdating ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Salvando...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              Salvar Alterações
-            </>
-          )}
-        </Button>
       </div>
 
       {/* Two Column Layout */}
@@ -761,6 +742,20 @@ export default function GalleryEdit() {
         onOpenChange={setIsClientModalOpen}
         onSave={handleCreateClient}
       />
+
+      {/* Floating Save Button */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={handleSave}
+          disabled={isUpdating}
+          variant="terracotta"
+          size="lg"
+          className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
+        >
+          {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {isUpdating ? 'Salvando...' : 'Salvar Alterações'}
+        </Button>
+      </div>
     </div>
   );
 }
