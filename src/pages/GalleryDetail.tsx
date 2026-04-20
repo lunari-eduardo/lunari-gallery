@@ -776,7 +776,7 @@ export default function GalleryDetail() {
                       {/* Thumbnail 1:1 */}
                       <div 
                         className="w-16 h-16 rounded overflow-hidden flex-shrink-0 cursor-pointer"
-                        onClick={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
+                        onClick={() => setLightboxState({ source: 'selection', index: selectedPhotos.findIndex(p => p.id === photo.id) })}
                       >
                         <img 
                           src={photo.thumbnailUrl} 
