@@ -46,6 +46,9 @@ export const mockGlobalSettings: GlobalSettings = {
   faviconUrl: undefined,
   discountPresets: [],
   welcomeMessageEnabled: true,
+  emailSendingEnabled: true,
+  emailOnGallerySent: true,
+  emailOnPaymentConfirmed: true,
   defaultSaleMode: 'sale_without_payment',
   defaultImageResize: 1920,
 };

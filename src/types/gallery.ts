@@ -170,6 +170,9 @@ export interface GlobalSettings {
   lastSessionFont?: string;
   defaultWelcomeMessage?: string;
   welcomeMessageEnabled?: boolean;
+  emailSendingEnabled?: boolean;
+  emailOnGallerySent?: boolean;
+  emailOnPaymentConfirmed?: boolean;
 
   // Defaults aplicados automaticamente em novas galerias
   defaultSaleMode?: SaleMode;

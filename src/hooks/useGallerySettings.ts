@@ -22,6 +22,9 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
   faviconUrl: undefined,
   defaultSaleMode: 'sale_without_payment',
   defaultImageResize: 1920,
+  emailSendingEnabled: true,
+  emailOnGallerySent: true,
+  emailOnPaymentConfirmed: true,
 };
 
 const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
@@ -88,6 +91,9 @@ function rowsToSettings(
     welcomeMessageEnabled: settingsRow.welcome_message_enabled ?? true,
     defaultSaleMode: (settingsRow.default_sale_mode as GlobalSettings['defaultSaleMode']) ?? 'sale_without_payment',
     defaultImageResize: (settingsRow.default_image_resize as GlobalSettings['defaultImageResize']) ?? 1920,
+    emailSendingEnabled: settingsRow.email_sending_enabled ?? true,
+    emailOnGallerySent: settingsRow.email_on_gallery_sent ?? true,
+    emailOnPaymentConfirmed: settingsRow.email_on_payment_confirmed ?? true,
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -168,6 +174,9 @@ export function useGallerySettings() {
           default_expiration_days: defaultSettings.defaultExpirationDays,
           default_watermark: defaultSettings.defaultWatermark as unknown as Json,
           theme_type: 'system',
+          email_sending_enabled: true,
+          email_on_gallery_sent: true,
+          email_on_payment_confirmed: true,
         });
 
       if (settingsError) throw settingsError;
@@ -253,6 +262,15 @@ export function useGallerySettings() {
       }
       if (data.defaultImageResize !== undefined) {
         updateData.default_image_resize = data.defaultImageResize;
+      }
+      if (data.emailSendingEnabled !== undefined) {
+        updateData.email_sending_enabled = data.emailSendingEnabled;
+      }
+      if (data.emailOnGallerySent !== undefined) {
+        updateData.email_on_gallery_sent = data.emailOnGallerySent;
+      }
+      if (data.emailOnPaymentConfirmed !== undefined) {
+        updateData.email_on_payment_confirmed = data.emailOnPaymentConfirmed;
       }
 
       // Nothing to update
