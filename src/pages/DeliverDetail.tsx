@@ -235,10 +235,6 @@ export default function DeliverDetail() {
                 Publicar entrega
               </Button>
             )}
-            <Button variant="outline" onClick={handleSave} disabled={saving} className="gap-2">
-              <Save className="h-4 w-4" />
-              {saving ? 'Salvando...' : 'Salvar'}
-            </Button>
             <DeleteGalleryDialog galleryName={gallery.nomeSessao || 'esta galeria'} onDelete={handleDelete} />
           </div>
 
