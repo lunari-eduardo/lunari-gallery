@@ -1,96 +1,72 @@
 
 
-# Plano: Lightbox da aba "Seleção" deve navegar apenas entre fotos selecionadas
+# Plano: Corrigir capa da galeria Transfer (cliente) e habilitar troca de capa na edição
 
 ## Diagnóstico
 
-Em `src/pages/GalleryDetail.tsx`:
+Após investigar o fluxo, encontrei **duas causas distintas**:
 
-- O `Lightbox` (linhas 1138-1147) sempre recebe `photos={transformedPhotos}` (todas as fotos da galeria).
-- Na lista da aba **Seleção** (linha 778), o thumbnail abre o lightbox usando `transformedPhotos.findIndex(...)`, ou seja, indexando contra **todas** as fotos.
-- Resultado: ao deslizar para o lado dentro do lightbox aberto pela aba Seleção, aparecem fotos não selecionadas.
+### Problema 1 — Capa não aparece para o cliente
+- Na criação (`DeliverCreate.tsx`), a capa é salva corretamente em `galerias.configuracoes.coverPhotoId` (linhas 269-294).
+- Mas a Edge Function `gallery-access` (linhas 195-216), ao montar o payload do tipo `deliver: true`, **não inclui** `coverPhotoId` no objeto `gallery.settings`. Só envia `sessionFont` e `titleCaseMode`.
+- Resultado: `ClientDeliverGallery.tsx` (linha 106) lê `gallery.settings?.coverPhotoId` como `undefined` e usa sempre `allPhotos[0]` (a primeira foto) como capa.
 
-Já na aba **Fotos** (linha 689), faz sentido navegar entre todas — esse comportamento deve ser preservado.
+### Problema 2 — Não há opção de capa na edição
+- `DeliverDetail.tsx` (linhas 295-368, aba "Fotos") renderiza um grid **manual** que só tem botões de download e excluir.
+- Não usa o componente `DeliverPhotoManager` (que tem a UI de "definir como capa") usado na criação.
+- Também não há badge mostrando qual é a capa atual nem como trocá-la.
 
-## Correção
+## Correções
 
-Tornar o conjunto de fotos do Lightbox **dependente da origem da abertura**.
+### 1. Edge Function `gallery-access` — incluir `coverPhotoId` no payload do cliente
 
-### 1. Novo estado: origem do lightbox
-
-Substituir o estado simples `lightboxIndex: number | null` por um par com contexto:
-
-```ts
-type LightboxSource = 'all' | 'selection';
-const [lightboxState, setLightboxState] = useState<{
-  source: LightboxSource;
-  index: number;
-} | null>(null);
-```
-
-### 2. Lista derivada para o lightbox
+Em `supabase/functions/gallery-access/index.ts`, no bloco do `deliver: true` (linhas 204-207), adicionar:
 
 ```ts
-const lightboxPhotos = useMemo(() => {
-  if (!lightboxState) return [];
-  return lightboxState.source === 'selection' ? selectedPhotos : transformedPhotos;
-}, [lightboxState, selectedPhotos, transformedPhotos]);
+settings: {
+  sessionFont: galleryConfig?.sessionFont || undefined,
+  titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+  coverPhotoId: galleryConfig?.coverPhotoId || undefined, // ← novo
+},
 ```
 
-### 3. Aberturas
+Isso resolve a persistência: capa escolhida na criação aparece imediatamente na galeria do cliente.
 
-- **Aba Fotos** (linha 689): mantém comportamento atual, mas usando o novo estado.
-  ```ts
-  onViewFullscreen={() => setLightboxState({
-    source: 'all',
-    index: transformedPhotos.findIndex(p => p.id === photo.id),
-  })}
-  ```
-- **Lista da aba Seleção** (linha 778): indexar contra `selectedPhotos`.
-  ```ts
-  onClick={() => setLightboxState({
-    source: 'selection',
-    index: selectedPhotos.findIndex(p => p.id === photo.id),
-  })}
-  ```
+### 2. `DeliverDetail.tsx` — habilitar gerenciar capa na aba Fotos
 
-### 4. Render do Lightbox
+Substituir o grid manual atual (linhas 320-354) por uma versão enriquecida que:
 
-```tsx
-{lightboxState !== null && (
-  <Lightbox
-    photos={lightboxPhotos}
-    currentIndex={lightboxState.index}
-    allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
-    disabled
-    onClose={() => setLightboxState(null)}
-    onNavigate={(idx) => setLightboxState((prev) => prev ? { ...prev, index: idx } : prev)}
-    onSelect={() => {}}
-  />
-)}
-```
+- Mantém todas as ações atuais (download, excluir).
+- Adiciona um **botão de estrela** ("Definir como capa" / "Remover capa") em cada foto, no mesmo padrão visual do `DeliverPhotoManager`.
+- Mostra **badge "CAPA"** sobre a foto atualmente definida como capa.
+- Mostra contador no topo: `"X fotos entregues · 1 capa selecionada"` quando aplicável.
 
-### 5. Guard contra estado inválido
+Estado e persistência:
+- Ler `coverPhotoId` atual de `gallery.configuracoes.coverPhotoId` no `useEffect` de carregamento da galeria.
+- Manter `coverPhotoId` em estado local (`useState`).
+- Ao clicar em "Definir como capa": atualizar estado + persistir imediatamente via `updateGallery` mesclando com `gallery.configuracoes` (mesmo padrão da criação).
+- Se a foto-capa for excluída: resetar `coverPhotoId` para `null` automaticamente e persistir.
 
-Se `selectedPhotos` mudar enquanto o lightbox estiver aberto na origem `selection` e o índice ficar fora dos limites, fechar automaticamente:
+UX:
+- Botão de capa fica ao lado de download/excluir no overlay hover (ícone `Star` da lucide).
+- Quando a foto é a capa: estrela amarela preenchida + ring amarelo discreto na borda + badge dourado "CAPA" no canto superior esquerdo.
+- Toast de confirmação ("Capa atualizada" / "Capa removida").
 
-```ts
-useEffect(() => {
-  if (lightboxState && lightboxState.index >= lightboxPhotos.length) {
-    setLightboxState(null);
-  }
-}, [lightboxPhotos.length, lightboxState]);
-```
+### 3. Limpeza do `DeliverCreate.tsx` (opcional, mesma seção)
 
-## Resultado
+O arquivo já funciona — só salva. Vou confirmar que a chave gravada é exatamente `coverPhotoId` (camelCase) para bater com o que a Edge Function vai ler. Já está correto.
 
-- Abrir foto via aba **Fotos** → lightbox navega por todas as fotos (comportamento mantido).
-- Abrir foto via lista da aba **Seleção** → lightbox navega **apenas entre as selecionadas**, mostrando o contador correto (ex: `2 / 5`).
-- Sem regressões nas outras abas/lista.
+## Resultado esperado
 
-## Arquivo modificado
+- Capa definida na criação aparece na hero section da galeria do cliente.
+- Capa pode ser alterada (ou removida) a qualquer momento na aba "Fotos" da edição da galeria Transfer.
+- Mesma UX de seleção de capa em ambos os pontos (criação e edição).
+- Capa atualizada propaga imediatamente para o cliente (sem precisar recriar a galeria).
+
+## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/GalleryDetail.tsx` | Estado do lightbox passa a guardar a origem; lista de fotos passada ao Lightbox depende da aba; índices recalculados conforme a origem |
+| `supabase/functions/gallery-access/index.ts` | Incluir `coverPhotoId` no `gallery.settings` retornado para galerias de entrega (deliver) |
+| `src/pages/DeliverDetail.tsx` | Adicionar UI de seleção/troca de capa na aba "Fotos", com persistência imediata em `configuracoes.coverPhotoId` e proteção contra exclusão da capa |
 
