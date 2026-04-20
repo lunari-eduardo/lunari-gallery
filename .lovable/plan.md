@@ -1,115 +1,57 @@
 
 
-# Plano: Galeria recém-criada deve ficar como "Criada", não "Enviada"
+# Plano: Resolver ambiguidade de `prepare_gallery_share` no Postgres
 
 ## Diagnóstico
 
-Ao concluir o passo final do criador de galerias (`GalleryCreate.tsx` linha 761 e `DeliverCreate.tsx` linha 255), o código chama `publishGallery(id)` para gerar o `public_token`. O comentário no código diz textualmente: *"Publish gallery (generate token) **without marking as sent**"* — ou seja, a intenção sempre foi separar **publicar** (gerar token, ficar acessível por link) de **enviar** (registrar que o link foi compartilhado com o cliente).
+Consulta no `pg_proc` confirma que **existem duas versões** coexistindo:
 
-Porém, `publishGallery` chama a RPC `prepare_gallery_share`, que **não respeita essa separação**:
+| Assinatura | Origem |
+|---|---|
+| `prepare_gallery_share(uuid)` | Versão antiga (migrations anteriores) |
+| `prepare_gallery_share(uuid, boolean)` | Versão nova criada na última migration |
 
-```sql
--- supabase/migrations/20260314175708_*.sql
-IF v_gallery.status = 'rascunho' THEN
-  v_new_status := 'enviado';   -- ← sempre marca como enviado
-END IF;
-...
-INSERT INTO galeria_acoes (...) VALUES (..., 'enviada', 'Galeria enviada para o cliente')
-WHERE NOT EXISTS (...);          -- ← sempre registra ação "enviada"
-```
+`CREATE OR REPLACE FUNCTION` no Postgres só substitui a função se a **assinatura for idêntica**. Como adicionamos um parâmetro, criamos uma sobrecarga em vez de substituir — a antiga ficou no banco.
 
-Resultado: ao criar uma galeria, ela aparece imediatamente com badge **"Enviada"** e a timeline já mostra a ação "Galeria enviada para o cliente" — antes de o fotógrafo realmente compartilhar o link.
+Quando o `SendGalleryModal` chama `supabase.rpc('prepare_gallery_share', { p_gallery_id })` (sem `p_mark_as_sent`), o PostgREST envia uma requisição que casa com **ambas** as funções (a de 1 arg literalmente, e a de 2 args via DEFAULT). Postgres lança:
 
-O envio de verdade acontece em dois pontos legítimos:
-1. **`SendGalleryModal`** (botão "Compartilhar"), que também chama `prepare_gallery_share` ao abrir.
-2. **`sendSupabaseGallery`** (`useSupabaseGalleries.ts` linha 574), também via RPC.
+> `Could not choose the best candidate function between: public.prepare_gallery_share(p_gallery_id => uuid), public.prepare_gallery_share(p_gallery_id => uuid, p_mark_as_sent => boolean)`
 
-Ambos precisam continuar marcando como "enviado". O único ponto que **não** deve marcar é a publicação automática no fim da criação.
+Resultado: o botão "Compartilhar" quebra com o modal de erro mostrado na captura.
 
 ## Solução
 
-Separar **gerar token** (publicação) de **marcar como enviada** em duas RPCs distintas, mantendo retrocompatibilidade:
-
-### 1. Nova migration: introduzir parâmetro `p_mark_as_sent` na RPC
-
-Atualizar `prepare_gallery_share` para aceitar um segundo parâmetro opcional `p_mark_as_sent boolean DEFAULT true` (mantém comportamento atual para chamadas existentes):
+Nova migration que **remove a versão antiga** (1 argumento) e mantém apenas a versão nova (2 argumentos com DEFAULT):
 
 ```sql
-CREATE OR REPLACE FUNCTION public.prepare_gallery_share(
-  p_gallery_id uuid,
-  p_mark_as_sent boolean DEFAULT true
-) RETURNS json
-...
-BEGIN
-  ...
-  -- Só promove status se p_mark_as_sent = true
-  v_new_status := v_gallery.status;
-  IF p_mark_as_sent AND v_gallery.status = 'rascunho' THEN
-    v_new_status := 'enviado';
-  END IF;
-
-  UPDATE galerias
-  SET
-    public_token = v_token,
-    published_at = COALESCE(published_at, now()),
-    status = v_new_status,
-    enviado_em = CASE WHEN v_new_status = 'enviado' THEN COALESCE(enviado_em, now()) ELSE enviado_em END,
-    ...
-
-  -- Só registra ação 'enviada' se p_mark_as_sent = true
-  IF p_mark_as_sent THEN
-    INSERT INTO galeria_acoes (galeria_id, user_id, tipo, descricao)
-    SELECT p_gallery_id, v_user_id, 'enviada', 'Galeria enviada para o cliente'
-    WHERE NOT EXISTS (
-      SELECT 1 FROM galeria_acoes WHERE galeria_id = p_gallery_id AND tipo = 'enviada'
-    );
-  END IF;
-  ...
-END;
+DROP FUNCTION IF EXISTS public.prepare_gallery_share(uuid);
 ```
 
-Compatibilidade preservada:
-- `SendGalleryModal` (linha 66) chama sem o segundo arg → `true` por default → continua marcando como enviada. ✅
-- `sendGalleryMutation` (linha 585) idem. ✅
-- `publishGalleryMutation` será atualizado para passar `false` (ver abaixo).
+A versão `prepare_gallery_share(uuid, boolean)` continua existindo, e como o segundo parâmetro tem `DEFAULT true`, todas as chamadas existentes continuam funcionando:
 
-### 2. Atualizar `publishGalleryMutation` em `useSupabaseGalleries.ts`
+- `SendGalleryModal.tsx`: `rpc('prepare_gallery_share', { p_gallery_id })` → resolve para a versão de 2 args usando `p_mark_as_sent = true` (default) → marca como enviada. ✅
+- `sendGalleryMutation` (`useSupabaseGalleries.ts` linha 585): idem. ✅
+- `publishGalleryMutation`: passa `p_mark_as_sent: false` explicitamente → galeria fica como "Criada". ✅
 
-Passar `p_mark_as_sent: false` na chamada da RPC (linhas 549-551):
+## Verificação pós-migration
 
-```ts
-const { data, error } = await supabase.rpc('prepare_gallery_share', {
-  p_gallery_id: id,
-  p_mark_as_sent: false,
-});
+Após aplicar, validar com:
+
+```sql
+SELECT oid::regprocedure FROM pg_proc WHERE proname = 'prepare_gallery_share';
+-- Deve retornar APENAS: prepare_gallery_share(uuid,boolean)
 ```
-
-Isso faz com que `publishGallery`:
-- Gere o `public_token` (galeria fica acessível por link). ✅
-- **Não** mude `status` de `rascunho` para `enviado`.
-- **Não** insira ação `'enviada'` na timeline.
-
-### 3. Regenerar tipos do Supabase
-
-Após a migration, os tipos em `src/integrations/supabase/types.ts` serão regenerados automaticamente para refletir a nova assinatura `{ p_gallery_id: string; p_mark_as_sent?: boolean }`.
-
-## Resultado esperado
-
-- Após concluir a criação no `GalleryCreate` ou `DeliverCreate`:
-  - Galeria fica com status **"Criada"** (badge cinza, ícone círculo).
-  - Token público é gerado (link funciona se compartilhado).
-  - Timeline mostra apenas **"Galeria criada"**.
-- Ao clicar em **"Compartilhar"** (`SendGalleryModal`) ou ação de envio:
-  - Status muda para **"Enviada"** (badge azul, ícone Send).
-  - Timeline ganha **"Galeria enviada para o cliente"**.
-  - `enviado_em` é preenchido.
-- Nenhuma chamada existente quebra (default do parâmetro mantém comportamento antigo para os outros chamadores).
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/migrations/<nova>.sql` | Recria `prepare_gallery_share` com novo parâmetro `p_mark_as_sent boolean DEFAULT true`; promoção de status e log de ação ficam condicionados ao parâmetro |
-| `src/hooks/useSupabaseGalleries.ts` | `publishGalleryMutation` passa `p_mark_as_sent: false` na RPC |
-| `src/integrations/supabase/types.ts` | Regeneração automática dos tipos da função |
+| `supabase/migrations/<nova>.sql` | `DROP FUNCTION IF EXISTS public.prepare_gallery_share(uuid);` para remover a versão duplicada |
+
+## Resultado esperado
+
+- Erro "Could not choose the best candidate function" desaparece imediatamente.
+- Botão "Compartilhar" volta a funcionar e marca a galeria como **"Enviada"**.
+- Publicação automática (fim da criação) continua deixando a galeria como **"Criada"** (correção da rodada anterior preservada).
+- Nenhuma chamada cliente precisa mudar — a assinatura única `(uuid, boolean DEFAULT true)` cobre todos os casos.
 
