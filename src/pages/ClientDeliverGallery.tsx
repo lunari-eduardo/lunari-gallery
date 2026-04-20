@@ -146,9 +146,7 @@ export default function ClientDeliverGallery({ data }: Props) {
       const zipName = activeFolderId && hasFolders
         ? `${gallery.sessionName} - ${folders.find(f => f.id === activeFolderId)?.nome || 'fotos'}.zip`
         : `${gallery.sessionName}.zip`;
-      await downloadAllDeliverPhotos(gallery.id, downloadable, zipName, (current, total) => {
-        if (current === total) 
-      });
+      await downloadAllDeliverPhotos(gallery.id, downloadable, zipName);
     } catch {
       toast.error('Erro ao baixar fotos');
     } finally {

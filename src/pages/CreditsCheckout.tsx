@@ -691,10 +691,10 @@ export default function CreditsCheckout() {
 
           {/* INSTITUTIONAL BUTTONS */}
           <div className="flex justify-center gap-4 pb-20">
-            <Button variant="outline" className="px-6" onClick={() => }>
+            <Button variant="outline" className="px-6" disabled>
               Conheça o Select
             </Button>
-            <Button variant="outline" className="px-6" onClick={() => }>
+            <Button variant="outline" className="px-6" disabled>
               Conheça o Transfer
             </Button>
           </div>
