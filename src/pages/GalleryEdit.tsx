@@ -323,7 +323,7 @@ export default function GalleryEdit() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-24">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -339,25 +339,6 @@ export default function GalleryEdit() {
             </p>
           </div>
         </div>
-        
-        {/* Save button in header */}
-        <Button 
-          onClick={handleSave}
-          disabled={isUpdating}
-          variant="terracotta"
-        >
-          {isUpdating ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Salvando...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              Salvar Alterações
-            </>
-          )}
-        </Button>
       </div>
 
       {/* Two Column Layout */}
