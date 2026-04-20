@@ -546,8 +546,12 @@ export function useSupabaseGalleries() {
       }
 
       // Use prepare_gallery_share RPC as single source of truth
+      // p_mark_as_sent=false: gera o token mas mantém status 'rascunho' (Criada).
+      // O envio real (status 'enviado') só ocorre quando o fotógrafo
+      // compartilha pelo SendGalleryModal ou via sendGalleryMutation.
       const { data, error } = await supabase.rpc('prepare_gallery_share', {
         p_gallery_id: id,
+        p_mark_as_sent: false,
       });
 
       if (error) throw error;
