@@ -1,142 +1,625 @@
 
-# Plano: Ajustar lista de fotos selecionadas com thumbnails maiores e indicadores mais limpos
+# Plano ajustado: E-mails automáticos com Resend + melhor UX de envio
 
-## Objetivo
+## Direção confirmada
 
-Refinar o resumo visual da etapa **Confirmar Seleção** para ficar mais próximo do esboço desejado:
-
-- Fotos um pouco maiores.
-- Favoritas indicadas apenas por um coração.
-- Comentário exibido como texto, sem badge.
-- Extras não aparecem como badge na lista de fotos.
-- O resumo financeiro da direita continua mostrando extras e valores normalmente.
-
-## Mudanças em `src/components/SelectionConfirmation.tsx`
-
-### 1. Aumentar o tamanho das fotos
-
-Hoje o thumbnail está em:
-
-```tsx
-h-24 w-24 md:h-28 md:w-28
-```
-
-Será ajustado para algo mais confortável, sem virar preview gigante:
-
-```tsx
-h-28 w-28 md:h-32 md:w-32
-```
-
-Resultado:
-
-- A foto fica mais legível.
-- O card continua compacto.
-- Fotos verticais e horizontais continuam dentro de uma caixa previsível com `object-contain`.
-
-### 2. Remover badges dentro do card
-
-Remover do card:
-
-- Badge “Favorita”.
-- Badge “Comentário”.
-- Badge “+N extra”.
-
-O card passará a ter uma leitura mais limpa:
+Usaremos **Resend** com o domínio já configurado:
 
 ```text
-┌────────────┐  Nome da foto                         ♥
-│            │  "Comentário do cliente, se existir"
-│    foto    │
-│            │
-└────────────┘
+mail.lunarihub.com
 ```
 
-### 3. Mostrar favorita apenas com coração
+Remetente padrão:
 
-Quando `photo.isFavorite` for verdadeiro:
-
-- Mostrar somente o ícone `Heart`.
-- Sem fundo de badge.
-- Sem texto “Favorita”.
-- O coração ficará ao lado do nome ou no canto superior direito da área textual.
-- Usar preenchimento vermelho/terracotta para ficar claro visualmente.
-
-Exemplo técnico:
-
-```tsx
-<div className="flex items-start justify-between gap-2">
-  <p className="truncate text-sm font-medium">{displayName}</p>
-
-  {photo.isFavorite && (
-    <Heart className="h-4 w-4 shrink-0 fill-destructive text-destructive" />
-  )}
-</div>
+```text
+no-reply@mail.lunarihub.com
 ```
 
-### 4. Manter comentário como texto
+Não vamos configurar domínio de e-mail pelo sistema interno do Lovable, porque o envio será feito via Resend usando o domínio que você já configurou no Cloudflare e no Resend.
 
-O comentário continua aparecendo abaixo do nome, mas sem badge:
+---
 
-```tsx
-{photo.comment && (
-  <p className="line-clamp-2 text-xs italic text-muted-foreground">
-    "{photo.comment}"
-  </p>
-)}
+## 1. Configuração padrão crítica
+
+### Ajuste no banco
+
+Adicionar as configurações de e-mail em `gallery_settings` com padrão ativo:
+
+```text
+email_sending_enabled default true
+email_on_gallery_sent default true
+email_on_payment_confirmed default true
 ```
 
-Isso preserva a informação importante sem poluir o card.
+Também aplicar para usuários existentes:
 
-### 5. Remover lógica visual de extras da lista
+- se a coluna ainda não existir, criar com `default true`;
+- popular registros existentes com `true`;
+- manter `not null` para evitar comportamento ambíguo.
 
-Como o usuário não quer badge de extra no card:
+### Comportamento esperado
 
-- Remover `extraIndex` de `SelectedPhotoCardProps`.
-- Remover o cálculo `extraIndex` no map da lista.
-- Remover qualquer renderização de `+1 extra`, `+2 extra`, etc. dentro da lista visual.
+Por padrão, o produto já funciona assim que o fotógrafo envia uma galeria.
 
-A contagem de extras permanece no resumo “Sua seleção” à direita, onde faz sentido financeiro.
+O fotógrafo não precisa descobrir que precisa ligar algo escondido para o e-mail funcionar.
 
-### 6. Limpar imports
+---
 
-Como não haverá mais badges no card:
+## 2. UI de configurações
 
-- Remover import de `Badge` se não for usado em outro ponto do arquivo.
-- Manter `Heart`, `MessageSquare` e `ImageOff` se ainda forem usados no contador superior e fallback visual.
-- Se o contador de comentários continuar usando `MessageSquare`, manter o import.
+Criar uma seção em:
 
-## Comportamento esperado
+```text
+Configurações > Personalização > Comunicação
+```
 
-### Desktop
+Nova área:
 
-- Lista visual à esquerda com fotos maiores e mais fáceis de revisar.
-- Coração aparece de forma discreta nas favoritas.
-- Comentários continuam visíveis como texto.
-- Sem badges de comentário e sem badges de extra.
-- Resumo financeiro à direita continua com selecionadas, incluídas, extras, valor por foto e total.
+```text
+E-mails automáticos
+```
 
-### Mobile
+Controles:
 
-- Layout continua empilhado.
-- Cards continuam horizontais e compactos.
-- Fotos ficam um pouco maiores, mas sem prejudicar a rolagem.
-- Botão fixo no rodapé permanece igual.
+1. Toggle geral:
+   - “Ativar envio de e-mails”
 
-## Não alterar
+2. Toggles específicos:
+   - “Enviar e-mail ao enviar galeria”
+   - “Enviar e-mail ao confirmar pagamento”
 
-- Cálculo de extras.
-- Cálculo de valor.
-- Lógica de pagamento.
-- Confirmação da seleção.
-- Backend, Edge Functions, RPCs ou banco de dados.
-- Integrações InfinitePay, Asaas ou Mercado Pago.
+3. Aviso obrigatório na UI:
 
-## Resultado final
+```text
+Você pode desativar os e-mails a qualquer momento.
+```
 
-A tela fica mais limpa e focada na revisão:
+4. Informação do remetente:
 
-- Foto maior.
-- Nome claro.
-- Comentário legível.
-- Favorita marcada só com coração.
-- Sem poluição visual por badges de comentário ou extra.
+```text
+Remetente: no-reply@mail.lunarihub.com
+```
+
+Quando o toggle geral estiver desativado:
+
+- os toggles específicos ficam visualmente dependentes/desabilitados ou com menor destaque;
+- nenhum e-mail automático será enviado;
+- o usuário entende claramente que desligou todos os envios.
+
+---
+
+## 3. Função central de envio com Resend
+
+Criar uma função central reutilizável para envio de e-mails via Resend.
+
+Responsabilidades:
+
+- validar evento;
+- buscar dados reais no banco;
+- respeitar configurações do fotógrafo;
+- validar se o cliente tem e-mail;
+- garantir idempotência para evitar duplicidade;
+- montar HTML;
+- enviar via Resend;
+- registrar log;
+- retornar um resultado simples para a UI.
+
+Eventos suportados inicialmente:
+
+```text
+gallery_sent
+payment_confirmed
+```
+
+A chave do Resend ficará somente em segredo seguro do backend, nunca no frontend.
+
+Segredos esperados:
+
+```text
+RESEND_API_KEY
+```
+
+Se a chave estiver ausente ou inválida:
+
+- não quebrar o fluxo;
+- registrar log como erro;
+- mostrar mensagem amigável quando o envio for acionado pela UI.
+
+---
+
+## 4. Logs essenciais de envio
+
+Criar tabela de logs própria para os e-mails do produto.
+
+Campos principais:
+
+```text
+id
+user_id
+cliente_id
+cliente_nome
+cliente_email
+event_type
+status
+gallery_id
+payment_id
+idempotency_key
+resend_message_id
+subject
+friendly_message
+error_message
+metadata
+created_at
+updated_at
+```
+
+### Status
+
+```text
+enviado
+erro
+ignorado
+```
+
+### Visual na UI
+
+Na área de logs recentes:
+
+- `enviado` → verde
+- `erro` → vermelho
+- `ignorado` → cinza
+
+### Mensagens amigáveis
+
+Não mostrar erro técnico bruto para o usuário.
+
+Exemplos:
+
+```text
+Cliente sem e-mail cadastrado
+Envio automático desativado
+E-mail já enviado anteriormente
+Falha ao enviar pelo provedor
+Configuração do Resend ausente
+```
+
+O erro técnico completo pode ficar no campo interno `error_message`/`metadata`, mas a interface mostra apenas o motivo simples.
+
+---
+
+## 5. Prevenção de envios duplicados
+
+Usar chave única por evento lógico:
+
+```text
+gallery_sent:{gallery_id}
+payment_confirmed:{payment_id}
+```
+
+Regras:
+
+- se já existe envio `enviado` com a mesma chave, não reenviar;
+- registrar/retornar como `ignorado` com motivo amigável;
+- webhooks repetidos, polling e auto-healing não disparam e-mail duplicado;
+- abrir a modal novamente não reenviará a mesma galeria.
+
+---
+
+## 6. Evento 1: envio de galeria
+
+### Quando disparar
+
+Depois que a galeria for preparada/publicada com sucesso pela RPC atual:
+
+```text
+prepare_gallery_share
+```
+
+A função só poderá enviar e-mail quando existir:
+
+- token público válido retornado pela RPC;
+- link público gerado a partir desse token;
+- cliente com e-mail;
+- envio global ativado;
+- opção “Enviar e-mail ao enviar galeria” ativada;
+- evento ainda não enviado.
+
+### Link da galeria: regra crítica
+
+O e-mail deve usar apenas o link público correto:
+
+```text
+https://gallery.lunarihub.com/g/{publicToken}
+```
+
+Regras:
+
+- nunca gerar token no cliente;
+- nunca usar UUID interno da galeria;
+- sempre usar o token retornado por `prepare_gallery_share`;
+- se não houver token válido, não enviar;
+- registrar como erro/ignorado sem quebrar o compartilhamento.
+
+Isso garante que o botão do e-mail abre direto a galeria correta.
+
+### Feedback imediato na modal
+
+Na `SendGalleryModal`, após preparar a galeria:
+
+Se enviou:
+
+```text
+E-mail enviado para o cliente.
+```
+
+Se não tem e-mail:
+
+```text
+Cliente não possui e-mail cadastrado.
+```
+
+Se envio global está desativado:
+
+```text
+E-mails automáticos estão desativados.
+```
+
+Se já foi enviado antes:
+
+```text
+E-mail já enviado anteriormente.
+```
+
+Se falhou:
+
+```text
+Não foi possível enviar o e-mail agora.
+```
+
+O fluxo de compartilhar continua funcionando em todos os casos.
+
+### Fallback quando não houver e-mail
+
+Se o cliente não tiver e-mail cadastrado, destacar ações alternativas:
+
+- `Copiar link`
+- `Enviar via WhatsApp`
+
+Essas ações já existem na modal, mas serão reposicionadas/realçadas para deixar claro que este é o caminho recomendado quando não há e-mail.
+
+O botão “Enviar por Email — Em breve” deixa de existir nesse formato e vira um status real do envio automático.
+
+---
+
+## 7. Template de e-mail: galeria enviada
+
+### Objetivo
+
+Aumentar abertura, clique e conversão para seleção/compra de fotos extras.
+
+### Novo tom do template
+
+Trocar mensagem fraca como:
+
+```text
+Sua galeria está pronta
+```
+
+Por:
+
+```text
+Suas fotos já estão prontas ✨
+```
+
+Texto principal:
+
+```text
+Olá, {cliente}
+
+Suas fotos já estão prontas ✨
+
+Você já pode visualizar, escolher suas favoritas e garantir suas fotos.
+
+Clique no botão abaixo para acessar sua galeria.
+```
+
+CTA:
+
+```text
+Acessar minha galeria
+```
+
+Rodapé:
+
+```text
+Com carinho,
+{nome_do_estudio}
+```
+
+Se a galeria for privada e houver senha:
+
+```text
+Senha de acesso: {senha}
+```
+
+### Layout
+
+- HTML responsivo;
+- fundo branco;
+- card central limpo;
+- tipografia simples;
+- botão destacado;
+- boa leitura no celular;
+- sem excesso visual;
+- identidade neutra, com possibilidade futura de usar logo/nome do estúdio.
+
+---
+
+## 8. Evento 2: confirmação de pagamento
+
+### Quando disparar
+
+Após confirmação real do pagamento.
+
+Pontos a revisar:
+
+```text
+supabase/functions/check-payment-status/index.ts
+supabase/functions/infinitepay-webhook/index.ts
+supabase/functions/infinitepay-create-link/index.ts
+supabase/functions/asaas-webhook/index.ts
+supabase/functions/asaas-gallery-payment/index.ts
+supabase/functions/mercadopago-webhook/index.ts
+supabase/functions/confirm-payment-manual/index.ts
+```
+
+Regra principal:
+
+- o e-mail deve ser chamado apenas depois que o pagamento for finalizado/sincronizado com sucesso;
+- a chamada de e-mail sempre fica protegida por `try/catch`;
+- falha de e-mail nunca desfaz pagamento;
+- falha de e-mail nunca faz webhook retornar erro quando o pagamento já foi processado.
+
+### Cuidado obrigatório com InfinitePay
+
+Ao tocar nos fluxos de pagamento, revisar especialmente:
+
+```text
+supabase/functions/infinitepay-create-link/index.ts
+supabase/functions/infinitepay-webhook/index.ts
+```
+
+Preservar as regras existentes:
+
+- não adicionar validação JWT no webhook;
+- não quebrar `verify_jwt = false`;
+- manter busca por `ip_order_nsu` primeiro;
+- manter fallback por UUID;
+- manter chamada para `finalize_gallery_payment`;
+- manter auto-healing;
+- não alterar automação de cobrança de clientes.
+
+A integração de e-mail entra como efeito colateral seguro, nunca como parte crítica da confirmação financeira.
+
+### Conteúdo do e-mail de pagamento
+
+Assunto sugerido:
+
+```text
+Pagamento confirmado
+```
+
+Conteúdo:
+
+```text
+Olá, {cliente}
+
+Recebemos a confirmação do seu pagamento.
+
+Valor pago: R$ {valor}
+Forma de pagamento: {forma}
+Data: {data}
+Descrição: {descricao}
+Status: Confirmado
+```
+
+CTA opcional:
+
+```text
+Acessar galeria
+```
+
+Se houver galeria vinculada e token público disponível, incluir botão para voltar à galeria.
+
+---
+
+## 9. Logs recentes no frontend
+
+Criar componente para logs recentes dentro de Comunicação:
+
+```text
+Histórico de e-mails
+```
+
+Exibir:
+
+```text
+Tipo
+Cliente
+E-mail
+Status
+Data
+Motivo
+```
+
+Exemplo:
+
+```text
+Galeria enviada        Maria        enviado    Hoje, 14:32
+Pagamento confirmado  João         erro       Falha ao enviar pelo provedor
+Galeria enviada        Ana          ignorado   Cliente sem e-mail cadastrado
+```
+
+UX:
+
+- visual compacto;
+- cores claras por status;
+- mostrar no máximo os últimos registros;
+- permitir expandir erro simples se necessário;
+- sem expor stack trace ou detalhes técnicos.
+
+---
+
+## 10. Tipos, hooks e settings
+
+Atualizar:
+
+```text
+src/types/gallery.ts
+src/hooks/useGallerySettings.ts
+src/hooks/useSettings.ts
+```
+
+Adicionar ao `GlobalSettings`:
+
+```text
+emailSendingEnabled
+emailOnGallerySent
+emailOnPaymentConfirmed
+```
+
+Criar hook para logs:
+
+```text
+src/hooks/useEmailLogs.ts
+```
+
+Criar componente:
+
+```text
+src/components/settings/EmailAutomationSettings.tsx
+```
+
+Integrar em:
+
+```text
+src/components/settings/PersonalizationSettings.tsx
+```
+
+---
+
+## 11. Segurança e regras de não envio
+
+Nunca enviar quando:
+
+- cliente não possui e-mail;
+- envio global está desativado;
+- opção específica está desativada;
+- evento já foi enviado;
+- link público da galeria não está pronto;
+- token público não existe ou não é válido;
+- pagamento ainda não foi confirmado;
+- Resend falha.
+
+Em todos esses casos:
+
+- não quebrar o fluxo principal;
+- registrar log;
+- mostrar feedback amigável quando o usuário estiver na modal.
+
+---
+
+## 12. Estrutura preparada para futuro
+
+A função central e os logs ficarão preparados para novos eventos:
+
+```text
+selection_reminder
+selection_abandoned
+payment_reminder
+gallery_expiring
+```
+
+Mas estes não serão implementados agora.
+
+---
+
+## 13. Arquivos previstos
+
+### Banco
+
+```text
+supabase/migrations/*
+```
+
+Adicionar:
+
+- colunas de configuração em `gallery_settings`;
+- tabela de logs;
+- índices;
+- chave única de idempotência;
+- RLS para leitura dos logs pelo fotógrafo autenticado.
+
+### Nova função backend
+
+```text
+supabase/functions/send-email/index.ts
+```
+
+Função central de envio via Resend.
+
+### Frontend
+
+```text
+src/types/gallery.ts
+src/hooks/useGallerySettings.ts
+src/hooks/useSettings.ts
+src/hooks/useEmailLogs.ts
+src/components/settings/EmailAutomationSettings.tsx
+src/components/settings/PersonalizationSettings.tsx
+src/components/SendGalleryModal.tsx
+```
+
+### Pagamentos
+
+Revisar e ajustar com segurança:
+
+```text
+supabase/functions/check-payment-status/index.ts
+supabase/functions/infinitepay-webhook/index.ts
+supabase/functions/infinitepay-create-link/index.ts
+supabase/functions/asaas-webhook/index.ts
+supabase/functions/asaas-gallery-payment/index.ts
+supabase/functions/mercadopago-webhook/index.ts
+supabase/functions/confirm-payment-manual/index.ts
+```
+
+---
+
+## 14. Validação final
+
+Testes esperados:
+
+1. Cliente com e-mail + configurações padrão ativas → envia e-mail ao compartilhar galeria.
+2. Modal mostra “E-mail enviado para o cliente”.
+3. Cliente sem e-mail → não envia e mostra “Cliente não possui e-mail cadastrado”.
+4. Cliente sem e-mail mantém “Copiar link” e “Enviar via WhatsApp” como fallback claro.
+5. Toggle geral desligado → nenhum e-mail é enviado.
+6. Toggle de galeria desligado → não envia ao compartilhar galeria.
+7. Toggle de pagamento desligado → não envia confirmação de pagamento.
+8. Reabrir modal da mesma galeria → não duplica envio.
+9. Webhook/polling duplicado de pagamento → não duplica envio.
+10. Link recebido no e-mail abre diretamente a galeria pública correta.
+11. Falha no Resend → fluxo não quebra e log fica como erro.
+12. Logs exibem:
+    - enviado em verde;
+    - erro em vermelho;
+    - ignorado em cinza.
+13. InfinitePay continua funcionando:
+    - create-link;
+    - webhook;
+    - busca por NSU;
+    - fallback por UUID;
+    - auto-healing;
+    - finalização de pagamento.
+14. Build TypeScript sem erros.
