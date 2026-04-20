@@ -534,8 +534,22 @@ export default function DeliverDetail() {
               <Download className="h-4 w-4 text-primary" />
             </div>
           </div>
-        </TabsContent>
+      </TabsContent>
       </Tabs>
+
+      {/* Floating Save Button */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          variant="terracotta"
+          size="lg"
+          className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Salvando...' : 'Salvar Alterações'}
+        </Button>
+      </div>
     </div>
   );
 }
