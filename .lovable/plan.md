@@ -1,72 +1,86 @@
 
 
-# Plano: Corrigir capa da galeria Transfer (cliente) e habilitar troca de capa na edição
+# Plano: Botão Salvar flutuante + remover toasts + redirect pós-salvamento
 
 ## Diagnóstico
 
-Após investigar o fluxo, encontrei **duas causas distintas**:
+Em `src/pages/DeliverDetail.tsx` e `src/pages/GalleryEdit.tsx`:
 
-### Problema 1 — Capa não aparece para o cliente
-- Na criação (`DeliverCreate.tsx`), a capa é salva corretamente em `galerias.configuracoes.coverPhotoId` (linhas 269-294).
-- Mas a Edge Function `gallery-access` (linhas 195-216), ao montar o payload do tipo `deliver: true`, **não inclui** `coverPhotoId` no objeto `gallery.settings`. Só envia `sessionFont` e `titleCaseMode`.
-- Resultado: `ClientDeliverGallery.tsx` (linha 106) lê `gallery.settings?.coverPhotoId` como `undefined` e usa sempre `allPhotos[0]` (a primeira foto) como capa.
+- O botão **Salvar** vive no header. Ao rolar para baixo (galerias com muitas fotos), ele desaparece — usuário precisa rolar até o topo.
+- Após salvar, há `toast.success('Alterações salvas')` / `toast.success('Galeria atualizada!')` e o usuário **fica na mesma página**.
+- Para confirmar mudanças, é preciso voltar manualmente.
 
-### Problema 2 — Não há opção de capa na edição
-- `DeliverDetail.tsx` (linhas 295-368, aba "Fotos") renderiza um grid **manual** que só tem botões de download e excluir.
-- Não usa o componente `DeliverPhotoManager` (que tem a UI de "definir como capa") usado na criação.
-- Também não há badge mostrando qual é a capa atual nem como trocá-la.
+## Mudanças
 
-## Correções
+### 1. Botão Salvar fixo flutuante (bottom-right)
 
-### 1. Edge Function `gallery-access` — incluir `coverPhotoId` no payload do cliente
+Em **ambas** as páginas (`DeliverDetail.tsx` e `GalleryEdit.tsx`):
 
-Em `supabase/functions/gallery-access/index.ts`, no bloco do `deliver: true` (linhas 204-207), adicionar:
+- **Remover** o botão "Salvar" / "Salvar Alterações" do header.
+- **Adicionar** um botão flutuante fixo no canto inferior direito, sempre visível:
 
-```ts
-settings: {
-  sessionFont: galleryConfig?.sessionFont || undefined,
-  titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
-  coverPhotoId: galleryConfig?.coverPhotoId || undefined, // ← novo
-},
+```tsx
+<div className="fixed bottom-6 right-6 z-50">
+  <Button
+    onClick={handleSave}
+    disabled={saving}
+    variant="terracotta"
+    size="lg"
+    className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
+  >
+    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+    {saving ? 'Salvando...' : 'Salvar Alterações'}
+  </Button>
+</div>
 ```
 
-Isso resolve a persistência: capa escolhida na criação aparece imediatamente na galeria do cliente.
+Detalhes UX:
+- Posição: `fixed bottom-6 right-6`, `z-50` para ficar acima de tudo.
+- Estilo arredondado (`rounded-full`), `shadow-2xl` para destaque visual sutil.
+- Mantém o estado `disabled` durante a operação (`saving`/`isUpdating`).
+- Em mobile, mantém a mesma posição (canto inferior direito) — não vira full-width para não atrapalhar o conteúdo.
+- Padding inferior do container principal (`pb-24`) para evitar que o botão tampe os últimos elementos da página.
 
-### 2. `DeliverDetail.tsx` — habilitar gerenciar capa na aba Fotos
+### 2. Remover toasts de notificação após salvar
 
-Substituir o grid manual atual (linhas 320-354) por uma versão enriquecida que:
+Em `DeliverDetail.tsx` (`handleSave`):
+- Remover `toast.success('Alterações salvas')` e `toast.error('Erro ao salvar')`.
+- Erros silenciosos via `console.error` apenas (mantém log mas sem UI).
 
-- Mantém todas as ações atuais (download, excluir).
-- Adiciona um **botão de estrela** ("Definir como capa" / "Remover capa") em cada foto, no mesmo padrão visual do `DeliverPhotoManager`.
-- Mostra **badge "CAPA"** sobre a foto atualmente definida como capa.
-- Mostra contador no topo: `"X fotos entregues · 1 capa selecionada"` quando aplicável.
+Em `GalleryEdit.tsx` (`handleSave`):
+- Remover `toast.success('Galeria atualizada!')`.
+- Manter apenas `console.error` no catch.
 
-Estado e persistência:
-- Ler `coverPhotoId` atual de `gallery.configuracoes.coverPhotoId` no `useEffect` de carregamento da galeria.
-- Manter `coverPhotoId` em estado local (`useState`).
-- Ao clicar em "Definir como capa": atualizar estado + persistir imediatamente via `updateGallery` mesclando com `gallery.configuracoes` (mesmo padrão da criação).
-- Se a foto-capa for excluída: resetar `coverPhotoId` para `null` automaticamente e persistir.
+**Observação**: outros toasts no sistema (link copiado, capa atualizada, publicação, etc.) **permanecem** — só removemos os toasts pós-salvamento de edição. Confirmaremos isso na pergunta abaixo se necessário, mas o pedido é claramente sobre o "Alterações salvas".
 
-UX:
-- Botão de capa fica ao lado de download/excluir no overlay hover (ícone `Star` da lucide).
-- Quando a foto é a capa: estrela amarela preenchida + ring amarelo discreto na borda + badge dourado "CAPA" no canto superior esquerdo.
-- Toast de confirmação ("Capa atualizada" / "Capa removida").
+### 3. Redirect automático após salvar
 
-### 3. Limpeza do `DeliverCreate.tsx` (opcional, mesma seção)
+Em `DeliverDetail.tsx`:
+- Após `await updateGallery(...)` ter sucesso → `navigate('/galleries/deliver')`.
 
-O arquivo já funciona — só salva. Vou confirmar que a chave gravada é exatamente `coverPhotoId` (camelCase) para bater com o que a Edge Function vai ler. Já está correto.
+Em `GalleryEdit.tsx`:
+- Após `await updateGallery(...)` ter sucesso → `navigate(\`/gallery/\${gallery.id}\`)` (volta para a página de detalhe da galeria select, não para a lista).
 
-## Resultado esperado
+### 4. Tratamento de erro
 
-- Capa definida na criação aparece na hero section da galeria do cliente.
-- Capa pode ser alterada (ou removida) a qualquer momento na aba "Fotos" da edição da galeria Transfer.
-- Mesma UX de seleção de capa em ambos os pontos (criação e edição).
-- Capa atualizada propaga imediatamente para o cliente (sem precisar recriar a galeria).
+Se o salvamento falhar:
+- **Não** redirecionar.
+- Manter o usuário na página para corrigir.
+- Como removemos o toast, o feedback de erro fica via `console.error` apenas — o que é razoável dado que o caso de erro é raro e o estado `disabled` do botão já indica progresso.
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/gallery-access/index.ts` | Incluir `coverPhotoId` no `gallery.settings` retornado para galerias de entrega (deliver) |
-| `src/pages/DeliverDetail.tsx` | Adicionar UI de seleção/troca de capa na aba "Fotos", com persistência imediata em `configuracoes.coverPhotoId` e proteção contra exclusão da capa |
+| `src/pages/DeliverDetail.tsx` | Mover botão Salvar do header para flutuante; remover toasts pós-save; redirect para `/galleries/deliver` |
+| `src/pages/GalleryEdit.tsx` | Mover botão Salvar do header para flutuante; remover toast pós-save; redirect para `/gallery/${id}` |
+
+## Resultado
+
+- Botão **Salvar** sempre visível em qualquer ponto da rolagem (canto inferior direito).
+- Sem toast "Alterações salvas" / "Galeria atualizada!" poluindo a tela.
+- Após salvar, usuário é levado automaticamente:
+  - Galeria **Transfer** → lista de Transfers (`/galleries/deliver`).
+  - Galeria **Select** → página de detalhe da galeria (`/gallery/{id}`).
+- Salvamentos com erro mantêm o usuário na página de edição (sem redirect).
 
