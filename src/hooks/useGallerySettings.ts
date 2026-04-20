@@ -431,6 +431,9 @@ export function useGallerySettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
+    onError: (error) => {
+      console.error('Email template update error:', error);
+    },
   });
 
   // Discount preset mutations
@@ -499,7 +502,8 @@ export function useGallerySettings() {
     deleteCustomTheme: deleteCustomTheme.mutate,
     setThemeType: setThemeType.mutate,
     // Email template operations
-    updateEmailTemplate: updateEmailTemplate.mutate,
+    updateEmailTemplate: updateEmailTemplate.mutateAsync,
+    isUpdatingEmailTemplate: updateEmailTemplate.isPending,
     // Discount preset operations
     createDiscountPreset: createDiscountPreset.mutate,
     updateDiscountPreset: updateDiscountPreset.mutate,

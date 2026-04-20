@@ -18,6 +18,8 @@ export function PersonalizationSettings() {
     saveCustomTheme,
     deleteCustomTheme,
     setThemeType,
+    updateEmailTemplate,
+    isUpdatingEmailTemplate,
   } = useGallerySettings();
 
   const [welcomeEnabled, setWelcomeEnabled] = useState(true);
@@ -129,9 +131,8 @@ export function PersonalizationSettings() {
         <div className="lunari-card p-6">
           <EmailTemplates
             templates={settings.emailTemplates}
-            onTemplatesChange={(templates) => {
-              // For now, email templates still use the old pattern
-            }}
+            onTemplateSave={updateEmailTemplate}
+            isSaving={isUpdatingEmailTemplate}
           />
         </div>
       </div>

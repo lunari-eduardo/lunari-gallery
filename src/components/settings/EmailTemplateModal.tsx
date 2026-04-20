@@ -12,12 +12,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Loader2 } from 'lucide-react';
 
 interface EmailTemplateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   template: EmailTemplate | null;
-  onSave: (template: EmailTemplate) => void;
+  onSave: (template: EmailTemplate) => Promise<void> | void;
+  isSaving?: boolean;
 }
 
 const VARIABLES = [
@@ -37,6 +39,7 @@ export function EmailTemplateModal({
   onOpenChange,
   template,
   onSave,
+  isSaving = false,
 }: EmailTemplateModalProps) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -48,9 +51,9 @@ export function EmailTemplateModal({
     }
   }, [template, open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!template) return;
-    onSave({
+    await onSave({
       ...template,
       subject,
       body,
@@ -150,8 +153,9 @@ export function EmailTemplateModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button variant="terracotta" onClick={handleSave}>
-            Salvar Template
+          <Button variant="terracotta" onClick={handleSave} disabled={isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSaving ? 'Salvando...' : 'Salvar Template'}
           </Button>
         </DialogFooter>
       </DialogContent>
