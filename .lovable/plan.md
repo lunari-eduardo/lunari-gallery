@@ -1,118 +1,96 @@
 
 
-# Plano: Padrões de "Modo de Venda" e "Tamanho de Imagens" nas Configurações
+# Plano: Lightbox da aba "Seleção" deve navegar apenas entre fotos selecionadas
 
 ## Diagnóstico
 
-Hoje na criação de galeria (`GalleryCreate.tsx`):
-- `saleMode` inicia hardcoded como `'sale_without_payment'` (linha 155)
-- `imageResizeOption` inicia hardcoded como `1920` (linha 273)
+Em `src/pages/GalleryDetail.tsx`:
 
-Usuário precisa reescolher manualmente toda vez. Vamos transformar isso em **defaults configuráveis** por fotógrafo, lidos das Configurações.
+- O `Lightbox` (linhas 1138-1147) sempre recebe `photos={transformedPhotos}` (todas as fotos da galeria).
+- Na lista da aba **Seleção** (linha 778), o thumbnail abre o lightbox usando `transformedPhotos.findIndex(...)`, ou seja, indexando contra **todas** as fotos.
+- Resultado: ao deslizar para o lado dentro do lightbox aberto pela aba Seleção, aparecem fotos não selecionadas.
 
-## 1. Schema do banco
+Já na aba **Fotos** (linha 689), faz sentido navegar entre todas — esse comportamento deve ser preservado.
 
-Adicionar duas colunas em `gallery_settings` via migração:
+## Correção
 
-| Coluna | Tipo | Default |
-|---|---|---|
-| `default_sale_mode` | `text` | `'sale_without_payment'` |
-| `default_image_resize` | `int` | `1920` |
+Tornar o conjunto de fotos do Lightbox **dependente da origem da abertura**.
 
-Constraint check em `default_sale_mode`: `IN ('no_sale', 'sale_with_payment', 'sale_without_payment')`.
-Constraint check em `default_image_resize`: `IN (1024, 1920, 2560)`.
+### 1. Novo estado: origem do lightbox
 
-## 2. Tipos (`src/types/gallery.ts`)
+Substituir o estado simples `lightboxIndex: number | null` por um par com contexto:
 
-Adicionar em `GlobalSettings`:
 ```ts
-defaultSaleMode?: SaleMode;
-defaultImageResize?: ImageResizeOption;
+type LightboxSource = 'all' | 'selection';
+const [lightboxState, setLightboxState] = useState<{
+  source: LightboxSource;
+  index: number;
+} | null>(null);
 ```
 
-## 3. Hook `useGallerySettings.ts`
+### 2. Lista derivada para o lightbox
 
-- `rowsToSettings`: ler `default_sale_mode` e `default_image_resize`
-- `defaultSettings`: incluir `defaultSaleMode: 'sale_without_payment'` e `defaultImageResize: 1920`
-- `updateSettings`: mapear novos campos para colunas do BD (snake_case)
-- `initializeSettings`: gravar defaults na criação inicial
-
-## 4. UI — `GeneralSettings.tsx` (aba Geral)
-
-Adicionar **dois novos cards** seguindo o padrão visual existente:
-
-### Card "Modo de Venda Padrão" (ícone `Tag`)
-RadioGroup com 3 opções (mesmo conteúdo da Etapa 2 da galeria):
-- **Não, sem venda** — cliente não vê preços
-- **Sim, COM pagamento** — cliente é cobrado ao finalizar
-- **Sim, SEM pagamento** — cliente é apenas informado dos preços
-
-### Card "Tamanho Padrão das Imagens" (ícone `Image`)
-RadioGroup ou Select com 3 opções:
-- **1024 px** — leve, ideal para web
-- **1920 px** (recomendado) — equilíbrio qualidade/peso
-- **2560 px** — alta resolução
-
-Ambos chamam `updateSettings({ defaultSaleMode: ... })` / `updateSettings({ defaultImageResize: ... })`.
-
-## 5. Aplicar defaults em `GalleryCreate.tsx`
-
-Trocar inicializações hardcoded:
 ```ts
-const { settings } = useSettings();
-
-const [saleMode, setSaleMode] = useState<SaleMode>(
-  settings?.defaultSaleMode ?? 'sale_without_payment'
-);
-const [imageResizeOption, setImageResizeOption] = useState<ImageResizeOption>(
-  settings?.defaultImageResize ?? 1920
-);
+const lightboxPhotos = useMemo(() => {
+  if (!lightboxState) return [];
+  return lightboxState.source === 'selection' ? selectedPhotos : transformedPhotos;
+}, [lightboxState, selectedPhotos, transformedPhotos]);
 ```
 
-**Importante** — como `settings` chega async, adicionar `useEffect` para hidratar quando settings carregar (se o usuário ainda não interagiu):
+### 3. Aberturas
+
+- **Aba Fotos** (linha 689): mantém comportamento atual, mas usando o novo estado.
+  ```ts
+  onViewFullscreen={() => setLightboxState({
+    source: 'all',
+    index: transformedPhotos.findIndex(p => p.id === photo.id),
+  })}
+  ```
+- **Lista da aba Seleção** (linha 778): indexar contra `selectedPhotos`.
+  ```ts
+  onClick={() => setLightboxState({
+    source: 'selection',
+    index: selectedPhotos.findIndex(p => p.id === photo.id),
+  })}
+  ```
+
+### 4. Render do Lightbox
+
+```tsx
+{lightboxState !== null && (
+  <Lightbox
+    photos={lightboxPhotos}
+    currentIndex={lightboxState.index}
+    allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
+    disabled
+    onClose={() => setLightboxState(null)}
+    onNavigate={(idx) => setLightboxState((prev) => prev ? { ...prev, index: idx } : prev)}
+    onSelect={() => {}}
+  />
+)}
+```
+
+### 5. Guard contra estado inválido
+
+Se `selectedPhotos` mudar enquanto o lightbox estiver aberto na origem `selection` e o índice ficar fora dos limites, fechar automaticamente:
 
 ```ts
 useEffect(() => {
-  if (settings?.defaultSaleMode) setSaleMode(settings.defaultSaleMode);
-  if (settings?.defaultImageResize) setImageResizeOption(settings.defaultImageResize);
-}, [settings?.defaultSaleMode, settings?.defaultImageResize]);
-// Apenas no mount — não sobrescrever após o usuário interagir
+  if (lightboxState && lightboxState.index >= lightboxPhotos.length) {
+    setLightboxState(null);
+  }
+}, [lightboxPhotos.length, lightboxState]);
 ```
-
-Usaremos uma flag `userTouchedRef` para impedir sobrescrita após o usuário ter alterado manualmente nessa sessão.
-
-**Não aplicar** quando vier do Modo Assistido (`gestaoParams.modelo_de_cobranca` tem prioridade — já existe lógica para isso).
-
-## 6. Integração com Modo Assistido
-
-A hierarquia continua:
-1. `regras_congeladas` da sessão (Modo Assistido) — prioridade máxima
-2. Defaults do fotógrafo (novo)
-3. Fallback hardcoded
-
-Nada a alterar na lógica do `useGestaoParams` — apenas garantir que o `useEffect` de hidratação **não rode** se `hasGestaoParams === true`.
-
-## 7. UX
-
-- Toast confirmando alteração (já tem via `updateSettings` existente)
-- Adicionar texto auxiliar pequeno em cada card explicando "Aplicado automaticamente em novas galerias"
-- Manter padrão visual de cards `lunari-card p-6 space-y-6` com ícone redondo
-
-## Arquivos modificados
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/migrations/<novo>.sql` | Adicionar colunas `default_sale_mode` e `default_image_resize` |
-| `src/types/gallery.ts` | Adicionar campos em `GlobalSettings` |
-| `src/data/mockData.ts` | Defaults no mock |
-| `src/hooks/useGallerySettings.ts` | Ler/gravar novas colunas |
-| `src/components/settings/GeneralSettings.tsx` | Dois novos cards |
-| `src/pages/GalleryCreate.tsx` | Hidratar `saleMode` e `imageResizeOption` dos settings |
 
 ## Resultado
 
-- Fotógrafo configura "modo de venda padrão" e "tamanho padrão" uma vez
-- Toda nova galeria já abre com esses valores pré-selecionados
-- Modo Assistido continua tendo prioridade sobre os defaults
-- Persistência por usuário no banco
+- Abrir foto via aba **Fotos** → lightbox navega por todas as fotos (comportamento mantido).
+- Abrir foto via lista da aba **Seleção** → lightbox navega **apenas entre as selecionadas**, mostrando o contador correto (ex: `2 / 5`).
+- Sem regressões nas outras abas/lista.
+
+## Arquivo modificado
+
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/GalleryDetail.tsx` | Estado do lightbox passa a guardar a origem; lista de fotos passada ao Lightbox depende da aba; índices recalculados conforme a origem |
 
