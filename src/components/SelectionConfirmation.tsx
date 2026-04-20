@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ArrowLeft, Check, Loader2, Heart, MessageSquare, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { Gallery, GalleryPhoto } from '@/types/gallery';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { cn } from '@/lib/utils';
@@ -34,16 +34,9 @@ function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
 
   const displayName = photo.displayName || photo.originalFilename || photo.filename;
 
-  const aspectRatio = photo.width && photo.height
-    ? `${photo.width} / ${photo.height}`
-    : '4 / 3';
-
   return (
-    <div className="group relative flex flex-col gap-2">
-      <div
-        className="relative w-full overflow-hidden rounded-md bg-muted"
-        style={{ aspectRatio }}
-      >
+    <div className="group flex gap-3 rounded-lg border border-border/20 bg-card/40 p-2">
+      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md bg-muted md:h-28 md:w-28">
         {hasError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
             <ImageOff className="h-5 w-5" />
@@ -68,46 +61,36 @@ function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
           </>
         )}
 
-        {/* Favorite badge */}
-        {photo.isFavorite && (
-          <div className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md">
-            <Heart className="h-3.5 w-3.5 fill-current" />
-          </div>
-        )}
-
-        {/* Extra pill */}
-        {extraIndex !== null && (
-          <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-full bg-primary/90 text-primary-foreground text-[10px] font-semibold shadow-md backdrop-blur-sm">
-            +{extraIndex}
-          </div>
-        )}
-
-        {/* Comment badge */}
-        {photo.comment && (
-          <TooltipProvider delayDuration={150}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="absolute bottom-1.5 right-1.5 h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md cursor-help">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-[240px]">
-                <p className="text-xs whitespace-pre-wrap break-words">{photo.comment}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
       </div>
 
-      <div className="px-0.5 space-y-0.5">
-        <p className="text-[11px] leading-tight font-medium truncate" title={displayName}>
+      <div className="min-w-0 flex-1 space-y-2 py-1">
+        <p className="truncate text-sm font-medium leading-tight" title={displayName}>
           {displayName}
         </p>
         {photo.comment && (
-          <p className="text-[10px] leading-tight text-muted-foreground line-clamp-2 italic">
+          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground italic" title={photo.comment}>
             "{photo.comment}"
           </p>
         )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {photo.isFavorite && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0 text-[10px]">
+              <Heart className="h-3 w-3 fill-destructive text-destructive" />
+              Favorita
+            </Badge>
+          )}
+          {photo.comment && (
+            <Badge variant="outline" className="gap-1 px-2 py-0 text-[10px]">
+              <MessageSquare className="h-3 w-3" />
+              Comentário
+            </Badge>
+          )}
+          {extraIndex !== null && (
+            <Badge className="px-2 py-0 text-[10px]">
+              +{extraIndex} extra
+            </Badge>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -192,13 +175,13 @@ export function SelectionConfirmation({
 
       {/* Main Content */}
       <main className="flex-1 px-4 py-8 pb-28 overflow-y-auto">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 lg:grid-cols-[minmax(420px,520px)_minmax(360px,460px)] lg:justify-center lg:gap-16">
           
           {/* LEFT (desktop) / BOTTOM (mobile): Visual grid */}
           <section className="order-2 lg:order-1">
             <div className="flex items-baseline justify-between mb-4 mt-8 lg:mt-0">
               <h2 className="text-xl font-semibold">
-                Suas fotos <span className="text-muted-foreground font-normal">({selectedPhotos.length})</span>
+                Resumo de seleção <span className="text-muted-foreground font-normal">({selectedPhotos.length})</span>
               </h2>
             </div>
 
@@ -219,7 +202,7 @@ export function SelectionConfirmation({
               </div>
             )}
 
-            <div className="flex flex-col gap-3 lg:max-w-[480px] lg:mx-auto lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto lg:pr-2">
+            <div className="flex flex-col gap-3 lg:max-h-[calc(100vh-220px)] lg:max-w-[520px] lg:overflow-y-auto lg:pr-2">
               {selectedPhotos.map((photo, idx) => {
                 const position = idx + 1; // 1-indexed
                 const extraIndex = position > includedLimit ? position - includedLimit : null;
