@@ -34,9 +34,16 @@ function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
 
   const displayName = photo.displayName || photo.originalFilename || photo.filename;
 
+  const aspectRatio = photo.width && photo.height
+    ? `${photo.width} / ${photo.height}`
+    : '4 / 3';
+
   return (
-    <div className="group relative flex flex-col gap-1.5">
-      <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
+    <div className="group relative flex flex-col gap-2">
+      <div
+        className="relative w-full overflow-hidden rounded-md bg-muted"
+        style={{ aspectRatio }}
+      >
         {hasError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
             <ImageOff className="h-5 w-5" />
@@ -53,7 +60,7 @@ function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
               onError={() => setHasError(true)}
               onContextMenu={(e) => e.preventDefault()}
               className={cn(
-                'h-full w-full object-cover select-none transition-opacity duration-300',
+                'h-full w-full object-contain select-none transition-opacity duration-300',
                 !isLoaded && 'opacity-0',
                 isLoaded && 'opacity-100'
               )}
