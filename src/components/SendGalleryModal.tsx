@@ -374,7 +374,7 @@ export function SendGalleryModal({
               className="gap-2 flex-shrink-0"
             >
               {isLinkCopied ? (
-                <Check className="h-4 w-4 text-green-500" />
+                <Check className="h-4 w-4 text-success" />
               ) : (
                 <Link className="h-4 w-4" />
               )}
@@ -396,14 +396,14 @@ export function SendGalleryModal({
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Button
                 onClick={handleCopyMessage}
                 variant="outline"
                 className="justify-center gap-2 h-11"
               >
                 {isCopied ? (
-                  <Check className="h-4 w-4 text-green-500" />
+                  <Check className="h-4 w-4 text-success" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
@@ -421,6 +421,22 @@ export function SendGalleryModal({
                   <span className="text-xs opacity-80">→ {formattedPhone}</span>
                 )}
               </Button>
+
+              <Button
+                onClick={handleSendEmail}
+                variant="outline"
+                disabled={isEmailActionDisabled}
+                className="justify-center gap-2 h-11"
+              >
+                {isSendingEmail ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : emailFeedback?.status === 'enviado' ? (
+                  <Check className="h-4 w-4 text-success" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                {isSendingEmail ? 'Enviando...' : !gallery.clienteEmail ? 'Sem e-mail cadastrado' : 'Enviar e-mail'}
+              </Button>
             </div>
 
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
@@ -433,7 +449,7 @@ export function SendGalleryModal({
                   <Mail className="h-4 w-4 text-muted-foreground" />
                 )}
                 <span className="text-muted-foreground">
-                  {emailFeedback?.message || 'Envio automático de e-mail preparado.'}
+                  {emailStatusMessage}
                 </span>
               </div>
               {!gallery.clienteEmail && (
