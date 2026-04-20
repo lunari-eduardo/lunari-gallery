@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, MessageCircle, Mail, Check, Send, Link, Phone, Calendar, Lock, Loader2 } from 'lucide-react';
+import { Copy, MessageCircle, Mail, Check, Send, Link, Phone, Calendar, Lock, Loader2, AlertCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -48,7 +48,9 @@ export function SendGalleryModal({
   const [isPreparing, setIsPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [resolvedToken, setResolvedToken] = useState<string | null>(gallery.publicToken);
+  const [emailFeedback, setEmailFeedback] = useState<{ status: 'enviado' | 'erro' | 'ignorado'; message: string } | null>(null);
   const hasSentRef = useRef(false);
+  const hasEmailAttemptRef = useRef(false);
 
   // When modal opens, always call RPC to ensure gallery is ready for sharing
   useEffect(() => {
@@ -56,6 +58,8 @@ export function SendGalleryModal({
       hasSentRef.current = false;
       setPrepareError(null);
       setResolvedToken(null);
+      setEmailFeedback(null);
+      hasEmailAttemptRef.current = false;
       return;
     }
 
@@ -76,6 +80,22 @@ export function SendGalleryModal({
         }
 
         setResolvedToken(result.token!);
+
+        if (!hasEmailAttemptRef.current) {
+          hasEmailAttemptRef.current = true;
+          try {
+            const { data: emailResult } = await supabase.functions.invoke('send-email', {
+              body: { eventType: 'gallery_sent', galleryId: gallery.id, publicToken: result.token },
+            });
+            const feedback = emailResult as { status?: 'enviado' | 'erro' | 'ignorado'; message?: string } | null;
+            setEmailFeedback({ status: feedback?.status || 'erro', message: feedback?.message || 'Não foi possível enviar o e-mail agora.' });
+            if (feedback?.status === 'enviado') toast.success('E-mail enviado para o cliente.');
+            else if (feedback?.message) toast.info(feedback.message);
+          } catch (emailError) {
+            console.warn('Email send failed without blocking share:', emailError);
+            setEmailFeedback({ status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
+          }
+        }
       } catch (e: any) {
         console.error('Error preparing gallery share:', e);
         setPrepareError(e.message || 'Erro ao publicar galeria');
@@ -224,6 +244,22 @@ export function SendGalleryModal({
                 const result = data as { token?: string; ready?: boolean; error?: string };
                 if (!result?.ready) throw new Error(result?.error || 'Erro');
                 setResolvedToken(result.token!);
+
+        if (!hasEmailAttemptRef.current) {
+          hasEmailAttemptRef.current = true;
+          try {
+            const { data: emailResult } = await supabase.functions.invoke('send-email', {
+              body: { eventType: 'gallery_sent', galleryId: gallery.id, publicToken: result.token },
+            });
+            const feedback = emailResult as { status?: 'enviado' | 'erro' | 'ignorado'; message?: string } | null;
+            setEmailFeedback({ status: feedback?.status || 'erro', message: feedback?.message || 'Não foi possível enviar o e-mail agora.' });
+            if (feedback?.status === 'enviado') toast.success('E-mail enviado para o cliente.');
+            else if (feedback?.message) toast.info(feedback.message);
+          } catch (emailError) {
+            console.warn('Email send failed without blocking share:', emailError);
+            setEmailFeedback({ status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
+          }
+        }
               } catch (e: any) {
                 setPrepareError(e.message);
               } finally {
@@ -352,15 +388,23 @@ export function SendGalleryModal({
               </Button>
             </div>
 
-            <Button
-              variant="outline"
-              className="w-full justify-center gap-2 h-10 text-sm opacity-50 cursor-not-allowed"
-              disabled
-            >
-              <Mail className="h-4 w-4" />
-              Enviar por Email
-              <span className="text-xs bg-muted px-2 py-0.5 rounded">Em breve</span>
-            </Button>
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+              <div className="flex items-center gap-2">
+                {emailFeedback?.status === 'enviado' ? (
+                  <Check className="h-4 w-4 text-success" />
+                ) : emailFeedback?.status === 'erro' ? (
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                ) : (
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-muted-foreground">
+                  {emailFeedback?.message || 'Envio automático de e-mail preparado.'}
+                </span>
+              </div>
+              {!gallery.clienteEmail && (
+                <p className="mt-2 text-xs text-muted-foreground">Use Copiar Link ou WhatsApp para compartilhar com este cliente.</p>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

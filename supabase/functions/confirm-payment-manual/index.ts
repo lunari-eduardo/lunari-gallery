@@ -19,6 +19,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+
+async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: 'payment_confirmed', paymentId }),
+    });
+    if (!response.ok) console.warn('⚠️ payment email notification failed:', response.status, await response.text());
+  } catch (error) {
+    console.warn('⚠️ payment email notification exception:', error);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -189,6 +203,8 @@ Deno.serve(async (req: Request) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, targetCobrancaId);
 
     console.log(`💳 Cobrança ${targetCobrancaId} finalizada por user ${authenticatedUserId}`);
 
