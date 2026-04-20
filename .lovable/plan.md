@@ -1,101 +1,57 @@
 
 
-# Plano: Resumo visual de seleção na tela de confirmação
+# Plano: Empilhar fotos selecionadas em coluna única respeitando proporção original
 
-## Objetivo
+## Diagnóstico
 
-Adicionar uma grade com as fotos selecionadas (thumbnail + nome + favorito + comentário) ao lado do resumo descritivo na etapa **Confirmar Seleção**, para o cliente revisar visualmente antes de fechar.
+Hoje o `SelectedPhotoCard` em `SelectionConfirmation.tsx` força `aspect-square object-cover`, recortando as imagens e exibindo-as em grade de 2/3 colunas. O cliente perde a noção real do enquadramento das fotos verticais e horizontais, que é justamente o que ele precisa revisar antes de confirmar.
 
-## Layout
+## Solução
 
-### Desktop (≥1024px) — duas colunas
-```text
-┌──────────────────────────────────────────────────────────┐
-│  Header: ← Voltar    Confirmar Seleção                   │
-├───────────────────────────────┬──────────────────────────┤
-│                               │                          │
-│  RESUMO DA SELEÇÃO            │  SUA SELEÇÃO (descritivo)│
-│  (grid 2 col de fotos         │  • Selecionadas: 12      │
-│   com scroll interno)         │  • Incluídas: 10         │
-│  ┌─────┐ ┌─────┐              │  • Extras: 2             │
-│  │ ♥   │ │     │              │  • Valor: R$ 50,00       │
-│  │ IMG │ │ IMG │              │                          │
-│  │nome │ │nome │              │  Total adicional R$ 50   │
-│  │💬…  │ │     │              │                          │
-│  └─────┘ └─────┘              │  Pagamento online…       │
-│  ┌─────┐ ┌─────┐              │  Não será possível…      │
-│  │ ... │ │ ... │              │                          │
-│                               │                          │
-├───────────────────────────────┴──────────────────────────┤
-│         [ ✓ Confirmar e Pagar ]   (centralizado)         │
-└──────────────────────────────────────────────────────────┘
-```
-Proporção `lg:grid-cols-[1.1fr_1fr]` — fotos com leve prioridade de espaço. Cada coluna tem scroll independente (`overflow-y-auto`), header e footer ficam fixos.
+Trocar a grade por **coluna única empilhada**, com cada foto ocupando 100% da largura da coluna e altura proporcional ao aspect ratio original.
 
-### Mobile (<1024px) — empilhado
-```text
-┌──────────────────────────┐
-│ Header                   │
-├──────────────────────────┤
-│ SUA SELEÇÃO (descritivo) │  ← primeiro o resumo (decisão)
-│ • valores e total        │
-├──────────────────────────┤
-│ RESUMO DA SELEÇÃO        │  ← depois a grade visual
-│ ┌────┐ ┌────┐            │
-│ │IMG │ │IMG │ ...        │
-│ └────┘ └────┘            │
-├──────────────────────────┤
-│ [ ✓ Confirmar e Pagar ]  │  (sticky bottom)
-└──────────────────────────┘
-```
-Página rolável de cima para baixo (uma coluna, sem scroll aninhado). Botão fixo no rodapé como hoje.
+### Mudanças em `src/components/SelectionConfirmation.tsx`
 
-## Cartão de foto (componente novo, inline em `SelectionConfirmation.tsx`)
+1. **Remover grid de fotos**:
+   - Hoje: `grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2 lg:gap-3`.
+   - Novo: `flex flex-col gap-3` (uma foto por linha, empilhadas).
 
-Cada foto selecionada vira um mini-card:
+2. **Substituir `aspect-square object-cover` por aspect ratio dinâmico**:
+   - No `<img>` da `SelectedPhotoCard`: usar `w-full h-auto object-contain` (sem recorte).
+   - Wrapper recebe `style={{ aspectRatio: photo.width && photo.height ? \`\${photo.width} / \${photo.height}\` : '4 / 3' }}` como **fallback visual** enquanto carrega, evitando salto de layout.
+   - Fundo `bg-muted` permanece para preencher enquanto a imagem baixa.
 
-- Miniatura quadrada `aspect-square object-cover` usando `photo.previewUrl`.
-- **Nome de exibição**: `photo.displayName || photo.originalFilename || photo.filename` (truncado com `line-clamp-1`).
-- **Badge favorito**: ícone `Heart` preenchido vermelho/rosa no canto superior direito quando `photo.isFavorite`.
-- **Comentário**: ícone `MessageSquare` + texto truncado em 2 linhas (`line-clamp-2`) quando `photo.comment`. Hover/tap mostra tooltip com o texto completo.
-- **Indicador "extra"**: pequena pílula no canto inferior esquerdo (`+1`, `+2`…) nas fotos que excedem `includedPhotos`. Usa `photo.order` ou ordem da lista de selecionadas para numerar a partir de `includedPhotos + 1`.
+3. **Largura da coluna esquerda (desktop)**:
+   - Manter `lg:grid-cols-[1.1fr_1fr]` mas limitar a coluna de fotos com `max-w-[480px]` (ou similar) para não exibir verticais gigantes em telas largas. Centralizar com `mx-auto`.
+   - Mobile: largura cheia (já é, sem ajuste).
 
-Grid:
-- Desktop: `grid-cols-2 gap-3`.
-- Mobile: `grid-cols-3 gap-2` (mais compacto, foco em "passar o olho").
+4. **Posicionamento dos badges (favorito, comentário, pílula `+N`)**:
+   - Continuam absolutos sobre o `<img>`, mas agora o container é a foto inteira na proporção real — badges ficam visíveis nos cantos como hoje.
+   - Garantir `pointer-events-none` no wrapper de overlays para não bloquear scroll em mobile.
 
-Cabeçalho da seção: `"Suas fotos (N)"` com contadores secundários: `N favoritas`, `N com comentário` (quando > 0).
+5. **Nome + comentário abaixo da foto**:
+   - Permanecem como estão (texto truncado, ícone de comentário com tooltip).
+   - Espaçamento `mt-2` entre foto e legenda; `gap-3` entre cards já dá respiro suficiente.
 
-## Tratamento de casos
+6. **Scroll**:
+   - Desktop: coluna esquerda mantém `lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto lg:pr-2` para permitir rolar várias fotos sem afetar o resumo à direita (sticky).
+   - Mobile: scroll natural da página.
 
-| Caso | Comportamento |
-|---|---|
-| Nenhuma foto selecionada | Não entra nessa tela (botão de confirmar já é bloqueado antes). |
-| Lista grande (50+) | Scroll interno na coluna desktop; mobile usa scroll natural da página. |
-| Carregamento de imagem falha | Fallback `bg-muted` + ícone `ImageOff` (mesmo padrão do `PhotoCard`). |
-| Sem comentário e sem favorito | Card mostra só thumb + nome — visual limpo. |
+### Tipos / dados
 
-## Ajustes técnicos
-
-### `src/components/SelectionConfirmation.tsx`
-- Filtrar `photos.filter(p => p.isSelected)` e ordenar por `order`.
-- Adicionar grid responsivo: `lg:grid-cols-[1.1fr_1fr] lg:gap-8` no `<main>`, com `max-w-6xl` em vez de `max-w-lg`.
-- Em mobile (`<lg`) manter empilhado em coluna única, resumo descritivo primeiro, grade depois.
-- Criar helper local `SelectedPhotoCard` (componente interno do arquivo) — evita novo arquivo para algo específico desta tela.
-- Ícones reaproveitados de `lucide-react`: `Heart`, `MessageSquare`, `ImageOff` (já no projeto).
-- Aplicar `useImageProtection` hook? **Não** — esta tela é pós-seleção interna; manter consistência com o `PhotoCard` da galeria não é necessário aqui (já está protegido na grid principal). Apenas `select-none` + `draggable={false}` no `<img>`.
-
-### Bottom action bar
-- Centralizar conteúdo: `max-w-6xl mx-auto` no wrapper interno; o botão continua `w-full` em mobile e `lg:max-w-md lg:mx-auto` em desktop para não ocupar largura excessiva.
-
-### Sem mudanças em
-- `ClientGallery.tsx` (já passa `photos={localPhotos}` — só precisamos usar).
-- Tipos, hooks, ou backend.
+- `Photo` já expõe `width` e `height` (usados no `MasonryGrid`). Reaproveitar.
+- Quando ausentes: usar fallback `aspectRatio: '4 / 3'` para o placeholder, e deixar a imagem assumir altura natural ao carregar (`onLoad` sem necessidade de medição manual graças a `w-full h-auto`).
 
 ## Resultado esperado
 
-- Cliente vê na mesma tela **o que está confirmando** (grade visual com favoritas e comentários) e **quanto vai pagar** (resumo numérico).
-- Desktop aproveita o espaço horizontal sem rolagem dupla incômoda; mobile mantém leitura vertical natural com botão sticky.
-- Reduz risco de confirmação por engano (usuário identifica fotos erradas/comentários esquecidos antes de fechar).
-- Zero impacto em backend, fluxo de pagamento ou contagem de extras.
+- Cliente vê cada foto **inteira** (sem corte), na largura da coluna, empilhada verticalmente.
+- Verticais aparecem altas e estreitas; horizontais aparecem largas e baixas — todas alinhadas à mesma largura, respeitando proporção real.
+- Favorito, comentário e pílula `+N` continuam visíveis nos cantos.
+- Resumo descritivo fica fixo à direita (desktop) ou no topo (mobile); botão "Confirmar e Pagar" continua sticky no rodapé.
+
+## Arquivos modificados
+
+| Arquivo | Mudança |
+|---|---|
+| `src/components/SelectionConfirmation.tsx` | Trocar grid por coluna única; usar `aspectRatio` dinâmico baseado em `width`/`height`; ajustar `max-w` da coluna de fotos no desktop |
 
