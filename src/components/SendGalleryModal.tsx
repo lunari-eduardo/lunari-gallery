@@ -177,7 +177,72 @@ export function SendGalleryModal({
     await markAsSent();
   };
 
+  const handleSendEmail = async () => {
+    if (!clientLink || !resolvedToken) {
+      const message = 'Link da galeria ainda não está pronto.';
+      setEmailFeedback({ status: 'erro', message });
+      toast.error(message);
+      return;
+    }
+
+    if (!gallery.clienteEmail) {
+      const message = 'Cliente não possui e-mail cadastrado.';
+      setEmailFeedback({ status: 'ignorado', message });
+      toast.info(message);
+      return;
+    }
+
+    if (!emailSendingEnabled) {
+      const message = 'E-mails automáticos estão desativados.';
+      setEmailFeedback({ status: 'ignorado', message });
+      toast.info(message);
+      return;
+    }
+
+    if (!galleryEmailEnabled) {
+      const message = 'Envio de e-mail de galeria está desativado.';
+      setEmailFeedback({ status: 'ignorado', message });
+      toast.info(message);
+      return;
+    }
+
+    setIsSendingEmail(true);
+    setEmailFeedback(null);
+    try {
+      const { data: emailResult, error } = await supabase.functions.invoke('send-email', {
+        body: { eventType: 'gallery_sent', galleryId: gallery.id, publicToken: resolvedToken },
+      });
+
+      if (error) throw error;
+
+      const feedback = emailResult as { status?: 'enviado' | 'erro' | 'ignorado'; message?: string } | null;
+      const status = feedback?.status || 'erro';
+      const message = feedback?.message || (status === 'enviado' ? 'E-mail enviado para o cliente.' : 'Não foi possível enviar o e-mail agora.');
+      setEmailFeedback({ status, message });
+      if (status === 'enviado') toast.success(message);
+      else if (status === 'erro') toast.error(message);
+      else toast.info(message);
+      if (status === 'enviado') await markAsSent();
+    } catch (emailError) {
+      console.warn('Email send failed without blocking share:', emailError);
+      const message = 'Não foi possível enviar o e-mail agora.';
+      setEmailFeedback({ status: 'erro', message });
+      toast.error(message);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   const formattedPhone = formatPhoneDisplay(gallery.clienteTelefone);
+  const isEmailActionDisabled = isSendingEmail || !gallery.clienteEmail || !emailSendingEnabled || !galleryEmailEnabled || emailFeedback?.status === 'enviado' || emailFeedback?.status === 'ignorado';
+  const emailStatusMessage = emailFeedback?.message
+    || (!gallery.clienteEmail
+      ? 'Cliente não possui e-mail cadastrado. Use Copiar Link ou WhatsApp.'
+      : !emailSendingEnabled
+        ? 'E-mails automáticos estão desativados nas configurações.'
+        : !galleryEmailEnabled
+          ? 'O envio de e-mail de galeria está desativado nas configurações.'
+          : 'Envie por e-mail quando quiser notificar o cliente diretamente.');
 
   const handleOpenChange = (open: boolean) => {
     onOpenChange(open);
