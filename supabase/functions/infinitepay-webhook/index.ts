@@ -20,6 +20,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+
+async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: 'payment_confirmed', paymentId }),
+    });
+    if (!response.ok) console.warn('⚠️ payment email notification failed:', response.status, await response.text());
+  } catch (error) {
+    console.warn('⚠️ payment email notification exception:', error);
+  }
+}
+
 interface InfinitePayWebhookPayload {
   invoice_slug?: string;
   amount?: number;
@@ -371,6 +385,7 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
+    await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, cobranca.id);
 
     // Update webhook log to success
     if (initialLogId) {

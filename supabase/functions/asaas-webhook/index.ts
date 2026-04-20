@@ -282,6 +282,7 @@ async function processGalleryPayment(adminClient: any, payment: any) {
       console.error('❌ RPC finalize_gallery_payment error:', rpcError);
     } else {
       console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
+      await notifyPaymentConfirmed(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, cobranca.id);
     }
   } else {
     console.log(`⏳ Cobrança ${cobranca.id}: ${refreshed?.parcelas_pagas}/${refreshed?.total_parcelas} parcelas pagas, status=${refreshed?.status}`);
@@ -295,6 +296,20 @@ async function processGalleryPayment(adminClient: any, payment: any) {
       descricao: `Parcela ${numeroParcela} confirmada via Asaas (R$ ${valorBruto.toFixed(2)})`,
       user_id: null,
     });
+  }
+}
+
+
+async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: 'payment_confirmed', paymentId }),
+    });
+    if (!response.ok) console.warn('⚠️ payment email notification failed:', response.status, await response.text());
+  } catch (error) {
+    console.warn('⚠️ payment email notification exception:', error);
   }
 }
 

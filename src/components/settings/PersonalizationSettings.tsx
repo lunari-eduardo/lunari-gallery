@@ -4,6 +4,7 @@ import { LogoUploader } from './LogoUploader';
 import { ThemeConfig } from './ThemeConfig';
 import { WatermarkSettings } from './WatermarkSettings';
 import { EmailTemplates } from './EmailTemplates';
+import { EmailAutomationSettings } from './EmailAutomationSettings';
 import { FaviconUploader } from './FaviconUploader';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -118,6 +119,10 @@ export function PersonalizationSettings() {
               </p>
             </div>
           )}
+        </div>
+
+        <div className="lunari-card p-6">
+          <EmailAutomationSettings settings={settings} updateSettings={updateSettings} />
         </div>
 
         {/* Email Templates */}

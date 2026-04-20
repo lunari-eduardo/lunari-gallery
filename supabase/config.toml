@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.gallery-visitors]
 verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
