@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ArrowLeft, Check, Loader2, Heart, MessageSquare, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Gallery, GalleryPhoto } from '@/types/gallery';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { cn } from '@/lib/utils';
@@ -25,10 +24,9 @@ interface SelectionConfirmationProps {
 
 interface SelectedPhotoCardProps {
   photo: GalleryPhoto;
-  extraIndex: number | null; // null = within package, number >= 1 = extra position
 }
 
-function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
+function SelectedPhotoCard({ photo }: SelectedPhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -36,7 +34,7 @@ function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
 
   return (
     <div className="group flex gap-3 rounded-lg border border-border/20 bg-card/40 p-2">
-      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md bg-muted md:h-28 md:w-28">
+      <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-md bg-muted md:h-32 md:w-32">
         {hasError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
             <ImageOff className="h-5 w-5" />
@@ -64,33 +62,19 @@ function SelectedPhotoCard({ photo, extraIndex }: SelectedPhotoCardProps) {
       </div>
 
       <div className="min-w-0 flex-1 space-y-2 py-1">
-        <p className="truncate text-sm font-medium leading-tight" title={displayName}>
-          {displayName}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="truncate text-sm font-medium leading-tight" title={displayName}>
+            {displayName}
+          </p>
+          {photo.isFavorite && (
+            <Heart className="h-4 w-4 shrink-0 fill-destructive text-destructive" />
+          )}
+        </div>
         {photo.comment && (
           <p className="line-clamp-2 text-xs leading-snug text-muted-foreground italic" title={photo.comment}>
             "{photo.comment}"
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {photo.isFavorite && (
-            <Badge variant="secondary" className="gap-1 px-2 py-0 text-[10px]">
-              <Heart className="h-3 w-3 fill-destructive text-destructive" />
-              Favorita
-            </Badge>
-          )}
-          {photo.comment && (
-            <Badge variant="outline" className="gap-1 px-2 py-0 text-[10px]">
-              <MessageSquare className="h-3 w-3" />
-              Comentário
-            </Badge>
-          )}
-          {extraIndex !== null && (
-            <Badge className="px-2 py-0 text-[10px]">
-              +{extraIndex} extra
-            </Badge>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -203,17 +187,12 @@ export function SelectionConfirmation({
             )}
 
             <div className="flex flex-col gap-3 lg:max-h-[calc(100vh-220px)] lg:max-w-[520px] lg:overflow-y-auto lg:pr-2">
-              {selectedPhotos.map((photo, idx) => {
-                const position = idx + 1; // 1-indexed
-                const extraIndex = position > includedLimit ? position - includedLimit : null;
-                return (
-                  <SelectedPhotoCard
-                    key={photo.id}
-                    photo={photo}
-                    extraIndex={extraIndex}
-                  />
-                );
-              })}
+              {selectedPhotos.map((photo) => (
+                <SelectedPhotoCard
+                  key={photo.id}
+                  photo={photo}
+                />
+              ))}
             </div>
           </section>
 
