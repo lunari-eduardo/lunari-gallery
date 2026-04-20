@@ -687,7 +687,7 @@ export default function GalleryDetail() {
                     allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
                     disabled
                     onSelect={() => {}}
-                    onViewFullscreen={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
+                    onViewFullscreen={() => setLightboxState({ source: 'all', index: transformedPhotos.findIndex(p => p.id === photo.id) })}
                   />
                 </MasonryItem>
               ))}
