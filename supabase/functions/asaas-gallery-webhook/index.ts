@@ -30,6 +30,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+async function notifyPaymentConfirmed(paymentId: string) {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: 'payment_confirmed', paymentId }),
+    });
+    if (!response.ok) console.warn('⚠️ payment email notification failed:', response.status, await response.text());
+  } catch (error) {
+    console.warn('⚠️ payment email notification exception:', error);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -146,7 +161,7 @@ async function processPayment(
     console.log(`⏭️ Cobrança ${cobrancaId} already paid (${cobranca.status}), skipping`);
     return new Response(
       JSON.stringify({ received: true, message: 'Already processed' }),
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -245,6 +260,7 @@ async function processPayment(
     // Don't return error — the trigger chain may have already done the work
   } else {
     console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
+    await notifyPaymentConfirmed(cobrancaId);
   }
 
   // ============================================================
@@ -264,6 +280,6 @@ async function processPayment(
 
   return new Response(
     JSON.stringify({ received: true, processed: true }),
-    { headers: { 'Content-Type': 'application/json' } }
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
