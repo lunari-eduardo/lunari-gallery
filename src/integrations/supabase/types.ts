@@ -3884,12 +3884,10 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
-      prepare_gallery_share:
-        | { Args: { p_gallery_id: string }; Returns: Json }
-        | {
-            Args: { p_gallery_id: string; p_mark_as_sent?: boolean }
-            Returns: Json
-          }
+      prepare_gallery_share: {
+        Args: { p_gallery_id: string; p_mark_as_sent?: boolean }
+        Returns: Json
+      }
       purchase_credits: {
         Args: {
           _amount: number

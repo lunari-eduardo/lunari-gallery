@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.prepare_gallery_share(uuid);
