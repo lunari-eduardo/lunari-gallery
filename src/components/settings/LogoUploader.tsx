@@ -28,7 +28,6 @@ export function LogoUploader({ logo, onLogoChange }: LogoUploaderProps) {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       onLogoChange(result);
-      toast.success('Logo atualizado!');
     };
     reader.onerror = () => {
       toast.error('Erro ao carregar arquivo.');

@@ -148,7 +148,6 @@ export function SendGalleryModal({
   const handleCopyMessage = async () => {
     await navigator.clipboard.writeText(fullMessage);
     setIsCopied(true);
-    toast.success('Mensagem copiada!');
     setTimeout(() => setIsCopied(false), 2000);
     await markAsSent();
   };
@@ -157,7 +156,6 @@ export function SendGalleryModal({
     if (clientLink) {
       await navigator.clipboard.writeText(clientLink);
       setIsLinkCopied(true);
-      toast.success('Link copiado!');
       setTimeout(() => setIsLinkCopied(false), 2000);
       await markAsSent();
     }

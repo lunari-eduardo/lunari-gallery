@@ -44,7 +44,7 @@ import { PaymentHistoryCard } from '@/components/PaymentHistoryCard';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
-import { toast } from 'sonner';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getGalleryUrl } from '@/lib/galleryUrl';
@@ -291,9 +291,6 @@ export default function GalleryDetail() {
       
       if (data?.status === 'pago' && cobrancaData.status !== 'pago') {
         console.log('[Polling] Payment confirmed! Refreshing data...');
-        toast.success('Pagamento confirmado!', {
-          description: 'O status foi atualizado automaticamente.',
-        });
         
         // Refresh all relevant queries
         queryClient.invalidateQueries({ queryKey: ['galerias'] });
@@ -432,9 +429,6 @@ export default function GalleryDetail() {
       await sendSupabaseGallery(supabaseGallery.id);
       // Refresh gallery data to pick up the token set by RPC
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Galeria enviada!', {
-        description: `Galeria publicada e pronta para o cliente`,
-      });
     } catch (error) {
       console.error('Error sending gallery:', error);
     }

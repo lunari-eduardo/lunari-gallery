@@ -7,7 +7,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { PersonalizationSettings } from '@/components/settings/PersonalizationSettings';
 import { PaymentSettings } from '@/components/settings/PaymentSettings';
-import { toast } from 'sonner';
+
 
 export default function Settings() {
   const { settings, updateSettings } = useSettings();
@@ -20,7 +20,6 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(isMpCallback ? 'payment' : 'general');
 
   const handleSave = () => {
-    toast.success('Configurações salvas!');
   };
 
   return (

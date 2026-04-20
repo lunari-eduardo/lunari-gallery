@@ -61,10 +61,6 @@ export function ChangeEmailForm({ currentEmail }: ChangeEmailFormProps) {
 
     setEmailSent(true);
     form.reset();
-    toast({
-      title: 'Email de confirmação enviado',
-      description: `Um link de confirmação foi enviado para ${data.newEmail}.`,
-    });
   };
 
   if (emailSent) {

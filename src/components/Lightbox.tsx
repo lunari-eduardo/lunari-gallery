@@ -108,7 +108,6 @@ export function Lightbox({
           originalPath, // Use B2 path, not R2 storageKey
           currentPhoto.originalFilename || currentPhoto.filename
         );
-        toast.success('Download iniciado!');
       } catch (error) {
         console.error('Download error:', error);
         toast.error('Erro no download. Tente novamente.');

@@ -488,7 +488,6 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Galeria excluída');
     },
     onError: (error) => {
       console.error('Error deleting gallery:', error);
@@ -644,7 +643,6 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Seleção confirmada!');
     },
   });
 
@@ -707,7 +705,6 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Seleção reaberta!');
     },
   });
 
@@ -768,7 +765,6 @@ export function useSupabaseGalleries() {
     onSuccess: (_, { galleryId }) => {
       queryClient.invalidateQueries({ queryKey: ['galeria-fotos', galleryId] });
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
-      toast.success('Foto excluída');
     },
     onError: (error) => {
       console.error('Error deleting photo:', error);

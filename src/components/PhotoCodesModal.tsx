@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+
 import { GalleryPhoto } from '@/types/gallery';
 import { GalleryFolderRow } from '@/hooks/useGalleryFolders';
 
@@ -100,7 +100,6 @@ export function PhotoCodesModal({
   const handleCopy = (code: string, label: string) => {
     navigator.clipboard.writeText(code);
     setCopied(label);
-    toast.success('Código copiado!');
     setTimeout(() => setCopied(null), 2000);
   };
 

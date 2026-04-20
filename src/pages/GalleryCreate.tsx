@@ -210,7 +210,6 @@ export default function GalleryCreate() {
 
       setUploadedPhotos(prev => prev.filter(p => p.id !== photoId));
       setUploadedCount(prev => Math.max(0, prev - 1));
-      toast.success('Foto excluída e crédito devolvido');
     } catch (err) {
       console.error('Error deleting photo:', err);
       toast.error('Erro ao excluir foto');
@@ -257,7 +256,6 @@ export default function GalleryCreate() {
       setUploadedPhotos([]);
       setUploadedCount(0);
       setShowUploadedPhotos(false);
-      toast.success(`${totalPhotos} fotos excluídas e créditos devolvidos`);
     } catch (err) {
       console.error('Error deleting all photos:', err);
       toast.error('Erro ao excluir fotos. Tente novamente.');
@@ -683,9 +681,6 @@ export default function GalleryCreate() {
 
         // For assisted mode, wait for pricing rules to load
         if (isAssistedMode && !regrasLoaded) {
-          toast.loading('Carregando configurações de preços...', {
-            duration: 2000
-          });
           return;
         }
         await createSupabaseGalleryForUploads();
@@ -764,9 +759,6 @@ export default function GalleryCreate() {
 
           // Publish gallery (generate token) without marking as "sent"
           await publishSupabaseGallery(supabaseGalleryId);
-          toast.success('Galeria criada e publicada!', {
-            description: 'Agora você pode compartilhar o link com o cliente.'
-          });
           navigate(`/gallery/${supabaseGalleryId}`);
         } catch (error) {
           console.error('Error finalizing gallery:', error);
@@ -853,7 +845,6 @@ export default function GalleryCreate() {
             })
           }
         });
-        toast.success('Rascunho salvo!');
         navigate('/');
       } else {
         // Determine regrasCongeladas for new draft
@@ -906,7 +897,6 @@ export default function GalleryCreate() {
           }
         });
         if (result?.id) {
-          toast.success('Rascunho salvo!');
           navigate('/');
         }
       }
@@ -925,7 +915,6 @@ export default function GalleryCreate() {
       setSelectedClient(newClient);
       setUseExistingPassword(true);
       setIsClientModalOpen(false);
-      toast.success('Cliente cadastrado com sucesso!');
     } catch (error) {
       console.error('Error creating client:', error);
       toast.error('Erro ao cadastrar cliente');
@@ -987,7 +976,6 @@ export default function GalleryCreate() {
     });
     setPresetName('');
     setShowSavePresetDialog(false);
-    toast.success('Predefinição salva com sucesso!');
   };
   const loadPreset = (presetId: string) => {
     const preset = settings.discountPresets?.find((p) => p.id === presetId);
@@ -998,7 +986,6 @@ export default function GalleryCreate() {
         id: generateId()
       }));
       setDiscountPackages(clonedPackages);
-      toast.success(`Predefinição "${preset.name}" carregada`);
     }
   };
   const removeDiscountPackage = (id: string) => {

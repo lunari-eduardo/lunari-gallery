@@ -117,7 +117,6 @@ export function UserCreditsManager() {
       return data;
     },
     onSuccess: () => {
-      toast.success(`${creditAmount} créditos adicionados com sucesso!`);
       setCreditAmount('');
       setReason('');
       

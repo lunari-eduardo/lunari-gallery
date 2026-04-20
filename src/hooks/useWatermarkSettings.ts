@@ -96,7 +96,6 @@ export function useWatermarkSettings() {
       }
 
       setSettings(prev => ({ ...prev, ...newSettings }));
-      toast.success('Configurações de marca d\'água salvas');
       return true;
     } catch (error) {
       console.error('Error saving watermark settings:', error);
@@ -174,7 +173,6 @@ export function useWatermarkSettings() {
         path: null 
       });
       
-      toast.success('Marca d\'água personalizada removida');
       return true;
     } catch (error) {
       console.error('Error deleting watermark:', error);

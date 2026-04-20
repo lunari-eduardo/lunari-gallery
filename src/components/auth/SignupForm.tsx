@@ -71,9 +71,7 @@ export function SignupForm() {
       }
     } else if (needsEmailConfirmation) {
       setEmailSent(true);
-      toast.success('Email de confirmação enviado!');
     } else {
-      toast.success('Conta criada com sucesso!');
     }
     setIsLoading(false);
   };

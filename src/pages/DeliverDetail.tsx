@@ -142,7 +142,6 @@ export default function DeliverDetail() {
     if (!id) return;
     try {
       await sendGallery(id);
-      toast.success('Entrega publicada!');
     } catch {
       toast.error('Erro ao publicar');
     }
@@ -179,7 +178,6 @@ export default function DeliverDetail() {
       await updateGallery({ id, data: {
         configuracoes: { ...(gallery?.configuracoes as any), coverPhotoId: newCoverId },
       }});
-      toast.success(newCoverId ? 'Capa atualizada' : 'Capa removida');
     } catch {
       toast.error('Erro ao atualizar capa');
       setCoverPhotoId(coverPhotoId);
@@ -195,7 +193,6 @@ export default function DeliverDetail() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('Link copiado!');
   };
 
   const openWhatsApp = () => {

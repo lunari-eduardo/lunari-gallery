@@ -214,7 +214,6 @@ export default function GalleryEdit() {
       setClienteEmail(newClient.email);
       setClienteTelefone(newClient.phone ? formatPhoneBR(newClient.phone) : '');
       setIsClientModalOpen(false);
-      toast.success('Cliente criado!');
       refetchClients();
     } catch (error) {
       console.error('Error creating client:', error);
@@ -298,9 +297,6 @@ export default function GalleryEdit() {
   const handleReactivate = async (days: number = 7) => {
     try {
       await reopenSelection({ id: gallery.id, days });
-      toast.success('Galeria reativada!', {
-        description: 'O cliente pode fazer seleções novamente.',
-      });
     } catch (error) {
       console.error('Error reactivating gallery:', error);
     }
@@ -318,7 +314,6 @@ export default function GalleryEdit() {
   const handleCopyPassword = () => {
     if (gallery.galleryPassword) {
       navigator.clipboard.writeText(gallery.galleryPassword);
-      toast.success('Senha copiada!');
     }
   };
 
@@ -501,7 +496,6 @@ export default function GalleryEdit() {
                       if (preset && preset.packages.length > 0) {
                         // Use the first tier's price as the extra photo price
                         setValorFotoExtra(preset.packages[0].pricePerPhoto);
-                        toast.success(`Template "${preset.name}" aplicado`);
                       }
                     }}
                   >
