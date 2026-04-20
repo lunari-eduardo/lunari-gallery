@@ -5,7 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw
+  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +66,7 @@ export default function DeliverDetail() {
   const [galleryPassword, setGalleryPassword] = useState('');
   const [expirationDate, setExpirationDate] = useState<Date | undefined>();
   const [shareMessage, setShareMessage] = useState('Suas fotos finais estão prontas para download.');
+  const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
 
@@ -79,6 +80,7 @@ export default function DeliverDetail() {
       setIsPrivate(gallery.permissao === 'private');
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
+      setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
     }
   }, [gallery]);
 
@@ -156,6 +158,32 @@ export default function DeliverDetail() {
     if (!id) return;
     await deletePhoto({ galleryId: id, photoId });
     setPhotos(prev => prev.filter(p => p.id !== photoId));
+    // Se a foto excluída era a capa, resetar
+    if (coverPhotoId === photoId) {
+      setCoverPhotoId(null);
+      try {
+        await updateGallery({ id, data: {
+          configuracoes: { ...(gallery?.configuracoes as any), coverPhotoId: null },
+        }});
+      } catch (e) {
+        console.error('Erro ao limpar capa após exclusão:', e);
+      }
+    }
+  };
+
+  const handleSetCover = async (photoId: string) => {
+    if (!id) return;
+    const newCoverId = coverPhotoId === photoId ? null : photoId;
+    setCoverPhotoId(newCoverId);
+    try {
+      await updateGallery({ id, data: {
+        configuracoes: { ...(gallery?.configuracoes as any), coverPhotoId: newCoverId },
+      }});
+      toast.success(newCoverId ? 'Capa atualizada' : 'Capa removida');
+    } catch {
+      toast.error('Erro ao atualizar capa');
+      setCoverPhotoId(coverPhotoId);
+    }
   };
 
   const handleUploadComplete = (uploaded: UploadedPhoto[]) => {
@@ -294,7 +322,15 @@ export default function DeliverDetail() {
         {/* === FOTOS === */}
         <TabsContent value="photos" className="space-y-4 mt-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-lg">{photos.length} fotos entregues</h3>
+            <h3 className="font-semibold text-lg">
+              {photos.length} fotos entregues
+              {coverPhotoId && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  Capa selecionada
+                </span>
+              )}
+            </h3>
             <Button onClick={() => setShowUploader(true)} className="gap-2">
               <Upload className="h-4 w-4" />
               Adicionar fotos
@@ -319,38 +355,65 @@ export default function DeliverDetail() {
             </div>
           ) : photos.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {photos.map(photo => (
-                <div key={photo.id} className="group relative aspect-square rounded-lg overflow-hidden bg-muted">
-                  <img
-                    src={getPhotoUrl({ storageKey: photo.storageKey }, 'thumbnail')}
-                    alt={photo.originalFilename}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                    <a
-                      href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
-                      download={photo.originalFilename}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <Button variant="secondary" size="icon" className="h-8 w-8">
-                        <Download className="h-4 w-4" />
+              {photos.map(photo => {
+                const isCover = coverPhotoId === photo.id;
+                return (
+                  <div
+                    key={photo.id}
+                    className={cn(
+                      'group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all',
+                      isCover ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-transparent'
+                    )}
+                  >
+                    <img
+                      src={getPhotoUrl({ storageKey: photo.storageKey }, 'thumbnail')}
+                      alt={photo.originalFilename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+
+                    {/* Badge CAPA */}
+                    {isCover && (
+                      <div className="absolute top-1.5 left-1.5 bg-amber-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10">
+                        <Star className="h-2.5 w-2.5 fill-current" />
+                        CAPA
+                      </div>
+                    )}
+
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                      <Button
+                        variant={isCover ? 'default' : 'secondary'}
+                        size="icon"
+                        className={cn('h-8 w-8', isCover && 'bg-amber-400 hover:bg-amber-300 text-black')}
+                        onClick={() => handleSetCover(photo.id)}
+                        title={isCover ? 'Remover capa' : 'Definir como capa'}
+                      >
+                        <Star className={cn('h-4 w-4', isCover && 'fill-current')} />
                       </Button>
-                    </a>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handlePhotoDelete(photo.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      <a
+                        href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
+                        download={photo.originalFilename}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Button variant="secondary" size="icon" className="h-8 w-8">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </a>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handlePhotoDelete(photo.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                      {photo.originalFilename}
+                    </p>
                   </div>
-                  <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                    {photo.originalFilename}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-16">
