@@ -3,10 +3,12 @@ import { Mail, Pencil, Send, Bell, CheckCircle } from 'lucide-react';
 import { EmailTemplate } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { EmailTemplateModal } from './EmailTemplateModal';
+import { toast } from 'sonner';
 
 interface EmailTemplatesProps {
   templates: EmailTemplate[];
-  onTemplatesChange: (templates: EmailTemplate[]) => void;
+  onTemplateSave: (template: EmailTemplate) => Promise<void> | void;
+  isSaving?: boolean;
 }
 
 const getTemplateIcon = (type: EmailTemplate['type']) => {
@@ -22,14 +24,17 @@ const getTemplateIcon = (type: EmailTemplate['type']) => {
   }
 };
 
-export function EmailTemplates({ templates, onTemplatesChange }: EmailTemplatesProps) {
+export function EmailTemplates({ templates, onTemplateSave, isSaving = false }: EmailTemplatesProps) {
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
 
-  const handleSaveTemplate = (template: EmailTemplate) => {
-    const updated = templates.map((t) =>
-      t.id === template.id ? template : t
-    );
-    onTemplatesChange(updated);
+  const handleSaveTemplate = async (template: EmailTemplate) => {
+    try {
+      await onTemplateSave(template);
+      toast.success('Template salvo com sucesso.');
+    } catch (error) {
+      toast.error('Não foi possível salvar o template.');
+      throw error;
+    }
   };
 
   return (
@@ -83,6 +88,7 @@ export function EmailTemplates({ templates, onTemplatesChange }: EmailTemplatesP
         onOpenChange={(open) => !open && setEditingTemplate(null)}
         template={editingTemplate}
         onSave={handleSaveTemplate}
+        isSaving={isSaving}
       />
     </div>
   );
