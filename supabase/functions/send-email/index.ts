@@ -45,6 +45,30 @@ function formatDate(value: unknown): string {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
 }
 
+function formatDateOnly(value: unknown): string {
+  if (!value) return 'Sem prazo definido';
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(String(value)));
+}
+
+function daysRemaining(value: unknown): string {
+  if (!value) return '0';
+  const today = new Date();
+  const deadline = new Date(String(value));
+  const diff = deadline.getTime() - today.getTime();
+  return String(Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24))));
+}
+
+function replaceTemplateVariables(template: string, variables: Record<string, string>) {
+  return template.replace(/{(\w+)}/g, (match, key) => variables[key] ?? match);
+}
+
+function textToHtmlParagraphs(text: string) {
+  return escapeHtml(text)
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 18px;color:#211b18;font-size:16px;line-height:1.65;">${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
 function paymentMethodLabel(payment: any): string {
   if (payment?.metodo_manual) return String(payment.metodo_manual);
   const provider = String(payment?.provedor || '').toLowerCase();
