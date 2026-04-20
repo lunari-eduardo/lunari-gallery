@@ -46,11 +46,11 @@ export function SendGalleryModal({
   const [isCopied, setIsCopied] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [resolvedToken, setResolvedToken] = useState<string | null>(gallery.publicToken);
   const [emailFeedback, setEmailFeedback] = useState<{ status: 'enviado' | 'erro' | 'ignorado'; message: string } | null>(null);
   const hasSentRef = useRef(false);
-  const hasEmailAttemptRef = useRef(false);
 
   // When modal opens, always call RPC to ensure gallery is ready for sharing
   useEffect(() => {
@@ -59,7 +59,7 @@ export function SendGalleryModal({
       setPrepareError(null);
       setResolvedToken(null);
       setEmailFeedback(null);
-      hasEmailAttemptRef.current = false;
+      setIsSendingEmail(false);
       return;
     }
 
@@ -80,22 +80,6 @@ export function SendGalleryModal({
         }
 
         setResolvedToken(result.token!);
-
-        if (!hasEmailAttemptRef.current) {
-          hasEmailAttemptRef.current = true;
-          try {
-            const { data: emailResult } = await supabase.functions.invoke('send-email', {
-              body: { eventType: 'gallery_sent', galleryId: gallery.id, publicToken: result.token },
-            });
-            const feedback = emailResult as { status?: 'enviado' | 'erro' | 'ignorado'; message?: string } | null;
-            setEmailFeedback({ status: feedback?.status || 'erro', message: feedback?.message || 'Não foi possível enviar o e-mail agora.' });
-            if (feedback?.status === 'enviado') toast.success('E-mail enviado para o cliente.');
-            else if (feedback?.message) toast.info(feedback.message);
-          } catch (emailError) {
-            console.warn('Email send failed without blocking share:', emailError);
-            setEmailFeedback({ status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
-          }
-        }
       } catch (e: any) {
         console.error('Error preparing gallery share:', e);
         setPrepareError(e.message || 'Erro ao publicar galeria');
@@ -110,6 +94,8 @@ export function SendGalleryModal({
   const clientLink = resolvedToken
     ? getGalleryUrl(resolvedToken)
     : null;
+  const emailSendingEnabled = settings.emailSendingEnabled ?? true;
+  const galleryEmailEnabled = settings.emailOnGallerySent ?? true;
 
   const gallerySentTemplate = useMemo(() => {
     return settings.emailTemplates.find((t) => t.type === 'gallery_sent');
