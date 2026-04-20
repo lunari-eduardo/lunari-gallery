@@ -278,7 +278,7 @@ export default function GalleryEdit() {
           prazoSelecao,  // Now saving the deadline
         }
       });
-      toast.success('Galeria atualizada!');
+      navigate(`/gallery/${gallery.id}`);
     } catch (error) {
       console.error('Error updating gallery:', error);
     }
