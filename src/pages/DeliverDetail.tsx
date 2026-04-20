@@ -158,6 +158,32 @@ export default function DeliverDetail() {
     if (!id) return;
     await deletePhoto({ galleryId: id, photoId });
     setPhotos(prev => prev.filter(p => p.id !== photoId));
+    // Se a foto excluída era a capa, resetar
+    if (coverPhotoId === photoId) {
+      setCoverPhotoId(null);
+      try {
+        await updateGallery({ id, data: {
+          configuracoes: { ...(gallery?.configuracoes as any), coverPhotoId: null },
+        }});
+      } catch (e) {
+        console.error('Erro ao limpar capa após exclusão:', e);
+      }
+    }
+  };
+
+  const handleSetCover = async (photoId: string) => {
+    if (!id) return;
+    const newCoverId = coverPhotoId === photoId ? null : photoId;
+    setCoverPhotoId(newCoverId);
+    try {
+      await updateGallery({ id, data: {
+        configuracoes: { ...(gallery?.configuracoes as any), coverPhotoId: newCoverId },
+      }});
+      toast.success(newCoverId ? 'Capa atualizada' : 'Capa removida');
+    } catch {
+      toast.error('Erro ao atualizar capa');
+      setCoverPhotoId(coverPhotoId);
+    }
   };
 
   const handleUploadComplete = (uploaded: UploadedPhoto[]) => {
