@@ -1,86 +1,99 @@
 
 
-# Plano: Botão Salvar flutuante + remover toasts + redirect pós-salvamento
+# Plano: Remoção sistêmica de toasts de sucesso/informativos (mantendo erros)
 
 ## Diagnóstico
 
-Em `src/pages/DeliverDetail.tsx` e `src/pages/GalleryEdit.tsx`:
+Mapeei **todos** os toasts do sistema:
 
-- O botão **Salvar** vive no header. Ao rolar para baixo (galerias com muitas fotos), ele desaparece — usuário precisa rolar até o topo.
-- Após salvar, há `toast.success('Alterações salvas')` / `toast.success('Galeria atualizada!')` e o usuário **fica na mesma página**.
-- Para confirmar mudanças, é preciso voltar manualmente.
+- **96 toasts informativos** (`toast.success`, `toast.info`, `toast.loading`) em ~40 arquivos.
+- **~70 toasts de erro** (`toast.error` e `toast({ variant: 'destructive' })`) — **manter intactos**.
+- O `<Toaster />` (sonner) continua montado no app — apenas paramos de chamá-lo para sucesso/info.
 
-## Mudanças
+## Regra única
 
-### 1. Botão Salvar fixo flutuante (bottom-right)
+**Remover** todas as chamadas `toast.success(...)`, `toast.info(...)`, `toast.loading(...)` e `toast({ ... })` informativos (sem `variant: 'destructive'`).
+**Manter** todas as chamadas `toast.error(...)` e `toast({ variant: 'destructive' })`.
 
-Em **ambas** as páginas (`DeliverDetail.tsx` e `GalleryEdit.tsx`):
+Quando a remoção deixa um bloco vazio (`try { toast.success(...) }` sem mais nada), eliminar o bloco inteiro mantendo apenas o `console.log` ou efeito útil.
 
-- **Remover** o botão "Salvar" / "Salvar Alterações" do header.
-- **Adicionar** um botão flutuante fixo no canto inferior direito, sempre visível:
+## Arquivos e ações
 
-```tsx
-<div className="fixed bottom-6 right-6 z-50">
-  <Button
-    onClick={handleSave}
-    disabled={saving}
-    variant="terracotta"
-    size="lg"
-    className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
-  >
-    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-    {saving ? 'Salvando...' : 'Salvar Alterações'}
-  </Button>
-</div>
-```
-
-Detalhes UX:
-- Posição: `fixed bottom-6 right-6`, `z-50` para ficar acima de tudo.
-- Estilo arredondado (`rounded-full`), `shadow-2xl` para destaque visual sutil.
-- Mantém o estado `disabled` durante a operação (`saving`/`isUpdating`).
-- Em mobile, mantém a mesma posição (canto inferior direito) — não vira full-width para não atrapalhar o conteúdo.
-- Padding inferior do container principal (`pb-24`) para evitar que o botão tampe os últimos elementos da página.
-
-### 2. Remover toasts de notificação após salvar
-
-Em `DeliverDetail.tsx` (`handleSave`):
-- Remover `toast.success('Alterações salvas')` e `toast.error('Erro ao salvar')`.
-- Erros silenciosos via `console.error` apenas (mantém log mas sem UI).
-
-Em `GalleryEdit.tsx` (`handleSave`):
-- Remover `toast.success('Galeria atualizada!')`.
-- Manter apenas `console.error` no catch.
-
-**Observação**: outros toasts no sistema (link copiado, capa atualizada, publicação, etc.) **permanecem** — só removemos os toasts pós-salvamento de edição. Confirmaremos isso na pergunta abaixo se necessário, mas o pedido é claramente sobre o "Alterações salvas".
-
-### 3. Redirect automático após salvar
-
-Em `DeliverDetail.tsx`:
-- Após `await updateGallery(...)` ter sucesso → `navigate('/galleries/deliver')`.
-
-Em `GalleryEdit.tsx`:
-- Após `await updateGallery(...)` ter sucesso → `navigate(\`/gallery/\${gallery.id}\`)` (volta para a página de detalhe da galeria select, não para a lista).
-
-### 4. Tratamento de erro
-
-Se o salvamento falhar:
-- **Não** redirecionar.
-- Manter o usuário na página para corrigir.
-- Como removemos o toast, o feedback de erro fica via `console.error` apenas — o que é razoável dado que o caso de erro é raro e o estado `disabled` do botão já indica progresso.
-
-## Arquivos modificados
-
-| Arquivo | Mudança |
+### Hooks (lógica compartilhada — alto impacto)
+| Arquivo | Toasts a remover |
 |---|---|
-| `src/pages/DeliverDetail.tsx` | Mover botão Salvar do header para flutuante; remover toasts pós-save; redirect para `/galleries/deliver` |
-| `src/pages/GalleryEdit.tsx` | Mover botão Salvar do header para flutuante; remover toast pós-save; redirect para `/gallery/${id}` |
+| `src/hooks/useSupabaseGalleries.ts` | "Galeria excluída", "Seleção confirmada!", "Seleção reaberta!", "Foto excluída" |
+| `src/hooks/useGalleryFolders.ts` | "Pasta excluída...", "Capa da pasta atualizada" |
+| `src/hooks/useGallerySettings.ts` | "Tema salvo com sucesso!", "Tema removido..." |
+| `src/hooks/usePaymentIntegration.ts` | 10 sucessos (PIX configurado, InfinitePay configurado, Asaas configurado, MP conectado, configs migradas etc.) |
+| `src/hooks/useAsaasSubscription.ts` | "Upgrade realizado", "Assinatura cancelada", "Downgrade agendado", "Downgrade cancelado", "Assinatura reativada" |
+| `src/hooks/useWatermarkSettings.ts` | "Configurações de marca d'água salvas", "Marca d'água personalizada removida" |
+
+### Componentes do painel do fotógrafo
+| Arquivo | Toasts a remover |
+|---|---|
+| `src/components/deliver/DeliverPhotoManager.tsx` | "Foto excluída", "Foto definida como capa", "Capa removida" |
+| `src/components/PhotoUploader.tsx` | "X foto(s) enviada(s) com sucesso!", "X arquivos com erro. Tentando novamente..." |
+| `src/components/PaymentStatusCard.tsx` | "Recebimento registrado!", "Link de cobrança gerado!", "Link copiado!" |
+| `src/components/PhotoCodesModal.tsx` | "Código copiado!" |
+| `src/components/SendGalleryModal.tsx` | "Mensagem copiada!", "Link copiado!" |
+| `src/components/ReactivateGalleryDialog.tsx` | "Link copiado!" |
+| `src/components/settings/LogoUploader.tsx` | "Logo atualizado!" |
+| `src/components/admin/UserCreditsManager.tsx` | "X créditos adicionados com sucesso!" |
+
+### Componentes de pagamento (manter erros, remover sucessos)
+| Arquivo | Toasts a remover |
+|---|---|
+| `src/components/AsaasCheckout.tsx` | "Pagamento confirmado!", "Código PIX copiado!", "Pagamento aprovado!", "Processando pagamento...", "Pagamento enviado! Aguardando confirmação." (todas as variantes) |
+| `src/components/PixPaymentScreen.tsx` | "Código PIX copiado!" |
+| `src/components/credits/CreditCheckoutModal.tsx` | "Pagamento aprovado! Créditos adicionados.", "Pagamento confirmado! Créditos adicionados." |
+| `src/components/credits/PixPaymentDisplay.tsx` | "Código PIX copiado!", "Pagamento ainda não confirmado" (info) |
+| `src/components/DownloadModal.tsx` | "Download concluído!" |
+| `src/components/FinalizedPreviewScreen.tsx` | "Download concluído!" |
+| `src/components/Lightbox.tsx` | "Download iniciado!" |
+
+### Auth (manter erros — login falhou, etc.)
+| Arquivo | Toasts a remover |
+|---|---|
+| `src/components/auth/SignupForm.tsx` | "Email de confirmação enviado!", "Conta criada com sucesso!" |
+| `src/components/auth/ResetPasswordForm.tsx` | "Email de recuperação enviado!" |
+| `src/components/auth/UpdatePasswordForm.tsx` | "Senha atualizada com sucesso!" |
+| `src/pages/Auth.tsx` | "Email alterado com sucesso!" |
+| `src/components/account/ChangeEmailForm.tsx` | "Email de confirmação enviado" (toast legado sem variant); manter os 2 com `variant: 'destructive'` |
+
+### Páginas
+| Arquivo | Toasts a remover |
+|---|---|
+| `src/pages/GalleryDetail.tsx` | "Pagamento confirmado!", "Galeria enviada!" |
+| `src/pages/GalleryEdit.tsx` | "Cliente criado!", "Galeria reativada!", "Senha copiada!", "Template aplicado" |
+| `src/pages/GalleryCreate.tsx` | "Predefinição carregada", "Foto excluída e crédito devolvido", "X fotos excluídas e créditos devolvidos", "Carregando configurações..." (loading), "Galeria criada e publicada!", "Rascunho salvo!" (2x), "Cliente cadastrado", "Predefinição salva" |
+| `src/pages/DeliverCreate.tsx` | "Galeria de entrega publicada!" |
+| `src/pages/DeliverDetail.tsx` | "Entrega publicada!", "Capa atualizada/removida", "Link copiado!" |
+| `src/pages/CreditsPayment.tsx` | "Pagamento confirmado! Créditos adicionados." (2x), "Upgrade realizado", "Assinatura anual ativada", "Plano ativado", "Assinatura ativada" |
+| `src/pages/CreditsCheckout.tsx` | 2x `toast.info('Em breve!')` — substituir botões por `disabled` em vez do toast |
+| `src/pages/Clients.tsx` | "Cliente atualizado", "Cliente cadastrado", "Nova senha enviada para X" |
+| `src/pages/ClientProfile.tsx` | "Cliente atualizado com sucesso!" |
+| `src/pages/Settings.tsx` | "Configurações salvas!" |
+| `src/pages/Referrals.tsx` | "Link copiado!" |
+
+### Lado do cliente (galeria pública) — também remover
+| Arquivo | Toasts a remover |
+|---|---|
+| `src/pages/ClientGallery.tsx` | "Seleção confirmada!" (3 variantes), "Pagamento informado com sucesso!" (2x), "Comentário salvo!" |
+| `src/pages/ClientDeliverGallery.tsx` | "X fotos baixadas!" |
+
+## Considerações técnicas
+
+1. **Imports**: onde após a remoção o import `toast`/`useToast` ficar sem uso, removo o import. Se ainda houver `toast.error`, mantenho.
+2. **`toast.loading` em `GalleryCreate.tsx`** (`'Carregando configurações de preços...'`): remover. Se ele tinha `id` reutilizado para `toast.success` posterior com mesmo id, removo ambos.
+3. **Blocos `try`/`then` que só faziam o toast**: deletar a linha; manter o restante do efeito (refetch, navigate, setState) intacto.
+4. **Sem novos componentes nem novo tipo de feedback** — usuário já tem feedback visual em cada fluxo (redirect, badge, estado disabled, atualização da lista).
+5. **`<Toaster />` permanece montado** — usado pelos `toast.error` que ficam.
 
 ## Resultado
 
-- Botão **Salvar** sempre visível em qualquer ponto da rolagem (canto inferior direito).
-- Sem toast "Alterações salvas" / "Galeria atualizada!" poluindo a tela.
-- Após salvar, usuário é levado automaticamente:
-  - Galeria **Transfer** → lista de Transfers (`/galleries/deliver`).
-  - Galeria **Select** → página de detalhe da galeria (`/gallery/{id}`).
-- Salvamentos com erro mantêm o usuário na página de edição (sem redirect).
+- 96 chamadas removidas, 0 toast informativo restante em todo o sistema.
+- ~70 toasts de erro mantidos para feedback de falha (login, pagamento, upload, RLS).
+- Nenhuma regressão funcional: navegações, atualizações de lista e estados visuais permanecem.
+- Interface mais limpa, sem pop-ups de confirmação cosmética em nenhuma jornada (fotógrafo ou cliente).
 
