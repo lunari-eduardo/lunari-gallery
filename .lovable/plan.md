@@ -1,244 +1,336 @@
 
-# Plano: Corrigir salvamento e uso real dos templates de e-mail
-
-## Diagnóstico
-
-O problema principal está na tela de **Configurações > Personalização > Textos de E-mails**.
-
-Hoje o modal permite editar assunto e corpo, mas a alteração não é persistida porque o componente está assim:
-
-```text
-onTemplatesChange={(templates) => {
-  // For now, email templates still use the old pattern
-}}
-```
-
-Ou seja:
-
-- o botão “Salvar Template” fecha o modal;
-- a lista até monta um array atualizado localmente;
-- mas nada é enviado para o Supabase;
-- ao recarregar ou reabrir, volta o conteúdo antigo.
-
-Também há um segundo ponto importante:
-
-- a Edge Function `send-email` ainda usa um template hardcoded para o e-mail automático de galeria enviada;
-- então mesmo depois de salvar no banco, o e-mail automático pode continuar ignorando o texto editado pelo fotógrafo.
+# Plano: Enviar e-mail manualmente pelo modal de compartilhamento
 
 ## Objetivo
 
-Fazer com que as edições feitas nos templates sejam:
+Alterar o comportamento atual para que o e-mail **não seja enviado automaticamente** ao clicar em **Compartilhar** na página/lista da galeria.
 
-1. salvas corretamente no banco;
-2. refletidas na interface imediatamente;
-3. usadas no texto de compartilhamento da galeria;
-4. usadas também no envio automático via Resend, principalmente no evento **Galeria Enviada**.
+O botão **Compartilhar** continuará abrindo o modal e preparando o link público da galeria, mas o envio de e-mail só acontecerá quando o fotógrafo clicar explicitamente em um novo botão dentro do modal:
+
+```text
+Enviar e-mail
+```
 
 ---
 
-## 1. Corrigir salvamento no frontend
+## Comportamento atual a corrigir
 
-### Arquivo principal
+Hoje, ao abrir o modal `Compartilhar Galeria`, o componente faz duas coisas automaticamente:
 
-```text
-src/components/settings/PersonalizationSettings.tsx
-```
+1. chama a RPC `prepare_gallery_share`;
+2. logo depois chama a Edge Function `send-email`.
 
-Hoje `EmailTemplates` recebe um `onTemplatesChange` vazio.
-
-Vou alterar para usar a mutation já existente em:
-
-```text
-src/hooks/useGallerySettings.ts
-```
-
-A mutation existente:
-
-```text
-updateEmailTemplate
-```
-
-já atualiza a tabela:
-
-```text
-gallery_email_templates
-```
-
-Então a correção será ligar o componente visual a essa mutation.
-
-### Resultado
-
-Ao clicar em “Salvar Template”:
-
-- o template será atualizado no Supabase;
-- a query `gallery-settings` será invalidada;
-- a lista será recarregada com os dados salvos;
-- ao fechar e abrir novamente, o texto editado continuará lá.
+Isso faz o e-mail ser enviado apenas por abrir o modal, antes do fotógrafo decidir se quer enviar por e-mail, copiar link ou WhatsApp.
 
 ---
 
-## 2. Melhorar feedback de salvamento
+## Novo fluxo desejado
 
-### Arquivos
+### Ao clicar em “Compartilhar” na galeria
 
-```text
-src/hooks/useGallerySettings.ts
-src/components/settings/EmailTemplates.tsx
-src/components/settings/EmailTemplateModal.tsx
-```
+O sistema deve:
 
-Adicionar feedback claro:
+- abrir o modal;
+- preparar/publicar a galeria com segurança;
+- resolver o token público pela RPC `prepare_gallery_share`;
+- montar o link público correto;
+- exibir a mensagem para revisão;
+- não enviar e-mail automaticamente.
 
-- salvando;
-- salvo com sucesso;
-- erro ao salvar.
+### Dentro do modal
 
-Comportamento esperado:
-
-```text
-Salvar Template → desabilita botão enquanto salva → mostra sucesso → fecha modal
-```
-
-Se falhar:
+O fotógrafo terá três ações claras:
 
 ```text
-Não foi possível salvar o template.
+Copiar Mensagem
+WhatsApp
+Enviar e-mail
 ```
 
-E o modal não deve simplesmente fechar como se tivesse dado certo.
+E continuará tendo também:
+
+```text
+Copiar Link
+```
 
 ---
 
-## 3. Ajustar contrato do componente `EmailTemplates`
+## 1. Ajustar `SendGalleryModal`
 
-Hoje ele trabalha com:
-
-```text
-onTemplatesChange(templates)
-```
-
-Isso força o componente a enviar a lista inteira.
-
-Como o caso real é editar um template por vez, vou simplificar para:
+Arquivo principal:
 
 ```text
-onTemplateSave(template)
+src/components/SendGalleryModal.tsx
 ```
 
-Benefícios:
+### Remover envio automático ao abrir
 
-- menos chance de sobrescrever templates errados;
-- aproveita a mutation já pronta;
-- fica mais claro que o salvamento é individual;
-- reduz risco de conflito entre templates.
+No `useEffect` de abertura do modal, manter apenas:
+
+- `setIsPreparing(true)`;
+- chamada segura para `prepare_gallery_share`;
+- `setResolvedToken(result.token)`;
+- tratamento de erro.
+
+Remover dali:
+
+- chamada automática para `supabase.functions.invoke('send-email')`;
+- controle `hasEmailAttemptRef`;
+- toast automático de e-mail enviado ao abrir.
+
+### Remover envio automático no retry
+
+No botão `Tentar novamente`, manter apenas a nova tentativa de preparar/publicar a galeria.
+
+Não chamar `send-email` automaticamente depois do retry.
 
 ---
 
-## 4. Garantir atualização visual imediata
+## 2. Criar ação manual “Enviar e-mail”
 
-Após salvar:
+Adicionar uma função no modal:
 
-- invalidar `gallery-settings`;
-- manter a lista refletindo o novo assunto;
-- fechar o modal somente depois do sucesso;
-- manter o texto editado caso aconteça erro.
+```text
+handleSendEmail
+```
 
-Opcionalmente, aplicar atualização otimista simples para a lista parecer instantânea, mas sem esconder erro real.
+Responsabilidades:
+
+- bloquear se não houver `clientLink`/token resolvido;
+- bloquear se o cliente não tiver e-mail;
+- respeitar configuração global de e-mails;
+- respeitar configuração de e-mail de galeria;
+- chamar `send-email` apenas quando o fotógrafo clicar;
+- mostrar loading no botão;
+- mostrar feedback amigável;
+- não quebrar o fluxo se o envio falhar.
+
+Estados novos/ajustados:
+
+```text
+isSendingEmail
+emailFeedback
+```
+
+Feedback esperado:
+
+- enviado:
+  ```text
+  E-mail enviado para o cliente.
+  ```
+
+- cliente sem e-mail:
+  ```text
+  Cliente não possui e-mail cadastrado.
+  ```
+
+- configuração geral desativada:
+  ```text
+  E-mails automáticos estão desativados.
+  ```
+
+- e-mail de galeria desativado:
+  ```text
+  Envio de e-mail de galeria está desativado.
+  ```
+
+- duplicado:
+  ```text
+  E-mail já enviado anteriormente.
+  ```
+
+- erro:
+  ```text
+  Não foi possível enviar o e-mail agora.
+  ```
 
 ---
 
-## 5. Fazer o e-mail automático usar o template salvo
+## 3. Novo botão no layout do modal
 
-### Arquivo
-
-```text
-supabase/functions/send-email/index.ts
-```
-
-No evento:
+No bloco de ações, ajustar para uma grade responsiva com três botões principais:
 
 ```text
-gallery_sent
+Copiar Mensagem
+WhatsApp
+Enviar e-mail
 ```
 
-a função hoje monta assunto e corpo fixos.
+Sugestão de UI:
 
-Vou ajustar para:
+- Desktop: três colunas.
+- Mobile: uma coluna.
+- `WhatsApp` continua em destaque terracotta.
+- `Enviar e-mail` usa ícone de `Mail`.
+- Durante envio, mostrar spinner e texto:
+  ```text
+  Enviando...
+  ```
 
-1. buscar o template do fotógrafo em `gallery_email_templates`;
-2. usar o template com `type = gallery_sent`;
-3. substituir variáveis suportadas;
-4. gerar o HTML final com o layout padrão responsivo;
-5. manter o botão “Acessar minha galeria” usando o link público correto.
+Estados do botão:
 
-### Variáveis suportadas
+### Cliente com e-mail
 
-Manter as variáveis que já aparecem no modal:
+Botão ativo:
 
 ```text
-{cliente}
-{galeria}
-{prazo}
-{link}
-{estudio}
-{dias_restantes}
-{total_fotos}
-{fotos_extras}
-{valor_extra}
+Enviar e-mail
 ```
 
-Para o evento de galeria enviada, as principais serão:
+### Cliente sem e-mail
+
+Botão desabilitado ou com estado informativo:
 
 ```text
-{cliente}
-{galeria}
-{prazo}
-{link}
-{estudio}
+Sem e-mail cadastrado
 ```
 
-As demais podem ficar com fallback seguro quando não houver dado disponível.
+E manter orientação:
+
+```text
+Use Copiar Link ou WhatsApp para compartilhar com este cliente.
+```
+
+### E-mail já enviado
+
+Depois de retorno `ignorado` por duplicidade, mostrar status no card inferior:
+
+```text
+E-mail já enviado anteriormente.
+```
+
+O botão pode continuar clicável para retornar o mesmo feedback, ou ficar desabilitado após a resposta. A opção mais limpa para UX é desabilitar após retorno de enviado/duplicado nesta abertura do modal.
 
 ---
 
-## 6. Preservar regra crítica do link público
+## 4. Ajustar texto de status inferior
 
-Mesmo usando o template editado, o link enviado no e-mail continuará seguindo a regra segura:
-
-- usar o token retornado pela RPC `prepare_gallery_share`;
-- nunca usar UUID interno da galeria;
-- nunca gerar token no cliente;
-- se o token não existir, não enviar;
-- registrar como ignorado/erro sem quebrar o fluxo.
-
-O botão do HTML continuará usando o link público resolvido.
-
----
-
-## 7. Compatibilidade com WhatsApp e copiar mensagem
-
-O `SendGalleryModal` já monta a mensagem de WhatsApp/cópia a partir de:
+O card inferior hoje diz:
 
 ```text
-settings.emailTemplates.find(type === 'gallery_sent')
+Envio automático de e-mail preparado.
 ```
 
-Depois que o salvamento for corrigido, esse fluxo também passa a refletir o texto editado.
+Isso fica incoerente com o novo fluxo.
 
-Vou revisar esse ponto para garantir que:
+Trocar para algo como:
 
-- o texto copiado usa o template salvo;
-- `{link}` é substituído corretamente;
-- senha da galeria privada continua sendo anexada;
-- prazo continua formatado corretamente.
+Antes de enviar:
+
+```text
+Envie por e-mail quando quiser notificar o cliente diretamente.
+```
+
+Se não tiver e-mail:
+
+```text
+Cliente não possui e-mail cadastrado. Use Copiar Link ou WhatsApp.
+```
+
+Depois do envio:
+
+```text
+E-mail enviado para o cliente.
+```
+
+Se erro:
+
+```text
+Não foi possível enviar o e-mail agora.
+```
 
 ---
 
-## 8. Não alterar fluxos de pagamento agora
+## 5. Preservar segurança do token público
 
-Este ajuste é focado em templates.
+Não alterar a regra crítica já definida:
 
-Não vou mexer em:
+- o token público continua vindo da RPC `prepare_gallery_share`;
+- não gerar token no frontend;
+- não usar UUID interno da galeria no link do e-mail;
+- enviar para `send-email` usando:
+  ```text
+  galleryId
+  publicToken
+  ```
+- o link final continua sendo montado de forma segura pela Edge Function.
+
+---
+
+## 6. Preservar logs e idempotência
+
+A Edge Function `send-email` já possui:
+
+- validação de cliente;
+- validação de configurações;
+- logs em `email_delivery_logs`;
+- idempotência por:
+  ```text
+  gallery_sent:{gallery_id}
+  ```
+
+Não é necessário mudar essa estrutura.
+
+O botão manual continuará usando a mesma função, então:
+
+- não haverá duplicidade real;
+- reabrir o modal não envia automaticamente;
+- clicar mais de uma vez não deve gerar envios duplicados;
+- logs continuam exibindo `enviado`, `erro` e `ignorado`.
+
+---
+
+## 7. Ajustar configurações para refletir o novo comportamento
+
+Arquivo:
+
+```text
+src/components/settings/EmailAutomationSettings.tsx
+```
+
+Hoje a opção aparece como:
+
+```text
+Enviar e-mail ao enviar galeria
+```
+
+Como o envio deixará de ser automático na abertura do modal, a nomenclatura pode gerar confusão.
+
+Ajustar para algo mais claro:
+
+```text
+Permitir envio de e-mail de galeria
+```
+
+Ou:
+
+```text
+Habilitar botão de e-mail na galeria
+```
+
+Recomendação de UX:
+
+```text
+Permitir envio de e-mail de galeria
+```
+
+O toggle continua controlando a mesma configuração `emailOnGallerySent`.
+
+Quando desativado:
+
+- o botão de e-mail no modal pode aparecer desabilitado;
+- o card inferior explica:
+  ```text
+  O envio de e-mail de galeria está desativado nas configurações.
+  ```
+
+---
+
+## 8. Não alterar pagamentos nem webhooks
+
+Este ajuste é apenas no envio manual do e-mail de galeria.
+
+Não mexer em:
 
 ```text
 infinitepay-create-link
@@ -252,38 +344,39 @@ confirm-payment-manual
 
 Motivo:
 
-- o problema reportado está no salvamento/uso dos templates;
-- evitar risco desnecessário nos webhooks e automação de cobrança;
-- manter intactas as regras críticas da InfinitePay.
-
-Se for necessário mexer em e-mail de pagamento depois, será em uma etapa separada e com revisão completa dos webhooks.
+- a solicitação é específica do modal de compartilhamento;
+- o fluxo de confirmação de pagamento deve continuar intacto;
+- manter a regra do projeto de não arriscar a automação de cobrança e webhooks da InfinitePay.
 
 ---
 
 ## 9. Validação final
 
-Depois da implementação, validar:
+Após implementar, validar:
 
-1. abrir template “Galeria Enviada”;
-2. alterar assunto;
-3. alterar corpo;
-4. clicar em “Salvar Template”;
-5. confirmar toast de sucesso;
-6. reabrir o modal e confirmar que o texto continua salvo;
-7. recarregar a página e confirmar persistência;
-8. abrir modal de envio de galeria e confirmar que a mensagem usa o template editado;
-9. enviar galeria para cliente com e-mail e confirmar que o e-mail automático usa o conteúdo salvo;
-10. confirmar que o link do e-mail abre a galeria pública correta;
-11. testar erro de salvamento e garantir que o modal não fecha como sucesso;
-12. rodar build TypeScript.
+1. clicar em `Compartilhar` na galeria;
+2. confirmar que o modal abre normalmente;
+3. confirmar que nenhum e-mail é enviado automaticamente;
+4. confirmar que o link público é gerado e exibido na mensagem;
+5. clicar em `Enviar e-mail`;
+6. confirmar feedback `E-mail enviado para o cliente`;
+7. confirmar registro no histórico de e-mails;
+8. reabrir o modal da mesma galeria e confirmar que não reenvia sozinho;
+9. clicar novamente em `Enviar e-mail` e confirmar tratamento de duplicidade;
+10. testar cliente sem e-mail e confirmar fallback para `Copiar Link` e `WhatsApp`;
+11. testar toggle geral desativado;
+12. testar toggle de e-mail de galeria desativado;
+13. confirmar que `Copiar Mensagem`, `Copiar Link` e `WhatsApp` continuam funcionando;
+14. rodar build TypeScript;
+15. revisar visual no desktop e mobile.
 
 ## Resultado esperado
 
-O fotógrafo poderá editar os textos de e-mail com confiança:
+O compartilhamento fica mais controlado e previsível:
 
-- o botão “Salvar Template” realmente salva;
-- a interface mostra feedback;
-- o texto permanece após recarregar;
-- o WhatsApp/cópia usa o template salvo;
-- o e-mail automático de galeria enviada usa o template personalizado;
-- o link público da galeria continua seguro e funcional.
+- abrir o modal não dispara e-mail;
+- o fotógrafo revisa a mensagem antes;
+- o e-mail só é enviado por ação explícita;
+- os botões de link e WhatsApp continuam como fallback;
+- logs e idempotência continuam protegendo contra duplicidade;
+- pagamentos e webhooks permanecem intactos.
