@@ -202,7 +202,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: gallery, error: galleryError } = await supabase
         .from('galerias')
-        .select('id, user_id, cliente_id, cliente_nome, cliente_email, nome_sessao, permissao, gallery_password, public_token')
+        .select('id, user_id, cliente_id, cliente_nome, cliente_email, nome_sessao, permissao, gallery_password, public_token, prazo_selecao, total_fotos, fotos_selecionadas, total_fotos_extras_vendidas, valor_extras')
         .eq('id', body.galleryId)
         .maybeSingle();
 
@@ -255,20 +255,37 @@ Deno.serve(async (req: Request) => {
 
       const studioName = settings?.studio_name || 'Lunari';
       const galleryUrl = `${GALLERY_BASE_URL}/g/${encodeURIComponent(token)}`;
-      const subject = `Suas fotos já estão prontas ✨`;
+      const { data: template } = await supabase
+        .from('gallery_email_templates')
+        .select('subject, body')
+        .eq('user_id', gallery.user_id)
+        .eq('type', 'gallery_sent')
+        .maybeSingle();
+
+      const variables = {
+        cliente: gallery.cliente_nome || 'Cliente',
+        galeria: gallery.nome_sessao || 'Galeria',
+        prazo: formatDateOnly(gallery.prazo_selecao),
+        link: galleryUrl,
+        estudio: studioName,
+        dias_restantes: daysRemaining(gallery.prazo_selecao),
+        total_fotos: String(gallery.total_fotos || gallery.fotos_selecionadas || 0),
+        fotos_extras: String(gallery.total_fotos_extras_vendidas || 0),
+        valor_extra: formatCurrency(gallery.valor_extras || 0),
+      };
+      const subject = replaceTemplateVariables(template?.subject || 'Suas fotos já estão prontas ✨', variables);
+      const bodyText = replaceTemplateVariables(template?.body || 'Olá {cliente}!\n\nVocê já pode visualizar, escolher suas favoritas e garantir suas fotos.\n\nAcesse sua galeria: {link}\n\nCom carinho,\n{estudio}', variables);
       const passwordLine = gallery.permissao === 'private' && gallery.gallery_password
         ? `<p style="margin:18px 0 0;color:#211b18;font-size:15px;line-height:1.6;"><strong>Senha de acesso:</strong> ${escapeHtml(gallery.gallery_password)}</p>`
         : '';
       const html = buildLayout({
         studioName,
-        title: 'Suas fotos já estão prontas ✨',
+        title: subject,
         preview: 'Você já pode visualizar, escolher suas favoritas e garantir suas fotos.',
         buttonUrl: galleryUrl,
         buttonText: 'Acessar minha galeria',
         children: `
-          <p style="margin:0 0 18px;color:#211b18;font-size:16px;line-height:1.65;">Olá, ${escapeHtml(gallery.cliente_nome || 'cliente')}.</p>
-          <p style="margin:0 0 18px;color:#211b18;font-size:16px;line-height:1.65;">Você já pode visualizar, escolher suas favoritas e garantir suas fotos.</p>
-          <p style="margin:0;color:#6f625c;font-size:15px;line-height:1.6;">Clique no botão abaixo para acessar sua galeria${gallery.nome_sessao ? ` <strong>${escapeHtml(gallery.nome_sessao)}</strong>` : ''}.</p>
+          ${textToHtmlParagraphs(bodyText)}
           ${passwordLine}
         `,
       });
