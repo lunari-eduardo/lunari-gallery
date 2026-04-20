@@ -1,226 +1,142 @@
 
+# Plano: Ajustar lista de fotos selecionadas com thumbnails maiores e indicadores mais limpos
 
-# Plano: Ajustar o resumo visual para ser uma lista compacta de seleção, não uma exibição gigante das fotos
+## Objetivo
 
-## Diagnóstico
+Refinar o resumo visual da etapa **Confirmar Seleção** para ficar mais próximo do esboço desejado:
 
-A implementação atual ficou com comportamento de “preview grande”:
+- Fotos um pouco maiores.
+- Favoritas indicadas apenas por um coração.
+- Comentário exibido como texto, sem badge.
+- Extras não aparecem como badge na lista de fotos.
+- O resumo financeiro da direita continua mostrando extras e valores normalmente.
 
-- Cada foto ocupa toda a largura da coluna esquerda (`lg:max-w-[480px]`).
-- Fotos verticais ficam enormes e empurram o restante da lista para baixo.
-- O resumo visual deixou de parecer um **resumo de seleção** e virou uma galeria ampliada.
-- No desktop, o cliente vê praticamente só uma foto grande, quando deveria conseguir revisar várias seleções rapidamente.
+## Mudanças em `src/components/SelectionConfirmation.tsx`
 
-Pelo esboço, o ideal é:
+### 1. Aumentar o tamanho das fotos
 
-```text
-┌───────────────────────────────┬───────────────────────────────┐
-│ Resumo de seleção             │ Sua seleção                   │
-│                               │                               │
-│ ┌──────┐  nome                │ Selecionadas              2   │
-│ │ foto │  comentário          │ Incluídas no pacote       1   │
-│ └──────┘  coração/favorita    │ Extras                    1   │
-│                               │ Valor por foto      R$ 25,00  │
-│ ┌──────┐  nome                │                               │
-│ │ foto │  comentário          │ Total adicional     R$ 25,00  │
-│ └──────┘                      │                               │
-│                               │ Pagamento online após...      │
-│ ┌──────┐  nome                │ Não será possível alterar...  │
-│ │ foto │  comentário          │                               │
-│ └──────┘                      │                               │
-└───────────────────────────────┴───────────────────────────────┘
-                         [ Confirmar e Pagar ]
+Hoje o thumbnail está em:
+
+```tsx
+h-24 w-24 md:h-28 md:w-28
 ```
 
-Ou seja: uma **lista vertical compacta**, com thumbnail + informações ao lado.
+Será ajustado para algo mais confortável, sem virar preview gigante:
 
-## Mudança principal
-
-Transformar o `SelectedPhotoCard` de uma foto grande em um **item de lista horizontal**.
-
-### Antes
-
-```text
-┌──────────────────────────────┐
-│                              │
-│        FOTO GIGANTE          │
-│                              │
-└──────────────────────────────┘
-nome
-comentário
+```tsx
+h-28 w-28 md:h-32 md:w-32
 ```
 
-### Depois
+Resultado:
+
+- A foto fica mais legível.
+- O card continua compacto.
+- Fotos verticais e horizontais continuam dentro de uma caixa previsível com `object-contain`.
+
+### 2. Remover badges dentro do card
+
+Remover do card:
+
+- Badge “Favorita”.
+- Badge “Comentário”.
+- Badge “+N extra”.
+
+O card passará a ter uma leitura mais limpa:
 
 ```text
-┌──────────┐  Nome da foto
-│          │  Comentário do cliente
-│  FOTO    │
-│          │  ♥ Favorita    +1 extra
-└──────────┘
+┌────────────┐  Nome da foto                         ♥
+│            │  "Comentário do cliente, se existir"
+│    foto    │
+│            │
+└────────────┘
 ```
 
-## Ajustes de UI/UX
+### 3. Mostrar favorita apenas com coração
+
+Quando `photo.isFavorite` for verdadeiro:
+
+- Mostrar somente o ícone `Heart`.
+- Sem fundo de badge.
+- Sem texto “Favorita”.
+- O coração ficará ao lado do nome ou no canto superior direito da área textual.
+- Usar preenchimento vermelho/terracotta para ficar claro visualmente.
+
+Exemplo técnico:
+
+```tsx
+<div className="flex items-start justify-between gap-2">
+  <p className="truncate text-sm font-medium">{displayName}</p>
+
+  {photo.isFavorite && (
+    <Heart className="h-4 w-4 shrink-0 fill-destructive text-destructive" />
+  )}
+</div>
+```
+
+### 4. Manter comentário como texto
+
+O comentário continua aparecendo abaixo do nome, mas sem badge:
+
+```tsx
+{photo.comment && (
+  <p className="line-clamp-2 text-xs italic text-muted-foreground">
+    "{photo.comment}"
+  </p>
+)}
+```
+
+Isso preserva a informação importante sem poluir o card.
+
+### 5. Remover lógica visual de extras da lista
+
+Como o usuário não quer badge de extra no card:
+
+- Remover `extraIndex` de `SelectedPhotoCardProps`.
+- Remover o cálculo `extraIndex` no map da lista.
+- Remover qualquer renderização de `+1 extra`, `+2 extra`, etc. dentro da lista visual.
+
+A contagem de extras permanece no resumo “Sua seleção” à direita, onde faz sentido financeiro.
+
+### 6. Limpar imports
+
+Como não haverá mais badges no card:
+
+- Remover import de `Badge` se não for usado em outro ponto do arquivo.
+- Manter `Heart`, `MessageSquare` e `ImageOff` se ainda forem usados no contador superior e fallback visual.
+- Se o contador de comentários continuar usando `MessageSquare`, manter o import.
+
+## Comportamento esperado
 
 ### Desktop
 
-- A tela continua dividida em duas colunas.
-- Coluna esquerda: lista de fotos selecionadas.
-- Coluna direita: resumo financeiro/descritivo.
-- A lista de fotos terá scroll próprio quando houver muitas imagens.
-- O resumo da direita continua sticky.
-- O botão de confirmação continua no rodapé, centralizado e sem ocupar largura excessiva.
+- Lista visual à esquerda com fotos maiores e mais fáceis de revisar.
+- Coração aparece de forma discreta nas favoritas.
+- Comentários continuam visíveis como texto.
+- Sem badges de comentário e sem badges de extra.
+- Resumo financeiro à direita continua com selecionadas, incluídas, extras, valor por foto e total.
 
 ### Mobile
 
-- O resumo financeiro continua aparecendo primeiro.
-- Depois vem a lista compacta de fotos.
-- Nada de fotos gigantes: os cards também serão horizontais e compactos no mobile.
-- A página usa rolagem natural, com o botão fixo no rodapé.
+- Layout continua empilhado.
+- Cards continuam horizontais e compactos.
+- Fotos ficam um pouco maiores, mas sem prejudicar a rolagem.
+- Botão fixo no rodapé permanece igual.
 
-## Como o card de foto deve funcionar
+## Não alterar
 
-### Thumbnail
+- Cálculo de extras.
+- Cálculo de valor.
+- Lógica de pagamento.
+- Confirmação da seleção.
+- Backend, Edge Functions, RPCs ou banco de dados.
+- Integrações InfinitePay, Asaas ou Mercado Pago.
 
-- Usar um contêiner fixo e previsível, por exemplo:
-  - Mobile: `w-24`
-  - Desktop: `w-28` ou `w-32`
-- Altura limitada para evitar cards muito altos.
-- A imagem deve aparecer inteira, sem corte:
-  - `object-contain`
-  - `bg-muted`
-- Fotos verticais e horizontais ficam dentro do mesmo espaço visual, mantendo proporção original sem distorcer.
+## Resultado final
 
-### Informações ao lado
+A tela fica mais limpa e focada na revisão:
 
-Exibir em coluna:
-
-1. Nome da foto:
-   - `photo.displayName || photo.originalFilename || photo.filename`
-   - truncado se for muito longo.
-
-2. Comentário:
-   - se existir, mostrar o texto diretamente.
-   - limitar em 2 linhas.
-   - manter tooltip ou title para leitura completa.
-
-3. Favorita:
-   - se `photo.isFavorite`, mostrar ícone de coração + texto “Favorita”.
-   - Isso fica mais claro do que só um coração flutuante no canto da imagem.
-
-4. Extra:
-   - se for foto acima do pacote, mostrar `+1 extra`, `+2 extra`, etc.
-   - Usar badge discreto em `primary`.
-
-## Alterações técnicas
-
-### Arquivo
-
-`src/components/SelectionConfirmation.tsx`
-
-### 1. Ajustar `SelectedPhotoCard`
-
-Trocar estrutura atual:
-
-```tsx
-<div className="group relative flex flex-col gap-2">
-  <div className="relative w-full ..." style={{ aspectRatio }}>
-    <img className="h-full w-full object-contain" />
-  </div>
-  <div>nome/comentário</div>
-</div>
-```
-
-Por estrutura horizontal:
-
-```tsx
-<div className="group flex gap-3 rounded-lg border border-border/20 bg-card/40 p-2">
-  <div className="relative shrink-0 w-24 md:w-28 rounded-md bg-muted overflow-hidden">
-    <img className="h-full w-full object-contain" />
-  </div>
-
-  <div className="min-w-0 flex-1">
-    <p>nome</p>
-    <p>comentário</p>
-
-    <div>
-      favorita
-      extra
-    </div>
-  </div>
-</div>
-```
-
-### 2. Remover o uso de aspect ratio como altura total do card
-
-O `aspectRatio` atual é o que faz a imagem vertical ficar enorme.
-
-Em vez disso:
-
-- Manter a proporção dentro de uma caixa compacta.
-- Não deixar o aspect ratio determinar a altura inteira da tela.
-- Usar `object-contain` para respeitar a imagem sem recortar.
-
-### 3. Ajustar a coluna esquerda
-
-Trocar:
-
-```tsx
-lg:max-w-[480px] lg:mx-auto
-```
-
-Por uma largura mais natural para lista:
-
-```tsx
-lg:max-w-[520px]
-```
-
-Sem centralizar demais, para ficar alinhado ao título “Suas fotos”.
-
-### 4. Ajustar título da seção
-
-Trocar “Suas fotos” por “Resumo de seleção” para bater com a intenção do fluxo.
-
-Exemplo:
-
-```text
-Resumo de seleção (4)
-♥ 1 favorita   💬 1 com comentário
-```
-
-### 5. Melhorar espaçamento entre colunas
-
-Ajustar o grid desktop para a divisão ficar mais próxima do esboço:
-
-```tsx
-lg:grid-cols-[minmax(420px,520px)_minmax(360px,460px)]
-lg:justify-center
-lg:gap-16
-```
-
-Isso evita que a tela fique espalhada demais em monitores largos.
-
-### 6. Manter fluxo e regras existentes
-
-Não alterar:
-
-- cálculo de extras;
-- cálculo de valor;
-- lógica de pagamento;
-- `onConfirm`;
-- `onBack`;
-- dados vindos de `photos`;
-- backend;
-- Edge Functions;
-- RPCs;
-- integrações InfinitePay, Asaas ou Mercado Pago.
-
-## Resultado esperado
-
-- A esquerda vira um resumo visual rápido e escaneável.
-- O cliente consegue ver várias fotos selecionadas ao mesmo tempo.
-- Nome, comentário, favorito e extra ficam claros.
-- Fotos verticais e horizontais não são cortadas, mas também não ficam gigantes.
-- A direita continua focada na decisão: quantidade, extras, valor e confirmação.
-- A experiência fica mais próxima do esboço: lista de seleção à esquerda, resumo financeiro à direita e botão centralizado no rodapé.
-
+- Foto maior.
+- Nome claro.
+- Comentário legível.
+- Favorita marcada só com coração.
+- Sem poluição visual por badges de comentário ou extra.
