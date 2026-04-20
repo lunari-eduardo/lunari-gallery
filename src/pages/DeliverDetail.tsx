@@ -130,9 +130,9 @@ export default function DeliverDetail() {
         },
         prazoSelecao: expirationDate,
       }});
-      toast.success('Alterações salvas');
-    } catch {
-      toast.error('Erro ao salvar');
+      navigate('/galleries/deliver');
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
     } finally {
       setSaving(false);
     }
