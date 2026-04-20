@@ -5,7 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw
+  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +66,7 @@ export default function DeliverDetail() {
   const [galleryPassword, setGalleryPassword] = useState('');
   const [expirationDate, setExpirationDate] = useState<Date | undefined>();
   const [shareMessage, setShareMessage] = useState('Suas fotos finais estão prontas para download.');
+  const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
 
@@ -79,6 +80,7 @@ export default function DeliverDetail() {
       setIsPrivate(gallery.permissao === 'private');
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
+      setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
     }
   }, [gallery]);
 

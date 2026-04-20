@@ -204,6 +204,7 @@ serve(async (req) => {
             settings: {
               sessionFont: galleryConfig?.sessionFont || undefined,
               titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
+              coverPhotoId: galleryConfig?.coverPhotoId || undefined,
             },
           },
           photos: photos || [],
