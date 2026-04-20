@@ -253,7 +253,6 @@ export default function DeliverCreate() {
 
       // Publish gallery (generate token) without marking as "sent"
       await publishGallery(supabaseGalleryId);
-      toast.success('Galeria de entrega publicada!');
       navigate(`/deliver/${supabaseGalleryId}`);
     } catch (error) {
       console.error('Error publishing deliver gallery:', error);

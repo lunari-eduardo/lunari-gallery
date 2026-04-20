@@ -51,7 +51,6 @@ export default function ClientProfile() {
     if (!clientId) return;
     try {
       await updateClient(clientId, data);
-      toast.success('Cliente atualizado com sucesso!');
       setIsEditModalOpen(false);
     } catch (error) {
       console.error('Error updating client:', error);

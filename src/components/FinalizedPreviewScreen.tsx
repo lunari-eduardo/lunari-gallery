@@ -101,7 +101,6 @@ export function FinalizedPreviewScreen({
         sessionName || 'fotos-selecionadas',
         (current, total) => setDownloadProgress({ current, total })
       );
-      toast.success('Download concluído!');
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Erro no download. Tente novamente.');

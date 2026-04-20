@@ -100,7 +100,6 @@ export function PhotoCodesModal({
   const handleCopy = (code: string, label: string) => {
     navigator.clipboard.writeText(code);
     setCopied(label);
-    toast.success('Código copiado!');
     setTimeout(() => setCopied(null), 2000);
   };
 

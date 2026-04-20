@@ -115,7 +115,6 @@ export function PhotoUploader({
             retryRoundRef.current++;
             const round = retryRoundRef.current;
             const delay = round * 5000;
-            toast.info(`${retryableItems.length} arquivo(s) com erro. Tentando novamente automaticamente...`);
             setTimeout(() => {
               if (!pipelineRef.current) return;
               retryableItems.forEach(item => pipelineRef.current?.retry(item.id));
@@ -139,7 +138,6 @@ export function PhotoUploader({
             if (errItems.length > 0) {
               toast.warning(`${results.length} foto(s) enviada(s), ${errItems.length} com erro.`);
             } else {
-              toast.success(`${results.length} foto(s) enviada(s) com sucesso!`);
             }
             onUploadComplete?.(results as UploadedPhoto[]);
           } else if (errItems.length > 0) {

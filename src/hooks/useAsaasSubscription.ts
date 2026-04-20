@@ -280,7 +280,6 @@ export function useAsaasSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
-      toast.success('Upgrade realizado com sucesso!');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao realizar upgrade.');
@@ -298,7 +297,6 @@ export function useAsaasSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
-      toast.success('Assinatura cancelada com sucesso.');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao cancelar assinatura.');
@@ -319,7 +317,6 @@ export function useAsaasSubscription() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
-      toast.success(data.message || 'Downgrade agendado com sucesso.');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao agendar downgrade.');
@@ -336,7 +333,6 @@ export function useAsaasSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
-      toast.success('Downgrade cancelado.');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao cancelar downgrade.');
@@ -354,7 +350,6 @@ export function useAsaasSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asaas-subscription'] });
-      toast.success('Assinatura reativada com sucesso!');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao reativar assinatura.');

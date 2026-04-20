@@ -37,7 +37,6 @@ export default function Auth() {
       // Handle email change confirmation
       if (type === 'email_change') {
         console.log('📧 Email change confirmation detected');
-        toast.success('Email alterado com sucesso!');
         // Clear hash and redirect to home
         window.history.replaceState(null, '', '/');
         navigate('/', { replace: true });

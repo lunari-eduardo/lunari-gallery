@@ -64,9 +64,6 @@ export function DownloadModal({
         (current, total) => setDownloadProgress({ current, total })
       );
 
-      toast.success('Download concluído!', {
-        description: `${downloadablePhotos.length} fotos salvas com sucesso.`,
-      });
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Erro no download', {

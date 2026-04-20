@@ -89,7 +89,6 @@ export function useGalleryFolders(galleryId: string | null) {
     }
 
     setFolders(prev => prev.filter(f => f.id !== folderId));
-    toast.success('Pasta excluída. Fotos movidas para "Geral".');
   }, []);
 
   const reorderFolders = useCallback(async (reordered: GalleryFolderRow[]) => {
@@ -118,7 +117,6 @@ export function useGalleryFolders(galleryId: string | null) {
     }
 
     setFolders(prev => prev.map(f => f.id === folderId ? { ...f, cover_photo_id: photoId } : f));
-    toast.success('Capa da pasta atualizada');
   }, []);
 
   return {

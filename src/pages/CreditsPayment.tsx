@@ -440,7 +440,6 @@ function SelectPixForm({ pkg, formattedPrice }: { pkg: SelectPayment; formattedP
 
   const handlePixSuccess = () => {
     setPaymentSuccess(true);
-    toast.success('Pagamento confirmado! Créditos adicionados.');
     setTimeout(() => navigate('/credits'), 2000);
   };
 
@@ -548,7 +547,6 @@ function SelectCardForm({ pkg, formattedPrice }: { pkg: SelectPayment; formatted
         });
 
         if (result.status === 'CONFIRMED' || result.status === 'RECEIVED') {
-          toast.success('Pagamento confirmado! Créditos adicionados.');
           setTimeout(() => navigate('/credits'), 2000);
           return { success: true };
         } else {
@@ -748,7 +746,6 @@ function SubscriptionWizard({ pkg }: { pkg: SubscriptionPayment }) {
         const result = await upgradeSubscription(upgradeBody);
         if (result.status === 'ACTIVE' || result.newSubscriptionId) {
           setWizardState('success');
-          toast.success('Upgrade realizado com sucesso!');
           setTimeout(() => navigate('/credits'), 3000);
           return;
         } else {
@@ -765,7 +762,6 @@ function SubscriptionWizard({ pkg }: { pkg: SubscriptionPayment }) {
         });
         if (result.status === 'ACTIVE' || result.subscriptionId) {
           setWizardState('success');
-          toast.success('Assinatura anual ativada com sucesso!');
           setTimeout(() => navigate('/credits'), 3000);
           return;
         } else {
@@ -783,7 +779,6 @@ function SubscriptionWizard({ pkg }: { pkg: SubscriptionPayment }) {
         });
         if (result.status === 'ACTIVE' || result.paymentId) {
           setWizardState('success');
-          toast.success('Plano ativado com sucesso!');
           setTimeout(() => navigate('/credits'), 3000);
           return;
         } else {
@@ -800,7 +795,6 @@ function SubscriptionWizard({ pkg }: { pkg: SubscriptionPayment }) {
         });
         if (result.status === 'ACTIVE' || result.subscriptionId) {
           setWizardState('success');
-          toast.success('Assinatura ativada com sucesso!');
           setTimeout(() => navigate('/credits'), 3000);
           return;
         } else {

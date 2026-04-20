@@ -205,7 +205,6 @@ export function usePaymentIntegration() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
       queryClient.invalidateQueries({ queryKey: ['photographer-account'] });
-      toast.success('Chave PIX configurada com sucesso!');
     },
     onError: (error) => {
       console.error('Error saving PIX manual:', error);
@@ -264,7 +263,6 @@ export function usePaymentIntegration() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
       queryClient.invalidateQueries({ queryKey: ['photographer-account'] });
-      toast.success('InfinitePay configurado com sucesso!');
     },
     onError: (error) => {
       console.error('Error saving InfinitePay:', error);
@@ -327,7 +325,6 @@ export function usePaymentIntegration() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
       queryClient.invalidateQueries({ queryKey: ['photographer-account'] });
-      toast.success('Asaas configurado com sucesso!');
     },
     onError: (error) => {
       console.error('Error saving Asaas:', error);
@@ -362,7 +359,6 @@ export function usePaymentIntegration() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
-      toast.success('Configurações Asaas atualizadas!');
     },
     onError: (error) => {
       console.error('Error updating Asaas settings:', error);
@@ -390,7 +386,6 @@ export function usePaymentIntegration() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
-      toast.success('Método de pagamento padrão atualizado!');
     },
     onError: (error) => {
       console.error('Error setting default:', error);
@@ -414,7 +409,6 @@ export function usePaymentIntegration() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
       queryClient.invalidateQueries({ queryKey: ['photographer-account'] });
-      toast.success('Método de pagamento desativado');
     },
     onError: (error) => {
       console.error('Error deactivating payment:', error);
@@ -452,7 +446,6 @@ export function usePaymentIntegration() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
       queryClient.invalidateQueries({ queryKey: ['photographer-account'] });
-      toast.success('Mercado Pago conectado com sucesso!');
     },
     onError: (error) => {
       console.error('Error connecting Mercado Pago:', error);
@@ -487,7 +480,6 @@ export function usePaymentIntegration() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
-      toast.success('Configurações atualizadas!');
     },
     onError: (error) => {
       console.error('Error updating MP settings:', error);
@@ -527,7 +519,6 @@ export function usePaymentIntegration() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-integration'] });
-      toast.success('Configurações migradas do Studio com sucesso!');
     },
     onError: (error) => {
       console.error('Error migrating settings:', error);

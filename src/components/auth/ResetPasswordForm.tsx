@@ -39,7 +39,6 @@ export function ResetPasswordForm({ onBack }: ResetPasswordFormProps) {
       toast.error('Erro ao enviar email. Tente novamente.');
     } else {
       setEmailSent(true);
-      toast.success('Email de recuperação enviado!');
     }
     setIsLoading(false);
   };

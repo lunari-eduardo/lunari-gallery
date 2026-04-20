@@ -560,9 +560,6 @@ export default function ClientGallery() {
           valorTotal: data.valorTotal || 0,
         });
         setCurrentStep('payment');
-        toast.success('Seleção confirmada!', {
-          description: 'Complete o pagamento via PIX para liberar suas fotos.',
-        });
         return;
       }
       
@@ -570,9 +567,6 @@ export default function ClientGallery() {
       if (data.requiresPayment && data.transparentCheckout && data.asaasCheckoutData) {
         setAsaasCheckoutData(data.asaasCheckoutData as AsaasCheckoutData);
         setCurrentStep('payment');
-        toast.success('Seleção confirmada!', {
-          description: 'Escolha a forma de pagamento.',
-        });
         return;
       }
 
@@ -598,9 +592,6 @@ export default function ClientGallery() {
       // No payment required - go directly to confirmed
       setIsConfirmed(true);
       setCurrentStep('confirmed');
-      toast.success('Seleção confirmada com sucesso!', {
-        description: 'O fotógrafo receberá sua seleção.',
-      });
     },
     onError: (error: Error) => {
       // Parse error code from message if available
@@ -1149,9 +1140,6 @@ export default function ClientGallery() {
           throw new Error(err.error || 'Erro ao confirmar pagamento');
         }
         
-        toast.success('Pagamento informado com sucesso!', {
-          description: 'O fotógrafo será notificado para verificar.',
-        });
         
         // Refetch gallery to show finalized state
         await refetchGallery();
@@ -1353,7 +1341,6 @@ export default function ClientGallery() {
       p.id === photoId ? { ...p, comment } : p
     ));
     selectionMutation.mutate({ photoId, action: 'comment', comment, previousState });
-    toast.success('Comentário salvo!');
   };
 
   const handleFavorite = (photoId: string) => {
@@ -1739,9 +1726,6 @@ export default function ClientGallery() {
         
         setIsConfirmed(true);
         setCurrentStep('confirmed');
-        toast.success('Pagamento informado com sucesso!', {
-          description: 'O fotógrafo será notificado para verificar.',
-        });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Erro ao informar pagamento');
       } finally {

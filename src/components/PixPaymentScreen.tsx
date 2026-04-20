@@ -70,7 +70,6 @@ export function PixPaymentScreen({
     try {
       await navigator.clipboard.writeText(pixPayload);
       setCopied(true);
-      toast.success('Código PIX copiado!');
       setTimeout(() => setCopied(false), 3000);
     } catch (err) {
       toast.error('Erro ao copiar');

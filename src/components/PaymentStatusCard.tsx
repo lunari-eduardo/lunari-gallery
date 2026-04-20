@@ -161,11 +161,6 @@ export function PaymentStatusCard({
       const data = response.data;
 
       if (data.success) {
-        toast.success('Recebimento registrado!', {
-          description: data.alreadyPaid
-            ? 'O pagamento já estava registrado.'
-            : `R$ ${parsedValor.toFixed(2)} via ${manualMethodLabels[manualMethod] || manualMethod}`,
-        });
         setShowReceiptModal(false);
         onStatusUpdated?.();
       } else {
@@ -217,7 +212,6 @@ export function PaymentStatusCard({
       if (data.success && (data.checkoutUrl || data.galleryUrl)) {
         const urlToShow = (provider === 'asaas' && data.galleryUrl) ? data.galleryUrl : data.checkoutUrl;
         setNewCheckoutUrl(urlToShow || data.checkoutUrl);
-        toast.success('Link de cobrança gerado!');
         onStatusUpdated?.();
       } else {
         toast.error(data.error || 'Erro ao gerar cobrança');
@@ -232,7 +226,6 @@ export function PaymentStatusCard({
 
   const copyToClipboard = (url: string) => {
     navigator.clipboard.writeText(url);
-    toast.success('Link copiado!');
   };
 
   const getBadgeClasses = () => {

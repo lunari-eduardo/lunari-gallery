@@ -93,7 +93,6 @@ export function CreditCheckoutModal({
 
       if (result.status === 'approved') {
         setPaymentSuccess(true);
-        toast.success('Pagamento aprovado! Créditos adicionados.');
         setTimeout(() => {
           onSuccess();
           onOpenChange(false);
@@ -118,7 +117,6 @@ export function CreditCheckoutModal({
 
   const handlePixSuccess = () => {
     setPaymentSuccess(true);
-    toast.success('Pagamento confirmado! Créditos adicionados.');
     setTimeout(() => {
       onSuccess();
       onOpenChange(false);

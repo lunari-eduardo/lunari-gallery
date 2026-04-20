@@ -328,7 +328,6 @@ export function useGallerySettings() {
       }
     },
     onSuccess: () => {
-      toast.success('Tema salvo com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
     onError: (error) => {
@@ -362,7 +361,6 @@ export function useGallerySettings() {
       if (updateError) throw updateError;
     },
     onSuccess: () => {
-      toast.success('Tema removido. Usando tema do sistema.');
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
     onError: (error) => {

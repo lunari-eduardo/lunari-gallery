@@ -64,10 +64,8 @@ export default function Clients() {
     try {
       if (editingClient) {
         await updateClient(editingClient.id, clientData);
-        toast.success('Cliente atualizado com sucesso!');
       } else {
         await createClient(clientData);
-        toast.success('Cliente cadastrado com sucesso!');
       }
       setIsModalOpen(false);
       setEditingClient(null);
@@ -87,7 +85,6 @@ export default function Clients() {
   };
 
   const handleResetPassword = (client: Client) => {
-    toast.success(`Nova senha enviada para ${client.email}`);
   };
 
   const getStatusBadge = (status: ClientGalleryStatus) => {

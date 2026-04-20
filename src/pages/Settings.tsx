@@ -20,7 +20,6 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(isMpCallback ? 'payment' : 'general');
 
   const handleSave = () => {
-    toast.success('Configurações salvas!');
   };
 
   return (

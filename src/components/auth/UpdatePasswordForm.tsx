@@ -43,7 +43,6 @@ export function UpdatePasswordForm() {
       toast.error('Erro ao atualizar senha. Tente novamente.');
     } else {
       setSuccess(true);
-      toast.success('Senha atualizada com sucesso!');
       
       // Remove reset param from URL
       const url = new URL(window.location.href);

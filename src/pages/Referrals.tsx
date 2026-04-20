@@ -29,7 +29,6 @@ export default function Referrals() {
     try {
       await navigator.clipboard.writeText(referralLink);
       setCopied(true);
-      toast.success('Link copiado!');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Erro ao copiar');

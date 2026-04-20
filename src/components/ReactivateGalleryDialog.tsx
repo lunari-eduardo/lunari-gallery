@@ -61,7 +61,6 @@ export function ReactivateGalleryDialog({
     if (clientLink) {
       navigator.clipboard.writeText(clientLink);
       setCopied(true);
-      toast.success('Link copiado!');
       setTimeout(() => setCopied(false), 2000);
     }
   };

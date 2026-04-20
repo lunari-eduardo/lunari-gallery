@@ -88,7 +88,6 @@ export function PixPaymentDisplay({
     try {
       await navigator.clipboard.writeText(pixCopiaECola);
       setCopied(true);
-      toast.success('Código PIX copiado!');
       setTimeout(() => setCopied(false), 3000);
     } catch (error) {
       toast.error('Erro ao copiar código');
@@ -103,7 +102,6 @@ export function PixPaymentDisplay({
         setStatus('approved');
         onSuccess();
       } else {
-        toast.info('Pagamento ainda não confirmado');
       }
     } catch (error) {
       toast.error('Erro ao verificar pagamento');

@@ -82,7 +82,6 @@ export function DeliverPhotoManager({
 
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
       onPhotosChange?.(photos.length - 1);
-      toast.success('Foto excluída');
     } catch (error) {
       console.error('Error deleting photo:', error);
       toast.error('Erro ao excluir foto');
@@ -94,7 +93,6 @@ export function DeliverPhotoManager({
   const handleSetCover = (photoId: string) => {
     const newCoverId = coverPhotoId === photoId ? null : photoId;
     onCoverChange?.(newCoverId);
-    toast.success(newCoverId ? 'Foto definida como capa' : 'Capa removida');
   };
 
   if (isLoading && photos.length === 0) return null;
