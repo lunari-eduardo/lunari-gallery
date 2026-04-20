@@ -230,22 +230,6 @@ export function SendGalleryModal({
                 const result = data as { token?: string; ready?: boolean; error?: string };
                 if (!result?.ready) throw new Error(result?.error || 'Erro');
                 setResolvedToken(result.token!);
-
-        if (!hasEmailAttemptRef.current) {
-          hasEmailAttemptRef.current = true;
-          try {
-            const { data: emailResult } = await supabase.functions.invoke('send-email', {
-              body: { eventType: 'gallery_sent', galleryId: gallery.id, publicToken: result.token },
-            });
-            const feedback = emailResult as { status?: 'enviado' | 'erro' | 'ignorado'; message?: string } | null;
-            setEmailFeedback({ status: feedback?.status || 'erro', message: feedback?.message || 'Não foi possível enviar o e-mail agora.' });
-            if (feedback?.status === 'enviado') toast.success('E-mail enviado para o cliente.');
-            else if (feedback?.message) toast.info(feedback.message);
-          } catch (emailError) {
-            console.warn('Email send failed without blocking share:', emailError);
-            setEmailFeedback({ status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
-          }
-        }
               } catch (e: any) {
                 setPrepareError(e.message);
               } finally {
