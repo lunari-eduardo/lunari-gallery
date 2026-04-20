@@ -219,7 +219,7 @@ export function SelectionConfirmation({
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 lg:grid-cols-2 lg:gap-3">
+            <div className="flex flex-col gap-3 lg:max-w-[480px] lg:mx-auto lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto lg:pr-2">
               {selectedPhotos.map((photo, idx) => {
                 const position = idx + 1; // 1-indexed
                 const extraIndex = position > includedLimit ? position - includedLimit : null;
