@@ -1136,14 +1136,14 @@ export default function GalleryDetail() {
       </Tabs>
 
       {/* Lightbox */}
-      {lightboxIndex !== null && (
+      {lightboxState !== null && (
         <Lightbox
-          photos={transformedPhotos}
-          currentIndex={lightboxIndex}
+          photos={lightboxState.source === 'selection' ? selectedPhotos : transformedPhotos}
+          currentIndex={lightboxState.index}
           allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
           disabled
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={setLightboxIndex}
+          onClose={() => setLightboxState(null)}
+          onNavigate={(idx) => setLightboxState((prev) => prev ? { ...prev, index: idx } : prev)}
           onSelect={() => {}}
         />
       )}
