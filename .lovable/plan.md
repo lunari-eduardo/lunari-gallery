@@ -1,625 +1,289 @@
 
-# Plano ajustado: E-mails automáticos com Resend + melhor UX de envio
+# Plano: Corrigir salvamento e uso real dos templates de e-mail
 
-## Direção confirmada
+## Diagnóstico
 
-Usaremos **Resend** com o domínio já configurado:
+O problema principal está na tela de **Configurações > Personalização > Textos de E-mails**.
 
-```text
-mail.lunarihub.com
-```
-
-Remetente padrão:
+Hoje o modal permite editar assunto e corpo, mas a alteração não é persistida porque o componente está assim:
 
 ```text
-no-reply@mail.lunarihub.com
+onTemplatesChange={(templates) => {
+  // For now, email templates still use the old pattern
+}}
 ```
 
-Não vamos configurar domínio de e-mail pelo sistema interno do Lovable, porque o envio será feito via Resend usando o domínio que você já configurou no Cloudflare e no Resend.
+Ou seja:
+
+- o botão “Salvar Template” fecha o modal;
+- a lista até monta um array atualizado localmente;
+- mas nada é enviado para o Supabase;
+- ao recarregar ou reabrir, volta o conteúdo antigo.
+
+Também há um segundo ponto importante:
+
+- a Edge Function `send-email` ainda usa um template hardcoded para o e-mail automático de galeria enviada;
+- então mesmo depois de salvar no banco, o e-mail automático pode continuar ignorando o texto editado pelo fotógrafo.
+
+## Objetivo
+
+Fazer com que as edições feitas nos templates sejam:
+
+1. salvas corretamente no banco;
+2. refletidas na interface imediatamente;
+3. usadas no texto de compartilhamento da galeria;
+4. usadas também no envio automático via Resend, principalmente no evento **Galeria Enviada**.
 
 ---
 
-## 1. Configuração padrão crítica
+## 1. Corrigir salvamento no frontend
 
-### Ajuste no banco
-
-Adicionar as configurações de e-mail em `gallery_settings` com padrão ativo:
-
-```text
-email_sending_enabled default true
-email_on_gallery_sent default true
-email_on_payment_confirmed default true
-```
-
-Também aplicar para usuários existentes:
-
-- se a coluna ainda não existir, criar com `default true`;
-- popular registros existentes com `true`;
-- manter `not null` para evitar comportamento ambíguo.
-
-### Comportamento esperado
-
-Por padrão, o produto já funciona assim que o fotógrafo envia uma galeria.
-
-O fotógrafo não precisa descobrir que precisa ligar algo escondido para o e-mail funcionar.
-
----
-
-## 2. UI de configurações
-
-Criar uma seção em:
-
-```text
-Configurações > Personalização > Comunicação
-```
-
-Nova área:
-
-```text
-E-mails automáticos
-```
-
-Controles:
-
-1. Toggle geral:
-   - “Ativar envio de e-mails”
-
-2. Toggles específicos:
-   - “Enviar e-mail ao enviar galeria”
-   - “Enviar e-mail ao confirmar pagamento”
-
-3. Aviso obrigatório na UI:
-
-```text
-Você pode desativar os e-mails a qualquer momento.
-```
-
-4. Informação do remetente:
-
-```text
-Remetente: no-reply@mail.lunarihub.com
-```
-
-Quando o toggle geral estiver desativado:
-
-- os toggles específicos ficam visualmente dependentes/desabilitados ou com menor destaque;
-- nenhum e-mail automático será enviado;
-- o usuário entende claramente que desligou todos os envios.
-
----
-
-## 3. Função central de envio com Resend
-
-Criar uma função central reutilizável para envio de e-mails via Resend.
-
-Responsabilidades:
-
-- validar evento;
-- buscar dados reais no banco;
-- respeitar configurações do fotógrafo;
-- validar se o cliente tem e-mail;
-- garantir idempotência para evitar duplicidade;
-- montar HTML;
-- enviar via Resend;
-- registrar log;
-- retornar um resultado simples para a UI.
-
-Eventos suportados inicialmente:
-
-```text
-gallery_sent
-payment_confirmed
-```
-
-A chave do Resend ficará somente em segredo seguro do backend, nunca no frontend.
-
-Segredos esperados:
-
-```text
-RESEND_API_KEY
-```
-
-Se a chave estiver ausente ou inválida:
-
-- não quebrar o fluxo;
-- registrar log como erro;
-- mostrar mensagem amigável quando o envio for acionado pela UI.
-
----
-
-## 4. Logs essenciais de envio
-
-Criar tabela de logs própria para os e-mails do produto.
-
-Campos principais:
-
-```text
-id
-user_id
-cliente_id
-cliente_nome
-cliente_email
-event_type
-status
-gallery_id
-payment_id
-idempotency_key
-resend_message_id
-subject
-friendly_message
-error_message
-metadata
-created_at
-updated_at
-```
-
-### Status
-
-```text
-enviado
-erro
-ignorado
-```
-
-### Visual na UI
-
-Na área de logs recentes:
-
-- `enviado` → verde
-- `erro` → vermelho
-- `ignorado` → cinza
-
-### Mensagens amigáveis
-
-Não mostrar erro técnico bruto para o usuário.
-
-Exemplos:
-
-```text
-Cliente sem e-mail cadastrado
-Envio automático desativado
-E-mail já enviado anteriormente
-Falha ao enviar pelo provedor
-Configuração do Resend ausente
-```
-
-O erro técnico completo pode ficar no campo interno `error_message`/`metadata`, mas a interface mostra apenas o motivo simples.
-
----
-
-## 5. Prevenção de envios duplicados
-
-Usar chave única por evento lógico:
-
-```text
-gallery_sent:{gallery_id}
-payment_confirmed:{payment_id}
-```
-
-Regras:
-
-- se já existe envio `enviado` com a mesma chave, não reenviar;
-- registrar/retornar como `ignorado` com motivo amigável;
-- webhooks repetidos, polling e auto-healing não disparam e-mail duplicado;
-- abrir a modal novamente não reenviará a mesma galeria.
-
----
-
-## 6. Evento 1: envio de galeria
-
-### Quando disparar
-
-Depois que a galeria for preparada/publicada com sucesso pela RPC atual:
-
-```text
-prepare_gallery_share
-```
-
-A função só poderá enviar e-mail quando existir:
-
-- token público válido retornado pela RPC;
-- link público gerado a partir desse token;
-- cliente com e-mail;
-- envio global ativado;
-- opção “Enviar e-mail ao enviar galeria” ativada;
-- evento ainda não enviado.
-
-### Link da galeria: regra crítica
-
-O e-mail deve usar apenas o link público correto:
-
-```text
-https://gallery.lunarihub.com/g/{publicToken}
-```
-
-Regras:
-
-- nunca gerar token no cliente;
-- nunca usar UUID interno da galeria;
-- sempre usar o token retornado por `prepare_gallery_share`;
-- se não houver token válido, não enviar;
-- registrar como erro/ignorado sem quebrar o compartilhamento.
-
-Isso garante que o botão do e-mail abre direto a galeria correta.
-
-### Feedback imediato na modal
-
-Na `SendGalleryModal`, após preparar a galeria:
-
-Se enviou:
-
-```text
-E-mail enviado para o cliente.
-```
-
-Se não tem e-mail:
-
-```text
-Cliente não possui e-mail cadastrado.
-```
-
-Se envio global está desativado:
-
-```text
-E-mails automáticos estão desativados.
-```
-
-Se já foi enviado antes:
-
-```text
-E-mail já enviado anteriormente.
-```
-
-Se falhou:
-
-```text
-Não foi possível enviar o e-mail agora.
-```
-
-O fluxo de compartilhar continua funcionando em todos os casos.
-
-### Fallback quando não houver e-mail
-
-Se o cliente não tiver e-mail cadastrado, destacar ações alternativas:
-
-- `Copiar link`
-- `Enviar via WhatsApp`
-
-Essas ações já existem na modal, mas serão reposicionadas/realçadas para deixar claro que este é o caminho recomendado quando não há e-mail.
-
-O botão “Enviar por Email — Em breve” deixa de existir nesse formato e vira um status real do envio automático.
-
----
-
-## 7. Template de e-mail: galeria enviada
-
-### Objetivo
-
-Aumentar abertura, clique e conversão para seleção/compra de fotos extras.
-
-### Novo tom do template
-
-Trocar mensagem fraca como:
-
-```text
-Sua galeria está pronta
-```
-
-Por:
-
-```text
-Suas fotos já estão prontas ✨
-```
-
-Texto principal:
-
-```text
-Olá, {cliente}
-
-Suas fotos já estão prontas ✨
-
-Você já pode visualizar, escolher suas favoritas e garantir suas fotos.
-
-Clique no botão abaixo para acessar sua galeria.
-```
-
-CTA:
-
-```text
-Acessar minha galeria
-```
-
-Rodapé:
-
-```text
-Com carinho,
-{nome_do_estudio}
-```
-
-Se a galeria for privada e houver senha:
-
-```text
-Senha de acesso: {senha}
-```
-
-### Layout
-
-- HTML responsivo;
-- fundo branco;
-- card central limpo;
-- tipografia simples;
-- botão destacado;
-- boa leitura no celular;
-- sem excesso visual;
-- identidade neutra, com possibilidade futura de usar logo/nome do estúdio.
-
----
-
-## 8. Evento 2: confirmação de pagamento
-
-### Quando disparar
-
-Após confirmação real do pagamento.
-
-Pontos a revisar:
-
-```text
-supabase/functions/check-payment-status/index.ts
-supabase/functions/infinitepay-webhook/index.ts
-supabase/functions/infinitepay-create-link/index.ts
-supabase/functions/asaas-webhook/index.ts
-supabase/functions/asaas-gallery-payment/index.ts
-supabase/functions/mercadopago-webhook/index.ts
-supabase/functions/confirm-payment-manual/index.ts
-```
-
-Regra principal:
-
-- o e-mail deve ser chamado apenas depois que o pagamento for finalizado/sincronizado com sucesso;
-- a chamada de e-mail sempre fica protegida por `try/catch`;
-- falha de e-mail nunca desfaz pagamento;
-- falha de e-mail nunca faz webhook retornar erro quando o pagamento já foi processado.
-
-### Cuidado obrigatório com InfinitePay
-
-Ao tocar nos fluxos de pagamento, revisar especialmente:
-
-```text
-supabase/functions/infinitepay-create-link/index.ts
-supabase/functions/infinitepay-webhook/index.ts
-```
-
-Preservar as regras existentes:
-
-- não adicionar validação JWT no webhook;
-- não quebrar `verify_jwt = false`;
-- manter busca por `ip_order_nsu` primeiro;
-- manter fallback por UUID;
-- manter chamada para `finalize_gallery_payment`;
-- manter auto-healing;
-- não alterar automação de cobrança de clientes.
-
-A integração de e-mail entra como efeito colateral seguro, nunca como parte crítica da confirmação financeira.
-
-### Conteúdo do e-mail de pagamento
-
-Assunto sugerido:
-
-```text
-Pagamento confirmado
-```
-
-Conteúdo:
-
-```text
-Olá, {cliente}
-
-Recebemos a confirmação do seu pagamento.
-
-Valor pago: R$ {valor}
-Forma de pagamento: {forma}
-Data: {data}
-Descrição: {descricao}
-Status: Confirmado
-```
-
-CTA opcional:
-
-```text
-Acessar galeria
-```
-
-Se houver galeria vinculada e token público disponível, incluir botão para voltar à galeria.
-
----
-
-## 9. Logs recentes no frontend
-
-Criar componente para logs recentes dentro de Comunicação:
-
-```text
-Histórico de e-mails
-```
-
-Exibir:
-
-```text
-Tipo
-Cliente
-E-mail
-Status
-Data
-Motivo
-```
-
-Exemplo:
-
-```text
-Galeria enviada        Maria        enviado    Hoje, 14:32
-Pagamento confirmado  João         erro       Falha ao enviar pelo provedor
-Galeria enviada        Ana          ignorado   Cliente sem e-mail cadastrado
-```
-
-UX:
-
-- visual compacto;
-- cores claras por status;
-- mostrar no máximo os últimos registros;
-- permitir expandir erro simples se necessário;
-- sem expor stack trace ou detalhes técnicos.
-
----
-
-## 10. Tipos, hooks e settings
-
-Atualizar:
-
-```text
-src/types/gallery.ts
-src/hooks/useGallerySettings.ts
-src/hooks/useSettings.ts
-```
-
-Adicionar ao `GlobalSettings`:
-
-```text
-emailSendingEnabled
-emailOnGallerySent
-emailOnPaymentConfirmed
-```
-
-Criar hook para logs:
-
-```text
-src/hooks/useEmailLogs.ts
-```
-
-Criar componente:
-
-```text
-src/components/settings/EmailAutomationSettings.tsx
-```
-
-Integrar em:
+### Arquivo principal
 
 ```text
 src/components/settings/PersonalizationSettings.tsx
 ```
 
----
+Hoje `EmailTemplates` recebe um `onTemplatesChange` vazio.
 
-## 11. Segurança e regras de não envio
-
-Nunca enviar quando:
-
-- cliente não possui e-mail;
-- envio global está desativado;
-- opção específica está desativada;
-- evento já foi enviado;
-- link público da galeria não está pronto;
-- token público não existe ou não é válido;
-- pagamento ainda não foi confirmado;
-- Resend falha.
-
-Em todos esses casos:
-
-- não quebrar o fluxo principal;
-- registrar log;
-- mostrar feedback amigável quando o usuário estiver na modal.
-
----
-
-## 12. Estrutura preparada para futuro
-
-A função central e os logs ficarão preparados para novos eventos:
+Vou alterar para usar a mutation já existente em:
 
 ```text
-selection_reminder
-selection_abandoned
-payment_reminder
-gallery_expiring
+src/hooks/useGallerySettings.ts
 ```
 
-Mas estes não serão implementados agora.
+A mutation existente:
+
+```text
+updateEmailTemplate
+```
+
+já atualiza a tabela:
+
+```text
+gallery_email_templates
+```
+
+Então a correção será ligar o componente visual a essa mutation.
+
+### Resultado
+
+Ao clicar em “Salvar Template”:
+
+- o template será atualizado no Supabase;
+- a query `gallery-settings` será invalidada;
+- a lista será recarregada com os dados salvos;
+- ao fechar e abrir novamente, o texto editado continuará lá.
 
 ---
 
-## 13. Arquivos previstos
+## 2. Melhorar feedback de salvamento
 
-### Banco
+### Arquivos
 
 ```text
-supabase/migrations/*
+src/hooks/useGallerySettings.ts
+src/components/settings/EmailTemplates.tsx
+src/components/settings/EmailTemplateModal.tsx
 ```
 
-Adicionar:
+Adicionar feedback claro:
 
-- colunas de configuração em `gallery_settings`;
-- tabela de logs;
-- índices;
-- chave única de idempotência;
-- RLS para leitura dos logs pelo fotógrafo autenticado.
+- salvando;
+- salvo com sucesso;
+- erro ao salvar.
 
-### Nova função backend
+Comportamento esperado:
+
+```text
+Salvar Template → desabilita botão enquanto salva → mostra sucesso → fecha modal
+```
+
+Se falhar:
+
+```text
+Não foi possível salvar o template.
+```
+
+E o modal não deve simplesmente fechar como se tivesse dado certo.
+
+---
+
+## 3. Ajustar contrato do componente `EmailTemplates`
+
+Hoje ele trabalha com:
+
+```text
+onTemplatesChange(templates)
+```
+
+Isso força o componente a enviar a lista inteira.
+
+Como o caso real é editar um template por vez, vou simplificar para:
+
+```text
+onTemplateSave(template)
+```
+
+Benefícios:
+
+- menos chance de sobrescrever templates errados;
+- aproveita a mutation já pronta;
+- fica mais claro que o salvamento é individual;
+- reduz risco de conflito entre templates.
+
+---
+
+## 4. Garantir atualização visual imediata
+
+Após salvar:
+
+- invalidar `gallery-settings`;
+- manter a lista refletindo o novo assunto;
+- fechar o modal somente depois do sucesso;
+- manter o texto editado caso aconteça erro.
+
+Opcionalmente, aplicar atualização otimista simples para a lista parecer instantânea, mas sem esconder erro real.
+
+---
+
+## 5. Fazer o e-mail automático usar o template salvo
+
+### Arquivo
 
 ```text
 supabase/functions/send-email/index.ts
 ```
 
-Função central de envio via Resend.
-
-### Frontend
+No evento:
 
 ```text
-src/types/gallery.ts
-src/hooks/useGallerySettings.ts
-src/hooks/useSettings.ts
-src/hooks/useEmailLogs.ts
-src/components/settings/EmailAutomationSettings.tsx
-src/components/settings/PersonalizationSettings.tsx
-src/components/SendGalleryModal.tsx
+gallery_sent
 ```
 
-### Pagamentos
+a função hoje monta assunto e corpo fixos.
 
-Revisar e ajustar com segurança:
+Vou ajustar para:
+
+1. buscar o template do fotógrafo em `gallery_email_templates`;
+2. usar o template com `type = gallery_sent`;
+3. substituir variáveis suportadas;
+4. gerar o HTML final com o layout padrão responsivo;
+5. manter o botão “Acessar minha galeria” usando o link público correto.
+
+### Variáveis suportadas
+
+Manter as variáveis que já aparecem no modal:
 
 ```text
-supabase/functions/check-payment-status/index.ts
-supabase/functions/infinitepay-webhook/index.ts
-supabase/functions/infinitepay-create-link/index.ts
-supabase/functions/asaas-webhook/index.ts
-supabase/functions/asaas-gallery-payment/index.ts
-supabase/functions/mercadopago-webhook/index.ts
-supabase/functions/confirm-payment-manual/index.ts
+{cliente}
+{galeria}
+{prazo}
+{link}
+{estudio}
+{dias_restantes}
+{total_fotos}
+{fotos_extras}
+{valor_extra}
 ```
+
+Para o evento de galeria enviada, as principais serão:
+
+```text
+{cliente}
+{galeria}
+{prazo}
+{link}
+{estudio}
+```
+
+As demais podem ficar com fallback seguro quando não houver dado disponível.
 
 ---
 
-## 14. Validação final
+## 6. Preservar regra crítica do link público
 
-Testes esperados:
+Mesmo usando o template editado, o link enviado no e-mail continuará seguindo a regra segura:
 
-1. Cliente com e-mail + configurações padrão ativas → envia e-mail ao compartilhar galeria.
-2. Modal mostra “E-mail enviado para o cliente”.
-3. Cliente sem e-mail → não envia e mostra “Cliente não possui e-mail cadastrado”.
-4. Cliente sem e-mail mantém “Copiar link” e “Enviar via WhatsApp” como fallback claro.
-5. Toggle geral desligado → nenhum e-mail é enviado.
-6. Toggle de galeria desligado → não envia ao compartilhar galeria.
-7. Toggle de pagamento desligado → não envia confirmação de pagamento.
-8. Reabrir modal da mesma galeria → não duplica envio.
-9. Webhook/polling duplicado de pagamento → não duplica envio.
-10. Link recebido no e-mail abre diretamente a galeria pública correta.
-11. Falha no Resend → fluxo não quebra e log fica como erro.
-12. Logs exibem:
-    - enviado em verde;
-    - erro em vermelho;
-    - ignorado em cinza.
-13. InfinitePay continua funcionando:
-    - create-link;
-    - webhook;
-    - busca por NSU;
-    - fallback por UUID;
-    - auto-healing;
-    - finalização de pagamento.
-14. Build TypeScript sem erros.
+- usar o token retornado pela RPC `prepare_gallery_share`;
+- nunca usar UUID interno da galeria;
+- nunca gerar token no cliente;
+- se o token não existir, não enviar;
+- registrar como ignorado/erro sem quebrar o fluxo.
+
+O botão do HTML continuará usando o link público resolvido.
+
+---
+
+## 7. Compatibilidade com WhatsApp e copiar mensagem
+
+O `SendGalleryModal` já monta a mensagem de WhatsApp/cópia a partir de:
+
+```text
+settings.emailTemplates.find(type === 'gallery_sent')
+```
+
+Depois que o salvamento for corrigido, esse fluxo também passa a refletir o texto editado.
+
+Vou revisar esse ponto para garantir que:
+
+- o texto copiado usa o template salvo;
+- `{link}` é substituído corretamente;
+- senha da galeria privada continua sendo anexada;
+- prazo continua formatado corretamente.
+
+---
+
+## 8. Não alterar fluxos de pagamento agora
+
+Este ajuste é focado em templates.
+
+Não vou mexer em:
+
+```text
+infinitepay-create-link
+infinitepay-webhook
+asaas-webhook
+asaas-gallery-webhook
+mercadopago-webhook
+check-payment-status
+confirm-payment-manual
+```
+
+Motivo:
+
+- o problema reportado está no salvamento/uso dos templates;
+- evitar risco desnecessário nos webhooks e automação de cobrança;
+- manter intactas as regras críticas da InfinitePay.
+
+Se for necessário mexer em e-mail de pagamento depois, será em uma etapa separada e com revisão completa dos webhooks.
+
+---
+
+## 9. Validação final
+
+Depois da implementação, validar:
+
+1. abrir template “Galeria Enviada”;
+2. alterar assunto;
+3. alterar corpo;
+4. clicar em “Salvar Template”;
+5. confirmar toast de sucesso;
+6. reabrir o modal e confirmar que o texto continua salvo;
+7. recarregar a página e confirmar persistência;
+8. abrir modal de envio de galeria e confirmar que a mensagem usa o template editado;
+9. enviar galeria para cliente com e-mail e confirmar que o e-mail automático usa o conteúdo salvo;
+10. confirmar que o link do e-mail abre a galeria pública correta;
+11. testar erro de salvamento e garantir que o modal não fecha como sucesso;
+12. rodar build TypeScript.
+
+## Resultado esperado
+
+O fotógrafo poderá editar os textos de e-mail com confiança:
+
+- o botão “Salvar Template” realmente salva;
+- a interface mostra feedback;
+- o texto permanece após recarregar;
+- o WhatsApp/cópia usa o template salvo;
+- o e-mail automático de galeria enviada usa o template personalizado;
+- o link público da galeria continua seguro e funcional.
