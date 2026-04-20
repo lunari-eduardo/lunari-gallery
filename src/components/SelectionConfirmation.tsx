@@ -175,13 +175,13 @@ export function SelectionConfirmation({
 
       {/* Main Content */}
       <main className="flex-1 px-4 py-8 pb-28 overflow-y-auto">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 lg:grid-cols-[minmax(420px,520px)_minmax(360px,460px)] lg:justify-center lg:gap-16">
           
           {/* LEFT (desktop) / BOTTOM (mobile): Visual grid */}
           <section className="order-2 lg:order-1">
             <div className="flex items-baseline justify-between mb-4 mt-8 lg:mt-0">
               <h2 className="text-xl font-semibold">
-                Suas fotos <span className="text-muted-foreground font-normal">({selectedPhotos.length})</span>
+                Resumo de seleção <span className="text-muted-foreground font-normal">({selectedPhotos.length})</span>
               </h2>
             </div>
 
@@ -202,7 +202,7 @@ export function SelectionConfirmation({
               </div>
             )}
 
-            <div className="flex flex-col gap-3 lg:max-w-[480px] lg:mx-auto lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto lg:pr-2">
+            <div className="flex flex-col gap-3 lg:max-h-[calc(100vh-220px)] lg:max-w-[520px] lg:overflow-y-auto lg:pr-2">
               {selectedPhotos.map((photo, idx) => {
                 const position = idx + 1; // 1-indexed
                 const extraIndex = position > includedLimit ? position - includedLimit : null;
