@@ -46,7 +46,7 @@ export function EmailAutomationSettings({ settings, updateSettings }: EmailAutom
         </div>
         <div className={cn('space-y-4 pl-4 border-l border-border', !enabled && 'opacity-50')}>
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-sm">Enviar e-mail ao enviar galeria</Label>
+            <Label className="text-sm">Permitir envio de e-mail de galeria</Label>
             <Switch disabled={!enabled} checked={settings.emailOnGallerySent ?? true} onCheckedChange={(checked) => updateSettings({ emailOnGallerySent: checked })} />
           </div>
           <div className="flex items-center justify-between gap-4">
