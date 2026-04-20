@@ -57,7 +57,8 @@ export default function GalleryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  type LightboxSource = 'all' | 'selection';
+  const [lightboxState, setLightboxState] = useState<{ source: LightboxSource; index: number } | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
