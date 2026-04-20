@@ -44,7 +44,7 @@ import { PaymentHistoryCard } from '@/components/PaymentHistoryCard';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
-import { toast } from 'sonner';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getGalleryUrl } from '@/lib/galleryUrl';
