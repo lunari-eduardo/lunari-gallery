@@ -57,7 +57,8 @@ export default function GalleryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  type LightboxSource = 'all' | 'selection';
+  const [lightboxState, setLightboxState] = useState<{ source: LightboxSource; index: number } | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
@@ -686,7 +687,7 @@ export default function GalleryDetail() {
                     allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
                     disabled
                     onSelect={() => {}}
-                    onViewFullscreen={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
+                    onViewFullscreen={() => setLightboxState({ source: 'all', index: transformedPhotos.findIndex(p => p.id === photo.id) })}
                   />
                 </MasonryItem>
               ))}
@@ -775,7 +776,7 @@ export default function GalleryDetail() {
                       {/* Thumbnail 1:1 */}
                       <div 
                         className="w-16 h-16 rounded overflow-hidden flex-shrink-0 cursor-pointer"
-                        onClick={() => setLightboxIndex(transformedPhotos.findIndex(p => p.id === photo.id))}
+                        onClick={() => setLightboxState({ source: 'selection', index: selectedPhotos.findIndex(p => p.id === photo.id) })}
                       >
                         <img 
                           src={photo.thumbnailUrl} 
@@ -1135,14 +1136,14 @@ export default function GalleryDetail() {
       </Tabs>
 
       {/* Lightbox */}
-      {lightboxIndex !== null && (
+      {lightboxState !== null && (
         <Lightbox
-          photos={transformedPhotos}
-          currentIndex={lightboxIndex}
+          photos={lightboxState.source === 'selection' ? selectedPhotos : transformedPhotos}
+          currentIndex={lightboxState.index}
           allowComments={supabaseGallery.configuracoes?.allowComments ?? true}
           disabled
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={setLightboxIndex}
+          onClose={() => setLightboxState(null)}
+          onNavigate={(idx) => setLightboxState((prev) => prev ? { ...prev, index: idx } : prev)}
           onSelect={() => {}}
         />
       )}
