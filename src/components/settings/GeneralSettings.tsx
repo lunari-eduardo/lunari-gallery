@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Globe, Calendar, Building2, Shield, Lock, Tag, Image as ImageIcon } from 'lucide-react';
+import { Globe, Calendar, Building2, Shield, Lock, Tag, Image as ImageIcon, Receipt, Package, CreditCard } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { GlobalSettings, GalleryPermission, SaleMode, ImageResizeOption } from '@/types/gallery';
+import { GlobalSettings, GalleryPermission, SaleMode, ImageResizeOption, ChargeType, PricingModel, PaymentMethod } from '@/types/gallery';
 import { UpdateSettingsOptions } from '@/hooks/useGallerySettings';
 
 interface GeneralSettingsProps {
