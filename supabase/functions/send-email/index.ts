@@ -9,7 +9,7 @@ const FROM_EMAIL = 'Lunari <contato@mail.lunarihub.com>';
 const GALLERY_BASE_URL = 'https://gallery.lunarihub.com';
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
-type EventType = 'gallery_sent' | 'payment_confirmed';
+type EventType = 'gallery_sent' | 'payment_confirmed' | 'gallery_reactivated';
 type DeliveryStatus = 'enviado' | 'erro' | 'ignorado';
 
 interface RequestBody {
@@ -213,7 +213,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceKey);
     const body = await req.json().catch(() => ({})) as RequestBody;
 
-    if (body.eventType !== 'gallery_sent' && body.eventType !== 'payment_confirmed') {
+    if (body.eventType !== 'gallery_sent' && body.eventType !== 'payment_confirmed' && body.eventType !== 'gallery_reactivated') {
       return jsonResponse({ success: false, status: 'erro', message: 'Evento de e-mail inválido' }, 400);
     }
 
