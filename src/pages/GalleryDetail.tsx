@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   CreditCard,
+  RotateCcw,
 } from 'lucide-react';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export default function GalleryDetail() {
   const [lightboxState, setLightboxState] = useState<{ source: LightboxSource; index: number } | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
   const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
   const [activeDetailFolderId, setActiveDetailFolderId] = useState<string | null>(null);
@@ -585,13 +587,10 @@ export default function GalleryDetail() {
           </Button>
           
           {canReactivate && (
-            <ReactivateGalleryDialog
-              galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
-              clientLink={clientLink}
-              onReactivate={handleReopenSelection}
-              gallery={supabaseGallery}
-              settings={settings}
-            />
+            <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reativar
+            </Button>
           )}
           
           <DeleteGalleryDialog 
@@ -1171,6 +1170,17 @@ export default function GalleryDetail() {
         gallery={supabaseGallery}
         settings={settings}
         onSendGallery={handleSendGallery}
+      />
+
+      {/* Reactivate Gallery Dialog (always mounted to survive status changes) */}
+      <ReactivateGalleryDialog
+        open={reactivateOpen}
+        onOpenChange={setReactivateOpen}
+        galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
+        clientLink={clientLink}
+        onReactivate={handleReopenSelection}
+        gallery={supabaseGallery}
+        settings={settings}
       />
     </div>
   );

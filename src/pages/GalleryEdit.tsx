@@ -14,7 +14,8 @@ import {
   Eye,
   EyeOff,
   Copy,
-  Trash2
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,6 +110,7 @@ export default function GalleryEdit() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPhotoUploader, setShowPhotoUploader] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
 
   // Initialize form with gallery data
   useEffect(() => {
@@ -719,18 +721,26 @@ export default function GalleryEdit() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ReactivateGalleryDialog
-                  galleryName={gallery.nomeSessao || 'Esta galeria'}
-                  clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
-                  onReactivate={handleReactivate}
-                  gallery={gallery}
-                  settings={settings}
-                />
+                <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reativar
+                </Button>
               </CardContent>
             </Card>
           )}
         </div>
       </div>
+
+      {/* Reactivate Gallery Dialog (always mounted to survive status changes) */}
+      <ReactivateGalleryDialog
+        open={reactivateOpen}
+        onOpenChange={setReactivateOpen}
+        galleryName={gallery.nomeSessao || 'Esta galeria'}
+        clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
+        onReactivate={handleReactivate}
+        gallery={gallery}
+        settings={settings}
+      />
 
       {/* Client Modal */}
       <ClientModal
