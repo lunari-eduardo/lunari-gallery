@@ -27,7 +27,7 @@ export function WatermarkSettings() {
   }, [settings.opacity]);
 
   const handleModeChange = async (mode: WatermarkMode) => {
-    await saveSettings({ mode });
+    await saveSettings({ mode }, { successMessage: 'Proteção de imagem salva.' });
   };
 
   const handleOpacityChange = (value: number[]) => {
@@ -35,7 +35,7 @@ export function WatermarkSettings() {
   };
 
   const handleOpacityCommit = async (value: number[]) => {
-    await saveSettings({ opacity: value[0] });
+    await saveSettings({ opacity: value[0] }, { successMessage: 'Opacidade salva.' });
   };
 
   if (isLoading) {
@@ -153,7 +153,7 @@ export function WatermarkSettings() {
                 onValueChange={(value) => {
                   if (!value) return;
                   const scaleMap = { small: 15, medium: 25, large: 40 };
-                  saveSettings({ scale: scaleMap[value as 'small' | 'medium' | 'large'] });
+                  saveSettings({ scale: scaleMap[value as 'small' | 'medium' | 'large'] }, { successMessage: 'Tamanho da marca salvo.' });
                 }}
                 disabled={isSaving}
                 className="justify-start w-fit border border-border rounded-md p-1 bg-background"
