@@ -287,6 +287,13 @@ export default function GalleryCreate() {
   // from overwriting user choices when they load after the user already interacted.
   const userTouchedSaleModeRef = useRef(false);
   const userTouchedImageResizeRef = useRef(false);
+  const userTouchedChargeTypeRef = useRef(false);
+  const userTouchedPricingModelRef = useRef(false);
+  const userTouchedPaymentMethodRef = useRef(false);
+  const userTouchedAllowCommentsRef = useRef(false);
+  const userTouchedAllowDownloadRef = useRef(false);
+  const userTouchedAllowExtraPhotosRef = useRef(false);
+  const userTouchedWatermarkDisplayRef = useRef(false);
 
   // Initialize from settings
   useEffect(() => {
@@ -316,11 +323,13 @@ export default function GalleryCreate() {
         setWelcomeMessage('');
       }
 
-      // Hydrate sale mode default from photographer settings — but never override
-      // assisted mode (Gestão has priority) or a value the user already touched.
+      // Hydrate sale mode default from photographer settings.
+      // Priority: Gestão URL param > userTouched > settings default.
+      // (Removed `!hasGestaoParams` guard — defaults must apply even in assisted mode
+      // when Gestão did not send `modelo_de_cobranca`.)
       if (
-        !hasGestaoParams &&
         !userTouchedSaleModeRef.current &&
+        !gestaoParams?.modelo_de_cobranca &&
         settings.defaultSaleMode
       ) {
         setSaleMode(settings.defaultSaleMode);
@@ -333,8 +342,39 @@ export default function GalleryCreate() {
       ) {
         setImageResizeOption(settings.defaultImageResize);
       }
+
+      // Hydrate charge type default
+      if (
+        !userTouchedChargeTypeRef.current &&
+        settings.defaultChargeType
+      ) {
+        setChargeType(settings.defaultChargeType);
+      }
+
+      // Hydrate pricing model default — Gestão's `modelo_de_preco` has priority
+      if (
+        !userTouchedPricingModelRef.current &&
+        !gestaoParams?.modelo_de_preco &&
+        settings.defaultPricingModel
+      ) {
+        setPricingModel(settings.defaultPricingModel);
+      }
+
+      // Hydrate behavior toggles
+      if (!userTouchedAllowCommentsRef.current && settings.defaultAllowComments !== undefined) {
+        setAllowComments(settings.defaultAllowComments);
+      }
+      if (!userTouchedAllowDownloadRef.current && settings.defaultAllowDownload !== undefined) {
+        setAllowDownload(settings.defaultAllowDownload);
+      }
+      if (!userTouchedAllowExtraPhotosRef.current && settings.defaultAllowExtraPhotos !== undefined) {
+        setAllowExtraPhotos(settings.defaultAllowExtraPhotos);
+      }
+      if (!userTouchedWatermarkDisplayRef.current && settings.defaultWatermarkDisplay) {
+        setWatermarkDisplay(settings.defaultWatermarkDisplay);
+      }
     }
-  }, [settings, hasGestaoParams]);
+  }, [settings, gestaoParams?.modelo_de_cobranca, gestaoParams?.modelo_de_preco]);
 
   // Initialize watermark from global personalization settings (photographer_accounts)
   useEffect(() => {
