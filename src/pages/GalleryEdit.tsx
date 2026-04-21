@@ -28,6 +28,7 @@ import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
@@ -111,6 +112,8 @@ export default function GalleryEdit() {
   const [showPhotoUploader, setShowPhotoUploader] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivateSuccessOpen, setReactivateSuccessOpen] = useState(false);
+  const [reactivateDays, setReactivateDays] = useState(7);
 
   // Initialize form with gallery data
   useEffect(() => {
@@ -299,8 +302,12 @@ export default function GalleryEdit() {
   const handleReactivate = async (days: number = 7) => {
     try {
       await reopenSelection({ id: gallery.id, days });
+      // Aguarda o refetch para garantir que publicToken esteja atualizado.
+      await queryClient.invalidateQueries({ queryKey: ['galerias'] });
+      await queryClient.refetchQueries({ queryKey: ['galerias'] });
     } catch (error) {
       console.error('Error reactivating gallery:', error);
+      throw error;
     }
   };
 
