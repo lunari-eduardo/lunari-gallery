@@ -589,6 +589,8 @@ export default function GalleryDetail() {
               galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
               clientLink={clientLink}
               onReactivate={handleReopenSelection}
+              gallery={supabaseGallery}
+              settings={settings}
             />
           )}
           

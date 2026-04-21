@@ -248,10 +248,11 @@ export default function DeliverDetail() {
               const { supabase } = await import('@/integrations/supabase/client');
               await supabase.from('galerias').update({ status: 'enviado', updated_at: new Date().toISOString() }).eq('id', id!);
               setExpirationDate(newExpiration);
-              setShowReactivateDialog(false);
             }}
             open={showReactivateDialog}
             onOpenChange={setShowReactivateDialog}
+            gallery={gallery}
+            settings={settings}
           />
         </div>
       </div>
