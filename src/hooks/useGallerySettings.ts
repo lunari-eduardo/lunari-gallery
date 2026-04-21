@@ -50,6 +50,12 @@ const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
     subject: 'Seleção confirmada! - {galeria}',
     body: 'Olá {cliente}!\n\nSua seleção da galeria "{galeria}" foi confirmada com sucesso!\n\nTotal de fotos selecionadas: {total_fotos}\nFotos extras: {fotos_extras}\nValor adicional: R$ {valor_extra}\n\nEm breve entraremos em contato com mais informações.\n\nCom carinho,\n{estudio}',
   },
+  {
+    name: 'Galeria Reativada',
+    type: 'gallery_reactivated',
+    subject: 'Sua galeria foi reaberta - {galeria}',
+    body: 'Olá {cliente}!\n\nBoas notícias: a galeria "{galeria}" foi reaberta para você concluir sua seleção de fotos.\n\nVocê tem até {prazo} para escolher suas favoritas.\n\nAcesse: {link}\n\nCom carinho,\n{estudio}',
+  },
 ];
 
 // Helper to parse watermark from JSON
