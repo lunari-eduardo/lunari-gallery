@@ -1,296 +1,296 @@
 
-# Plano: adicionar Reply-To do fotógrafo nos e-mails enviados pelo Resend
+# Plano: adicionar feedback visual de salvamento nas Configurações
 
 ## Objetivo
 
-Ajustar o envio de e-mails para que o cliente consiga responder naturalmente ao fotógrafo:
+Garantir que toda alteração salva nas telas de configuração mostre feedback claro para o usuário, principalmente em **Configurações > Personalização**, onde hoje o botão fixo “Salvar Configurações” não comunica se algo foi salvo.
+
+Comportamento esperado:
 
 ```text
-Cliente responde o e-mail → resposta chega no e-mail do fotógrafo
+Usuário altera configuração → sistema salva → toast confirma sucesso ou erro
 ```
-
-Sem criar inbox interno, sem receber e-mails dentro do sistema e sem alterar a automação de pagamentos.
-
-## Comportamento final
-
-### Remetente
-
-O campo `From` passará a ser:
-
-```text
-Lunari <contato@mail.lunarihub.com>
-```
-
-### Reply-To
-
-Quando o fotógrafo tiver e-mail cadastrado:
-
-```text
-reply-to = e-mail do fotógrafo
-```
-
-Quando não tiver e-mail cadastrado:
-
-```text
-Enviar normalmente sem reply-to
-```
-
-Isso vale para:
-
-- e-mail manual de galeria enviada;
-- e-mail de pagamento confirmado.
 
 ---
 
-## Diagnóstico atual
+## Diagnóstico
 
-Hoje a Edge Function central de e-mails está em:
-
-```text
-supabase/functions/send-email/index.ts
-```
-
-Ela envia para o Resend usando:
+A tela `Settings.tsx` possui um botão fixo:
 
 ```text
-from: Lunari <no-reply@mail.lunarihub.com>
+Salvar Configurações
 ```
 
-E não envia nenhum campo de resposta.
+mas o `handleSave` está vazio. Além disso, muitas configurações são salvas automaticamente no momento da alteração:
 
-A origem mais segura para buscar o e-mail do fotógrafo é a tabela:
+- nome do estúdio;
+- permissão padrão;
+- prazo padrão;
+- modo de venda;
+- tamanho de imagem;
+- logo;
+- favicon;
+- toggles de e-mail;
+- mensagem de boas-vindas;
+- tema;
+- watermark.
 
-```text
-profiles
-```
-
-Ela já possui:
-
-```text
-user_id
-email
-nome
-```
-
-Essa tabela é criada/atualizada no cadastro do usuário e é mais adequada do que usar dados do cliente ou confiar em valor vindo do frontend.
+O problema é que várias dessas ações persistem no banco, mas não exibem um toast de sucesso. Isso cria a sensação de que nada aconteceu.
 
 ---
 
-## 1. Ajustar remetente padrão
-
-No envio centralizado por Resend, alterar o remetente fixo para:
-
-```text
-Lunari <contato@mail.lunarihub.com>
-```
-
-Manter o From centralizado em constante para não espalhar esse valor pelo código.
-
----
-
-## 2. Criar helper seguro para buscar Reply-To
-
-Adicionar uma função interna na Edge Function:
-
-```text
-getPhotographerReplyTo(supabase, userId)
-```
-
-Ela deve:
-
-1. buscar o perfil do fotógrafo por `profiles.user_id`;
-2. selecionar apenas `email`;
-3. validar se o e-mail existe;
-4. validar formato básico de e-mail;
-5. retornar `null` se não houver e-mail válido.
-
-Regra importante:
-
-```text
-Nunca aceitar reply-to vindo do cliente/frontend.
-```
-
-O sistema sempre resolve o e-mail do fotógrafo no backend usando `gallery.user_id` ou `payment.user_id`.
-
----
-
-## 3. Atualizar função central de envio
-
-Alterar a assinatura atual de envio:
-
-```text
-sendResendEmail(to, subject, html)
-```
-
-Para aceitar opções:
-
-```text
-sendResendEmail(to, subject, html, { replyTo })
-```
-
-No payload enviado ao Resend:
-
-- sempre enviar `from`, `to`, `subject`, `html`;
-- incluir `reply_to` somente se houver e-mail válido.
-
-Exemplo conceitual do payload:
-
-```text
-{
-  from: "Lunari <contato@mail.lunarihub.com>",
-  to: ["cliente@email.com"],
-  subject,
-  html,
-  reply_to: "fotografo@email.com"
-}
-```
-
-Se `replyTo` for `null`, o campo não entra no payload.
-
----
-
-## 4. Aplicar no evento “Galeria enviada”
-
-No bloco:
-
-```text
-eventType = gallery_sent
-```
-
-Depois de validar galeria, configurações, e-mail do cliente e token público:
-
-1. buscar o e-mail do fotógrafo usando `gallery.user_id`;
-2. passar esse valor para `sendResendEmail`;
-3. registrar no log metadados não sensíveis para auditoria.
-
-Sugestão de metadata:
-
-```text
-replyToConfigured: true/false
-```
-
-Não é necessário salvar o e-mail completo do fotógrafo no log para evitar exposição desnecessária.
-
----
-
-## 5. Aplicar no evento “Pagamento confirmado”
-
-No bloco:
-
-```text
-eventType = payment_confirmed
-```
-
-Depois de validar pagamento, configurações e e-mail do cliente:
-
-1. buscar o e-mail do fotógrafo usando `payment.user_id`;
-2. passar esse valor para `sendResendEmail`;
-3. registrar no log:
-
-```text
-replyToConfigured: true/false
-```
-
-Isso preserva o fluxo de webhooks: InfinitePay, Asaas, Mercado Pago, polling e confirmação manual continuam chamando a mesma função central, sem precisar alterar cada webhook.
-
----
-
-## 6. Não mexer nos webhooks de pagamento
-
-Não alterar:
-
-```text
-supabase/functions/infinitepay-webhook/index.ts
-supabase/functions/infinitepay-create-link/index.ts
-supabase/functions/asaas-webhook/index.ts
-supabase/functions/asaas-gallery-webhook/index.ts
-supabase/functions/asaas-gallery-payment/index.ts
-supabase/functions/mercadopago-webhook/index.ts
-supabase/functions/check-payment-status/index.ts
-supabase/functions/confirm-payment-manual/index.ts
-```
-
-Motivo:
-
-- o ponto correto de ajuste é a função central `send-email`;
-- todos os fluxos de pagamento já passam por ela;
-- isso reduz risco de quebrar automação de cobrança, NSU, auto-healing, fallback por UUID e webhooks.
-
----
-
-## 7. Atualizar a interface de configurações
+## 1. Corrigir feedback no hook central de configurações
 
 Arquivo:
 
 ```text
+src/hooks/useGallerySettings.ts
+```
+
+A mutation central `updateSettings` já tem toast de erro, mas não tem toast de sucesso.
+
+Vou ajustar para suportar feedback controlado, evitando excesso de notificações em campos que disparam muitas alterações.
+
+Estratégia:
+
+- manter `updateSettings` como ponto único de persistência;
+- adicionar opção para mostrar toast de sucesso;
+- preservar erro com `toast.error`;
+- não exibir toast automático em cada tecla digitada, para não poluir a UX.
+
+Exemplo conceitual:
+
+```text
+updateSettings(data, { successMessage?: string, showSuccessToast?: boolean })
+```
+
+Ou, se for mais simples com o padrão atual:
+
+```text
+updateSettings(data)
+updateSettingsAsync(data)
+```
+
+Assim componentes que precisam aguardar o salvamento poderão mostrar toast só após sucesso real.
+
+---
+
+## 2. Ajustar `useSettings` para expor salvamento assíncrono
+
+Arquivo:
+
+```text
+src/hooks/useSettings.ts
+```
+
+Hoje `updateSettings` apenas chama a mutation sem retorno assíncrono.
+
+Vou expor uma forma segura para a página aguardar o salvamento, por exemplo:
+
+```text
+updateSettingsAsync
+isUpdating
+```
+
+Isso permitirá que a tela de Configurações:
+
+- desabilite botão enquanto salva;
+- mostre “Salvando...”;
+- exiba `toast.success`;
+- exiba `toast.error` quando falhar.
+
+---
+
+## 3. Tornar o botão “Salvar Configurações” útil
+
+Arquivo:
+
+```text
+src/pages/Settings.tsx
+```
+
+Hoje o botão fixo chama um `handleSave` vazio.
+
+Vou alterar para que ele tenha um comportamento coerente com o fluxo atual:
+
+### Na aba Geral
+
+Como os campos já salvam ao alterar, o botão será usado como confirmação visual:
+
+- se houver alterações pendentes/localmente controladas, salvar;
+- se não houver pendência, mostrar:
+
+```text
+Configurações já estão salvas.
+```
+
+### Na aba Personalização
+
+O botão continuará visível e poderá confirmar salvamentos globais, mas os componentes específicos também terão feedback próprio.
+
+Estados do botão:
+
+```text
+Salvar Configurações
+Salvando...
+Configurações salvas
+```
+
+Visual:
+
+- manter a barra fixa inferior;
+- adicionar spinner `Loader2` durante salvamento;
+- desabilitar enquanto estiver salvando.
+
+---
+
+## 4. Adicionar toast nos salvamentos automáticos principais
+
+Arquivos:
+
+```text
+src/components/settings/GeneralSettings.tsx
+src/components/settings/PersonalizationSettings.tsx
 src/components/settings/EmailAutomationSettings.tsx
+src/components/settings/ThemeConfig.tsx
+src/hooks/useWatermarkSettings.ts
 ```
 
-Atualizar o texto exibido hoje como:
+### Geral
 
-```text
-Remetente: no-reply@mail.lunarihub.com
-```
+Mostrar toast para ações discretas:
 
-Para algo mais claro:
+- trocar permissão padrão;
+- alterar modo de venda;
+- alterar tamanho padrão da imagem;
+- corrigir prazo no blur.
 
-```text
-Remetente: contato@mail.lunarihub.com
-Respostas vão para o e-mail cadastrado do fotógrafo quando disponível.
-```
+Evitar toast em toda digitação do nome do estúdio. Para esse campo, a melhor UX é:
 
-Isso evita confusão para o usuário e comunica o novo comportamento.
+- salvar no blur; ou
+- manter digitação local e salvar no botão.
+
+Recomendação: ajustar `Nome do Estúdio` para salvar no blur ou no botão, não a cada tecla.
+
+### Personalização
+
+Adicionar feedback para:
+
+- upload/troca de logo;
+- remoção de logo;
+- upload/troca de favicon;
+- remoção de favicon;
+- ativar/desativar mensagem de boas-vindas;
+- salvar mensagem de boas-vindas no blur;
+- ativar/desativar e-mails;
+- permitir/desativar e-mail de galeria;
+- permitir/desativar e-mail de pagamento.
+
+### Tema
+
+Adicionar toast para:
+
+- alternar entre tema padrão e personalizado;
+- salvar tema personalizado;
+- voltar para tema do sistema.
+
+### Watermark
+
+O hook `useWatermarkSettings` já mostra toast de erro, mas não sucesso. Vou adicionar sucesso para:
+
+- alterar tipo de proteção;
+- alterar opacidade;
+- alterar tamanho da marca;
+- enviar marca d’água;
+- remover marca d’água.
+
+Com cuidado para não disparar vários toasts enquanto o usuário arrasta o slider: o toast deve aparecer apenas no commit final.
 
 ---
 
-## 8. Segurança e escalabilidade
+## 5. Padronizar mensagens de toast
 
-Regras que serão preservadas:
+Usar `sonner`, que já está configurado no app.
 
-- não criar inbox interno;
-- não salvar credenciais adicionais;
-- não aceitar e-mail de resposta vindo do frontend;
-- não quebrar envio caso o fotógrafo não tenha e-mail;
-- não quebrar fluxo se a busca do perfil falhar;
-- manter CORS em todas as respostas;
-- manter idempotência por evento;
-- manter logs de enviado, erro e ignorado;
-- manter o link público da galeria vindo da RPC `prepare_gallery_share`;
-- manter chamadas internas entre Edge Functions via `fetch` com service key.
-
-A solução é escalável porque o reply-to é resolvido no envio, usando `user_id`, sem duplicar essa lógica nos webhooks.
-
----
-
-## 9. Deploy necessário
-
-Como haverá alteração em Edge Function, será necessário redeploy de:
+Mensagens sugeridas:
 
 ```text
-send-email
+Configurações salvas.
+Tema salvo com sucesso.
+Logo atualizado.
+Favicon atualizado.
+Mensagem padrão salva.
+Preferência de e-mail salva.
+Marca d’água atualizada.
+Não foi possível salvar as configurações.
 ```
 
-Nenhuma outra Edge Function precisa ser redeployada para esse ajuste.
+Para não ficar repetitivo, usar mensagens específicas só nas ações mais importantes e uma mensagem genérica nos demais casos.
 
 ---
 
-## 10. Validação final
+## 6. Melhorar UX sem excesso de notificações
+
+Regras de UX:
+
+- não mostrar toast a cada caractere digitado;
+- não mostrar múltiplos toasts em sequência para a mesma ação;
+- usar `toast.success` apenas após confirmação real do Supabase;
+- usar `toast.error` quando a mutation falhar;
+- manter botões com loading quando o salvamento for manual;
+- manter feedback discreto e no canto inferior direito, seguindo o padrão atual do Sonner.
+
+---
+
+## 7. Não alterar pagamentos nem webhooks
+
+Este ajuste é apenas de UI/UX e feedback de configurações.
+
+Não mexer em:
+
+```text
+supabase/functions/infinitepay-create-link
+supabase/functions/infinitepay-webhook
+supabase/functions/asaas-webhook
+supabase/functions/asaas-gallery-webhook
+supabase/functions/mercadopago-webhook
+supabase/functions/check-payment-status
+supabase/functions/confirm-payment-manual
+```
+
+Também vou revisar para garantir que nenhuma alteração afete a automação de cobrança InfinitePay.
+
+---
+
+## 8. Validação final
 
 Após implementar, validar:
 
-1. build TypeScript sem erros;
-2. e-mail de galeria enviada com `From = contato@mail.lunarihub.com`;
-3. e-mail de galeria enviada com `Reply-To = e-mail do fotógrafo`;
-4. cliente sem e-mail continua não enviando;
-5. fotógrafo sem e-mail em `profiles` envia sem `reply-to`;
-6. pagamento confirmado envia com `Reply-To = e-mail do fotógrafo`;
-7. resposta do cliente no provedor de e-mail aponta para o fotógrafo;
-8. logs continuam funcionando;
-9. duplicidade continua bloqueada;
-10. InfinitePay continua intacto:
-    - create-link;
-    - webhook;
-    - NSU;
-    - fallback UUID;
-    - auto-healing;
-    - finalização de pagamento.
+1. alterar nome do estúdio e confirmar toast no salvamento;
+2. trocar permissão padrão e confirmar toast;
+3. alterar prazo padrão e confirmar toast no momento correto;
+4. alterar modo de venda e confirmar toast;
+5. alterar tamanho padrão das imagens e confirmar toast;
+6. trocar logo e confirmar toast;
+7. remover logo e confirmar toast;
+8. trocar favicon e confirmar toast;
+9. alterar tema e confirmar toast;
+10. salvar tema personalizado e confirmar toast;
+11. alterar watermark e confirmar toast apenas no commit final;
+12. alterar toggles de e-mail e confirmar toast;
+13. editar template de e-mail e confirmar que o toast existente continua funcionando;
+14. clicar em “Salvar Configurações” e confirmar feedback visual;
+15. testar estados de erro;
+16. rodar build TypeScript;
+17. verificar layout desktop e mobile da barra inferior.
+
+## Resultado esperado
+
+As telas de configuração passam a transmitir confiança:
+
+- o usuário sabe quando algo foi salvo;
+- erros ficam visíveis;
+- o botão fixo deixa de parecer quebrado;
+- alterações automáticas têm confirmação discreta;
+- não há spam de notificações;
+- pagamentos e webhooks permanecem intactos.
