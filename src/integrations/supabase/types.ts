@@ -2175,6 +2175,7 @@ export type Database = {
           default_sale_mode: string
           default_watermark: Json | null
           default_welcome_message: string | null
+          email_on_gallery_reactivated: boolean | null
           email_on_gallery_sent: boolean
           email_on_payment_confirmed: boolean
           email_sending_enabled: boolean
@@ -2197,6 +2198,7 @@ export type Database = {
           default_sale_mode?: string
           default_watermark?: Json | null
           default_welcome_message?: string | null
+          email_on_gallery_reactivated?: boolean | null
           email_on_gallery_sent?: boolean
           email_on_payment_confirmed?: boolean
           email_sending_enabled?: boolean
@@ -2219,6 +2221,7 @@ export type Database = {
           default_sale_mode?: string
           default_watermark?: Json | null
           default_welcome_message?: string | null
+          email_on_gallery_reactivated?: boolean | null
           email_on_gallery_sent?: boolean
           email_on_payment_confirmed?: boolean
           email_sending_enabled?: boolean
