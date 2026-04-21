@@ -651,6 +651,11 @@ export function useSupabaseGalleries() {
   });
 
   // Reopen selection
+  // ⚠️ IMPORTANTE: NUNCA resetar `total_fotos_extras_vendidas` nem `valor_total_vendido`.
+  // Esses campos representam o "crédito" do cliente — fotos já compradas em ciclos
+  // anteriores. Eles só são incrementados pela RPC `finalize_gallery_payment` (idempotente
+  // por cobrança via flag `extras_contabilizados`). Resetar aqui causaria cobrança
+  // duplicada das mesmas fotos extras na próxima seleção.
   const reopenSelectionMutation = useMutation({
     mutationFn: async ({ id, days }: { id: string; days: number }) => {
       const prazoSelecao = new Date();
@@ -666,6 +671,7 @@ export function useSupabaseGalleries() {
           prazo_selecao_dias: days,
           finalized_at: null,
           updated_at: new Date().toISOString(),
+          // NÃO incluir: total_fotos_extras_vendidas, valor_total_vendido (preservar histórico)
         })
         .eq('id', id);
 
