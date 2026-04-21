@@ -63,19 +63,6 @@ function parseWatermark(json: Json | null): WatermarkSettings {
     type = 'standard';
   }
   
-  const updateSettingsWithFeedback = (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
-    updateSettings.mutate(data, {
-      onSuccess: () => {
-        if (options?.successMessage) toast.success(options.successMessage);
-      },
-    });
-  };
-
-  const updateSettingsAsync = async (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
-    await updateSettings.mutateAsync(data);
-    if (options?.successMessage) toast.success(options.successMessage);
-  };
-
   return {
     type,
     opacity: (obj.opacity as number) || 40,
@@ -507,6 +494,19 @@ export function useGallerySettings() {
       queryClient.invalidateQueries({ queryKey: ['gallery-settings', user?.id] });
     },
   });
+
+  const updateSettingsWithFeedback = (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
+    updateSettings.mutate(data, {
+      onSuccess: () => {
+        if (options?.successMessage) toast.success(options.successMessage);
+      },
+    });
+  };
+
+  const updateSettingsAsync = async (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
+    await updateSettings.mutateAsync(data);
+    if (options?.successMessage) toast.success(options.successMessage);
+  };
 
   return {
     settings,
