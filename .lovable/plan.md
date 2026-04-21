@@ -1,171 +1,183 @@
 
 
-# Plano: corrigir contagem de fotos extras pagas no fluxo Asaas (e padronizar todos os provedores)
+# Plano: aplicar defaults globais do Gallery em galerias vinculadas ao Gestão
 
 ## Diagnóstico
 
-Galeria `963afe89...` no banco:
+Quando uma galeria é criada **a partir de uma sessão do Gestão** (URL com `?session_id=...`), o `GalleryCreate.tsx` ignora ou aplica de forma incompleta os padrões definidos em `Configurações > Geral`. Isso quebra a expectativa do fotógrafo que configurou o padrão "Sim, COM pagamento" e vê a galeria nascer como "Sim, SEM pagamento".
 
-| Campo | Valor real | Esperado |
-|---|---|---|
-| `total_fotos_extras_vendidas` | **0** | 3 |
-| `valor_total_vendido` | **R$ 0** | R$ 75 |
-| Cobranças pagas (Asaas) | 2 (R$ 50 + R$ 25), `status='pago'` | ok |
+### Causas reais encontradas no código
 
-Por isso, ao reativar, o cliente vê **todas as fotos extras de novo**: o sistema acha que nada foi pago. Em InfinitePay isso não acontece.
+| Default | Fonte do problema |
+|---|---|
+| **Modo de Venda** (`defaultSaleMode`) | `useEffect` em `GalleryCreate.tsx:321` tem guard explícito `if (!hasGestaoParams && ...)`. Quando há `session_id` na URL, o default do fotógrafo **nunca** é aplicado. Se o Gestão não mandar `modelo_de_cobranca`, a galeria fica presa no `useState('sale_without_payment')` inicial. |
+| **Tipo de Cobrança** (`chargeType`) | Inexistente em `GlobalSettings`. Sempre nasce hardcoded como `'only_extras'`. Não há UI nem coluna no banco. |
+| **Modelo de Preços** (`pricingModel`) | Inexistente em `GlobalSettings`. Sempre nasce hardcoded como `'fixed'`. Quando vem do Gestão, é sobrescrito por `regrasCongeladas`; quando não, ignora preferência do fotógrafo. |
+| **Método de Pagamento** (`paymentMethod`) | Vem só de `paymentData.defaultIntegration` (do `usePaymentIntegration`), mas isso reflete a integração ativa, não uma preferência configurável de "qual usar por padrão em novas galerias". |
+| **Tamanho de Imagem** (`defaultImageResize`) | Existe e é aplicado, mas o `useEffect` roda em paralelo com o de `regrasCongeladas`, e o valor inicial do `useState(1920)` pode "vencer" se o settings carregar tarde — em telas com cache vazio o usuário vê 1920 mesmo tendo configurado 2560 como padrão. |
+| **Watermark/Display/Comments/Download/Extras** | `defaultWatermarkDisplay`, `defaultAllowComments`, `defaultAllowDownload`, `defaultAllowExtraPhotos` não existem em `GlobalSettings`. Watermark global existe (`watermarkGlobalSettings`) mas os 4 toggles operacionais sempre nascem com valores hardcoded (`true`, `true`, `false`, `true`). |
+| **Mensagem de Boas-vindas** | Já é aplicada corretamente via `defaultWelcomeMessage` + `welcomeMessageEnabled`. **OK**. |
+| **Prazo de Seleção** | Já aplicado via `settings.defaultExpirationDays`. **OK**. |
+| **Permissão (Pública/Privada)** | Já aplicado via `settings.defaultGalleryPermission`. **OK**. |
 
-## Causa raiz: corrida de 3 caminhos no fluxo Asaas
+### Por que o Gestão não conserta isso sozinho
 
-Quando a parcela Asaas é confirmada, três trechos disputam o `status` da cobrança:
-
-```text
-1. webhook upsert em cobranca_parcelas
-   └─► trigger reconcile_cobranca_from_parcelas
-       └─► UPDATE cobrancas SET status='pago'
-           └─► trigger sync_gallery_on_cobranca_paid (BEFORE UPDATE)
-               └─► UPDATE galerias SET status_pagamento='pago', status_selecao='selecao_completa'
-                   (NÃO toca em total_fotos_extras_vendidas nem valor_total_vendido)
-
-2. webhook chama RPC finalize_gallery_payment(p_cobranca_id, p_receipt_url, p_paid_at)
-   └─► RPC entra no branch "IF v_cobranca.status IN ('pago','pago_manual')" (já é pago)
-       └─► Tenta incrementar contadores SOMENTE se status_pagamento NOT IN ('pago','pago_manual')
-       └─► Mas o trigger (#1) já marcou status_pagamento='pago' → FOUND falha → contadores NUNCA são incrementados
-```
-
-**InfinitePay não tem esse problema** porque não passa por `cobranca_parcelas`. A RPC recebe `cobranca.status='pendente'` e cai no caminho "novo pagamento", que incrementa corretamente.
+O Gestão envia apenas: `cliente_*`, `pacote_*`, `fotos_incluidas`, `preco_foto_extra`, `modelo_de_cobranca`, `modelo_de_preco`. Tudo **mais** (chargeType, watermark, image size, allowDownload, etc.) é responsabilidade do Gallery aplicar a partir das configurações do fotógrafo. Hoje o Gallery não faz isso de forma consistente.
 
 ## Solução
 
-### Parte 1 — Corrigir a RPC `finalize_gallery_payment` (5 args)
+### Parte 1 — Expandir defaults globais (banco + tipo + UI)
 
-Tornar o incremento de `total_fotos_extras_vendidas` e `valor_total_vendido` **idempotente** e independente do `status_pagamento` corrente da galeria. Substituir a guard atual por uma trava por cobrança:
+Adicionar 4 colunas em `gallery_settings` e os campos correspondentes em `GlobalSettings`:
 
-- guardar uma flag `extras_contabilizados` na própria `cobrancas` (coluna `boolean DEFAULT false`);
-- a RPC só incrementa os contadores se a cobrança ainda não foi contabilizada;
-- após incrementar, marca `cobrancas.extras_contabilizados = true` na mesma transação;
-- isso elimina a dependência do `status_pagamento` da galeria como guard, que é frágil (o trigger #1 sempre vai chegar primeiro em Asaas).
+- `default_charge_type` text → `'only_extras' | 'all_selected'` (default `'only_extras'`)
+- `default_pricing_model` text → `'fixed' | 'packages'` (default `'fixed'`)
+- `default_payment_method` text → `'pix_manual' | 'infinitepay' | 'mercadopago' | null` (null = usar o `defaultIntegration`)
+- `default_allow_comments` boolean (default `true`)
+- `default_allow_download` boolean (default `false`)
+- `default_allow_extra_photos` boolean (default `true`)
+- `default_watermark_display` text → `'all' | 'fullscreen' | 'none'` (default `'all'`)
 
-Em pseudo-SQL na RPC:
+Atualizar:
+- migração SQL com `ADD COLUMN IF NOT EXISTS`
+- `src/types/gallery.ts` → novos campos opcionais em `GlobalSettings`
+- `src/data/mockData.ts` → defaults
+- `src/hooks/useGallerySettings.ts` → mapear leitura/escrita das novas colunas
 
-```text
-IF v_cobranca.extras_contabilizados IS NOT TRUE
-   AND COALESCE(v_cobranca.qtd_fotos, 0) > 0
-   AND v_galeria_id IS NOT NULL THEN
-  UPDATE galerias
-    SET total_fotos_extras_vendidas = COALESCE(total_fotos_extras_vendidas,0) + v_cobranca.qtd_fotos,
-        valor_total_vendido       = COALESCE(valor_total_vendido,0)       + v_cobranca.valor,
-        ...
-    WHERE id = v_galeria_id;
-  UPDATE cobrancas SET extras_contabilizados = true WHERE id = p_cobranca_id;
-END IF;
-```
+### Parte 2 — Adicionar UI de configuração
 
-Aplicar em **todos os branches** da RPC (already paid, parcelas Asaas, novo pagamento). Assim qualquer caminho — webhook, auto-heal, polling, finalização manual — produz o mesmo resultado uma única vez.
-
-### Parte 2 — Migração para curar registros já existentes
-
-```sql
-ALTER TABLE public.cobrancas
-  ADD COLUMN IF NOT EXISTS extras_contabilizados boolean NOT NULL DEFAULT false;
-
--- Marcar como contabilizadas as cobranças cujos valores já estão refletidos
--- na galeria (heurística: status pago/pago_manual + qtd_fotos > 0).
--- Para registros órfãos (Asaas pagos cujos contadores foram zerados pelo bug),
--- recalcular galerias.total_fotos_extras_vendidas e valor_total_vendido a partir
--- da soma das cobranças pagas e marcar todas como contabilizadas.
-WITH agregado AS (
-  SELECT galeria_id,
-         SUM(qtd_fotos) AS qtd,
-         SUM(valor)     AS val
-  FROM public.cobrancas
-  WHERE status IN ('pago','pago_manual')
-    AND galeria_id IS NOT NULL
-    AND COALESCE(qtd_fotos,0) > 0
-  GROUP BY galeria_id
-)
-UPDATE public.galerias g
-   SET total_fotos_extras_vendidas = a.qtd,
-       valor_total_vendido         = a.val
-  FROM agregado a
- WHERE g.id = a.galeria_id;
-
-UPDATE public.cobrancas
-   SET extras_contabilizados = true
- WHERE status IN ('pago','pago_manual')
-   AND COALESCE(qtd_fotos,0) > 0;
-```
-
-Resultado: galeria de teste passa para `total_fotos_extras_vendidas=3` e `valor_total_vendido=75`.
-
-### Parte 3 — Padronizar contrato compartilhado para todos os provedores
-
-Hoje cada provedor calcula extras de forma ligeiramente diferente:
-
-| Provedor | Caminho de finalização | Risco |
-|---|---|---|
-| InfinitePay | webhook → RPC (sem trigger intermediário) | OK hoje, mas continuará OK porque a RPC vira idempotente |
-| Asaas | webhook → upsert parcela → triggers → RPC | quebrado — corrigido pela Parte 1 |
-| Mercado Pago | webhook → RPC | mesmo padrão InfinitePay; herda a correção |
-| PIX Manual | confirm-payment-manual → RPC | mesmo padrão; herda a correção |
-| Asaas via polling (`check-payment-status`) | API Asaas → RPC | mesmo padrão; herda a correção |
-
-A coluna `extras_contabilizados` torna a regra **uma só** para todos: "incrementa uma vez por cobrança paga, nunca mais". Não precisa mudar nenhum webhook ou edge function.
-
-### Parte 4 — Garantir que reativação não zere o crédito
-
-`useSupabaseGalleries.reopenSelectionMutation` hoje faz:
+Em `src/components/settings/GeneralSettings.tsx`, adicionar 3 cards adicionais após "Modo de Venda Padrão":
 
 ```text
-UPDATE galerias SET
-  status='selecao_iniciada',
-  status_selecao='em_andamento',
-  status_pagamento='sem_vendas',
-  finalized_at=null
-WHERE id=...
+[Tag] Tipo de Cobrança Padrão
+  ( ) Cobrar apenas as fotos extras
+  ( ) Cobrar todas as fotos selecionadas
+
+[Package] Modelo de Preços Padrão
+  ( ) Preço único
+  ( ) Pacotes com desconto
+
+[CreditCard] Método de Pagamento Padrão
+  ( ) Usar integração ativa  ← seleciona automaticamente
+  ( ) PIX Manual
+  ( ) InfinitePay
+  ( ) Mercado Pago
+  ( ) Asaas
 ```
 
-Confirmar (e proteger) que **NÃO** zera `total_fotos_extras_vendidas` nem `valor_total_vendido`. Está correto hoje, mas adicionar um comentário explícito no código alertando que esses dois campos são "crédito do cliente" e nunca devem ser resetados — só incrementados pela RPC.
-
-### Parte 5 — Validação extra no `confirm-selection`
-
-Hoje o `confirm-selection` lê `gallery.total_fotos_extras_vendidas` para descontar do `extrasACobrar`. Adicionar log de sanidade quando há cobranças pagas para a galeria mas o contador é zero — sinaliza divergência precoce em galerias futuras:
+E em um novo arquivo / novo card em `GeneralSettings.tsx` ou adicionar a `PersonalizationSettings.tsx`:
 
 ```text
-IF (SELECT COUNT(*) FROM cobrancas WHERE galeria_id=... AND status IN ('pago','pago_manual')) > 0
-   AND gallery.total_fotos_extras_vendidas = 0 THEN
-  console.warn('⚠️ DIVERGÊNCIA: cobranças pagas existem mas contador zerado, executando auto-heal...')
-  PERFORM finalize_gallery_payment para cada cobrança
-END IF;
+[Image] Comportamento Padrão de Galerias
+  [switch] Permitir comentários
+  [switch] Permitir download
+  [switch] Permitir fotos extras
+
+[Droplet] Exibição Padrão da Marca d'Água
+  ( ) Em todas as fotos (proteção máxima)
+  ( ) Apenas em tela cheia (preview limpo)
+  ( ) Nunca (sem marca d'água)
 ```
+
+### Parte 3 — Corrigir o `useEffect` de hidratação em `GalleryCreate.tsx`
+
+Reescrever o bloco de hidratação (linhas 291-336) com **regra única**:
+
+```text
+PRIORIDADE (do mais forte para o mais fraco):
+1. regrasCongeladas (Gestão)              ← só sobrescreve campos que ele controla
+2. URL params (Gestão modelo_de_cobranca) ← se enviado, vence default do fotógrafo
+3. settings.* (defaults do fotógrafo)     ← aplicar SEMPRE, inclusive em modo assistido
+4. useState inicial hardcoded             ← apenas fallback final
+```
+
+Isso significa **remover o guard `!hasGestaoParams`** do `defaultSaleMode`. A lógica nova:
+
+```text
+quando settings carrega:
+  if (!userTouchedSaleModeRef.current
+      && !gestaoParams.modelo_de_cobranca       ← Gestão tem prioridade SE enviado
+      && settings.defaultSaleMode) {
+    setSaleMode(settings.defaultSaleMode);
+  }
+  // mesma lógica para chargeType, pricingModel, paymentMethod, etc.
+```
+
+Adicionar refs `userTouched...` para cada novo campo: `chargeType`, `pricingModel`, `paymentMethod`, `allowComments`, `allowDownload`, `allowExtraPhotos`, `watermarkDisplay` — cada `setX` no JSX vira `userTouchedXRef.current = true; setX(...)`.
+
+### Parte 4 — Hidratar `paymentMethod` corretamente
+
+Atual (linha 532-536):
+```text
+if (paymentData.defaultIntegration && !selectedPaymentMethod) {
+  setSelectedPaymentMethod(paymentData.defaultIntegration.provedor);
+}
+```
+
+Novo:
+```text
+if (!userTouchedPaymentMethodRef.current && !selectedPaymentMethod) {
+  // 1. Preferência explícita do fotógrafo
+  if (settings.defaultPaymentMethod) {
+    setSelectedPaymentMethod(settings.defaultPaymentMethod);
+  }
+  // 2. Senão, integração ativa
+  else if (paymentData?.defaultIntegration) {
+    setSelectedPaymentMethod(paymentData.defaultIntegration.provedor);
+  }
+}
+```
+
+### Parte 5 — Garantir aplicação em modo Gestão sem param `modelo_de_cobranca`
+
+Quando o Gestão enviar uma sessão **sem** `modelo_de_cobranca` (caso comum, pois o fotógrafo configurou no Gallery, não no Gestão), o sistema agora vai:
+
+1. carregar `settings.defaultSaleMode = 'sale_with_payment'`
+2. aplicar via `setSaleMode` porque não há valor do Gestão e usuário não tocou
+3. mostrar a galeria pré-configurada no padrão do fotógrafo
+
+Resultado: a tela do passo 2 nasce com **"Sim, COM pagamento"** marcado, exatamente como configurado em Configurações.
+
+### Parte 6 — Não impactar `GalleryEdit.tsx`
+
+`GalleryEdit` carrega valores **da galeria existente**, não dos defaults. Nenhuma mudança ali. O escopo é apenas criação.
 
 ## Detalhes técnicos
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/migrations/<novo>.sql` | (a) `ADD COLUMN extras_contabilizados`; (b) recompor galerias afetadas; (c) marcar cobranças já pagas como contabilizadas; (d) atualizar a RPC `finalize_gallery_payment` (5 args) |
-| `supabase/functions/confirm-selection/index.ts` | adicionar auto-heal preventivo + log de divergência (opcional, defensivo) |
-| `src/hooks/useSupabaseGalleries.ts` | comentário explícito no `reopenSelectionMutation` |
-| Nenhuma mudança em | webhooks Asaas, InfinitePay, MercadoPago; `infinitepay-create-link`; `asaas-gallery-payment`; `gallery-access`; `try_lock_gallery_selection`; triggers `sync_gallery_on_cobranca_paid` e `reconcile_cobranca_from_parcelas` |
+| `supabase/migrations/<novo>.sql` | `ADD COLUMN` para 7 novos defaults em `gallery_settings` |
+| `src/types/gallery.ts` | Adicionar 7 campos opcionais em `GlobalSettings` |
+| `src/data/mockData.ts` | Defaults dos 7 novos campos |
+| `src/hooks/useGallerySettings.ts` | Mapear leitura (`rowsToSettings`) e escrita (`updateData`) das 7 colunas |
+| `src/components/settings/GeneralSettings.tsx` | Adicionar 3 novos cards (Tipo Cobrança, Modelo Preços, Método Pagamento) |
+| `src/components/settings/PersonalizationSettings.tsx` | Adicionar 2 novos cards (Comportamento Padrão de Galerias, Exibição Padrão da Marca d'Água) |
+| `src/pages/GalleryCreate.tsx` | (a) remover guard `!hasGestaoParams` do `defaultSaleMode`; (b) hidratar 6 novos campos respeitando prioridade Gestão > userTouched > settings; (c) novos refs `userTouchedXRef`; (d) marcar refs nos handlers JSX |
+| Nenhuma mudança em | webhooks Asaas/InfinitePay/MP, `infinitepay-create-link`, `asaas-gallery-payment`, `prepare_gallery_share`, `confirm-selection`, `GalleryEdit`, fluxo de reativação |
 
-A versão antiga de `finalize_gallery_payment(p_cobranca_id uuid)` de 1 argumento (que ainda existe no banco) será **deletada** para evitar uso acidental. Nenhuma edge function a chama hoje.
+### Compatibilidade
+
+- Galerias antigas: nenhuma alteração; defaults só impactam **novas** galerias.
+- Sessões Gestão que enviam `modelo_de_cobranca` na URL: comportamento idêntico (Gestão vence).
+- Sessões Gestão **sem** `modelo_de_cobranca`: agora respeitam o default do fotógrafo (era o bug).
+- Galerias standalone (sem Gestão): respeitam todos os 7 novos defaults.
 
 ## Validação
 
-1. rodar a migração → galeria de teste passa a mostrar `total_fotos_extras_vendidas=3, valor_total_vendido=75`;
-2. abrir a galeria como cliente após a reativação atual → tela de seleção mostra "Extras já pagas: 3" e "Valor a pagar: R$ 0" para as mesmas 2 fotos;
-3. selecionar uma 3ª foto extra (4ª foto total) → deve cobrar apenas o valor da nova extra com desconto progressivo aplicado sobre `totalExtras=4`;
-4. confirmar e pagar → após webhook, `total_fotos_extras_vendidas=4` e `extras_contabilizados=true` em ambas as cobranças novas e antigas;
-5. reativar de novo → contador permanece 4, cliente não vê cobrança duplicada;
-6. repetir o teste com InfinitePay (regressão): comportamento idêntico ao atual, sem cobrança duplicada;
-7. repetir com Mercado Pago e PIX Manual;
+1. configurar em `Configurações > Geral`: Modo "Sim, COM pagamento", Tipo "Cobrar todas selecionadas", Modelo "Pacotes com desconto", Pagamento "InfinitePay";
+2. configurar em `Personalização`: comentários OFF, download ON, marca d'água "Apenas em tela cheia";
+3. criar uma galeria **standalone** → passo 2 nasce com tudo aplicado;
+4. criar uma galeria **vinculada ao Gestão** sem `modelo_de_cobranca` na URL → passo 2 nasce com "Sim, COM pagamento" e demais padrões;
+5. criar uma galeria **vinculada ao Gestão** com `modelo_de_cobranca=no_sale` na URL → respeita Gestão (não vira "Sim, COM pagamento");
+6. tocar manualmente em qualquer campo → next render não reverte para o default;
+7. editar galeria existente → nenhum default sobrescreve valores salvos;
 8. `npm run build` sem erros TS;
-9. webhooks `asaas-webhook`, `asaas-gallery-webhook`, `infinitepay-webhook`, `mercadopago-webhook` continuam intactos.
+9. webhooks Asaas, InfinitePay e MP intactos;
+10. fluxo de reativação intacto.
 
 ## Resultado esperado
 
-- a coluna `extras_contabilizados` torna o incremento de extras pagas **idempotente e provedor-agnóstico**;
-- ao reativar uma galeria, o cliente nunca mais paga novamente fotos já compradas;
-- desconto progressivo conta automaticamente o histórico em todos os provedores;
-- nenhum impacto em InfinitePay (continua funcionando exatamente como antes);
-- sem alteração nos webhooks ou nos `create-link` de InfinitePay (contrato compartilhado preservado).
+- galerias **vinculadas ao Gestão** herdam os defaults do Gallery quando o Gestão não envia o campo;
+- 7 novos defaults disponíveis em `Configurações`, cobrindo modo de venda, cobrança, preços, pagamento, comentários, download, extras e marca d'água;
+- nenhum impacto em galerias existentes ou no fluxo de pagamentos.
 
