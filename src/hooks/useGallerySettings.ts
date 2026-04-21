@@ -158,10 +158,30 @@ export function useGallerySettings() {
       if (templatesRes.error) throw templatesRes.error;
       if (presetsRes.error) throw presetsRes.error;
 
+      // Seed any missing default templates for existing users (idempotent)
+      let templatesData = templatesRes.data || [];
+      if (templatesData.length > 0) {
+        const existingTypes = new Set(templatesData.map((t: any) => t.type));
+        const missing = defaultEmailTemplates.filter((t) => !existingTypes.has(t.type));
+        if (missing.length > 0) {
+          const { data: inserted } = await supabase
+            .from('gallery_email_templates')
+            .insert(missing.map((t) => ({
+              user_id: user.id,
+              name: t.name,
+              type: t.type,
+              subject: t.subject,
+              body: t.body,
+            })))
+            .select('*');
+          if (inserted) templatesData = [...templatesData, ...inserted];
+        }
+      }
+
       return rowsToSettings(
         settingsRes.data,
         themeRes.data,
-        templatesRes.data || [],
+        templatesData,
         presetsRes.data || []
       );
     },
