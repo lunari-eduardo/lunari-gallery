@@ -294,6 +294,7 @@ export default function GalleryCreate() {
   const userTouchedAllowDownloadRef = useRef(false);
   const userTouchedAllowExtraPhotosRef = useRef(false);
   const userTouchedWatermarkDisplayRef = useRef(false);
+  const userTouchedClientModeRef = useRef(false);
 
   // Initialize from settings
   useEffect(() => {
@@ -304,11 +305,22 @@ export default function GalleryCreate() {
       if (settings.activeThemeId) {
         setSelectedThemeId(settings.activeThemeId);
       }
-      // Initialize client mode from settings
-      if (settings.clientTheme === 'dark') {
-        setClientMode('dark');
-      } else {
-        setClientMode('light');
+      // Initialize client mode from settings.
+      // Priority: userTouched > settings.clientTheme (explicit) > customTheme.backgroundMode > 'light'.
+      // This guarantees that when the photographer configured a custom dark theme,
+      // new galleries inherit dark mode even if global clientTheme is 'system'.
+      if (!userTouchedClientModeRef.current) {
+        if (settings.clientTheme === 'dark') {
+          setClientMode('dark');
+        } else if (settings.clientTheme === 'light') {
+          setClientMode('light');
+        } else if (settings.customTheme?.backgroundMode === 'dark') {
+          setClientMode('dark');
+        } else if (settings.customTheme?.backgroundMode === 'light') {
+          setClientMode('light');
+        } else {
+          setClientMode('light');
+        }
       }
       // Initialize font from last used
       if (settings.lastSessionFont) {
@@ -1825,11 +1837,11 @@ export default function GalleryCreate() {
                     <div className="flex items-center gap-3 pt-2">
                       <Label className="text-sm">Modo para esta galeria:</Label>
                       <div className="flex gap-2">
-                        <Button type="button" variant={clientMode === 'light' ? 'default' : 'outline'} size="sm" onClick={() => setClientMode('light')} className="gap-1">
+                        <Button type="button" variant={clientMode === 'light' ? 'default' : 'outline'} size="sm" onClick={() => { userTouchedClientModeRef.current = true; setClientMode('light'); }} className="gap-1">
                           <Sun className="h-3.5 w-3.5" />
                           Claro
                         </Button>
-                        <Button type="button" variant={clientMode === 'dark' ? 'default' : 'outline'} size="sm" onClick={() => setClientMode('dark')} className="gap-1">
+                        <Button type="button" variant={clientMode === 'dark' ? 'default' : 'outline'} size="sm" onClick={() => { userTouchedClientModeRef.current = true; setClientMode('dark'); }} className="gap-1">
                           <Moon className="h-3.5 w-3.5" />
                           Escuro
                         </Button>

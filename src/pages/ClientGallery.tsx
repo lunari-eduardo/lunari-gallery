@@ -1120,7 +1120,7 @@ export default function ClientGallery() {
     const pendingPixDados = galleryResponse.pixDados;
     const pendingCheckoutUrl = galleryResponse.checkoutUrl;
     const pendingValorTotal = galleryResponse.valorTotal || 0;
-    const pendingBgMode = galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+    const pendingBgMode = effectiveBackgroundMode;
 
     const handlePixPaymentConfirmed = async () => {
       setIsConfirmingPixPayment(true);
@@ -1699,7 +1699,7 @@ export default function ClientGallery() {
         onBack={() => setCurrentStep('gallery')}
         onConfirm={handleConfirm}
         themeStyles={themeStyles}
-        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+        backgroundMode={effectiveBackgroundMode}
       />
     );
   }
@@ -1744,7 +1744,7 @@ export default function ClientGallery() {
         onPaymentConfirmed={handlePixFinalizePayment}
         isConfirming={isConfirmingPixPayment}
         themeStyles={themeStyles}
-        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+        backgroundMode={effectiveBackgroundMode}
       />
     );
   }
@@ -1767,7 +1767,7 @@ export default function ClientGallery() {
           setCurrentStep('confirmation');
         }}
         themeStyles={themeStyles}
-        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+        backgroundMode={effectiveBackgroundMode}
       />
     );
   }
@@ -1781,7 +1781,7 @@ export default function ClientGallery() {
         valorTotal={paymentInfo.valorTotal}
         onCancel={() => setCurrentStep('confirmed')}
         themeStyles={themeStyles}
-        backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
+        backgroundMode={effectiveBackgroundMode}
       />
     );
   }
