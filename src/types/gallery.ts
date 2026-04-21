@@ -146,7 +146,7 @@ export type ThemeType = 'system' | 'custom';
 export interface EmailTemplate {
   id: string;
   name: string;
-  type: 'gallery_sent' | 'selection_reminder' | 'selection_confirmed';
+  type: 'gallery_sent' | 'selection_reminder' | 'selection_confirmed' | 'gallery_reactivated';
   subject: string;
   body: string;
 }
