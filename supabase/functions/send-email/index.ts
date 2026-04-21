@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const FROM_EMAIL = 'Lunari <no-reply@mail.lunarihub.com>';
+const FROM_EMAIL = 'Lunari <contato@mail.lunarihub.com>';
 const GALLERY_BASE_URL = 'https://gallery.lunarihub.com';
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -60,6 +60,26 @@ function daysRemaining(value: unknown): string {
 
 function replaceTemplateVariables(template: string, variables: Record<string, string>) {
   return template.replace(/{(\w+)}/g, (match, key) => variables[key] ?? match);
+}
+
+function isValidEmail(value: unknown): value is string {
+  return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+async function getPhotographerReplyTo(supabase: any, userId: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('profiles reply-to lookup error:', error.message);
+    return null;
+  }
+
+  const email = typeof data?.email === 'string' ? data.email.trim() : '';
+  return isValidEmail(email) ? email : null;
 }
 
 function textToHtmlParagraphs(text: string) {
@@ -124,11 +144,14 @@ function buildLayout(params: { preview: string; title: string; children: string;
 </html>`;
 }
 
-async function sendResendEmail(to: string, subject: string, html: string) {
+async function sendResendEmail(to: string, subject: string, html: string, options: { replyTo?: string | null } = {}) {
   const resendApiKey = Deno.env.get('RESEND_API_KEY');
   if (!resendApiKey) {
     throw new Error('RESEND_API_KEY_MISSING');
   }
+
+  const payload: Record<string, unknown> = { from: FROM_EMAIL, to: [to], subject, html };
+  if (isValidEmail(options.replyTo)) payload.reply_to = options.replyTo.trim();
 
   const response = await fetch(RESEND_API_URL, {
     method: 'POST',
@@ -136,7 +159,7 @@ async function sendResendEmail(to: string, subject: string, html: string) {
       'Authorization': `Bearer ${resendApiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+    body: JSON.stringify(payload),
   });
 
   const data = await response.json().catch(() => ({}));
@@ -254,6 +277,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const studioName = settings?.studio_name || 'Lunari';
+      const replyTo = await getPhotographerReplyTo(supabase, gallery.user_id);
       const galleryUrl = `${GALLERY_BASE_URL}/g/${encodeURIComponent(token)}`;
       const { data: template } = await supabase
         .from('gallery_email_templates')
@@ -291,13 +315,13 @@ Deno.serve(async (req: Request) => {
       });
 
       try {
-        const resendMessageId = await sendResendEmail(gallery.cliente_email, subject, html);
-        const logId = await upsertLog(supabase, { ...baseLog, status: 'enviado', subject, resend_message_id: resendMessageId, friendly_message: 'E-mail enviado para o cliente' });
+        const resendMessageId = await sendResendEmail(gallery.cliente_email, subject, html, { replyTo });
+        const logId = await upsertLog(supabase, { ...baseLog, status: 'enviado', subject, resend_message_id: resendMessageId, friendly_message: 'E-mail enviado para o cliente', metadata: { ...baseLog.metadata, replyToConfigured: Boolean(replyTo) } });
         return jsonResponse({ success: true, status: 'enviado', message: 'E-mail enviado para o cliente.', logId });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const friendly = errorMessage === 'RESEND_API_KEY_MISSING' ? 'Configuração do Resend ausente' : 'Falha ao enviar pelo provedor';
-        await upsertLog(supabase, { ...baseLog, status: 'erro', subject, friendly_message: friendly, error_message: errorMessage });
+        await upsertLog(supabase, { ...baseLog, status: 'erro', subject, friendly_message: friendly, error_message: errorMessage, metadata: { ...baseLog.metadata, replyToConfigured: Boolean(replyTo) } });
         return jsonResponse({ success: false, status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
       }
     }
@@ -358,6 +382,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const studioName = settings?.studio_name || 'Lunari';
+    const replyTo = await getPhotographerReplyTo(supabase, payment.user_id);
     const galleryUrl = gallery?.public_token ? `${GALLERY_BASE_URL}/g/${encodeURIComponent(gallery.public_token)}` : undefined;
     const subject = 'Pagamento confirmado';
     const description = payment.descricao || (payment.qtd_fotos ? `${payment.qtd_fotos} foto(s) extra(s)` : 'Pagamento da galeria');
@@ -381,13 +406,13 @@ Deno.serve(async (req: Request) => {
     });
 
     try {
-      const resendMessageId = await sendResendEmail(clienteEmail, subject, html);
-      const logId = await upsertLog(supabase, { ...baseLog, status: 'enviado', subject, resend_message_id: resendMessageId, friendly_message: 'E-mail enviado para o cliente' });
+      const resendMessageId = await sendResendEmail(clienteEmail, subject, html, { replyTo });
+      const logId = await upsertLog(supabase, { ...baseLog, status: 'enviado', subject, resend_message_id: resendMessageId, friendly_message: 'E-mail enviado para o cliente', metadata: { ...baseLog.metadata, replyToConfigured: Boolean(replyTo) } });
       return jsonResponse({ success: true, status: 'enviado', message: 'E-mail enviado para o cliente.', logId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const friendly = errorMessage === 'RESEND_API_KEY_MISSING' ? 'Configuração do Resend ausente' : 'Falha ao enviar pelo provedor';
-      await upsertLog(supabase, { ...baseLog, status: 'erro', subject, friendly_message: friendly, error_message: errorMessage });
+      await upsertLog(supabase, { ...baseLog, status: 'erro', subject, friendly_message: friendly, error_message: errorMessage, metadata: { ...baseLog.metadata, replyToConfigured: Boolean(replyTo) } });
       return jsonResponse({ success: false, status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
     }
   } catch (error) {
