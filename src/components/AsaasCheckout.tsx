@@ -1,5 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { CreditCard, QrCode, Copy, CheckCircle, Loader2, Lock, ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
+import {
+  CreditCard,
+  QrCode,
+  Copy,
+  CheckCircle,
+  Loader2,
+  Lock,
+  ShieldCheck,
+  AlertCircle,
+  ArrowLeft,
+  User,
+  FileText,
+  Mail,
+  Calendar,
+  Phone,
+  MapPin,
+  Image as ImageIcon,
+  Info,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
