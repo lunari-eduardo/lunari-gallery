@@ -743,11 +743,29 @@ export default function GalleryEdit() {
         open={reactivateOpen}
         onOpenChange={setReactivateOpen}
         galleryName={gallery.nomeSessao || 'Esta galeria'}
-        clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
         onReactivate={handleReactivate}
-        gallery={gallery}
-        settings={settings}
+        onSuccess={(days) => {
+          setReactivateDays(days);
+          setReactivateSuccessOpen(true);
+        }}
       />
+
+      {/* Reactivate Success / Share Modal */}
+      {settings && (
+        <ReactivateSuccessModal
+          isOpen={reactivateSuccessOpen}
+          onOpenChange={setReactivateSuccessOpen}
+          gallery={gallery}
+          settings={settings}
+          clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
+          newDeadline={(() => {
+            const d = new Date();
+            d.setDate(d.getDate() + reactivateDays);
+            return d;
+          })()}
+          daysGranted={reactivateDays}
+        />
+      )}
 
       {/* Client Modal */}
       <ClientModal

@@ -19,6 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
@@ -240,22 +241,34 @@ export default function DeliverDetail() {
           {/* Reactivate Dialog */}
           <ReactivateGalleryDialog
             galleryName={gallery.nomeSessao || 'esta galeria'}
-            clientLink={galleryUrl || null}
             onReactivate={async (days) => {
               const newExpiration = addDays(new Date(), days);
               await updateGallery({ id: id!, data: {
                 prazoSelecao: newExpiration,
               }});
-              // Also update status back to published
               const { supabase } = await import('@/integrations/supabase/client');
               await supabase.from('galerias').update({ status: 'enviado', updated_at: new Date().toISOString() }).eq('id', id!);
               setExpirationDate(newExpiration);
             }}
             open={showReactivateDialog}
             onOpenChange={setShowReactivateDialog}
-            gallery={gallery}
-            settings={settings}
+            onSuccess={(days) => {
+              setReactivateDays(days);
+              setReactivateSuccessOpen(true);
+            }}
           />
+
+          {settings && (
+            <ReactivateSuccessModal
+              isOpen={reactivateSuccessOpen}
+              onOpenChange={setReactivateSuccessOpen}
+              gallery={gallery}
+              settings={settings}
+              clientLink={galleryUrl || null}
+              newDeadline={addDays(new Date(), reactivateDays)}
+              daysGranted={reactivateDays}
+            />
+          )}
         </div>
       </div>
 
