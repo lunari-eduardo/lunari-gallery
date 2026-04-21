@@ -28,6 +28,7 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
   defaultImageResize: 1920,
   emailSendingEnabled: true,
   emailOnGallerySent: true,
+  emailOnGalleryReactivated: true,
   emailOnPaymentConfirmed: true,
 };
 
@@ -103,6 +104,7 @@ function rowsToSettings(
     defaultImageResize: (settingsRow.default_image_resize as GlobalSettings['defaultImageResize']) ?? 1920,
     emailSendingEnabled: settingsRow.email_sending_enabled ?? true,
     emailOnGallerySent: settingsRow.email_on_gallery_sent ?? true,
+    emailOnGalleryReactivated: settingsRow.email_on_gallery_reactivated ?? true,
     emailOnPaymentConfirmed: settingsRow.email_on_payment_confirmed ?? true,
   } : defaultSettings;
 
@@ -206,6 +208,7 @@ export function useGallerySettings() {
           theme_type: 'system',
           email_sending_enabled: true,
           email_on_gallery_sent: true,
+          email_on_gallery_reactivated: true,
           email_on_payment_confirmed: true,
         });
 
@@ -298,6 +301,9 @@ export function useGallerySettings() {
       }
       if (data.emailOnGallerySent !== undefined) {
         updateData.email_on_gallery_sent = data.emailOnGallerySent;
+      }
+      if (data.emailOnGalleryReactivated !== undefined) {
+        updateData.email_on_gallery_reactivated = data.emailOnGalleryReactivated;
       }
       if (data.emailOnPaymentConfirmed !== undefined) {
         updateData.email_on_payment_confirmed = data.emailOnPaymentConfirmed;
