@@ -190,6 +190,26 @@ export function AsaasCheckout({
   const [cardError, setCardError] = useState<string | null>(null);
   const [cardSuccess, setCardSuccess] = useState(false);
 
+  // ——— Inline field errors (suave UX, não bloqueia digitação) ———
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const setFieldError = (key: string, msg: string | null) => {
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      if (msg) next[key] = msg;
+      else delete next[key];
+      return next;
+    });
+  };
+
+  // ——— Refs para auto-foco entre campos ———
+  const cpfRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const cardNumberRef = useRef<HTMLInputElement>(null);
+  const cardExpiryRef = useRef<HTMLInputElement>(null);
+  const cardCvvRef = useRef<HTMLInputElement>(null);
+  const cardPhoneRef = useRef<HTMLInputElement>(null);
+  const cardCepRef = useRef<HTMLInputElement>(null);
+
   // ——— Real-time fees from Asaas API ———
   const [accountFees, setAccountFees] = useState<AccountFees | null>(null);
   const [feesLoading, setFeesLoading] = useState(false);
