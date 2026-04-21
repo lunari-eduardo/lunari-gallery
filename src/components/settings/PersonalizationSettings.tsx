@@ -36,11 +36,11 @@ export function PersonalizationSettings() {
 
   const handleWelcomeEnabledChange = (enabled: boolean) => {
     setWelcomeEnabled(enabled);
-    updateSettings({ welcomeMessageEnabled: enabled });
+    updateSettings({ welcomeMessageEnabled: enabled }, { successMessage: 'Mensagem padrão atualizada.' });
   };
 
   const handleWelcomeTemplateBlur = () => {
-    updateSettings({ defaultWelcomeMessage: welcomeTemplate });
+    updateSettings({ defaultWelcomeMessage: welcomeTemplate }, { successMessage: 'Mensagem padrão salva.' });
   };
 
   return (
@@ -54,12 +54,12 @@ export function PersonalizationSettings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <LogoUploader
               logo={settings.studioLogo}
-              onLogoChange={(logo) => updateSettings({ studioLogo: logo })}
+              onLogoChange={(logo) => updateSettings({ studioLogo: logo }, { successMessage: logo ? 'Logo atualizado.' : 'Logo removido.' })}
             />
             <div className="md:border-l md:border-border md:pl-8 pt-6 md:pt-0 border-t md:border-t-0">
               <FaviconUploader
                 favicon={settings.faviconUrl}
-                onFaviconChange={(favicon) => updateSettings({ faviconUrl: favicon })}
+                onFaviconChange={(favicon) => updateSettings({ faviconUrl: favicon }, { successMessage: favicon ? 'Favicon atualizado.' : 'Favicon removido.' })}
               />
             </div>
           </div>
