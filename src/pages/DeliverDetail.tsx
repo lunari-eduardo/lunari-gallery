@@ -22,6 +22,7 @@ import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
+import { useSettings } from '@/hooks/useSettings';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { getPhotoUrl } from '@/lib/photoUrl';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,7 @@ export default function DeliverDetail() {
   } = useSupabaseGalleries();
 
   const transferStorage = useTransferStorage();
+  const { settings } = useSettings();
 
   const [photos, setPhotos] = useState<GaleriaPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -248,10 +250,11 @@ export default function DeliverDetail() {
               const { supabase } = await import('@/integrations/supabase/client');
               await supabase.from('galerias').update({ status: 'enviado', updated_at: new Date().toISOString() }).eq('id', id!);
               setExpirationDate(newExpiration);
-              setShowReactivateDialog(false);
             }}
             open={showReactivateDialog}
             onOpenChange={setShowReactivateDialog}
+            gallery={gallery}
+            settings={settings}
           />
         </div>
       </div>

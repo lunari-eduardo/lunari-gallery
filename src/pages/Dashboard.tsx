@@ -649,10 +649,11 @@ export default function Dashboard() {
               } else {
                 await reopenSelection({ id: reactivateGalleryId, days });
               }
-              setReactivateGalleryId(null);
             }}
             open={true}
             onOpenChange={(open) => { if (!open) setReactivateGalleryId(null); }}
+            gallery={galeria}
+            settings={settings}
           />
         );
       })()}

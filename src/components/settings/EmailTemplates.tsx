@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Pencil, Send, Bell, CheckCircle } from 'lucide-react';
+import { Mail, Pencil, Send, Bell, CheckCircle, RotateCcw } from 'lucide-react';
 import { EmailTemplate } from '@/types/gallery';
 import { Button } from '@/components/ui/button';
 import { EmailTemplateModal } from './EmailTemplateModal';
@@ -19,6 +19,8 @@ const getTemplateIcon = (type: EmailTemplate['type']) => {
       return Bell;
     case 'selection_confirmed':
       return CheckCircle;
+    case 'gallery_reactivated':
+      return RotateCcw;
     default:
       return Mail;
   }

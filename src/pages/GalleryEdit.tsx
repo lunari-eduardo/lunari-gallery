@@ -723,6 +723,8 @@ export default function GalleryEdit() {
                   galleryName={gallery.nomeSessao || 'Esta galeria'}
                   clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
                   onReactivate={handleReactivate}
+                  gallery={gallery}
+                  settings={settings}
                 />
               </CardContent>
             </Card>
