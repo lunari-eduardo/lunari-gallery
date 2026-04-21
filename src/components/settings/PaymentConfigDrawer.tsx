@@ -82,6 +82,8 @@ interface PaymentConfigDrawerProps {
   setAsaasMaxParcelas: (v: string) => void;
   asaasAbsorverTaxa: boolean;
   setAsaasAbsorverTaxa: (v: boolean) => void;
+  asaasCentralizarEmailsLunari: boolean;
+  setAsaasCentralizarEmailsLunari: (v: boolean) => void;
   asaasIreiAntecipar: boolean;
   setAsaasIreiAntecipar: (v: boolean) => void;
   asaasRepassarAntecipacao: boolean;
@@ -164,7 +166,8 @@ export function PaymentConfigDrawer({
   asaasIntegrationStatus, asaasApiKey, setAsaasApiKey, asaasEnvironment, setAsaasEnvironment,
   asaasHabilitarPix, setAsaasHabilitarPix, asaasHabilitarCartao, setAsaasHabilitarCartao,
   asaasHabilitarBoleto, setAsaasHabilitarBoleto, asaasMaxParcelas, setAsaasMaxParcelas,
-  asaasAbsorverTaxa, setAsaasAbsorverTaxa, asaasIreiAntecipar, setAsaasIreiAntecipar,
+  asaasAbsorverTaxa, setAsaasAbsorverTaxa, asaasCentralizarEmailsLunari, setAsaasCentralizarEmailsLunari,
+  asaasIreiAntecipar, setAsaasIreiAntecipar,
   asaasRepassarAntecipacao, setAsaasRepassarAntecipacao,
   handleSaveAsaas, handleSaveAsaasSettings, saveAsaasPending, updateAsaasSettings, userId,
   asaasFees, setAsaasFees,
@@ -374,6 +377,22 @@ export function PaymentConfigDrawer({
                       ? <span className="text-green-600 dark:text-green-400">Produção</span>
                       : <span className="text-amber-600 dark:text-amber-400">Sandbox</span>}
                   </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <Label>Centralizar e-mails no Lunari</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Recomendado. Evita e-mails duplicados do Asaas quando a API permitir; cobranças e confirmações seguem pelo Lunari.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={asaasCentralizarEmailsLunari}
+                    onCheckedChange={setAsaasCentralizarEmailsLunari}
+                    disabled={updateAsaasSettings.isPending}
+                  />
                 </div>
               </div>
 

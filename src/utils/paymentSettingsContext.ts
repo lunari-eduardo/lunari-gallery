@@ -13,6 +13,7 @@ const ASAAS_MIGRATABLE_FIELDS = [
   'habilitarPix', 'habilitarCartao', 'habilitarBoleto',
   'maxParcelas', 'absorverTaxa',
   'ireiAntecipar', 'repassarTaxaAntecipacao', 'incluirTaxaAntecipacao',
+  'centralizarEmailsLunari',
 ] as const;
 
 const MP_MIGRATABLE_FIELDS = [
@@ -178,6 +179,7 @@ export function getDivergenceSummary(
     ireiAntecipar: 'Antecipação',
     repassarTaxaAntecipacao: 'Repassar antecipação',
     incluirTaxaAntecipacao: 'Incluir antecipação',
+    centralizarEmailsLunari: 'E-mails Lunari',
   };
   
   for (const field of fields) {

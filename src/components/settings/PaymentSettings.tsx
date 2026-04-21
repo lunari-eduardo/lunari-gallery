@@ -115,6 +115,7 @@ export function PaymentSettings() {
   const [asaasHabilitarBoleto, setAsaasHabilitarBoleto] = useState(false);
   const [asaasMaxParcelas, setAsaasMaxParcelas] = useState('12');
   const [asaasAbsorverTaxa, setAsaasAbsorverTaxa] = useState(false);
+  const [asaasCentralizarEmailsLunari, setAsaasCentralizarEmailsLunari] = useState(true);
   const [asaasIreiAntecipar, setAsaasIreiAntecipar] = useState(false);
   const [asaasRepassarAntecipacao, setAsaasRepassarAntecipacao] = useState(false);
 
@@ -178,6 +179,7 @@ export function PaymentSettings() {
       setAsaasHabilitarBoleto(d.habilitarBoleto ?? false);
       setAsaasMaxParcelas(String(d.maxParcelas ?? 12));
       setAsaasAbsorverTaxa(d.absorverTaxa ?? false);
+      setAsaasCentralizarEmailsLunari(d.centralizarEmailsLunari ?? true);
       setAsaasIreiAntecipar(d.ireiAntecipar ?? d.incluirTaxaAntecipacao ?? false);
       setAsaasRepassarAntecipacao(d.repassarTaxaAntecipacao ?? d.incluirTaxaAntecipacao ?? false);
     }
@@ -228,6 +230,7 @@ export function PaymentSettings() {
         environment: asaasEnvironment, habilitarPix: asaasHabilitarPix,
         habilitarCartao: asaasHabilitarCartao, habilitarBoleto: asaasHabilitarBoleto,
         maxParcelas: parseInt(asaasMaxParcelas), absorverTaxa: asaasAbsorverTaxa,
+        centralizarEmailsLunari: asaasCentralizarEmailsLunari,
         ireiAntecipar: asaasIreiAntecipar, repassarTaxaAntecipacao: asaasRepassarAntecipacao,
         incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
       },
@@ -241,6 +244,7 @@ export function PaymentSettings() {
       environment: asaasEnvironment, habilitarPix: asaasHabilitarPix,
       habilitarCartao: asaasHabilitarCartao, habilitarBoleto: asaasHabilitarBoleto,
       maxParcelas: parseInt(asaasMaxParcelas), absorverTaxa: asaasAbsorverTaxa,
+      centralizarEmailsLunari: asaasCentralizarEmailsLunari,
       ireiAntecipar: asaasIreiAntecipar, repassarTaxaAntecipacao: asaasRepassarAntecipacao,
       incluirTaxaAntecipacao: asaasIreiAntecipar && asaasRepassarAntecipacao,
     });
@@ -434,6 +438,7 @@ export function PaymentSettings() {
         asaasHabilitarBoleto={asaasHabilitarBoleto} setAsaasHabilitarBoleto={setAsaasHabilitarBoleto}
         asaasMaxParcelas={asaasMaxParcelas} setAsaasMaxParcelas={setAsaasMaxParcelas}
         asaasAbsorverTaxa={asaasAbsorverTaxa} setAsaasAbsorverTaxa={setAsaasAbsorverTaxa}
+        asaasCentralizarEmailsLunari={asaasCentralizarEmailsLunari} setAsaasCentralizarEmailsLunari={setAsaasCentralizarEmailsLunari}
         asaasIreiAntecipar={asaasIreiAntecipar} setAsaasIreiAntecipar={setAsaasIreiAntecipar}
         asaasRepassarAntecipacao={asaasRepassarAntecipacao} setAsaasRepassarAntecipacao={setAsaasRepassarAntecipacao}
         handleSaveAsaas={handleSaveAsaas} handleSaveAsaasSettings={handleSaveAsaasSettings}

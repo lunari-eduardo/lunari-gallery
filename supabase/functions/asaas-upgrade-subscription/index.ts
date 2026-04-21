@@ -197,6 +197,17 @@ Deno.serve(async (req) => {
       );
     }
 
+    try {
+      const updateResponse = await fetch(`${ASAAS_BASE_URL}/v3/customers/${account.asaas_customer_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", access_token: ASAAS_API_KEY },
+        body: JSON.stringify({ notificationDisabled: true }),
+      });
+      if (!updateResponse.ok) console.warn("Failed to disable Asaas customer notifications:", await updateResponse.text());
+    } catch (error) {
+      console.warn("Notification disable update failed:", error);
+    }
+
     // 3. Charge net amount as one-time payment (if > 0)
     let prorataPaymentId: string | null = null;
     if (netChargeCents > 0) {
@@ -207,6 +218,7 @@ Deno.serve(async (req) => {
         dueDate: getNextBusinessDay(),
         description: `Upgrade: ${cancelledNames.join(' + ')} → ${newPlan.name} (proporcional)`,
         externalReference: userId,
+        postalService: false,
         creditCard: {
           holderName: creditCard.holderName,
           number: creditCard.number.replace(/\s/g, ""),
@@ -265,6 +277,7 @@ Deno.serve(async (req) => {
         dueDate: getNextBusinessDay(),
         description: `Upgrade: ${cancelledNames.join(' + ')} → ${newPlan.name} (Anual ${installmentCount}x)`,
         externalReference: userId,
+        postalService: false,
         creditCard: {
           holderName: creditCard.holderName,
           number: creditCard.number.replace(/\s/g, ""),

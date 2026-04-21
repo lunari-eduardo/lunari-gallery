@@ -87,6 +87,16 @@ Deno.serve(async (req) => {
 
       if (checkResponse.ok) {
         console.log(`[${requestId}] Existing customer validated: ${account.asaas_customer_id}`);
+        try {
+          const updateResponse = await fetch(`${ASAAS_BASE_URL}/v3/customers/${account.asaas_customer_id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", access_token: ASAAS_API_KEY },
+            body: JSON.stringify({ notificationDisabled: true }),
+          });
+          if (!updateResponse.ok) console.warn(`[${requestId}] Failed to disable Asaas customer notifications:`, await updateResponse.text());
+        } catch (error) {
+          console.warn(`[${requestId}] Notification disable update failed:`, error);
+        }
         return new Response(
           JSON.stringify({ customerId: account.asaas_customer_id, requestId }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -116,6 +126,7 @@ Deno.serve(async (req) => {
         cpfCnpj: cleanCpfCnpj,
         email: email || undefined,
         externalReference: userId,
+        notificationDisabled: true,
       }),
     });
 

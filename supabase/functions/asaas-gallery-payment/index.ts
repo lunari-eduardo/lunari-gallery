@@ -103,7 +103,8 @@ Deno.serve(async (req) => {
     }
 
     const asaasApiKey = integracao.access_token;
-    const settings = (integracao.dados_extras || {}) as {
+    const rawSettings = (integracao.dados_extras || {}) as Record<string, any>;
+    const settings = ({ ...rawSettings, ...(rawSettings.gallery_settings || {}) }) as {
       environment?: string;
       habilitarPix?: boolean;
       habilitarCartao?: boolean;
@@ -111,7 +112,9 @@ Deno.serve(async (req) => {
       maxParcelas?: number;
       absorverTaxa?: boolean;
       incluirTaxaAntecipacao?: boolean;
+      centralizarEmailsLunari?: boolean;
     };
+    const centralizarEmailsLunari = settings.centralizarEmailsLunari !== false;
 
     const asaasBaseUrl = settings.environment === 'production'
       ? 'https://api.asaas.com'
@@ -164,14 +167,17 @@ Deno.serve(async (req) => {
             const existingName = refData.data[0].name;
             console.log(`📋 Found Asaas customer by externalReference: ${asaasCustomerId} (name: ${existingName})`);
 
-            // Update name if divergent
-            if (existingName !== clienteName) {
-              console.log(`📝 Updating Asaas customer name: "${existingName}" → "${clienteName}"`);
-              await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+            const updates: Record<string, unknown> = {};
+            if (existingName !== clienteName) updates.name = clienteName;
+            if (centralizarEmailsLunari) updates.notificationDisabled = true;
+            if (Object.keys(updates).length > 0) {
+              console.log(`📝 Updating Asaas customer:`, updates);
+              const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-                body: JSON.stringify({ name: clienteName }),
+                body: JSON.stringify(updates),
               });
+              if (!updateResp.ok) console.warn('Failed to update Asaas customer notification settings:', await updateResp.text());
             }
           }
         }
@@ -189,16 +195,18 @@ Deno.serve(async (req) => {
               const existingName = match.name;
               console.log(`📋 Found Asaas customer by email: ${asaasCustomerId} (name: ${existingName})`);
 
-              const updates: Record<string, string> = {};
+              const updates: Record<string, unknown> = {};
               if (existingName !== clienteName) updates.name = clienteName;
               if (match.externalReference !== clienteId) updates.externalReference = clienteId;
+              if (centralizarEmailsLunari) updates.notificationDisabled = true;
               if (Object.keys(updates).length > 0) {
                 console.log(`📝 Updating Asaas customer:`, updates);
-                await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+                const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
                   body: JSON.stringify(updates),
                 });
+                if (!updateResp.ok) console.warn('Failed to update Asaas customer notification settings:', await updateResp.text());
               }
             }
           }
@@ -214,6 +222,7 @@ Deno.serve(async (req) => {
               email: cliente.email || undefined,
               phone: cliente.telefone || undefined,
               externalReference: clienteId,
+              ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
             }),
           });
 
@@ -240,6 +249,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           name: 'Cliente Galeria',
           externalReference: galeriaId || 'gallery-client',
+          ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
         }),
       });
 
@@ -346,6 +356,7 @@ Deno.serve(async (req) => {
       dueDate: dueDate.toISOString().split('T')[0],
       description: descricao || 'Pagamento galeria de fotos',
       externalReference: galeriaId || undefined,
+      postalService: false,
     };
 
     if (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) {
