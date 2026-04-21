@@ -59,6 +59,8 @@ export default function DeliverDetail() {
   const [showUploader, setShowUploader] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showReactivateDialog, setShowReactivateDialog] = useState(false);
+  const [reactivateSuccessOpen, setReactivateSuccessOpen] = useState(false);
+  const [reactivateDays, setReactivateDays] = useState(7);
 
   // Editable fields
   const [sessionName, setSessionName] = useState('');
