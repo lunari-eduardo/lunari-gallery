@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -183,6 +184,9 @@ export default function Dashboard() {
   const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
   const [deleteGalleryId, setDeleteGalleryId] = useState<string | null>(null);
   const [reactivateGalleryId, setReactivateGalleryId] = useState<string | null>(null);
+  const [reactivateSuccessOpen, setReactivateSuccessOpen] = useState(false);
+  const [reactivateSuccessGallery, setReactivateSuccessGallery] = useState<Galeria | null>(null);
+  const [reactivateDays, setReactivateDays] = useState(7);
 
   const shareGaleria = useMemo(() => 
     supabaseGalleries.find(g => g.id === shareGalleryId) || null
@@ -630,12 +634,10 @@ export default function Dashboard() {
       {/* Reactivate Dialog */}
       {reactivateGalleryId && (() => {
         const galeria = supabaseGalleries.find(g => g.id === reactivateGalleryId);
-        const clientLink = galeria?.publicToken ? getGalleryUrl(galeria.publicToken) : null;
         const isTransfer = galeria?.tipo === 'entrega';
         return (
           <ReactivateGalleryDialog
             galleryName={galeria?.nomeSessao || 'Esta galeria'}
-            clientLink={clientLink}
             onReactivate={async (days) => {
               if (isTransfer) {
                 const prazoSelecao = new Date();
@@ -645,18 +647,40 @@ export default function Dashboard() {
                   prazo_selecao: prazoSelecao.toISOString(),
                   updated_at: new Date().toISOString(),
                 }).eq('id', reactivateGalleryId);
-                refetch();
               } else {
                 await reopenSelection({ id: reactivateGalleryId, days });
               }
+              await refetch();
             }}
             open={true}
             onOpenChange={(open) => { if (!open) setReactivateGalleryId(null); }}
-            gallery={galeria}
-            settings={settings}
+            onSuccess={(days) => {
+              setReactivateDays(days);
+              setReactivateSuccessGallery(galeria || null);
+              setReactivateSuccessOpen(true);
+            }}
           />
         );
       })()}
+
+      {reactivateSuccessGallery && settings && (
+        <ReactivateSuccessModal
+          isOpen={reactivateSuccessOpen}
+          onOpenChange={(open) => {
+            setReactivateSuccessOpen(open);
+            if (!open) setReactivateSuccessGallery(null);
+          }}
+          gallery={reactivateSuccessGallery}
+          settings={settings}
+          clientLink={reactivateSuccessGallery.publicToken ? getGalleryUrl(reactivateSuccessGallery.publicToken) : null}
+          newDeadline={(() => {
+            const d = new Date();
+            d.setDate(d.getDate() + reactivateDays);
+            return d;
+          })()}
+          daysGranted={reactivateDays}
+        />
+      )}
     </div>
   );
 }

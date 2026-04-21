@@ -347,7 +347,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: settings } = await supabase
         .from('gallery_settings')
-        .select('studio_name, email_sending_enabled, email_on_gallery_sent')
+        .select('studio_name, email_sending_enabled, email_on_gallery_reactivated')
         .eq('user_id', gallery.user_id)
         .maybeSingle();
 
@@ -368,9 +368,9 @@ Deno.serve(async (req: Request) => {
         await upsertLog(supabase, { ...baseLog, status: 'ignorado', friendly_message: 'Envio automático desativado' });
         return jsonResponse({ success: true, status: 'ignorado', message: 'E-mails automáticos estão desativados.' });
       }
-      if (settings?.email_on_gallery_sent === false) {
-        await upsertLog(supabase, { ...baseLog, status: 'ignorado', friendly_message: 'Envio de galeria desativado' });
-        return jsonResponse({ success: true, status: 'ignorado', message: 'Envio de e-mail de galeria está desativado.' });
+      if (settings?.email_on_gallery_reactivated === false) {
+        await upsertLog(supabase, { ...baseLog, status: 'ignorado', friendly_message: 'Envio de reativação desativado' });
+        return jsonResponse({ success: true, status: 'ignorado', message: 'E-mail de reativação está desativado.' });
       }
       if (!gallery.cliente_email) {
         await upsertLog(supabase, { ...baseLog, status: 'ignorado', friendly_message: 'Cliente sem e-mail cadastrado' });

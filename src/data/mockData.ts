@@ -48,6 +48,7 @@ export const mockGlobalSettings: GlobalSettings = {
   welcomeMessageEnabled: true,
   emailSendingEnabled: true,
   emailOnGallerySent: true,
+  emailOnGalleryReactivated: true,
   emailOnPaymentConfirmed: true,
   defaultSaleMode: 'sale_without_payment',
   defaultImageResize: 1920,

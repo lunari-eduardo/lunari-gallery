@@ -28,6 +28,7 @@ import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
@@ -111,6 +112,8 @@ export default function GalleryEdit() {
   const [showPhotoUploader, setShowPhotoUploader] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivateSuccessOpen, setReactivateSuccessOpen] = useState(false);
+  const [reactivateDays, setReactivateDays] = useState(7);
 
   // Initialize form with gallery data
   useEffect(() => {
@@ -299,8 +302,12 @@ export default function GalleryEdit() {
   const handleReactivate = async (days: number = 7) => {
     try {
       await reopenSelection({ id: gallery.id, days });
+      // Aguarda o refetch para garantir que publicToken esteja atualizado.
+      await queryClient.invalidateQueries({ queryKey: ['galerias'] });
+      await queryClient.refetchQueries({ queryKey: ['galerias'] });
     } catch (error) {
       console.error('Error reactivating gallery:', error);
+      throw error;
     }
   };
 
@@ -736,11 +743,29 @@ export default function GalleryEdit() {
         open={reactivateOpen}
         onOpenChange={setReactivateOpen}
         galleryName={gallery.nomeSessao || 'Esta galeria'}
-        clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
         onReactivate={handleReactivate}
-        gallery={gallery}
-        settings={settings}
+        onSuccess={(days) => {
+          setReactivateDays(days);
+          setReactivateSuccessOpen(true);
+        }}
       />
+
+      {/* Reactivate Success / Share Modal */}
+      {settings && (
+        <ReactivateSuccessModal
+          isOpen={reactivateSuccessOpen}
+          onOpenChange={setReactivateSuccessOpen}
+          gallery={gallery}
+          settings={settings}
+          clientLink={gallery.publicToken ? getGalleryUrl(gallery.publicToken) : null}
+          newDeadline={(() => {
+            const d = new Date();
+            d.setDate(d.getDate() + reactivateDays);
+            return d;
+          })()}
+          daysGranted={reactivateDays}
+        />
+      )}
 
       {/* Client Modal */}
       <ClientModal

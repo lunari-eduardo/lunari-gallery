@@ -40,6 +40,7 @@ import { PhotoCodesModal } from '@/components/PhotoCodesModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
+import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { PaymentStatusCard } from '@/components/PaymentStatusCard';
 import { PaymentHistoryCard } from '@/components/PaymentHistoryCard';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
@@ -63,6 +64,8 @@ export default function GalleryDetail() {
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivateSuccessOpen, setReactivateSuccessOpen] = useState(false);
+  const [reactivateDays, setReactivateDays] = useState(7);
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
   const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
   const [activeDetailFolderId, setActiveDetailFolderId] = useState<string | null>(null);
@@ -438,6 +441,9 @@ export default function GalleryDetail() {
 
   const handleReopenSelection = async (days: number) => {
     await reopenSupabaseSelection({ id: supabaseGallery.id, days });
+    // Aguarda o refetch para garantir que publicToken esteja atualizado.
+    await queryClient.invalidateQueries({ queryKey: ['galerias'] });
+    await queryClient.refetchQueries({ queryKey: ['galerias'] });
   };
 
   const handleDeleteGallery = async () => {
@@ -1177,11 +1183,29 @@ export default function GalleryDetail() {
         open={reactivateOpen}
         onOpenChange={setReactivateOpen}
         galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
-        clientLink={clientLink}
         onReactivate={handleReopenSelection}
-        gallery={supabaseGallery}
-        settings={settings}
+        onSuccess={(days) => {
+          setReactivateDays(days);
+          setReactivateSuccessOpen(true);
+        }}
       />
+
+      {/* Reactivate Success / Share Modal (separate Dialog instance) */}
+      {settings && (
+        <ReactivateSuccessModal
+          isOpen={reactivateSuccessOpen}
+          onOpenChange={setReactivateSuccessOpen}
+          gallery={supabaseGallery}
+          settings={settings}
+          clientLink={clientLink}
+          newDeadline={(() => {
+            const d = new Date();
+            d.setDate(d.getDate() + reactivateDays);
+            return d;
+          })()}
+          daysGranted={reactivateDays}
+        />
+      )}
     </div>
   );
 }
