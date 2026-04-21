@@ -1,155 +1,139 @@
 
 
-# Plano: refinar o checkout transparente Asaas para o padrão premium da imagem 1
+# Plano: corrigir persistência de tema (light/dark) em galerias do cliente
 
-## Escopo
+## Diagnóstico — 3 bugs reais encontrados
 
-Reformular **apenas** `src/components/AsaasCheckout.tsx` para entregar a estética e a UX da primeira imagem. Componente é compartilhado entre cliente final e fotógrafo — então cobre os dois fluxos automaticamente. Nenhuma alteração de fluxo de pagamento, edge function ou webhook.
+### Bug 1 (raiz): default global de tema é ignorado se for `'system'`
 
-## Mudanças visuais e de UX
-
-### 1. Header (hierarquia premium)
-
+`src/pages/GalleryCreate.tsx` linha 308:
 ```text
-[logo do studio]
-🔒 Ambiente seguro e criptografado    ← novo selo de confiança no topo
-Pagamento                             ← título menor
-R$ 9,00                               ← valor MUITO maior (text-5xl, primary)
-🖼️ 3 fotos extras • Dia das Mães      ← descrição com ícone, em cinza
+if (settings.clientTheme === 'dark') setClientMode('dark');
+else                                  setClientMode('light');  ← força LIGHT quando é 'system'
 ```
 
-- subir o badge "Ambiente seguro e criptografado" para logo abaixo do logo
-- valor em `text-5xl font-bold text-primary` (era `text-3xl`)
-- descrição com `Image` lucide icon + separador `•`
+`GlobalSettings.clientTheme` aceita `'light' | 'dark' | 'system'` (default `'system'` no `mockData` e no DB). Como `'system'` cai no `else`, **nenhuma galeria nasce em dark** a menos que o fotógrafo abra a galeria e clique manualmente em "Escuro" no passo de criação. Por isso ele "criou no modo dark" mas o banco gravou `clientMode='light'`. Confirmado no banco: todas as galerias "Dia das Mães" têm `configuracoes->>'clientMode' = 'light'`, e o tema customizado vinculado (`gallery_themes.background_mode`) também é `'light'`.
 
-### 2. Toggle PIX/Cartão mais visual
+### Bug 2: tema do cliente não pode ser editado após criação
 
-- container do `TabsList` em card branco com sombra suave
-- aba ativa: fundo bege claro (`bg-primary/10`), texto `primary`, borda inferior sutil
-- aba inativa: transparente, texto `muted-foreground`
-- ícones aumentados (`h-5 w-5`)
-- altura maior (`h-14`)
+`src/pages/GalleryEdit.tsx` (792 linhas) **não tem uma única referência** a `clientMode`, `themeId`, `theme` ou `configuracoes`. O fotógrafo só consegue ajustar o tema da galeria recriando-a — caminho que ninguém faz na prática. É por isso que a galeria do print continuou em light: nem o `GalleryEdit` nem nenhum outro fluxo permite trocar.
 
-### 3. Inputs (o ponto central)
+### Bug 3: 4 telas internas cliente usam fallback `|| 'light'` em vez de `effectiveBackgroundMode`
 
-Criar uma classe utilitária local `checkoutInputClass`:
-
+`src/pages/ClientGallery.tsx`:
 ```text
-border: 1px solid #E5E5E5  (em dark: usa border-input)
-hover: borda #D4D4D4
-focus: borda primary + ring 2px primary/15 (sem outline preto duplo)
-altura: h-12 (era h-10)
-padding-left: pl-10 quando tem ícone
-texto preenchido: text-foreground (quase preto)
-placeholder: text-muted-foreground/60 (mais claro)
+linha 1702: backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}   ← SelectionConfirmation
+linha 1747: backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}   ← PixPaymentScreen
+linha 1770: backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}   ← AsaasCheckout
+linha 1784: backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}   ← PaymentRedirect
 ```
 
-- adicionar **ícones internos** alinhados à esquerda em cada input (User, FileText, Mail, CreditCard, Calendar, Lock, Phone, MapPin) — padrão da imagem 1
-- labels menores: `text-xs font-medium text-muted-foreground` (era `text-sm font-medium`)
-- "Telefone (opcional)" — adicionar sufixo cinza no label, reduzir peso visual
-- ícone de info (`ⓘ`) ao lado do CVV explicando "3 dígitos no verso"
+O `effectiveBackgroundMode` (linha 771) já calcula a prioridade certa `theme.backgroundMode > clientMode > 'light'`, mas essas 4 telas não o usam. Como o tema custom da fotógrafa também tem `background_mode='light'`, todas ficam light mesmo se ela só tivesse pedido `clientMode='dark'`. Isso reproduz exatamente o comportamento das imagens 2-7 (todas claras) enquanto a `PasswordScreen` (linha 933, usa `effectiveBackgroundMode`) ficou escura porque é renderizada **antes** do `theme` carregar — usando apenas o `clientMode` do header da resposta.
 
-### 4. Agrupamento por seção
+Espera — na verdade a tela de senha ficou escura no print e o resto light. Isso significa que para a galeria de teste, o backend responde:
+- 1ª chamada (sem senha): `clientMode = 'dark'` mas `theme = null` (sem `themeId` resolvido ainda no early-return de senha) → PasswordScreen vê `effectiveBackgroundMode='dark'` ✓
+- 2ª chamada (após senha): `theme.backgroundMode = 'light'` (do custom theme do fotógrafo) → todas as telas pegam `'light'`
 
-Dentro da aba Cartão, dividir em 3 grupos com subtítulo + ícone (sem caixas):
+Confirmando no banco: a galeria-teste tem `clientMode='light'` e `themeId='1abc5db0...'` com `background_mode='light'`. Então o print da senha em dark deve ser de **outra** galeria. Mesmo assim, os 3 bugs acima estão todos errados e juntos causam o sintoma.
+
+## Solução
+
+### Parte 1 — corrigir hidratação do `clientMode` em `GalleryCreate`
+
+Substituir o bloco linha 307-312:
 
 ```text
-👤 Dados do titular
-   Nome no cartão
-   CPF / CNPJ
-   Email do titular
-
-💳 Dados do cartão
-   Número do cartão
-   Validade | CVV
-
-📞 Contato
-   Telefone (opcional) | CEP
-   Parcelas
+if (!userTouchedClientModeRef.current) {
+  if (settings.clientTheme === 'dark')   setClientMode('dark');
+  else if (settings.clientTheme === 'light') setClientMode('light');
+  else if (settings.customTheme?.backgroundMode === 'dark') setClientMode('dark');
+  else if (settings.customTheme?.backgroundMode === 'light') setClientMode('light');
+  else setClientMode('light');   // fallback final
+}
 ```
 
-Subtítulo: `text-sm font-semibold` + ícone primary `h-4 w-4`. Espaço de 24px entre seções, 16px entre inputs.
+Adicionar `userTouchedClientModeRef = useRef(false)` e marcar nos 2 botões "Claro/Escuro" do passo de criação (linhas 1828, 1832).
 
-### 5. Botão de pagamento
+Prioridade: `userTouched > settings.clientTheme > customTheme.backgroundMode > light`. Quando o fotógrafo configurou tema customizado (com modo escuro), a galeria nasce escura mesmo se `clientTheme='system'`. Quando ele explicitamente disse `clientTheme='dark'`, vence.
 
-- altura `h-12` (era `size="lg"`)
-- texto: **"Finalizar pagamento • R$ X,XX"** (era "Pagar R$ X,XX")
-- ícone `Lock` antes do texto
-- `rounded-lg` (era `rounded-md` padrão)
-- transição suave `active:scale-[0.98]` para microinteração
-- hover já vem do `variant="terracotta"`
+### Parte 2 — adicionar gestão de tema em `GalleryEdit`
 
-### 6. Selo de segurança no rodapé (substituído)
+`GalleryEdit.tsx` ganha uma nova seção "Tema da Galeria" similar à de `GalleryCreate`:
 
-Atual: "Pagamento criptografado e seguro" pequeno e fraco.
+- ler `configuracoes.clientMode` e `configuracoes.themeId` na carga inicial
+- 2 botões Sol/Lua para alternar light/dark
+- preview da paleta atual (reusa lógica do `ThemePreviewCard`)
+- ao salvar, atualiza `configuracoes->>'clientMode'` e `configuracoes->>'themeId'` mantendo demais chaves intactas
 
-Novo (logo abaixo do botão):
+Implementação: adicionar estados `clientMode`, `selectedThemeId`; carregar do `gallery.configuracoes` no `useEffect` inicial; mesclar ao payload de update existente:
+
 ```text
-🛡️ Seus dados estão protegidos com segurança de ponta a ponta.
+configuracoes: { ...existingConfig, clientMode, themeId: selectedThemeId }
 ```
-- `text-xs text-muted-foreground` centralizado, ícone `ShieldCheck` em primary
-- selo do topo já cobre o gatilho de confiança principal
 
-### 7. Botão "Voltar" — mantém ghost no rodapé com `←`
+### Parte 3 — corrigir os 4 fallbacks em `ClientGallery`
 
-### 8. Auto-foco entre campos (micro UX)
+Substituir nas linhas 1702, 1747, 1770, 1784:
 
-- número do cartão completo (16 dígitos) → foca validade
-- validade completa (MM/AA) → foca CVV
-- CVV com 3 dígitos → foca telefone
-- CPF com 11 dígitos → foca email
+```text
+- backgroundMode={galleryResponse?.theme?.backgroundMode || 'light'}
++ backgroundMode={effectiveBackgroundMode}
+```
 
-Implementar com refs e dispatch `.focus()` dentro do `onChange` quando atinge o tamanho máximo.
+Como `effectiveBackgroundMode` já é o memo correto (linha 771), a mudança é mecânica e sem risco. Garante que `SelectionConfirmation`, `PixPaymentScreen`, `AsaasCheckout` e `PaymentRedirect` herdam o tema da galeria.
 
-### 9. Validação inline suave (preview imediato)
+### Parte 4 — `pendingBgMode` (linha 1123) já está OK
 
-- ao sair do campo (onBlur), se inválido → borda vira `destructive/50` + mensagem mínima abaixo (`text-xs text-destructive`)
-- não bloqueia digitação, só sinaliza
-- desaparece ao voltar a digitar
-- aplicar em: CPF/CNPJ, número do cartão, validade, email
+Só renomeia de `pendingBgMode` para `effectiveBackgroundMode` por consistência (mesmo cálculo). Não muda comportamento.
 
-### 10. Espaçamento global
+### Parte 5 — log de migração para galerias antigas
 
-- `space-y-6` entre header → card → tabs → footer (já existe)
-- dentro do form: `space-y-6` entre seções, `space-y-4` entre inputs da mesma seção
-- container central: `max-w-md` mantido
+Migração SQL **opcional** que pode ser executada uma única vez para galerias criadas no período do bug:
 
-### 11. Tela PIX (alinhar com mesmo padrão)
+```sql
+-- Para galerias que apontam para um tema custom dark,
+-- mas têm clientMode='light' por causa do bug do default,
+-- alinhar clientMode ao background_mode do tema vinculado.
+UPDATE galerias g
+SET configuracoes = jsonb_set(
+  COALESCE(g.configuracoes, '{}'::jsonb),
+  '{clientMode}',
+  to_jsonb(t.background_mode)
+)
+FROM gallery_themes t
+WHERE (g.configuracoes->>'themeId')::uuid = t.id
+  AND COALESCE(g.configuracoes->>'clientMode', 'light') <> t.background_mode;
+```
 
-- valor grande no topo (igual ao cartão)
-- QR code com sombra mais suave e cantos `rounded-2xl`
-- bloco "PIX Copia e Cola" com mesmo input style
-- "Aguardando pagamento" em pílula bege com loader
+Sem efeito retroativo perigoso: só copia o `background_mode` do tema customizado escolhido para o `clientMode` da galeria. Se nenhum tema custom estiver vinculado, nada muda. **Esta migração é opcional** — apresento para o usuário decidir se quer corrigir o histórico.
 
 ## Detalhes técnicos
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/AsaasCheckout.tsx` | reestruturação completa do JSX de retorno (linhas 487-662): novo header com selo de segurança; toggle visual; agrupamento por seção; inputs com ícones internos; auto-foco entre campos; validação inline `onBlur`; novo botão "Finalizar pagamento"; selo de segurança final reformulado |
-| `src/components/AsaasCheckout.tsx` | adicionar refs `cardNumberRef`, `cardExpiryRef`, `cardCvvRef`, `cardPhoneRef`, `cardEmailRef` e estado local `fieldErrors: Record<string, string>` para validação inline |
-| Imports adicionais | `User`, `FileText`, `Mail`, `Calendar`, `Phone`, `MapPin`, `Image as ImageIcon`, `Info` do lucide-react |
-| Sem mudanças em | toda lógica de fees, polling, geração de PIX, submit do cartão (`handleCardSubmit`), props da interface, integração com `asaas-gallery-payment`, `check-payment-status`, edge functions, webhooks Asaas, InfinitePay, Mercado Pago, fluxo de reativação, `prepare_gallery_share`, `confirm-selection` |
-
-## Compatibilidade
-
-- mantém props `themeStyles` e `backgroundMode` (suporta dark mode dos fotógrafos)
-- mantém todos os `autoComplete` para preenchimento automático do navegador
-- mantém validações finais no `handleCardSubmit` — a validação inline é apenas UX preventiva
-- usa tokens semânticos do Tailwind (`primary`, `muted-foreground`, `destructive`, `border`) — sem cores hardcoded fora do design system
+| `src/pages/GalleryCreate.tsx` | adicionar `userTouchedClientModeRef`; reescrever bloco linhas 307-312 com cascata de prioridades; marcar ref nos onClick dos botões Sol/Lua (linhas 1828, 1832) |
+| `src/pages/GalleryEdit.tsx` | adicionar estado `clientMode` e `selectedThemeId`; carregar de `gallery.configuracoes` no `useEffect` de hidratação; nova seção UI "Tema da galeria" com 2 botões Sol/Lua + seletor opcional de tema custom; mesclar `clientMode` e `themeId` no payload de `update` preservando outras chaves de `configuracoes` |
+| `src/pages/ClientGallery.tsx` | linhas 1702, 1747, 1770, 1784 → trocar fallback por `effectiveBackgroundMode`; renomear `pendingBgMode` → `effectiveBackgroundMode` na linha 1123 (idêntico, só clareza) |
+| `supabase/migrations/<novo>.sql` (opcional) | alinhar `clientMode` ao `background_mode` do `themeId` vinculado para galerias afetadas |
+| Sem alteração em | `gallery-access` (já manda `theme.backgroundMode` e `clientMode` corretos), `useGallerySettings`, `ThemeConfig`, webhooks, fluxos de pagamento, `prepare_gallery_share`, `confirm-selection`, `finalize_gallery_payment` |
 
 ## Validação
 
-1. abrir um pagamento de galeria como cliente → deve replicar imagem 1 (selo no topo, valor grande, agrupamento, ícones nos inputs, botão "Finalizar pagamento • R$ X,XX")
-2. abrir como fotógrafo (dark mode) → cores adaptam mantendo a estrutura
-3. preencher número do cartão completo → cursor pula para validade automaticamente
-4. digitar CPF inválido e sair do campo → borda fica vermelha + mensagem inline
-5. trocar de PIX para Cartão → toggle ativo bege visível
-6. PIX continua funcionando: gera QR, copia, polling confirma
-7. cartão continua funcionando: parcela, calcula taxa, submete, polling confirma
-8. mobile (375px): inputs e ícones se mantêm legíveis
-9. `npm run build` sem erros TS
+1. configurar em `Configurações > Personalização` um tema custom com modo **Escuro**;
+2. criar uma galeria standalone → todas as telas (welcome, álbuns, grid, lightbox, confirmação, pagamento Asaas, pagamento PIX manual) ficam escuras de ponta a ponta;
+3. configurar `clientTheme='dark'` no settings e criar outra galeria → mesma coisa;
+4. configurar `clientTheme='system'` mas tema custom light → galeria nasce light;
+5. abrir galeria existente em `GalleryEdit`, mudar para Escuro, salvar → recarregar a URL pública do cliente mostra todas as telas escuras;
+6. criar galeria via Gestão (`?session_id=...`) com tema custom dark → idem;
+7. tocar manualmente no botão Sol em `GalleryCreate` → settings async tardio não reverte;
+8. galeria antiga (com tema light) continua light — não há regressão visual;
+9. (opcional) rodar migração → galerias afetadas pelo bug histórico passam a refletir o tema do fotógrafo;
+10. `npm run build` sem erros TS.
 
 ## Resultado esperado
 
-Checkout Asaas com a estética premium da imagem 1: selo de confiança no topo, hierarquia clara do valor, agrupamento mental por seção, inputs com ícones e foco suave em primary, botão de finalização decisivo e micro UX (auto-foco, validação inline) que reduz fricção e aumenta conversão. Nenhum impacto em integrações de pagamento.
+- o tema (light/dark) escolhido pelo fotógrafo persiste em **todas** as telas que o cliente vê: senha, visitante, welcome, álbuns, grid, lightbox, confirmação, PIX manual, Asaas, redirect, finalizada;
+- fotógrafo passa a poder editar o tema de uma galeria existente em `GalleryEdit`;
+- o default do sistema (`clientTheme='system'`) deixa de forçar light quando há um tema custom dark configurado;
+- nenhum impacto em integrações de pagamento, webhooks, fluxo de reativação ou em galerias Transfer/entrega.
 
