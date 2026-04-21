@@ -178,6 +178,13 @@ export interface GlobalSettings {
   // Defaults aplicados automaticamente em novas galerias
   defaultSaleMode?: SaleMode;
   defaultImageResize?: ImageResizeOption;
+  defaultChargeType?: ChargeType;
+  defaultPricingModel?: PricingModel;
+  defaultPaymentMethod?: PaymentMethod;
+  defaultAllowComments?: boolean;
+  defaultAllowDownload?: boolean;
+  defaultAllowExtraPhotos?: boolean;
+  defaultWatermarkDisplay?: WatermarkDisplay;
 }
 
 export interface ExportData {
