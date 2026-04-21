@@ -287,6 +287,13 @@ export default function GalleryCreate() {
   // from overwriting user choices when they load after the user already interacted.
   const userTouchedSaleModeRef = useRef(false);
   const userTouchedImageResizeRef = useRef(false);
+  const userTouchedChargeTypeRef = useRef(false);
+  const userTouchedPricingModelRef = useRef(false);
+  const userTouchedPaymentMethodRef = useRef(false);
+  const userTouchedAllowCommentsRef = useRef(false);
+  const userTouchedAllowDownloadRef = useRef(false);
+  const userTouchedAllowExtraPhotosRef = useRef(false);
+  const userTouchedWatermarkDisplayRef = useRef(false);
 
   // Initialize from settings
   useEffect(() => {
@@ -316,11 +323,13 @@ export default function GalleryCreate() {
         setWelcomeMessage('');
       }
 
-      // Hydrate sale mode default from photographer settings — but never override
-      // assisted mode (Gestão has priority) or a value the user already touched.
+      // Hydrate sale mode default from photographer settings.
+      // Priority: Gestão URL param > userTouched > settings default.
+      // (Removed `!hasGestaoParams` guard — defaults must apply even in assisted mode
+      // when Gestão did not send `modelo_de_cobranca`.)
       if (
-        !hasGestaoParams &&
         !userTouchedSaleModeRef.current &&
+        !gestaoParams?.modelo_de_cobranca &&
         settings.defaultSaleMode
       ) {
         setSaleMode(settings.defaultSaleMode);
@@ -333,8 +342,39 @@ export default function GalleryCreate() {
       ) {
         setImageResizeOption(settings.defaultImageResize);
       }
+
+      // Hydrate charge type default
+      if (
+        !userTouchedChargeTypeRef.current &&
+        settings.defaultChargeType
+      ) {
+        setChargeType(settings.defaultChargeType);
+      }
+
+      // Hydrate pricing model default — Gestão's `modelo_de_preco` has priority
+      if (
+        !userTouchedPricingModelRef.current &&
+        !gestaoParams?.modelo_de_preco &&
+        settings.defaultPricingModel
+      ) {
+        setPricingModel(settings.defaultPricingModel);
+      }
+
+      // Hydrate behavior toggles
+      if (!userTouchedAllowCommentsRef.current && settings.defaultAllowComments !== undefined) {
+        setAllowComments(settings.defaultAllowComments);
+      }
+      if (!userTouchedAllowDownloadRef.current && settings.defaultAllowDownload !== undefined) {
+        setAllowDownload(settings.defaultAllowDownload);
+      }
+      if (!userTouchedAllowExtraPhotosRef.current && settings.defaultAllowExtraPhotos !== undefined) {
+        setAllowExtraPhotos(settings.defaultAllowExtraPhotos);
+      }
+      if (!userTouchedWatermarkDisplayRef.current && settings.defaultWatermarkDisplay) {
+        setWatermarkDisplay(settings.defaultWatermarkDisplay);
+      }
     }
-  }, [settings, hasGestaoParams]);
+  }, [settings, gestaoParams?.modelo_de_cobranca, gestaoParams?.modelo_de_preco]);
 
   // Initialize watermark from global personalization settings (photographer_accounts)
   useEffect(() => {
@@ -502,11 +542,13 @@ export default function GalleryCreate() {
       setFixedPrice(gestaoParams.preco_da_foto_extra);
     }
 
-    // Step 3: Sale Settings
+    // Step 3: Sale Settings — Gestão params have priority; mark refs so settings won't overwrite
     if (gestaoParams.modelo_de_cobranca) {
+      userTouchedSaleModeRef.current = true;
       setSaleMode(gestaoParams.modelo_de_cobranca);
     }
     if (gestaoParams.modelo_de_preco) {
+      userTouchedPricingModelRef.current = true;
       setPricingModel(gestaoParams.modelo_de_preco);
     }
 
@@ -528,12 +570,18 @@ export default function GalleryCreate() {
     markAsProcessed();
     clearParams();
   }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams]);
-  // Initialize payment method with default when data loads
+  // Initialize payment method default — preference order:
+  // 1. User explicitly chose (userTouched ref) — never overwrite
+  // 2. Photographer's `defaultPaymentMethod` configured in Settings
+  // 3. Active payment integration (`defaultIntegration`) as fallback
   useEffect(() => {
-    if (paymentData?.defaultIntegration && !selectedPaymentMethod) {
+    if (userTouchedPaymentMethodRef.current || selectedPaymentMethod) return;
+    if (settings?.defaultPaymentMethod) {
+      setSelectedPaymentMethod(settings.defaultPaymentMethod);
+    } else if (paymentData?.defaultIntegration) {
       setSelectedPaymentMethod(paymentData.defaultIntegration.provedor as PaymentMethod);
     }
-  }, [paymentData?.defaultIntegration, selectedPaymentMethod]);
+  }, [paymentData?.defaultIntegration, selectedPaymentMethod, settings?.defaultPaymentMethod]);
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
@@ -1275,7 +1323,7 @@ export default function GalleryCreate() {
                 
                 {/* Payment Method Selection - Only when sale_with_payment */}
                 {saleMode === 'sale_with_payment' && <div className="mt-4 pt-4 border-t border-border/50">
-                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={(method) => setSelectedPaymentMethod(method as PaymentMethod)} />
+                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={(method) => { userTouchedPaymentMethodRef.current = true; setSelectedPaymentMethod(method as PaymentMethod); }} />
                   </div>}
               </div>
 
@@ -1352,7 +1400,7 @@ export default function GalleryCreate() {
                       {/* Manual Pricing Model selection (default or override mode) */}
                       <div className="space-y-4">
                         <Label className="text-base font-medium">Qual formato de preço?</Label>
-                        <RadioGroup value={pricingModel} onValueChange={(v) => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
+                        <RadioGroup value={pricingModel} onValueChange={(v) => { userTouchedPricingModelRef.current = true; setPricingModel(v as PricingModel); }} className="flex flex-col gap-3">
                           {/* Fixed Price */}
                           <div>
                             <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
@@ -1467,7 +1515,7 @@ export default function GalleryCreate() {
                   {/* Charge Type */}
                   <div className="space-y-3">
                     <Label className="text-base font-medium">Tipo de cobrança</Label>
-                    <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
+                    <Select value={chargeType} onValueChange={(v) => { userTouchedChargeTypeRef.current = true; setChargeType(v as ChargeType); }}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1800,7 +1848,7 @@ export default function GalleryCreate() {
                         Cliente pode comentar em cada foto
                       </p>
                     </div>
-                    <Switch checked={allowComments} onCheckedChange={setAllowComments} />
+                    <Switch checked={allowComments} onCheckedChange={(v) => { userTouchedAllowCommentsRef.current = true; setAllowComments(v); }} />
                   </div>
 
                   <div className="flex items-center justify-between py-2">
@@ -1810,7 +1858,7 @@ export default function GalleryCreate() {
                         Cliente pode baixar as imagens
                       </p>
                     </div>
-                    <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
+                    <Switch checked={allowDownload} onCheckedChange={(v) => { userTouchedAllowDownloadRef.current = true; setAllowDownload(v); }} />
                   </div>
 
                   {saleMode !== 'no_sale' && <div className="flex items-center justify-between py-2">
@@ -1820,7 +1868,7 @@ export default function GalleryCreate() {
                           Cliente pode selecionar além do limite
                         </p>
                       </div>
-                      <Switch checked={allowExtraPhotos} onCheckedChange={setAllowExtraPhotos} />
+                      <Switch checked={allowExtraPhotos} onCheckedChange={(v) => { userTouchedAllowExtraPhotosRef.current = true; setAllowExtraPhotos(v); }} />
                     </div>}
                 </div>
               </div>

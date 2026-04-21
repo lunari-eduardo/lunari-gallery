@@ -9,7 +9,9 @@ import { FaviconUploader } from './FaviconUploader';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { defaultWelcomeMessage } from '@/data/mockData';
+import { WatermarkDisplay } from '@/types/gallery';
 
 export function PersonalizationSettings() {
   const {
@@ -84,6 +86,85 @@ export function PersonalizationSettings() {
         {/* Watermark */}
         <div className="lunari-card p-6">
           <WatermarkSettings />
+        </div>
+
+        {/* Default Watermark Display */}
+        <div className="lunari-card p-6 space-y-4">
+          <div>
+            <Label className="text-base font-medium">Exibição Padrão da Marca d'Água</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              Como a marca d'água aparece nas fotos por padrão em novas galerias
+            </p>
+          </div>
+          <RadioGroup
+            value={settings.defaultWatermarkDisplay ?? 'all'}
+            onValueChange={(v) => updateSettings({ defaultWatermarkDisplay: v as WatermarkDisplay }, { successMessage: 'Exibição padrão salva.' })}
+            className="space-y-3"
+          >
+            <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+              <RadioGroupItem value="all" id="wd-all" className="mt-0.5" />
+              <Label htmlFor="wd-all" className="flex-1 cursor-pointer">
+                <p className="font-medium">Em todas as fotos</p>
+                <p className="text-sm text-muted-foreground">Proteção máxima</p>
+              </Label>
+            </div>
+            <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+              <RadioGroupItem value="fullscreen" id="wd-fs" className="mt-0.5" />
+              <Label htmlFor="wd-fs" className="flex-1 cursor-pointer">
+                <p className="font-medium">Apenas em tela cheia</p>
+                <p className="text-sm text-muted-foreground">Preview limpo, marca aparece ao ampliar</p>
+              </Label>
+            </div>
+            <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+              <RadioGroupItem value="none" id="wd-none" className="mt-0.5" />
+              <Label htmlFor="wd-none" className="flex-1 cursor-pointer">
+                <p className="font-medium">Nunca</p>
+                <p className="text-sm text-muted-foreground">Sem marca d'água</p>
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+
+        {/* Default Behavior Toggles */}
+        <div className="lunari-card p-6 space-y-4">
+          <div>
+            <Label className="text-base font-medium">Comportamento Padrão de Galerias</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              Aplicado automaticamente em novas galerias
+            </p>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Permitir comentários</p>
+                <p className="text-sm text-muted-foreground">Cliente pode comentar em cada foto</p>
+              </div>
+              <Switch
+                checked={settings.defaultAllowComments ?? true}
+                onCheckedChange={(v) => updateSettings({ defaultAllowComments: v }, { successMessage: 'Comportamento padrão salvo.' })}
+              />
+            </div>
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Permitir download</p>
+                <p className="text-sm text-muted-foreground">Cliente pode baixar fotos selecionadas</p>
+              </div>
+              <Switch
+                checked={settings.defaultAllowDownload ?? false}
+                onCheckedChange={(v) => updateSettings({ defaultAllowDownload: v }, { successMessage: 'Comportamento padrão salvo.' })}
+              />
+            </div>
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Permitir fotos extras</p>
+                <p className="text-sm text-muted-foreground">Cliente pode escolher além do pacote</p>
+              </div>
+              <Switch
+                checked={settings.defaultAllowExtraPhotos ?? true}
+                onCheckedChange={(v) => updateSettings({ defaultAllowExtraPhotos: v }, { successMessage: 'Comportamento padrão salvo.' })}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

@@ -26,6 +26,13 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
   faviconUrl: undefined,
   defaultSaleMode: 'sale_without_payment',
   defaultImageResize: 1920,
+  defaultChargeType: 'only_extras',
+  defaultPricingModel: 'fixed',
+  defaultPaymentMethod: undefined,
+  defaultAllowComments: true,
+  defaultAllowDownload: false,
+  defaultAllowExtraPhotos: true,
+  defaultWatermarkDisplay: 'all',
   emailSendingEnabled: true,
   emailOnGallerySent: true,
   emailOnGalleryReactivated: true,
@@ -102,6 +109,13 @@ function rowsToSettings(
     welcomeMessageEnabled: settingsRow.welcome_message_enabled ?? true,
     defaultSaleMode: (settingsRow.default_sale_mode as GlobalSettings['defaultSaleMode']) ?? 'sale_without_payment',
     defaultImageResize: (settingsRow.default_image_resize as GlobalSettings['defaultImageResize']) ?? 1920,
+    defaultChargeType: (settingsRow.default_charge_type as GlobalSettings['defaultChargeType']) ?? 'only_extras',
+    defaultPricingModel: (settingsRow.default_pricing_model as GlobalSettings['defaultPricingModel']) ?? 'fixed',
+    defaultPaymentMethod: (settingsRow.default_payment_method as GlobalSettings['defaultPaymentMethod']) ?? undefined,
+    defaultAllowComments: settingsRow.default_allow_comments ?? true,
+    defaultAllowDownload: settingsRow.default_allow_download ?? false,
+    defaultAllowExtraPhotos: settingsRow.default_allow_extra_photos ?? true,
+    defaultWatermarkDisplay: (settingsRow.default_watermark_display as GlobalSettings['defaultWatermarkDisplay']) ?? 'all',
     emailSendingEnabled: settingsRow.email_sending_enabled ?? true,
     emailOnGallerySent: settingsRow.email_on_gallery_sent ?? true,
     emailOnGalleryReactivated: settingsRow.email_on_gallery_reactivated ?? true,
@@ -295,6 +309,27 @@ export function useGallerySettings() {
       }
       if (data.defaultImageResize !== undefined) {
         updateData.default_image_resize = data.defaultImageResize;
+      }
+      if (data.defaultChargeType !== undefined) {
+        updateData.default_charge_type = data.defaultChargeType;
+      }
+      if (data.defaultPricingModel !== undefined) {
+        updateData.default_pricing_model = data.defaultPricingModel;
+      }
+      if (data.defaultPaymentMethod !== undefined) {
+        updateData.default_payment_method = data.defaultPaymentMethod || null;
+      }
+      if (data.defaultAllowComments !== undefined) {
+        updateData.default_allow_comments = data.defaultAllowComments;
+      }
+      if (data.defaultAllowDownload !== undefined) {
+        updateData.default_allow_download = data.defaultAllowDownload;
+      }
+      if (data.defaultAllowExtraPhotos !== undefined) {
+        updateData.default_allow_extra_photos = data.defaultAllowExtraPhotos;
+      }
+      if (data.defaultWatermarkDisplay !== undefined) {
+        updateData.default_watermark_display = data.defaultWatermarkDisplay;
       }
       if (data.emailSendingEnabled !== undefined) {
         updateData.email_sending_enabled = data.emailSendingEnabled;

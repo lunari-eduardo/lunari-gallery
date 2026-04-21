@@ -2172,11 +2172,18 @@ export type Database = {
           active_theme_id: string | null
           client_theme: string | null
           created_at: string | null
+          default_allow_comments: boolean | null
+          default_allow_download: boolean | null
+          default_allow_extra_photos: boolean | null
+          default_charge_type: string | null
           default_expiration_days: number | null
           default_gallery_permission: string | null
           default_image_resize: number
+          default_payment_method: string | null
+          default_pricing_model: string | null
           default_sale_mode: string
           default_watermark: Json | null
+          default_watermark_display: string | null
           default_welcome_message: string | null
           email_on_gallery_reactivated: boolean | null
           email_on_gallery_sent: boolean
@@ -2195,11 +2202,18 @@ export type Database = {
           active_theme_id?: string | null
           client_theme?: string | null
           created_at?: string | null
+          default_allow_comments?: boolean | null
+          default_allow_download?: boolean | null
+          default_allow_extra_photos?: boolean | null
+          default_charge_type?: string | null
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
           default_image_resize?: number
+          default_payment_method?: string | null
+          default_pricing_model?: string | null
           default_sale_mode?: string
           default_watermark?: Json | null
+          default_watermark_display?: string | null
           default_welcome_message?: string | null
           email_on_gallery_reactivated?: boolean | null
           email_on_gallery_sent?: boolean
@@ -2218,11 +2232,18 @@ export type Database = {
           active_theme_id?: string | null
           client_theme?: string | null
           created_at?: string | null
+          default_allow_comments?: boolean | null
+          default_allow_download?: boolean | null
+          default_allow_extra_photos?: boolean | null
+          default_charge_type?: string | null
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
           default_image_resize?: number
+          default_payment_method?: string | null
+          default_pricing_model?: string | null
           default_sale_mode?: string
           default_watermark?: Json | null
+          default_watermark_display?: string | null
           default_welcome_message?: string | null
           email_on_gallery_reactivated?: boolean | null
           email_on_gallery_sent?: boolean
