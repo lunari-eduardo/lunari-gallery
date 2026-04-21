@@ -1171,6 +1171,17 @@ export default function GalleryDetail() {
         settings={settings}
         onSendGallery={handleSendGallery}
       />
+
+      {/* Reactivate Gallery Dialog (always mounted to survive status changes) */}
+      <ReactivateGalleryDialog
+        open={reactivateOpen}
+        onOpenChange={setReactivateOpen}
+        galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
+        clientLink={clientLink}
+        onReactivate={handleReopenSelection}
+        gallery={supabaseGallery}
+        settings={settings}
+      />
     </div>
   );
 }
