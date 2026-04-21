@@ -542,11 +542,13 @@ export default function GalleryCreate() {
       setFixedPrice(gestaoParams.preco_da_foto_extra);
     }
 
-    // Step 3: Sale Settings
+    // Step 3: Sale Settings — Gestão params have priority; mark refs so settings won't overwrite
     if (gestaoParams.modelo_de_cobranca) {
+      userTouchedSaleModeRef.current = true;
       setSaleMode(gestaoParams.modelo_de_cobranca);
     }
     if (gestaoParams.modelo_de_preco) {
+      userTouchedPricingModelRef.current = true;
       setPricingModel(gestaoParams.modelo_de_preco);
     }
 
