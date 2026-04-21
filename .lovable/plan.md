@@ -1,55 +1,108 @@
 
-# Plano: centralizar e-mails no Lunari e silenciar notificações do Asaas
+# Verificação do que aconteceu e plano de correção
 
-## Objetivo
+## Constatação
 
-Evitar que o cliente receba e-mails duplicados do Asaas, deixando a comunicação principal centralizada no Lunari:
+O plano de **centralizar e-mails no Lunari e silenciar notificações do Asaas** não foi implementado no código.
 
-```text
-Cobrança criada / pagamento confirmado → Lunari envia o e-mail
-Asaas → não envia notificações de cobrança ao cliente quando possível
-```
+Ao verificar o projeto em modo somente leitura, encontrei:
 
-Isso deve funcionar tanto para cobranças de galerias quanto para usuários/clientes vinculados aos fluxos de pagamento internos.
+- não existe `centralizarEmailsLunari` no frontend;
+- não existe `notificationDisabled` nas chamadas de criação/atualização de clientes Asaas;
+- não existe `postalService: false` nos payloads de cobrança Asaas;
+- o arquivo `.lovable/plan.md` ainda contém o plano anterior de **toasts nas configurações**, não o plano atual do Asaas;
+- a imagem mostra a interface presa em um estado de “Waiting for approval” com um plano incompleto, indicando que a execução foi interrompida/voltou para modo de aprovação antes de aplicar as alterações.
 
-## Diagnóstico
+Ou seja: o sistema não chegou a modificar os arquivos necessários. O plano exibido ficou incompleto e não houve implementação parcial relevante para essa demanda.
 
-O Asaas possui notificações próprias de cobrança e confirmação. Pela API, o controle mais seguro é feito no cadastro do cliente Asaas usando:
+## Estado atual dos pontos críticos
+
+### `supabase/functions/asaas-gallery-payment/index.ts`
+
+Hoje cria e atualiza clientes Asaas sem:
 
 ```text
 notificationDisabled: true
 ```
 
-Esse campo desativa notificações de cobrança do Asaas para aquele cliente.
-
-Também existe controle em cobranças para envio por Correios:
+E cria cobranças sem:
 
 ```text
 postalService: false
 ```
 
-O sistema hoje cria/atualiza clientes e cobranças Asaas em alguns pontos, mas não está enviando esses campos. Por isso o Asaas pode continuar mandando e-mails próprios.
+Pontos encontrados:
 
-## Comportamento esperado
+- busca cliente por `externalReference`;
+- busca fallback por e-mail;
+- atualiza nome/externalReference;
+- cria cliente novo;
+- cria cliente genérico fallback;
+- cria cobrança em `/v3/payments`.
 
-Quando o Lunari criar ou localizar um cliente no Asaas:
+Todos esses pontos precisam receber a blindagem contra notificações do Asaas.
 
-- definir `notificationDisabled: true`;
-- manter o e-mail do cliente cadastrado no Asaas quando necessário para cartão, antifraude, recibo e dados do pagador;
-- não depender do Asaas para comunicar o cliente;
-- deixar o envio de e-mails de galeria e confirmação centralizado na função `send-email` do Lunari.
+### `supabase/functions/asaas-create-customer/index.ts`
 
-Quando o Lunari criar uma cobrança no Asaas:
+Hoje cria o cliente Asaas do próprio usuário/fotógrafo sem:
 
-- adicionar `postalService: false`;
-- manter PIX, cartão e boleto funcionando normalmente;
-- manter webhooks e confirmação de pagamento intactos.
+```text
+notificationDisabled: true
+```
 
-Observação importante: isso desativa notificações de cobrança do Asaas configuráveis via API. E-mails obrigatórios, transacionais internos ou exigidos pelo próprio provedor podem não ser totalmente bloqueáveis se forem impostos pelo Asaas.
+E quando valida cliente existente, apenas retorna o ID, sem tentar corrigir notificações para clientes antigos.
+
+### `supabase/functions/asaas-create-payment/index.ts`
+
+Hoje cria cobranças internas via Asaas sem:
+
+```text
+postalService: false
+```
+
+E no auto-healing que recria cliente Asaas, também não inclui:
+
+```text
+notificationDisabled: true
+```
+
+### `supabase/functions/asaas-create-subscription/index.ts`
+
+Hoje cria assinatura Asaas sem uma etapa prévia para garantir que o cliente está com notificações desativadas.
+
+### `supabase/functions/asaas-upgrade-subscription/index.ts`
+
+Hoje cria cobranças proporcionais, parcelamentos e novas assinaturas Asaas sem padronizar:
+
+```text
+postalService: false
+```
+
+E sem garantir que o cliente Asaas existente esteja com notificações desativadas.
+
+### InfinitePay
+
+Não encontrei alteração feita nas funções InfinitePay nessa tentativa. A regra do projeto permanece: não mexer em `infinitepay-create-link` nem `infinitepay-webhook` para essa correção.
 
 ---
 
-## 1. Adicionar preferência de centralização nas configurações Asaas
+# Plano revisado: implementar centralização de e-mails no Lunari sem deixar o fluxo incompleto
+
+## Objetivo
+
+Evitar e-mails duplicados enviados diretamente pelo Asaas, mantendo a comunicação principal centralizada no Lunari.
+
+Fluxo desejado:
+
+```text
+Lunari cria cliente/cobrança Asaas
+Asaas processa pagamento
+Lunari envia e-mail de galeria/pagamento confirmado
+Cliente responde
+Fotógrafo recebe a resposta
+```
+
+## 1. Adicionar configuração `centralizarEmailsLunari`
 
 Arquivos:
 
@@ -60,40 +113,76 @@ src/components/settings/PaymentConfigDrawer.tsx
 src/utils/paymentSettingsContext.ts
 ```
 
-Criar uma nova configuração no `dados_extras` do Asaas:
+Adicionar ao tipo `AsaasData`:
 
 ```text
-centralizarEmailsLunari: boolean
+centralizarEmailsLunari?: boolean
 ```
 
-Padrão recomendado:
+Padrão:
 
 ```text
 true
 ```
 
-Na interface do Asaas, adicionar um card/toggle claro:
+Atualizar a lista de campos migráveis do Asaas para incluir:
+
+```text
+centralizarEmailsLunari
+```
+
+Assim a configuração fica isolada por contexto:
+
+```text
+gallery_settings.centralizarEmailsLunari
+gestao_settings.centralizarEmailsLunari
+```
+
+e também sincronizada no root para compatibilidade com Edge Functions.
+
+## 2. Adicionar UI clara no drawer do Asaas
+
+No drawer de configuração Asaas, adicionar um card/toggle:
 
 ```text
 Centralizar e-mails no Lunari
 ```
 
-Descrição:
+Descrição sugerida:
 
 ```text
-Quando ativo, o Lunari tenta desativar notificações de cobrança do Asaas para evitar e-mails duplicados. Os e-mails de galeria e pagamento confirmado continuam sendo enviados pelo Lunari.
+Recomendado. Quando ativo, o Lunari tenta desativar notificações de cobrança do Asaas para evitar e-mails duplicados. Os e-mails de galeria e pagamento confirmado continuam sendo enviados pelo Lunari.
 ```
 
-UX recomendada:
+Comportamento:
 
-- deixar ativado por padrão;
-- mostrar como “Recomendado”;
-- explicar que o Asaas ainda pode enviar mensagens obrigatórias do próprio provedor;
-- salvar com toast de sucesso.
+- ativo por padrão;
+- salvamento junto das demais configurações Asaas;
+- toast de sucesso já seguindo o padrão recente das configurações;
+- explicar que o Asaas ainda pode enviar mensagens obrigatórias do próprio provedor, se houver alguma exigência interna.
 
----
+## 3. Criar helper seguro nas Edge Functions Asaas
 
-## 2. Desativar notificações ao criar clientes Asaas da galeria
+Em cada função Asaas afetada, usar uma lógica simples e explícita:
+
+```text
+centralizarEmailsLunari !== false
+```
+
+Isso mantém compatibilidade com usuários antigos, porque ausência do campo significa “ativo”.
+
+Criar helper conceitual onde fizer sentido:
+
+```text
+shouldCentralizeAsaasEmails(settings)
+```
+
+Resultado:
+
+- se `centralizarEmailsLunari` for `false`, manter comportamento antigo;
+- se for `true` ou inexistente, aplicar silenciamento Asaas.
+
+## 4. Silenciar notificações em clientes Asaas de galeria
 
 Arquivo:
 
@@ -101,201 +190,189 @@ Arquivo:
 supabase/functions/asaas-gallery-payment/index.ts
 ```
 
-Ajustar todos os pontos de criação de cliente Asaas:
+Alterações:
 
-```text
-POST /v3/customers
-```
+### Ao criar cliente Asaas com `clienteId`
 
-Para incluir:
+Adicionar:
 
 ```text
 notificationDisabled: true
 ```
 
-quando `centralizarEmailsLunari !== false`.
+quando a centralização estiver ativa.
 
-Pontos a cobrir:
+### Ao criar cliente fallback
 
-- cliente criado a partir de `clienteId`;
-- cliente genérico fallback;
-- qualquer criação usada por cobrança PIX/cartão/boleto da galeria.
+Adicionar:
 
----
+```text
+notificationDisabled: true
+```
 
-## 3. Atualizar clientes Asaas já existentes quando encontrados
+quando a centralização estiver ativa.
+
+### Ao encontrar cliente existente por `externalReference`
+
+Fazer atualização silenciosa:
+
+```text
+PUT /v3/customers/{id}
+{
+  name,
+  notificationDisabled: true
+}
+```
+
+quando a centralização estiver ativa.
+
+### Ao encontrar cliente por e-mail
+
+Atualizar:
+
+```text
+externalReference
+name
+notificationDisabled: true
+```
+
+quando necessário.
+
+Se a atualização falhar:
+
+- registrar `console.warn`;
+- não bloquear a cobrança.
+
+## 5. Silenciar notificações em clientes Asaas internos
 
 Arquivo:
-
-```text
-supabase/functions/asaas-gallery-payment/index.ts
-```
-
-Hoje o sistema procura cliente por:
-
-- `externalReference`;
-- fallback por e-mail.
-
-Quando encontrar um cliente Asaas existente, atualizar também:
-
-```text
-notificationDisabled: true
-```
-
-junto com possíveis atualizações de nome ou `externalReference`.
-
-Isso resolve gradualmente clientes já criados anteriormente: na próxima cobrança, o Lunari corrige a configuração no Asaas sem exigir ação manual do fotógrafo.
-
----
-
-## 4. Desativar notificações nos clientes Asaas dos usuários Lunari
-
-Arquivos:
 
 ```text
 supabase/functions/asaas-create-customer/index.ts
-supabase/functions/asaas-create-payment/index.ts
 ```
 
-Aplicar a mesma regra nos fluxos em que o próprio usuário/fotógrafo é cliente do Asaas para pagar planos, créditos ou assinaturas do Lunari.
+Alterações:
 
-### Em `asaas-create-customer`
+### Ao validar cliente existente
 
-Ao criar cliente:
+Se o cliente existir no Asaas, tentar atualizar:
 
 ```text
 notificationDisabled: true
 ```
 
-Ao validar cliente existente:
+Antes de retornar o ID.
 
-- se existir no Asaas, fazer uma atualização silenciosa para garantir `notificationDisabled: true`;
-- se falhar essa atualização, não bloquear o fluxo de pagamento, apenas registrar log.
+Falha nessa atualização não deve bloquear o checkout.
 
-### Em `asaas-create-payment`
+### Ao criar cliente novo
 
-No auto-healing que recria cliente quando o customer antigo está inválido:
+Adicionar:
 
 ```text
 notificationDisabled: true
 ```
 
----
+## 6. Ajustar auto-healing de clientes internos
 
-## 5. Garantir cobranças sem envio por Correios
-
-Arquivos principais:
+Arquivo:
 
 ```text
-supabase/functions/asaas-gallery-payment/index.ts
 supabase/functions/asaas-create-payment/index.ts
-supabase/functions/asaas-create-subscription/index.ts
-supabase/functions/asaas-upgrade-subscription/index.ts
 ```
 
-Adicionar aos payloads de cobrança via `/v3/payments`:
+No trecho que recria customer inválido, adicionar:
+
+```text
+notificationDisabled: true
+```
+
+Também adicionar nas cobranças criadas por `/v3/payments`:
 
 ```text
 postalService: false
 ```
 
-Onde houver assinatura via `/v3/subscriptions`, manter foco em `notificationDisabled` no cliente, porque a documentação de assinatura não expõe o mesmo controle de envio por Correios no payload da assinatura.
+## 7. Ajustar cobranças de galeria
 
-Cobrir:
-
-- cobrança de galeria;
-- compra de créditos Select;
-- assinatura anual via pagamento único;
-- upgrade proporcional;
-- upgrade parcelado;
-- pagamentos criados durante auto-healing.
-
----
-
-## 6. Manter e-mails Lunari como fonte principal
-
-Arquivo já ajustado anteriormente:
+Arquivo:
 
 ```text
-supabase/functions/send-email/index.ts
+supabase/functions/asaas-gallery-payment/index.ts
 ```
 
-Não mudar a arquitetura principal, apenas garantir que ela continua sendo a fonte oficial para:
-
-- e-mail de galeria enviada;
-- e-mail de pagamento confirmado;
-- `From: contato@mail.lunarihub.com`;
-- `Reply-To: e-mail do fotógrafo`, quando existir.
-
-Assim, quando o cliente responder:
+No payload de `/v3/payments`, adicionar:
 
 ```text
-cliente responde → fotógrafo recebe
+postalService: false
 ```
 
----
+Isso deve valer para:
 
-## 7. Não quebrar pagamentos, webhooks nem InfinitePay
+- PIX;
+- cartão;
+- boleto.
 
-Não alterar a lógica de confirmação em:
+## 8. Ajustar assinaturas e upgrades internos
+
+Arquivos:
 
 ```text
-supabase/functions/infinitepay-create-link
-supabase/functions/infinitepay-webhook
-supabase/functions/asaas-webhook
-supabase/functions/asaas-gallery-webhook
-supabase/functions/check-payment-status
-supabase/functions/confirm-payment-manual
+supabase/functions/asaas-create-subscription/index.ts
+supabase/functions/asaas-upgrade-subscription/index.ts
 ```
 
-As funções de webhook Asaas devem continuar processando eventos normalmente. O ajuste é somente no momento de criação/atualização de clientes e cobranças.
+Aplicar:
 
-A regra do projeto será respeitada: revisar que `infinitepay-create-link` e `infinitepay-webhook` permanecem intactos e não ficam desatualizados.
+- garantir `notificationDisabled: true` no customer existente antes de criar assinatura/cobrança;
+- adicionar `postalService: false` nos payloads que usam `/v3/payments`.
 
----
+Para `/v3/subscriptions`, manter o foco em silenciar o customer, porque o controle documentado e mais confiável para notificações é no cliente Asaas.
 
-## 8. Tratamento de falhas
+## 9. Não alterar webhooks e InfinitePay
 
-Se a tentativa de atualizar `notificationDisabled` falhar:
+Não modificar:
 
-- não bloquear a criação da cobrança;
-- registrar `console.warn`;
-- continuar o fluxo de pagamento;
-- evitar erro para o cliente final.
+```text
+supabase/functions/infinitepay-create-link/index.ts
+supabase/functions/infinitepay-webhook/index.ts
+supabase/functions/asaas-webhook/index.ts
+supabase/functions/asaas-gallery-webhook/index.ts
+supabase/functions/check-payment-status/index.ts
+supabase/functions/confirm-payment-manual/index.ts
+```
 
-Motivo: uma falha pontual ao silenciar notificação não pode impedir uma venda ou assinatura.
+Motivo:
 
----
+- o problema está na criação/atualização de clientes e cobranças;
+- webhooks devem continuar apenas confirmando pagamento;
+- InfinitePay precisa permanecer intacto para não quebrar automação de cobrança e auto-healing.
 
-## 9. Validação final
+## 10. Validação após implementação
 
-Após implementar, validar:
+Validar:
 
-1. configurar Asaas com “Centralizar e-mails no Lunari” ativo;
-2. criar cobrança de galeria por PIX;
-3. confirmar que o cliente Asaas é criado com notificações desativadas;
-4. criar cobrança de galeria por cartão;
-5. confirmar que cartão continua funcionando;
-6. testar cliente Asaas já existente e confirmar que ele é atualizado;
-7. testar cobrança fallback sem `clienteId`;
-8. criar compra de créditos via Asaas;
-9. criar assinatura via Asaas;
-10. testar upgrade com cobrança proporcional;
-11. confirmar que e-mail de pagamento confirmado continua vindo pelo Lunari;
-12. confirmar que e-mail manual de galeria continua vindo pelo Lunari;
-13. confirmar que o `Reply-To` continua apontando para o fotógrafo;
-14. revisar que webhooks Asaas continuam intactos;
-15. revisar que InfinitePay create-link e webhook não foram alterados;
-16. rodar build TypeScript;
-17. redeploy das Edge Functions Asaas alteradas.
+1. o projeto compila sem erro TypeScript;
+2. a configuração Asaas exibe o novo toggle;
+3. salvar Asaas preserva configurações antigas e adiciona `centralizarEmailsLunari`;
+4. nova cobrança de galeria cria/atualiza customer com `notificationDisabled: true`;
+5. cobrança de galeria envia `/v3/payments` com `postalService: false`;
+6. cliente Asaas antigo é corrigido na próxima cobrança;
+7. compra de créditos via Asaas usa customer silenciado;
+8. assinatura Asaas usa customer silenciado;
+9. upgrade Asaas usa customer silenciado;
+10. e-mails do Lunari continuam funcionando via `send-email`;
+11. `Reply-To` continua apontando para o fotógrafo quando houver e-mail cadastrado;
+12. webhooks Asaas continuam sem alteração;
+13. `infinitepay-create-link` e `infinitepay-webhook` continuam sem alteração.
 
 ## Resultado esperado
 
-O fluxo fica centralizado e mais profissional:
+Depois da implementação real:
 
-- menos risco de e-mails duplicados;
-- Asaas continua processando pagamentos;
-- Lunari controla comunicação com cliente;
-- fotógrafo recebe respostas dos clientes;
-- cobrança, confirmação e logs continuam funcionando;
-- usuários atuais são corrigidos gradualmente quando novos pagamentos forem criados.
+- o Asaas deixa de enviar notificações de cobrança sempre que a API permitir;
+- o Lunari permanece como canal principal de comunicação;
+- clientes recebem menos e-mails duplicados;
+- fotógrafos recebem respostas diretamente;
+- usuários antigos são corrigidos gradualmente quando novos pagamentos forem criados;
+- cobranças, confirmações, webhooks e InfinitePay permanecem estáveis.
