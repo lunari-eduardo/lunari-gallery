@@ -52,6 +52,13 @@ export const mockGlobalSettings: GlobalSettings = {
   emailOnPaymentConfirmed: true,
   defaultSaleMode: 'sale_without_payment',
   defaultImageResize: 1920,
+  defaultChargeType: 'only_extras',
+  defaultPricingModel: 'fixed',
+  defaultPaymentMethod: undefined,
+  defaultAllowComments: true,
+  defaultAllowDownload: false,
+  defaultAllowExtraPhotos: true,
+  defaultWatermarkDisplay: 'all',
 };
 
 export const defaultWelcomeMessage = `Olá {cliente}! 💕
