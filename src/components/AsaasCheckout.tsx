@@ -522,45 +522,86 @@ export function AsaasCheckout({
     );
   }
 
+  // ——— Helpers de UI ———
+  const checkoutInputClass = (errKey?: string) =>
+    cn(
+      'h-12 bg-background border border-border/70 hover:border-border transition-colors',
+      'focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary focus-visible:ring-offset-0',
+      'placeholder:text-muted-foreground/50',
+      errKey && fieldErrors[errKey] && 'border-destructive/50 focus-visible:border-destructive focus-visible:ring-destructive/20',
+    );
+
+  const SectionTitle = ({ icon: Icon, children }: { icon: typeof User; children: React.ReactNode }) => (
+    <div className="flex items-center gap-2 pb-1">
+      <Icon className="h-4 w-4 text-primary" />
+      <h3 className="text-sm font-semibold text-foreground">{children}</h3>
+    </div>
+  );
+
+  const FieldError = ({ name }: { name: string }) =>
+    fieldErrors[name] ? (
+      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+        <AlertCircle className="h-3 w-3" /> {fieldErrors[name]}
+      </p>
+    ) : null;
+
   return (
     <div
       className={cn("min-h-screen flex flex-col items-center bg-background text-foreground p-4", backgroundMode === 'dark' && 'dark')}
       style={themeStyles}
     >
       <div className="max-w-md w-full space-y-6 py-6">
-        {/* Header */}
+        {/* Logo */}
         {studioLogoUrl ? (
           <img src={studioLogoUrl} alt={studioName || 'Estúdio'} className="h-16 mx-auto object-contain" />
         ) : studioName ? (
           <h1 className="text-xl font-semibold text-center">{studioName}</h1>
         ) : null}
 
-        <div className="text-center space-y-1">
-          <h2 className="text-2xl font-bold">Pagamento</h2>
-          <p className="text-3xl font-bold text-primary">R$ {data.valorTotal.toFixed(2)}</p>
-          <p className="text-sm text-muted-foreground">{data.descricao}</p>
+        {/* Selo de segurança no topo */}
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5 text-primary" />
+          <span>Ambiente seguro e criptografado</span>
+        </div>
+
+        {/* Hierarquia premium do valor */}
+        <div className="text-center space-y-2">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Pagamento</p>
+          <p className="text-5xl font-bold text-primary tracking-tight">
+            R$ {data.valorTotal.toFixed(2).replace('.', ',')}
+          </p>
+          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+            <ImageIcon className="h-3.5 w-3.5" />
+            <span>{data.descricao}</span>
+          </p>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-2">
+          <TabsList className="w-full grid grid-cols-2 h-14 p-1 bg-muted/50 rounded-xl">
             {data.enabledMethods.pix && (
-              <TabsTrigger value="pix" className="gap-2">
-                <QrCode className="h-4 w-4" /> PIX
+              <TabsTrigger
+                value="pix"
+                className="gap-2 h-full rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+              >
+                <QrCode className="h-5 w-5" /> PIX
               </TabsTrigger>
             )}
             {data.enabledMethods.creditCard && (
-              <TabsTrigger value="card" className="gap-2">
-                <CreditCard className="h-4 w-4" /> Cartão
+              <TabsTrigger
+                value="card"
+                className="gap-2 h-full rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+              >
+                <CreditCard className="h-5 w-5" /> Cartão
               </TabsTrigger>
             )}
           </TabsList>
 
           {/* ——— PIX TAB ——— */}
           {data.enabledMethods.pix && (
-            <TabsContent value="pix" className="space-y-4 mt-4">
+            <TabsContent value="pix" className="space-y-4 mt-6">
               {!pixQrCode && !pixLoading && (
-                <Button onClick={generatePix} className="w-full gap-2" variant="terracotta" size="lg">
+                <Button onClick={generatePix} className="w-full gap-2 h-12 rounded-lg active:scale-[0.98] transition-transform" variant="terracotta">
                   <QrCode className="h-5 w-5" />
                   Gerar QR Code PIX
                 </Button>
@@ -568,7 +609,7 @@ export function AsaasCheckout({
 
               {pixLoading && (
                 <div className="space-y-4 py-8">
-                  <Skeleton className="w-48 h-48 mx-auto rounded-lg" />
+                  <Skeleton className="w-48 h-48 mx-auto rounded-2xl" />
                   <Skeleton className="h-4 w-32 mx-auto" />
                   <p className="text-center text-sm text-muted-foreground">Gerando QR Code...</p>
                 </div>
@@ -576,29 +617,27 @@ export function AsaasCheckout({
 
               {pixQrCode && (
                 <div className="space-y-4 text-center animate-in fade-in duration-300">
-                  <div className="inline-block p-4 bg-white rounded-xl shadow-sm border mx-auto">
+                  <div className="inline-block p-5 bg-white rounded-2xl shadow-md border border-border/50 mx-auto">
                     <img src={pixQrCode} alt="QR Code PIX" className="w-52 h-52" />
                   </div>
 
                   {pixCopiaECola && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-muted-foreground">PIX Copia e Cola</p>
+                    <div className="space-y-2 text-left">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">PIX Copia e Cola</p>
                       <div className="relative">
-                        <div className="p-3 rounded-lg bg-muted/50 border max-h-20 overflow-y-auto">
+                        <div className="p-3 pr-24 rounded-lg bg-muted/40 border border-border/70 max-h-20 overflow-y-auto">
                           <code className="text-xs break-all font-mono text-muted-foreground">{pixCopiaECola}</code>
                         </div>
-                        <Button variant="secondary" size="sm" onClick={handleCopyPix} className="absolute top-2 right-2">
+                        <Button variant="secondary" size="sm" onClick={handleCopyPix} className="absolute top-2 right-2 h-8">
                           {pixCopied ? <><CheckCircle className="h-4 w-4 mr-1" /> Copiado</> : <><Copy className="h-4 w-4 mr-1" /> Copiar</>}
                         </Button>
                       </div>
                     </div>
                   )}
 
-                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                    <div className="flex items-center justify-center gap-2 text-sm">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="text-muted-foreground">Aguardando pagamento...</span>
-                    </div>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Aguardando pagamento...</span>
                   </div>
                 </div>
               )}
@@ -607,57 +646,238 @@ export function AsaasCheckout({
 
           {/* ——— CARD TAB ——— */}
           {data.enabledMethods.creditCard && (
-            <TabsContent value="card" className="space-y-4 mt-4">
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="cc-name">Nome no cartão</Label>
-                  <Input id="cc-name" value={cardName} onChange={e => setCardName(e.target.value.toUpperCase())} placeholder="NOME COMPLETO" autoComplete="cc-name" />
+            <TabsContent value="card" className="space-y-6 mt-6">
+              {/* Seção 1: Dados do titular */}
+              <section className="space-y-4">
+                <SectionTitle icon={User}>Dados do titular</SectionTitle>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-name" className="text-xs font-medium text-muted-foreground">Nome no cartão</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                    <Input
+                      id="cc-name"
+                      value={cardName}
+                      onChange={e => setCardName(e.target.value.toUpperCase())}
+                      placeholder="NOME COMPLETO"
+                      autoComplete="cc-name"
+                      className={cn(checkoutInputClass(), 'pl-10')}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="cc-cpf">CPF / CNPJ</Label>
-                  <Input id="cc-cpf" value={cardCpfCnpj} onChange={e => setCardCpfCnpj(maskCpfCnpj(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={18} />
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-cpf" className="text-xs font-medium text-muted-foreground">CPF / CNPJ</Label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                    <Input
+                      ref={cpfRef}
+                      id="cc-cpf"
+                      value={cardCpfCnpj}
+                      onChange={e => {
+                        const masked = maskCpfCnpj(e.target.value);
+                        setCardCpfCnpj(masked);
+                        if (fieldErrors.cpf) setFieldError('cpf', null);
+                        const digits = masked.replace(/\D/g, '');
+                        if (digits.length === 11) emailRef.current?.focus();
+                      }}
+                      onBlur={() => {
+                        if (cardCpfCnpj && !validateCpfCnpj(cardCpfCnpj)) {
+                          setFieldError('cpf', 'CPF/CNPJ inválido');
+                        }
+                      }}
+                      placeholder="000.000.000-00"
+                      inputMode="numeric"
+                      maxLength={18}
+                      className={cn(checkoutInputClass('cpf'), 'pl-10')}
+                    />
+                  </div>
+                  <FieldError name="cpf" />
                 </div>
-                <div>
-                  <Label htmlFor="cc-email">Email do titular</Label>
-                  <Input id="cc-email" type="email" value={cardEmail} onChange={e => setCardEmail(e.target.value)} placeholder="email@exemplo.com" autoComplete="email" />
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-email" className="text-xs font-medium text-muted-foreground">Email do titular</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                    <Input
+                      ref={emailRef}
+                      id="cc-email"
+                      type="email"
+                      value={cardEmail}
+                      onChange={e => {
+                        setCardEmail(e.target.value);
+                        if (fieldErrors.email) setFieldError('email', null);
+                      }}
+                      onBlur={() => {
+                        if (cardEmail && !/\S+@\S+\.\S+/.test(cardEmail)) {
+                          setFieldError('email', 'Email inválido');
+                        }
+                      }}
+                      placeholder="email@exemplo.com"
+                      autoComplete="email"
+                      className={cn(checkoutInputClass('email'), 'pl-10')}
+                    />
+                  </div>
+                  <FieldError name="email" />
                 </div>
-                <div>
-                  <Label htmlFor="cc-number">Número do cartão</Label>
-                  <Input id="cc-number" value={cardNumber} onChange={e => setCardNumber(maskCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" inputMode="numeric" maxLength={19} autoComplete="cc-number" />
+              </section>
+
+              {/* Seção 2: Dados do cartão */}
+              <section className="space-y-4">
+                <SectionTitle icon={CreditCard}>Dados do cartão</SectionTitle>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-number" className="text-xs font-medium text-muted-foreground">Número do cartão</Label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                    <Input
+                      ref={cardNumberRef}
+                      id="cc-number"
+                      value={cardNumber}
+                      onChange={e => {
+                        const masked = maskCardNumber(e.target.value);
+                        setCardNumber(masked);
+                        if (fieldErrors.cardNumber) setFieldError('cardNumber', null);
+                        const digits = masked.replace(/\s/g, '');
+                        if (digits.length >= 16) cardExpiryRef.current?.focus();
+                      }}
+                      onBlur={() => {
+                        const digits = cardNumber.replace(/\s/g, '');
+                        if (digits && digits.length < 13) {
+                          setFieldError('cardNumber', 'Número do cartão inválido');
+                        }
+                      }}
+                      placeholder="0000 0000 0000 0000"
+                      inputMode="numeric"
+                      maxLength={19}
+                      autoComplete="cc-number"
+                      className={cn(checkoutInputClass('cardNumber'), 'pl-10')}
+                    />
+                  </div>
+                  <FieldError name="cardNumber" />
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="cc-exp">Validade</Label>
-                    <Input id="cc-exp" value={cardExpiry} onChange={e => setCardExpiry(maskExpiry(e.target.value))} placeholder="MM/AA" inputMode="numeric" maxLength={5} autoComplete="cc-exp" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-exp" className="text-xs font-medium text-muted-foreground">Validade</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                      <Input
+                        ref={cardExpiryRef}
+                        id="cc-exp"
+                        value={cardExpiry}
+                        onChange={e => {
+                          const masked = maskExpiry(e.target.value);
+                          setCardExpiry(masked);
+                          if (fieldErrors.expiry) setFieldError('expiry', null);
+                          if (masked.length === 5) cardCvvRef.current?.focus();
+                        }}
+                        onBlur={() => {
+                          if (cardExpiry && cardExpiry.length === 5) {
+                            const [m, y] = cardExpiry.split('/');
+                            const mm = parseInt(m);
+                            if (!mm || mm < 1 || mm > 12) {
+                              setFieldError('expiry', 'Validade inválida');
+                            }
+                          } else if (cardExpiry) {
+                            setFieldError('expiry', 'Validade incompleta');
+                          }
+                        }}
+                        placeholder="MM/AA"
+                        inputMode="numeric"
+                        maxLength={5}
+                        autoComplete="cc-exp"
+                        className={cn(checkoutInputClass('expiry'), 'pl-10')}
+                      />
+                    </div>
+                    <FieldError name="expiry" />
                   </div>
-                  <div>
-                    <Label htmlFor="cc-cvv">CVV</Label>
-                    <Input id="cc-cvv" value={cardCvv} onChange={e => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="000" inputMode="numeric" maxLength={4} autoComplete="cc-csc" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="cc-cvv" className="text-xs font-medium text-muted-foreground">CVV</Label>
+                      <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1" title="3 dígitos no verso">
+                        <Info className="h-3 w-3" /> verso
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                      <Input
+                        ref={cardCvvRef}
+                        id="cc-cvv"
+                        value={cardCvv}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                          setCardCvv(v);
+                          if (v.length >= 3) cardPhoneRef.current?.focus();
+                        }}
+                        placeholder="000"
+                        inputMode="numeric"
+                        maxLength={4}
+                        autoComplete="cc-csc"
+                        className={cn(checkoutInputClass(), 'pl-10')}
+                      />
+                    </div>
                   </div>
                 </div>
+              </section>
+
+              {/* Seção 3: Contato */}
+              <section className="space-y-4">
+                <SectionTitle icon={Phone}>Contato</SectionTitle>
+
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="cc-phone">Telefone</Label>
-                    <Input id="cc-phone" value={cardPhone} onChange={e => setCardPhone(maskPhone(e.target.value))} placeholder="(00) 00000-0000" inputMode="tel" maxLength={15} />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-phone" className="text-xs font-medium text-muted-foreground">
+                      Telefone <span className="text-muted-foreground/60">(opcional)</span>
+                    </Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                      <Input
+                        ref={cardPhoneRef}
+                        id="cc-phone"
+                        value={cardPhone}
+                        onChange={e => {
+                          const masked = maskPhone(e.target.value);
+                          setCardPhone(masked);
+                          if (masked.replace(/\D/g, '').length === 11) cardCepRef.current?.focus();
+                        }}
+                        placeholder="(00) 00000-0000"
+                        inputMode="tel"
+                        maxLength={15}
+                        className={cn(checkoutInputClass(), 'pl-10')}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="cc-cep">CEP</Label>
-                    <Input id="cc-cep" value={cardCep} onChange={e => setCardCep(maskCep(e.target.value))} placeholder="00000-000" inputMode="numeric" maxLength={9} />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-cep" className="text-xs font-medium text-muted-foreground">CEP</Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 pointer-events-none" />
+                      <Input
+                        ref={cardCepRef}
+                        id="cc-cep"
+                        value={cardCep}
+                        onChange={e => setCardCep(maskCep(e.target.value))}
+                        placeholder="00000-000"
+                        inputMode="numeric"
+                        maxLength={9}
+                        className={cn(checkoutInputClass(), 'pl-10')}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Installments */}
                 {data.maxParcelas > 1 && (
-                  <div>
-                    <Label>Parcelas</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Parcelas</Label>
                     {feesLoading && !data.absorverTaxa ? (
-                      <div className="space-y-2 mt-1">
-                        <Skeleton className="h-10 w-full rounded-md" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-12 w-full rounded-md" />
                         <p className="text-xs text-muted-foreground">Carregando taxas...</p>
                       </div>
                     ) : (
                       <Select value={cardInstallments} onValueChange={setCardInstallments}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {installmentOptions.map(opt => (
                             <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -667,27 +887,36 @@ export function AsaasCheckout({
                     )}
                   </div>
                 )}
+              </section>
 
-                {cardError && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    {cardError}
-                  </div>
+              {cardError && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  {cardError}
+                </div>
+              )}
+
+              <Button
+                onClick={handleCardSubmit}
+                disabled={cardLoading || feesLoading}
+                className="w-full gap-2 h-12 rounded-lg text-base font-semibold active:scale-[0.98] transition-transform"
+                variant="terracotta"
+              >
+                {cardLoading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</>
+                ) : (
+                  <><Lock className="h-4 w-4" /> Finalizar pagamento • R$ {valorComTaxas.toFixed(2).replace('.', ',')}</>
                 )}
+              </Button>
 
-                <Button onClick={handleCardSubmit} disabled={cardLoading || feesLoading} className="w-full gap-2" variant="terracotta" size="lg">
-                  {cardLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</> : <><Lock className="h-4 w-4" /> Pagar R$ {valorComTaxas.toFixed(2)}</>}
-                </Button>
-              </div>
+              {/* Selo final */}
+              <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                Seus dados estão protegidos com segurança de ponta a ponta.
+              </p>
             </TabsContent>
           )}
         </Tabs>
-
-        {/* Security badge */}
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
-          <ShieldCheck className="h-4 w-4" />
-          <span>Pagamento criptografado e seguro</span>
-        </div>
 
         {/* Cancel */}
         {onCancel && (
