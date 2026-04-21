@@ -174,6 +174,9 @@ export default function GalleryCreate() {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [uploadErrorCount, setUploadErrorCount] = useState(0);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const [isGoingBack, setIsGoingBack] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   // Folder management
@@ -729,6 +732,9 @@ export default function GalleryCreate() {
     }
   };
   const handleNext = async () => {
+    if (isAdvancing || isSavingDraft || isGoingBack) return;
+    setIsAdvancing(true);
+    try {
     if (currentStep < 6) {
       // When going to step 4 (Fotos), create Supabase gallery first with configurations
       if (currentStep === 3 && !supabaseGalleryId) {
@@ -830,8 +836,15 @@ export default function GalleryCreate() {
       // No gallery created yet - shouldn't happen if flow is correct
       toast.error('Erro ao criar galeria. Tente novamente.');
     }
+    } finally {
+      setIsAdvancing(false);
+    }
   };
   const handleBack = () => {
+    if (isAdvancing || isSavingDraft || isGoingBack) return;
+    setIsGoingBack(true);
+    // Brief feedback animation even though navigation is synchronous
+    setTimeout(() => setIsGoingBack(false), 200);
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     } else {
@@ -841,6 +854,8 @@ export default function GalleryCreate() {
 
   // Save draft function - can be called at any step
   const handleSaveDraft = async () => {
+    if (isAdvancing || isSavingDraft || isGoingBack) return;
+    setIsSavingDraft(true);
     try {
       // Persist last used font
       updateSettings({ lastSessionFont: sessionFont });
@@ -963,6 +978,8 @@ export default function GalleryCreate() {
     } catch (error) {
       console.error('Error saving draft:', error);
       toast.error('Erro ao salvar rascunho');
+    } finally {
+      setIsSavingDraft(false);
     }
   };
   const handlePhotoUploadComplete = (photos: UploadedPhoto[]) => {
@@ -2082,22 +2099,57 @@ export default function GalleryCreate() {
       {/* Fixed Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border z-40">
         <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center gap-2">
-          <Button variant="outline" onClick={handleBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            {currentStep === 1 ? 'Cancelar' : 'Voltar'}
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            disabled={isAdvancing || isSavingDraft || isGoingBack}
+            className={cn(
+              "active:scale-[0.97] transition-transform duration-150",
+              isGoingBack && "cursor-wait"
+            )}
+          >
+            {isGoingBack ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <ArrowLeft className="h-4 w-4 mr-2" />
+            )}
+            {isGoingBack ? 'Voltando...' : (currentStep === 1 ? 'Cancelar' : 'Voltar')}
           </Button>
           
           <div className="flex items-center gap-2">
             {/* Save Draft button - always available */}
-            <Button variant="outline" onClick={handleSaveDraft}>
-              <Save className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Salvar Rascunho</span>
-              <span className="sm:hidden">Salvar</span>
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={isAdvancing || isSavingDraft || isGoingBack}
+              className={cn(
+                "active:scale-[0.97] transition-transform duration-150",
+                isSavingDraft && "cursor-wait"
+              )}
+            >
+              {isSavingDraft ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              <span className="hidden sm:inline">{isSavingDraft ? 'Salvando...' : 'Salvar Rascunho'}</span>
+              <span className="sm:hidden">{isSavingDraft ? 'Salvando...' : 'Salvar'}</span>
             </Button>
             
-            <Button variant="terracotta" onClick={handleNext}>
-              {currentStep === 6 ? 'Criar Galeria' : 'Próximo'}
-              {currentStep < 6 && <ArrowRight className="h-4 w-4 ml-2" />}
+            <Button
+              variant="terracotta"
+              onClick={handleNext}
+              disabled={isAdvancing || isSavingDraft || isGoingBack}
+              className={cn(
+                "active:scale-[0.97] transition-transform duration-150",
+                isAdvancing && "cursor-wait"
+              )}
+            >
+              {isAdvancing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isAdvancing
+                ? (currentStep === 6 ? 'Criando galeria...' : 'Avançando...')
+                : (currentStep === 6 ? 'Criar Galeria' : 'Próximo')}
+              {!isAdvancing && currentStep < 6 && <ArrowRight className="h-4 w-4 ml-2" />}
             </Button>
           </div>
         </div>
