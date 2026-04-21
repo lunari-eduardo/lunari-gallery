@@ -179,6 +179,7 @@ export function getDivergenceSummary(
     ireiAntecipar: 'Antecipação',
     repassarTaxaAntecipacao: 'Repassar antecipação',
     incluirTaxaAntecipacao: 'Incluir antecipação',
+    centralizarEmailsLunari: 'E-mails Lunari',
   };
   
   for (const field of fields) {
