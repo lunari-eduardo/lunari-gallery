@@ -61,6 +61,7 @@ export default function GalleryDetail() {
   const [lightboxState, setLightboxState] = useState<{ source: LightboxSource; index: number } | null>(null);
   const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
   const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
   const [activeDetailFolderId, setActiveDetailFolderId] = useState<string | null>(null);
