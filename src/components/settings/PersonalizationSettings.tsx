@@ -9,7 +9,9 @@ import { FaviconUploader } from './FaviconUploader';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { defaultWelcomeMessage } from '@/data/mockData';
+import { WatermarkDisplay } from '@/types/gallery';
 
 export function PersonalizationSettings() {
   const {
