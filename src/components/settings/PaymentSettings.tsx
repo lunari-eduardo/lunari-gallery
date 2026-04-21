@@ -438,6 +438,7 @@ export function PaymentSettings() {
         asaasHabilitarBoleto={asaasHabilitarBoleto} setAsaasHabilitarBoleto={setAsaasHabilitarBoleto}
         asaasMaxParcelas={asaasMaxParcelas} setAsaasMaxParcelas={setAsaasMaxParcelas}
         asaasAbsorverTaxa={asaasAbsorverTaxa} setAsaasAbsorverTaxa={setAsaasAbsorverTaxa}
+        asaasCentralizarEmailsLunari={asaasCentralizarEmailsLunari} setAsaasCentralizarEmailsLunari={setAsaasCentralizarEmailsLunari}
         asaasIreiAntecipar={asaasIreiAntecipar} setAsaasIreiAntecipar={setAsaasIreiAntecipar}
         asaasRepassarAntecipacao={asaasRepassarAntecipacao} setAsaasRepassarAntecipacao={setAsaasRepassarAntecipacao}
         handleSaveAsaas={handleSaveAsaas} handleSaveAsaasSettings={handleSaveAsaasSettings}
