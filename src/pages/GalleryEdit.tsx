@@ -110,6 +110,7 @@ export default function GalleryEdit() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPhotoUploader, setShowPhotoUploader] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
 
   // Initialize form with gallery data
   useEffect(() => {
