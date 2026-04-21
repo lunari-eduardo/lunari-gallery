@@ -586,13 +586,10 @@ export default function GalleryDetail() {
           </Button>
           
           {canReactivate && (
-            <ReactivateGalleryDialog
-              galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
-              clientLink={clientLink}
-              onReactivate={handleReopenSelection}
-              gallery={supabaseGallery}
-              settings={settings}
-            />
+            <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reativar
+            </Button>
           )}
           
           <DeleteGalleryDialog 
