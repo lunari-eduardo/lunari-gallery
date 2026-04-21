@@ -172,6 +172,7 @@ export interface GlobalSettings {
   welcomeMessageEnabled?: boolean;
   emailSendingEnabled?: boolean;
   emailOnGallerySent?: boolean;
+  emailOnGalleryReactivated?: boolean;
   emailOnPaymentConfirmed?: boolean;
 
   // Defaults aplicados automaticamente em novas galerias
