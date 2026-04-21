@@ -382,6 +382,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const studioName = settings?.studio_name || 'Lunari';
+    const replyTo = await getPhotographerReplyTo(supabase, payment.user_id);
     const galleryUrl = gallery?.public_token ? `${GALLERY_BASE_URL}/g/${encodeURIComponent(gallery.public_token)}` : undefined;
     const subject = 'Pagamento confirmado';
     const description = payment.descricao || (payment.qtd_fotos ? `${payment.qtd_fotos} foto(s) extra(s)` : 'Pagamento da galeria');
@@ -405,13 +406,13 @@ Deno.serve(async (req: Request) => {
     });
 
     try {
-      const resendMessageId = await sendResendEmail(clienteEmail, subject, html);
-      const logId = await upsertLog(supabase, { ...baseLog, status: 'enviado', subject, resend_message_id: resendMessageId, friendly_message: 'E-mail enviado para o cliente' });
+      const resendMessageId = await sendResendEmail(clienteEmail, subject, html, { replyTo });
+      const logId = await upsertLog(supabase, { ...baseLog, status: 'enviado', subject, resend_message_id: resendMessageId, friendly_message: 'E-mail enviado para o cliente', metadata: { ...baseLog.metadata, replyToConfigured: Boolean(replyTo) } });
       return jsonResponse({ success: true, status: 'enviado', message: 'E-mail enviado para o cliente.', logId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const friendly = errorMessage === 'RESEND_API_KEY_MISSING' ? 'Configuração do Resend ausente' : 'Falha ao enviar pelo provedor';
-      await upsertLog(supabase, { ...baseLog, status: 'erro', subject, friendly_message: friendly, error_message: errorMessage });
+      await upsertLog(supabase, { ...baseLog, status: 'erro', subject, friendly_message: friendly, error_message: errorMessage, metadata: { ...baseLog.metadata, replyToConfigured: Boolean(replyTo) } });
       return jsonResponse({ success: false, status: 'erro', message: 'Não foi possível enviar o e-mail agora.' });
     }
   } catch (error) {
