@@ -35,6 +35,7 @@ export interface AsaasData {
   habilitarBoleto: boolean;
   maxParcelas: number;
   absorverTaxa: boolean;
+  centralizarEmailsLunari?: boolean;
   /** "Vou antecipar meus recebíveis?" — campo granular do Gestão */
   ireiAntecipar?: boolean;
   /** "Repassar custo da antecipação ao cliente?" — campo granular do Gestão */

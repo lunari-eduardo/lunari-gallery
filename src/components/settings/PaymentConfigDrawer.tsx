@@ -82,6 +82,8 @@ interface PaymentConfigDrawerProps {
   setAsaasMaxParcelas: (v: string) => void;
   asaasAbsorverTaxa: boolean;
   setAsaasAbsorverTaxa: (v: boolean) => void;
+  asaasCentralizarEmailsLunari: boolean;
+  setAsaasCentralizarEmailsLunari: (v: boolean) => void;
   asaasIreiAntecipar: boolean;
   setAsaasIreiAntecipar: (v: boolean) => void;
   asaasRepassarAntecipacao: boolean;
@@ -164,7 +166,8 @@ export function PaymentConfigDrawer({
   asaasIntegrationStatus, asaasApiKey, setAsaasApiKey, asaasEnvironment, setAsaasEnvironment,
   asaasHabilitarPix, setAsaasHabilitarPix, asaasHabilitarCartao, setAsaasHabilitarCartao,
   asaasHabilitarBoleto, setAsaasHabilitarBoleto, asaasMaxParcelas, setAsaasMaxParcelas,
-  asaasAbsorverTaxa, setAsaasAbsorverTaxa, asaasIreiAntecipar, setAsaasIreiAntecipar,
+  asaasAbsorverTaxa, setAsaasAbsorverTaxa, asaasCentralizarEmailsLunari, setAsaasCentralizarEmailsLunari,
+  asaasIreiAntecipar, setAsaasIreiAntecipar,
   asaasRepassarAntecipacao, setAsaasRepassarAntecipacao,
   handleSaveAsaas, handleSaveAsaasSettings, saveAsaasPending, updateAsaasSettings, userId,
   asaasFees, setAsaasFees,
