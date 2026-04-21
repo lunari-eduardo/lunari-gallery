@@ -169,7 +169,7 @@ serve(async (req) => {
         if (theme) {
           themeData = {
             id: theme.id, name: theme.name,
-            backgroundMode: theme.background_mode || 'light',
+            backgroundMode: clientMode, // Gallery's clientMode wins over theme's background_mode
             primaryColor: theme.primary_color, accentColor: theme.accent_color,
             emphasisColor: theme.emphasis_color,
           };
@@ -391,7 +391,7 @@ serve(async (req) => {
         if (theme) {
           themeData = {
             id: theme.id, name: theme.name,
-            backgroundMode: theme.background_mode || 'light',
+            backgroundMode: clientMode, // Gallery's clientMode wins over theme's background_mode
             primaryColor: theme.primary_color, accentColor: theme.accent_color,
             emphasisColor: theme.emphasis_color,
           };
@@ -555,7 +555,7 @@ serve(async (req) => {
         if (theme) {
           recoveryThemeData = {
             id: theme.id, name: theme.name,
-            backgroundMode: theme.background_mode || 'light',
+            backgroundMode: recoveryClientMode, // Gallery's clientMode wins over theme's background_mode
             primaryColor: theme.primary_color, accentColor: theme.accent_color,
             emphasisColor: theme.emphasis_color,
           };
@@ -701,7 +701,7 @@ serve(async (req) => {
             if (theme) {
               themeData = {
                 id: theme.id, name: theme.name,
-                backgroundMode: theme.background_mode || 'light',
+                backgroundMode: clientMode, // Gallery's clientMode wins over theme's background_mode
                 primaryColor: theme.primary_color, accentColor: theme.accent_color,
                 emphasisColor: theme.emphasis_color,
               };
@@ -769,7 +769,7 @@ serve(async (req) => {
           if (theme) {
             themeData = {
               id: theme.id, name: theme.name,
-              backgroundMode: theme.background_mode || 'light',
+              backgroundMode: clientMode, // Gallery's clientMode wins over theme's background_mode
               primaryColor: theme.primary_color, accentColor: theme.accent_color,
               emphasisColor: theme.emphasis_color,
             };
@@ -878,7 +878,7 @@ serve(async (req) => {
         if (expiredTheme) {
           expiredThemeData = {
             id: expiredTheme.id, name: expiredTheme.name,
-            backgroundMode: expiredTheme.background_mode || 'light',
+            backgroundMode: expiredClientMode, // Gallery's clientMode wins over theme's background_mode
             primaryColor: expiredTheme.primary_color,
             accentColor: expiredTheme.accent_color,
             emphasisColor: expiredTheme.emphasis_color,
@@ -958,7 +958,7 @@ serve(async (req) => {
         if (theme) {
           idThemeData = {
             id: theme.id, name: theme.name,
-            backgroundMode: theme.background_mode || 'light',
+            backgroundMode: clientMode, // Gallery's clientMode wins over theme's background_mode
             primaryColor: theme.primary_color, accentColor: theme.accent_color,
             emphasisColor: theme.emphasis_color,
           };
@@ -1085,7 +1085,7 @@ serve(async (req) => {
         themeData = {
           id: theme.id,
           name: theme.name,
-          backgroundMode: theme.background_mode || 'light',
+          backgroundMode: clientMode, // Gallery's clientMode wins over theme's background_mode
           primaryColor: theme.primary_color,
           accentColor: theme.accent_color,
           emphasisColor: theme.emphasis_color,
