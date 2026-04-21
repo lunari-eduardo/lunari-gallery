@@ -35,7 +35,8 @@ export function EmailAutomationSettings({ settings, updateSettings }: EmailAutom
         <div className="space-y-1">
           <h4 className="font-medium">E-mails automáticos</h4>
           <p className="text-sm text-muted-foreground">Você pode desativar os e-mails a qualquer momento.</p>
-          <p className="text-xs text-muted-foreground">Remetente: no-reply@mail.lunarihub.com</p>
+          <p className="text-xs text-muted-foreground">Remetente: contato@mail.lunarihub.com</p>
+          <p className="text-xs text-muted-foreground">Respostas vão para o e-mail cadastrado do fotógrafo quando disponível.</p>
         </div>
       </div>
 
