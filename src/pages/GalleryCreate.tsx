@@ -1321,7 +1321,7 @@ export default function GalleryCreate() {
                 
                 {/* Payment Method Selection - Only when sale_with_payment */}
                 {saleMode === 'sale_with_payment' && <div className="mt-4 pt-4 border-t border-border/50">
-                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={(method) => setSelectedPaymentMethod(method as PaymentMethod)} />
+                    <PaymentMethodSelector integrations={paymentData?.allActiveIntegrations || []} selectedMethod={selectedPaymentMethod} onSelect={(method) => { userTouchedPaymentMethodRef.current = true; setSelectedPaymentMethod(method as PaymentMethod); }} />
                   </div>}
               </div>
 
@@ -1398,7 +1398,7 @@ export default function GalleryCreate() {
                       {/* Manual Pricing Model selection (default or override mode) */}
                       <div className="space-y-4">
                         <Label className="text-base font-medium">Qual formato de preço?</Label>
-                        <RadioGroup value={pricingModel} onValueChange={(v) => setPricingModel(v as PricingModel)} className="flex flex-col gap-3">
+                        <RadioGroup value={pricingModel} onValueChange={(v) => { userTouchedPricingModelRef.current = true; setPricingModel(v as PricingModel); }} className="flex flex-col gap-3">
                           {/* Fixed Price */}
                           <div>
                             <RadioGroupItem value="fixed" id="pricing-fixed" className="peer sr-only" />
@@ -1513,7 +1513,7 @@ export default function GalleryCreate() {
                   {/* Charge Type */}
                   <div className="space-y-3">
                     <Label className="text-base font-medium">Tipo de cobrança</Label>
-                    <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
+                    <Select value={chargeType} onValueChange={(v) => { userTouchedChargeTypeRef.current = true; setChargeType(v as ChargeType); }}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1846,7 +1846,7 @@ export default function GalleryCreate() {
                         Cliente pode comentar em cada foto
                       </p>
                     </div>
-                    <Switch checked={allowComments} onCheckedChange={setAllowComments} />
+                    <Switch checked={allowComments} onCheckedChange={(v) => { userTouchedAllowCommentsRef.current = true; setAllowComments(v); }} />
                   </div>
 
                   <div className="flex items-center justify-between py-2">
@@ -1856,7 +1856,7 @@ export default function GalleryCreate() {
                         Cliente pode baixar as imagens
                       </p>
                     </div>
-                    <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
+                    <Switch checked={allowDownload} onCheckedChange={(v) => { userTouchedAllowDownloadRef.current = true; setAllowDownload(v); }} />
                   </div>
 
                   {saleMode !== 'no_sale' && <div className="flex items-center justify-between py-2">
@@ -1866,7 +1866,7 @@ export default function GalleryCreate() {
                           Cliente pode selecionar além do limite
                         </p>
                       </div>
-                      <Switch checked={allowExtraPhotos} onCheckedChange={setAllowExtraPhotos} />
+                      <Switch checked={allowExtraPhotos} onCheckedChange={(v) => { userTouchedAllowExtraPhotosRef.current = true; setAllowExtraPhotos(v); }} />
                     </div>}
                 </div>
               </div>
