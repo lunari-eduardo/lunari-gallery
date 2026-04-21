@@ -380,6 +380,22 @@ export function PaymentConfigDrawer({
                 </div>
               </div>
 
+              <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <Label>Centralizar e-mails no Lunari</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Recomendado. Evita e-mails duplicados do Asaas quando a API permitir; cobranças e confirmações seguem pelo Lunari.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={asaasCentralizarEmailsLunari}
+                    onCheckedChange={setAsaasCentralizarEmailsLunari}
+                    disabled={updateAsaasSettings.isPending}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">Métodos de Pagamento</h4>
                 <div className="flex items-center justify-between">
