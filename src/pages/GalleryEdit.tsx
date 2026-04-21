@@ -15,7 +15,10 @@ import {
   EyeOff,
   Copy,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Palette,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -105,6 +108,10 @@ export default function GalleryEdit() {
   const [fotosIncluidas, setFotosIncluidas] = useState(0);
   const [valorFotoExtra, setValorFotoExtra] = useState(0);
   const [prazoSelecao, setPrazoSelecao] = useState<Date | undefined>();
+
+  // Theme state for client gallery
+  const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
+  const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
   
   // UI state
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -126,7 +133,16 @@ export default function GalleryEdit() {
       setFotosIncluidas(gallery.fotosIncluidas);
       setValorFotoExtra(gallery.valorFotoExtra);
       setPrazoSelecao(gallery.prazoSelecao || undefined);
-      
+
+      // Hydrate theme settings from configuracoes
+      const cfg = gallery.configuracoes || {};
+      if (cfg.clientMode === 'dark' || cfg.clientMode === 'light') {
+        setClientMode(cfg.clientMode);
+      }
+      if (cfg.themeId) {
+        setSelectedThemeId(cfg.themeId);
+      }
+
       // Initialize local photo count
       if (localPhotoCount === null) {
         setLocalPhotoCount(gallery.totalFotos);
@@ -268,7 +284,15 @@ export default function GalleryEdit() {
     try {
       // Clean phone number for storage
       const cleanPhone = clienteTelefone.replace(/\D/g, '');
-      
+
+      // Merge theme settings into existing configuracoes (preserve everything else)
+      const existingConfig = gallery.configuracoes || {};
+      const mergedConfig = {
+        ...existingConfig,
+        clientMode,
+        themeId: selectedThemeId,
+      };
+
       await updateGallery({
         id: gallery.id,
         data: {
@@ -280,6 +304,7 @@ export default function GalleryEdit() {
           fotosIncluidas,
           valorFotoExtra,
           prazoSelecao,  // Now saving the deadline
+          configuracoes: mergedConfig,
         }
       });
       navigate(`/gallery/${gallery.id}`);
