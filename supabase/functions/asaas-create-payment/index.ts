@@ -185,6 +185,7 @@ Deno.serve(async (req) => {
         dueDate: dueDateStr,
         description,
         externalReference: userId,
+        postalService: false,
         creditCard: {
           holderName: creditCard.holderName,
           number: creditCard.number.replace(/\s/g, ""),
@@ -266,6 +267,7 @@ Deno.serve(async (req) => {
             cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
             email: creditCardHolderInfo.email || user.email,
             externalReference: userId,
+            notificationDisabled: true,
           }),
         });
 

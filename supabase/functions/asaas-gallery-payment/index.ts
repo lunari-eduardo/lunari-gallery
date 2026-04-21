@@ -222,6 +222,7 @@ Deno.serve(async (req) => {
               email: cliente.email || undefined,
               phone: cliente.telefone || undefined,
               externalReference: clienteId,
+              ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
             }),
           });
 
@@ -248,6 +249,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           name: 'Cliente Galeria',
           externalReference: galeriaId || 'gallery-client',
+          ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
         }),
       });
 
@@ -354,6 +356,7 @@ Deno.serve(async (req) => {
       dueDate: dueDate.toISOString().split('T')[0],
       description: descricao || 'Pagamento galeria de fotos',
       externalReference: galeriaId || undefined,
+      postalService: false,
     };
 
     if (finalBillingType === 'CREDIT_CARD' && body.installmentCount && body.installmentCount > 1) {
