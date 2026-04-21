@@ -1,204 +1,136 @@
 
 
-# Plano: remover Histórico de e-mails e adicionar envio de aviso na reativação
+# Plano: corrigir o modal de reativação que fecha logo após "Reativar Galeria"
 
-## Objetivo
+## Diagnóstico
 
-Duas mudanças:
+O modal de reativação **abre o passo 2 (sucesso) por uma fração de segundo e fecha** porque o componente `<ReactivateGalleryDialog>` é **desmontado** pelo pai logo após a reativação, antes do usuário conseguir interagir com a tela de mensagem/WhatsApp/e-mail.
 
-1. **Remover totalmente** o "Histórico de e-mails" da tela de Configurações > Personalização > E-mails automáticos.
-2. **Expandir o modal de reativação** de galeria, transformando-o em uma experiência de 3 ações (igual ao modal de Compartilhar): definir prazo + reativar + opcionalmente notificar o cliente por e-mail / WhatsApp / link.
+Causa raiz por call site:
 
----
+| Página | Como o modal é renderizado | O que quebra |
+|---|---|---|
+| `GalleryDetail.tsx` | `{canReactivate && <ReactivateGalleryDialog .../>}` | `canReactivate` exige `status` em `selecao_completa`/`expirado`. Após `reopenSelection`, o status vira `selecao_iniciada`, `canReactivate` vira `false` e o componente **desmonta** no meio do `setShowSuccess(true)`. |
+| `GalleryEdit.tsx` | `{canReactivate && <Card>...<ReactivateGalleryDialog/>...</Card>}` | Mesmo problema: `canReactivate` deixa de ser verdadeiro após reativar. |
+| `Dashboard.tsx` | `{reactivateGalleryId && <ReactivateGalleryDialog open .../>}` com `gallery={supabaseGalleries.find(...)}` | Após `reopenSelection`, o React Query devolve novo array. O `find` retorna novo objeto, mas se a galeria mudar de aba/filtro, o `gallery` ainda é encontrado. Funciona em geral, mas o componente recebe **gallery atualizada com status diferente**, o que dispara re-render e o `useEffect [open]` não interfere. Esse caso provavelmente já funciona — o relato do usuário é da tela de detalhes. |
+| `DeliverDetail.tsx` | `<ReactivateGalleryDialog>` fora da condicional `isExpired` | OK: o modal sobrevive. |
 
-## Parte 1 — Remover histórico de e-mails
+Resumo: o `ReactivateGalleryDialog` precisa **continuar montado** durante toda a vida do modal, independente do `status` da galeria.
 
-### O que será removido
+## Solução
 
-Arquivo: `src/components/settings/EmailAutomationSettings.tsx`
+### 1. Desacoplar a montagem do modal da condicional de elegibilidade
 
-- bloco "Histórico de e-mails" inteiro (lista + estados de loading/empty);
-- import e uso do hook `useEmailLogs`;
-- imports não utilizados (`formatDistanceToNow`, `ptBR`, `EmailDeliveryStatus`, `CheckCircle2`, `XCircle`, `MinusCircle`).
+Em vez de montar o modal só quando `canReactivate` é verdadeiro, o pai vai:
 
-Arquivo: `src/hooks/useEmailLogs.ts`
+- usar **um botão simples** "Reativar" controlado pela condicional `canReactivate`;
+- **sempre montar** o `<ReactivateGalleryDialog>` em modo controlado (`open` + `onOpenChange`), sem depender do `canReactivate`;
+- só fechar o modal quando o usuário clicar em "Fechar" ou no `X`.
 
-- arquivo deletado (não é usado em nenhum outro lugar do projeto).
+Mesmo padrão que o Dashboard já usa, agora aplicado em `GalleryDetail.tsx` e `GalleryEdit.tsx`.
 
-### O que NÃO muda
+### 2. Tornar o componente robusto a mudanças de `gallery`
 
-- A tabela `email_delivery_logs` no banco continua sendo gravada pela Edge Function `send-email`. Ela serve como auditoria interna e idempotência (`alreadySent` evita reenviar o mesmo e-mail), então não pode ser removida do backend.
-- Toggles "Ativar envio de e-mails", "Permitir envio de e-mail de galeria" e "Enviar e-mail ao confirmar pagamento" permanecem.
+No `ReactivateGalleryDialog.tsx`:
 
-### Resultado visual
+- aceitar que `gallery` mude de status durante a vida do modal — o passo de sucesso (`showSuccess`) **não pode** depender de `canReactivate`;
+- garantir que a tela de sucesso continua aberta mesmo se o pai re-renderizar com nova `gallery`;
+- recalcular `clientLink` quando o `publicToken` aparecer pela primeira vez (galeria que ainda não tinha token e ganha um após reativar).
 
-A seção "E-mails automáticos" passa a ter apenas:
+### 3. Ajuste fino de UX no passo de sucesso
 
-```text
-[ícone] E-mails automáticos
-        Você pode desativar os e-mails a qualquer momento.
-        Remetente: contato@mail.lunarihub.com
-        Respostas vão para o e-mail cadastrado do fotógrafo quando disponível.
+Aproveitar a refatoração para deixar o passo 2 com a mesma identidade do `SendGalleryModal` (mostrado na imagem 2):
 
-Ativar envio de e-mails                                [switch]
-  Permitir envio de e-mail de galeria                  [switch]
-  Enviar e-mail ao confirmar pagamento                 [switch]
-```
+- **header compacto**: "Galeria reativada" + chip "Até DD/MM" + chip "Senha" (se houver);
+- **bloco de mensagem** com scroll interno;
+- **3 botões em linha**: Copiar Mensagem · WhatsApp · Enviar e-mail;
+- **rodapé sutil** com `Copiar Link` e status do envio de e-mail;
+- largura `sm:max-w-2xl` no passo 2, `sm:max-w-md` no passo 1.
 
----
+### 4. Corrigir refetch para garantir `publicToken` atualizado
 
-## Parte 2 — Modal de Reativação ampliado
+No fluxo `reopenSelection` (`useSupabaseGalleries.ts`), ao terminar a mutation:
 
-### Visão geral da nova UX
-
-O modal `ReactivateGalleryDialog` passa a ter **dois passos**, alinhados com o padrão do `SendGalleryModal`:
-
-```text
-Passo 1 — Definir prazo
-  - input de dias (mantém regra 1–90)
-  - botão "Reativar Galeria"
-
-Passo 2 — Galeria reativada (tela de sucesso ampliada)
-  - resumo: "Reaberta com prazo de N dias até DD/MM/AAAA"
-  - mensagem pré-pronta para o cliente (preview editável-only display)
-  - 3 botões de ação:
-      [Copiar mensagem]   [WhatsApp]   [Enviar e-mail]
-  - linha com link da galeria + botão de copiar
-  - status do envio de e-mail (enviado / erro / desativado / sem e-mail)
-  - botão "Fechar"
-```
-
-Largura do modal aumenta de `sm:max-w-md` para `sm:max-w-2xl` no passo 2 para acomodar mensagem + ações, igual ao `SendGalleryModal`.
-
-### Novo template de e-mail "Galeria reativada"
-
-Adicionar um novo tipo de template em:
-
-```text
-src/types/gallery.ts          → EmailTemplate.type adiciona 'gallery_reactivated'
-src/hooks/useGallerySettings.ts → defaultEmailTemplates ganha 1 entrada
-src/components/settings/EmailTemplates.tsx → ícone (RotateCcw)
-```
-
-Conteúdo padrão sugerido:
-
-```text
-Assunto: Sua galeria foi reaberta - {galeria}
-
-Olá {cliente}!
-
-Boas notícias: a galeria "{galeria}" foi reaberta para você concluir
-sua seleção de fotos.
-
-Você tem até {prazo} para escolher suas favoritas.
-
-Acesse: {link}
-
-Com carinho,
-{estudio}
-```
-
-Slugs disponíveis: `{cliente}`, `{galeria}`, `{prazo}`, `{dias_restantes}`, `{link}`, `{estudio}`.
-
-Templates novos serão semeados automaticamente para usuários existentes através de uma migração leve em `useGallerySettings.ts` (mesmo padrão que `defaultEmailTemplates` já usa para inserir o que está faltando).
-
-### Edge Function `send-email`
-
-Adicionar suporte a um novo `eventType`:
-
-```text
-eventType: 'gallery_reactivated'
-```
-
-Comportamento:
-
-- aceita `galleryId` + `publicToken`;
-- usa idempotência `gallery_reactivated:{galleryId}:{prazo_selecao_iso}` (assim cada reativação nova permite reenvio, sem duplicar dentro da mesma reativação);
-- respeita `email_sending_enabled` e `email_on_gallery_sent` (reaproveita o mesmo toggle de "envio de galeria", evitando criar mais uma chave de configuração);
-- busca template `gallery_reactivated` em `gallery_email_templates`, com fallback hard-coded;
-- mantém `From: Lunari <contato@mail.lunarihub.com>` e `reply_to` do fotógrafo;
-- grava log em `email_delivery_logs` com `event_type: 'gallery_reactivated'`.
-
-### Nova lógica no `ReactivateGalleryDialog`
-
-Props adicionadas:
-
-```text
-gallery: Galeria              // para extrair clienteNome, clienteEmail, telefone, nomeSessao
-settings: GlobalSettings      // para template + toggles + studioName
-```
-
-Comportamentos:
-
-- após `onReactivate(days)` retornar com sucesso, refetch da galeria garante `prazo_selecao` e `public_token` atualizados;
-- mensagem pré-pronta usa o template `gallery_reactivated` com substituição dos slugs;
-- "Copiar mensagem" copia texto completo;
-- "WhatsApp" abre `wa.me/55{telefone}?text={msg}`;
-- "Enviar e-mail" chama `supabase.functions.invoke('send-email', { body: { eventType: 'gallery_reactivated', galleryId, publicToken } })`;
-- estado `emailFeedback` (mesma estrutura do `SendGalleryModal`) controla mensagem visual abaixo dos botões;
-- desabilita botão de e-mail se: cliente sem e-mail, envio global desativado, envio de galeria desativado, ou já enviado nessa sessão do modal;
-- copiar link mantém botão dedicado.
-
-### Integração nos call sites
-
-Os 4 lugares que usam o componente passam os novos props:
-
-```text
-src/pages/GalleryDetail.tsx        → já tem supabaseGallery + settings
-src/pages/GalleryEdit.tsx          → já tem gallery + settings
-src/pages/DeliverDetail.tsx        → já tem gallery + settings
-src/pages/Dashboard.tsx            → já tem galeria + settings
-```
-
-Após `onReactivate`, todos garantem refetch (já fazem via React Query invalidation) para o modal abrir o passo 2 com `publicToken` e `prazo_selecao` atualizados.
-
----
+- a `invalidateQueries(['galerias'])` já existe;
+- garantir que o componente espera o refetch terminar antes de mostrar `showSuccess` para que o `clientLink` esteja preenchido. Hoje o `await onReactivate(days)` já espera a mutation, mas não espera o refetch. Solução: o componente passa a usar a `gallery` recebida via prop como fonte do link, e se ainda estiver vazio, mostra "Aguardando link..." por 1-2 segundos com um pequeno fallback.
 
 ## Detalhes técnicos
 
-### Frontend
+### `src/components/ReactivateGalleryDialog.tsx`
 
-| Arquivo | Mudança |
-|---|---|
-| `src/components/settings/EmailAutomationSettings.tsx` | remove bloco Histórico + imports |
-| `src/hooks/useEmailLogs.ts` | deletado |
-| `src/types/gallery.ts` | `EmailTemplate.type` ganha `'gallery_reactivated'` |
-| `src/hooks/useGallerySettings.ts` | `defaultEmailTemplates` ganha entrada de reativação; init garante semeadura |
-| `src/components/settings/EmailTemplates.tsx` | ícone `RotateCcw` para o novo tipo |
-| `src/components/ReactivateGalleryDialog.tsx` | reescrito com 2 passos, mensagem, 3 ações |
-| `src/pages/GalleryDetail.tsx` | passa `gallery` e `settings` |
-| `src/pages/GalleryEdit.tsx` | idem |
-| `src/pages/DeliverDetail.tsx` | idem |
-| `src/pages/Dashboard.tsx` | idem |
+- nenhuma mudança estrutural grande, mas:
+  - remover o `DialogTrigger` interno quando o componente é controlado (já feito);
+  - manter `showSuccess` resistente: não resetar enquanto `open === true`;
+  - no `useEffect [open]`, só resetar quando `open` for `false` (já feito) — isso garante que o modal não pisque mesmo com props novas;
+  - garantir que `lastDaysRef.current` é lido após `setShowSuccess(true)` (sem dependência de re-render).
 
-### Backend
+### `src/pages/GalleryDetail.tsx`
 
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/send-email/index.ts` | adiciona branch `gallery_reactivated` reaproveitando o pipeline atual; idempotência inclui `prazo_selecao` |
+Refatorar o bloco do botão Reativar:
 
-Sem migração de banco. Sem mexer em InfinitePay, webhooks Asaas/MP, `prepare_gallery_share`, RLS de `galerias`, nem em `email_delivery_logs`.
+```text
+// estado novo
+const [reactivateOpen, setReactivateOpen] = useState(false)
 
-### Segurança e idempotência
+// no header de ações
+{canReactivate && (
+  <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
+    <RotateCcw /> Reativar
+  </Button>
+)}
 
-- mesma autenticação do `send-email` atual (`getAuthenticatedUserId` + checagem `gallery.user_id`);
-- `Reply-To` continua resolvido server-side via `profiles.email`;
-- chave de idempotência inclui `prazo_selecao` para permitir um e-mail por reativação, bloquear duplo clique;
-- toggles existentes de envio são respeitados (não cria nova chave de configuração).
+// SEMPRE montado (fora da condicional)
+<ReactivateGalleryDialog
+  open={reactivateOpen}
+  onOpenChange={setReactivateOpen}
+  galleryName={...}
+  clientLink={clientLink}
+  onReactivate={handleReopenSelection}
+  gallery={supabaseGallery}
+  settings={settings}
+/>
+```
 
-### Validação
+### `src/pages/GalleryEdit.tsx`
 
-1. tela Configurações > Personalização sem o bloco Histórico;
-2. clicar em "Reativar" abre o modal compacto;
-3. confirmar prazo: galeria reativa, modal expande para passo 2;
-4. mensagem aparece com slugs substituídos;
-5. Copiar mensagem / Copiar link funcionam;
-6. WhatsApp abre com texto correto e número quando houver;
-7. Enviar e-mail dispara `send-email` com `gallery_reactivated`, mostra status no card abaixo;
-8. cliente sem e-mail desabilita botão com mensagem clara;
-9. envio global desativado também desabilita;
-10. clicar duas vezes em Enviar e-mail mostra "já enviado" via idempotência;
-11. nova reativação posterior gera nova chave de idempotência → permite novo e-mail;
-12. `npm run build` sem erros TS;
-13. webhooks e InfinitePay intactos.
+Mesmo padrão: card "Reativar Galeria" mostra apenas o botão controlado por `canReactivate`; o `<ReactivateGalleryDialog>` é montado fora da condicional, no final do JSX da página.
+
+### `src/pages/DeliverDetail.tsx`
+
+Já está correto (modal fora da condicional). Sem mudanças.
+
+### `src/pages/Dashboard.tsx`
+
+Já funciona, mas para uniformidade:
+- o `(() => { ... })()` IIFE é mantido porque depende do `reactivateGalleryId`;
+- nenhuma mudança funcional necessária.
+
+### Sem mudanças
+
+- `useSupabaseGalleries.ts` (mutation já está OK);
+- Edge Function `send-email` (já suporta `gallery_reactivated`);
+- migrações de banco;
+- InfinitePay, webhooks Asaas/MP, `prepare_gallery_share`.
+
+## Validação
+
+1. abrir `GalleryDetail` de uma galeria com status `selecao_completa`;
+2. clicar em "Reativar" → modal pequeno abre;
+3. confirmar 7 dias → modal **expande para o passo de sucesso e permanece aberto**;
+4. mensagem aparece com `{cliente}`, `{galeria}`, `{prazo}`, `{link}` substituídos;
+5. Copiar Mensagem, WhatsApp e Enviar e-mail funcionam;
+6. fechar com "Fechar" ou `X` → modal some normalmente;
+7. repetir o teste em `GalleryEdit` (card de Reativar);
+8. repetir em `DeliverDetail` (galeria expirada);
+9. repetir no `Dashboard` (botão da `GalleryCard`);
+10. confirmar que após fechar o modal, o botão "Reativar" desaparece (porque `canReactivate` agora é `false`) — comportamento esperado;
+11. `npm run build` sem erros TS;
+12. revisar que webhooks Asaas, InfinitePay create-link e InfinitePay webhook continuam intactos.
+
+## Resultado esperado
+
+- modal de reativação **não fecha mais** após confirmar o prazo;
+- usuário vê a mensagem pré-pronta, copia, manda WhatsApp ou aciona e-mail no mesmo fluxo;
+- botão "Reativar" some da página assim que o modal é fechado, refletindo o novo estado da galeria;
+- nenhum impacto em pagamentos, webhooks ou InfinitePay.
 
