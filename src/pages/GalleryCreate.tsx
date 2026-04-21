@@ -568,12 +568,18 @@ export default function GalleryCreate() {
     markAsProcessed();
     clearParams();
   }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams]);
-  // Initialize payment method with default when data loads
+  // Initialize payment method default — preference order:
+  // 1. User explicitly chose (userTouched ref) — never overwrite
+  // 2. Photographer's `defaultPaymentMethod` configured in Settings
+  // 3. Active payment integration (`defaultIntegration`) as fallback
   useEffect(() => {
-    if (paymentData?.defaultIntegration && !selectedPaymentMethod) {
+    if (userTouchedPaymentMethodRef.current || selectedPaymentMethod) return;
+    if (settings?.defaultPaymentMethod) {
+      setSelectedPaymentMethod(settings.defaultPaymentMethod);
+    } else if (paymentData?.defaultIntegration) {
       setSelectedPaymentMethod(paymentData.defaultIntegration.provedor as PaymentMethod);
     }
-  }, [paymentData?.defaultIntegration, selectedPaymentMethod]);
+  }, [paymentData?.defaultIntegration, selectedPaymentMethod, settings?.defaultPaymentMethod]);
   const getSaleSettings = (): SaleSettings => ({
     mode: saleMode,
     pricingModel,
