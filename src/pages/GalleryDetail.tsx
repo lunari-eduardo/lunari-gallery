@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   CreditCard,
+  RotateCcw,
 } from 'lucide-react';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { Button } from '@/components/ui/button';
