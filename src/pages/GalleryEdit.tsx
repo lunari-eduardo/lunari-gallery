@@ -663,7 +663,10 @@ export default function GalleryEdit() {
 
               {/* Light/Dark mode toggle */}
               <div className="space-y-2">
-                <Label className="text-sm">Modo de fundo</Label>
+                <Label className="text-sm">Fundo desta galeria</Label>
+                <p className="text-xs text-muted-foreground">
+                  As cores do seu tema personalizado serão aplicadas sobre o fundo escolhido.
+                </p>
                 <div className="flex gap-2">
                   <Button
                     type="button"
