@@ -4029,7 +4029,10 @@ export type Database = {
       account_status: "active" | "suspended" | "canceled"
       account_type: "gallery_solo" | "starter" | "pro" | "pro_gallery"
       app_role: "admin" | "moderator" | "user"
-      email_delivery_event_type: "gallery_sent" | "payment_confirmed"
+      email_delivery_event_type:
+        | "gallery_sent"
+        | "payment_confirmed"
+        | "gallery_reactivated"
       email_delivery_status: "enviado" | "erro" | "ignorado"
     }
     CompositeTypes: {
@@ -4161,7 +4164,11 @@ export const Constants = {
       account_status: ["active", "suspended", "canceled"],
       account_type: ["gallery_solo", "starter", "pro", "pro_gallery"],
       app_role: ["admin", "moderator", "user"],
-      email_delivery_event_type: ["gallery_sent", "payment_confirmed"],
+      email_delivery_event_type: [
+        "gallery_sent",
+        "payment_confirmed",
+        "gallery_reactivated",
+      ],
       email_delivery_status: ["enviado", "erro", "ignorado"],
     },
   },

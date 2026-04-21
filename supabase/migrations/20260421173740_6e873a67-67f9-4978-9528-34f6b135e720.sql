@@ -1,0 +1,1 @@
+ALTER TYPE public.email_delivery_event_type ADD VALUE IF NOT EXISTS 'gallery_reactivated';
