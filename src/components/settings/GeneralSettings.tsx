@@ -1,15 +1,44 @@
+import { useEffect, useState } from 'react';
 import { Globe, Calendar, Building2, Shield, Lock, Tag, Image as ImageIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { GlobalSettings, GalleryPermission, SaleMode, ImageResizeOption } from '@/types/gallery';
+import { UpdateSettingsOptions } from '@/hooks/useGallerySettings';
 
 interface GeneralSettingsProps {
   settings: GlobalSettings;
-  updateSettings: (data: Partial<GlobalSettings>) => void;
+  updateSettings: (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => void;
 }
 
 export function GeneralSettings({ settings, updateSettings }: GeneralSettingsProps) {
+  const [studioName, setStudioName] = useState(settings.studioName);
+  const [expirationDays, setExpirationDays] = useState(String(settings.defaultExpirationDays ?? 10));
+
+  useEffect(() => {
+    setStudioName(settings.studioName);
+  }, [settings.studioName]);
+
+  useEffect(() => {
+    setExpirationDays(String(settings.defaultExpirationDays ?? 10));
+  }, [settings.defaultExpirationDays]);
+
+  const saveStudioName = () => {
+    const nextName = studioName.trim() || 'Meu Estúdio';
+    if (nextName !== settings.studioName) {
+      updateSettings({ studioName: nextName }, { successMessage: 'Nome do estúdio salvo.' });
+    }
+    setStudioName(nextName);
+  };
+
+  const saveExpirationDays = () => {
+    const nextDays = Math.min(90, Math.max(1, Number.parseInt(expirationDays, 10) || 10));
+    if (nextDays !== settings.defaultExpirationDays) {
+      updateSettings({ defaultExpirationDays: nextDays }, { successMessage: 'Prazo padrão salvo.' });
+    }
+    setExpirationDays(String(nextDays));
+  };
+
   return (
     <div className="space-y-6">
       {/* Studio Info */}
@@ -31,8 +60,9 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
             <Label htmlFor="studioName">Nome do Estúdio</Label>
             <Input
               id="studioName"
-              value={settings.studioName}
-              onChange={(e) => updateSettings({ studioName: e.target.value })}
+              value={studioName}
+              onChange={(e) => setStudioName(e.target.value)}
+              onBlur={saveStudioName}
               placeholder="Seu estúdio"
             />
           </div>
@@ -55,7 +85,7 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
 
         <RadioGroup 
           value={settings.defaultGalleryPermission} 
-          onValueChange={(v) => updateSettings({ defaultGalleryPermission: v as GalleryPermission })}
+          onValueChange={(v) => updateSettings({ defaultGalleryPermission: v as GalleryPermission }, { successMessage: 'Permissão padrão salva.' })}
           className="space-y-3"
         >
           <div className="flex items-center gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
@@ -103,17 +133,9 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
               type="number"
               min={1}
               max={90}
-              value={settings.defaultExpirationDays ?? ''}
-              onChange={(e) =>
-                updateSettings({
-                  defaultExpirationDays: e.target.value === '' ? ('' as any) : (parseInt(e.target.value) || 0),
-                })
-              }
-              onBlur={() => {
-                if (!settings.defaultExpirationDays) {
-                  updateSettings({ defaultExpirationDays: 10 });
-                }
-              }}
+              value={expirationDays}
+              onChange={(e) => setExpirationDays(e.target.value)}
+              onBlur={saveExpirationDays}
               className="w-24"
             />
             <span className="text-muted-foreground">dias</span>
@@ -137,7 +159,7 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
 
         <RadioGroup
           value={settings.defaultSaleMode ?? 'sale_without_payment'}
-          onValueChange={(v) => updateSettings({ defaultSaleMode: v as SaleMode })}
+          onValueChange={(v) => updateSettings({ defaultSaleMode: v as SaleMode }, { successMessage: 'Modo de venda salvo.' })}
           className="space-y-3"
         >
           <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
@@ -188,7 +210,7 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
 
         <RadioGroup
           value={String(settings.defaultImageResize ?? 1920)}
-          onValueChange={(v) => updateSettings({ defaultImageResize: Number(v) as ImageResizeOption })}
+          onValueChange={(v) => updateSettings({ defaultImageResize: Number(v) as ImageResizeOption }, { successMessage: 'Tamanho padrão salvo.' })}
           className="space-y-3"
         >
           <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">

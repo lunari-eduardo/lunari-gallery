@@ -12,6 +12,10 @@ export interface WatermarkSettings {
   scale: number;
 }
 
+interface SaveSettingsOptions {
+  successMessage?: string;
+}
+
 const defaultSettings: WatermarkSettings = {
   mode: 'system',
   path: null,
@@ -64,7 +68,7 @@ export function useWatermarkSettings() {
   }, [user?.id]);
 
   // Save settings to database
-  const saveSettings = useCallback(async (newSettings: Partial<WatermarkSettings>) => {
+  const saveSettings = useCallback(async (newSettings: Partial<WatermarkSettings>, options?: SaveSettingsOptions) => {
     if (!user?.id) return false;
 
     setIsSaving(true);
@@ -96,6 +100,7 @@ export function useWatermarkSettings() {
       }
 
       setSettings(prev => ({ ...prev, ...newSettings }));
+      if (options?.successMessage) toast.success(options.successMessage);
       return true;
     } catch (error) {
       console.error('Error saving watermark settings:', error);
@@ -153,7 +158,7 @@ export function useWatermarkSettings() {
       await saveSettings({ 
         mode: 'custom', 
         path: result.path 
-      });
+      }, { successMessage: 'Marca d’água atualizada.' });
       
       return result.path;
     } catch (error) {
@@ -171,7 +176,7 @@ export function useWatermarkSettings() {
       await saveSettings({ 
         mode: 'system', 
         path: null 
-      });
+      }, { successMessage: 'Marca d’água removida.' });
       
       return true;
     } catch (error) {

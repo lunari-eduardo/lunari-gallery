@@ -2,6 +2,7 @@ import { Mail, CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { GlobalSettings } from '@/types/gallery';
+import { UpdateSettingsOptions } from '@/hooks/useGallerySettings';
 import { useEmailLogs, EmailDeliveryStatus } from '@/hooks/useEmailLogs';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -9,7 +10,7 @@ import { cn } from '@/lib/utils';
 
 interface EmailAutomationSettingsProps {
   settings: GlobalSettings;
-  updateSettings: (data: Partial<GlobalSettings>) => void;
+  updateSettings: (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => void;
 }
 
 const statusConfig: Record<EmailDeliveryStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
@@ -43,16 +44,16 @@ export function EmailAutomationSettings({ settings, updateSettings }: EmailAutom
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <Label className="text-sm font-medium">Ativar envio de e-mails</Label>
-          <Switch checked={enabled} onCheckedChange={(checked) => updateSettings({ emailSendingEnabled: checked })} />
+          <Switch checked={enabled} onCheckedChange={(checked) => updateSettings({ emailSendingEnabled: checked }, { successMessage: 'Preferência de e-mail salva.' })} />
         </div>
         <div className={cn('space-y-4 pl-4 border-l border-border', !enabled && 'opacity-50')}>
           <div className="flex items-center justify-between gap-4">
             <Label className="text-sm">Permitir envio de e-mail de galeria</Label>
-            <Switch disabled={!enabled} checked={settings.emailOnGallerySent ?? true} onCheckedChange={(checked) => updateSettings({ emailOnGallerySent: checked })} />
+            <Switch disabled={!enabled} checked={settings.emailOnGallerySent ?? true} onCheckedChange={(checked) => updateSettings({ emailOnGallerySent: checked }, { successMessage: 'Preferência de e-mail salva.' })} />
           </div>
           <div className="flex items-center justify-between gap-4">
             <Label className="text-sm">Enviar e-mail ao confirmar pagamento</Label>
-            <Switch disabled={!enabled} checked={settings.emailOnPaymentConfirmed ?? true} onCheckedChange={(checked) => updateSettings({ emailOnPaymentConfirmed: checked })} />
+            <Switch disabled={!enabled} checked={settings.emailOnPaymentConfirmed ?? true} onCheckedChange={(checked) => updateSettings({ emailOnPaymentConfirmed: checked }, { successMessage: 'Preferência de e-mail salva.' })} />
           </div>
         </div>
       </div>

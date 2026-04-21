@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Globe, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 interface FaviconUploaderProps {
   favicon?: string;
@@ -12,7 +13,10 @@ export function FaviconUploader({ favicon, onFaviconChange }: FaviconUploaderPro
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Formato inválido. Use uma imagem.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (e) => {

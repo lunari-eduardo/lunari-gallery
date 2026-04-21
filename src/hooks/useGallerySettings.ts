@@ -5,6 +5,10 @@ import { GlobalSettings, CustomTheme, EmailTemplate, WatermarkSettings, Discount
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 
+export interface UpdateSettingsOptions {
+  successMessage?: string;
+}
+
 // Default settings for new users
 const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | 'discountPresets'> = {
   defaultGalleryPermission: 'private',
@@ -491,16 +495,36 @@ export function useGallerySettings() {
     },
   });
 
+  const updateSettingsWithFeedback = (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
+    updateSettings.mutate(data, {
+      onSuccess: () => {
+        if (options?.successMessage) toast.success(options.successMessage);
+      },
+    });
+  };
+
+  const updateSettingsAsync = async (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
+    await updateSettings.mutateAsync(data);
+    if (options?.successMessage) toast.success(options.successMessage);
+  };
+
   return {
     settings,
     isLoading,
     initializeSettings,
-    updateSettings: updateSettings.mutate,
+    updateSettings: updateSettingsWithFeedback,
+    updateSettingsAsync,
     isUpdating: updateSettings.isPending,
     // Theme operations (simplified)
-    saveCustomTheme: saveCustomTheme.mutate,
-    deleteCustomTheme: deleteCustomTheme.mutate,
-    setThemeType: setThemeType.mutate,
+    saveCustomTheme: (theme: Omit<CustomTheme, 'id'> & { id?: string }) => saveCustomTheme.mutate(theme, {
+      onSuccess: () => toast.success('Tema salvo com sucesso.'),
+    }),
+    deleteCustomTheme: () => deleteCustomTheme.mutate(undefined, {
+      onSuccess: () => toast.success('Tema do sistema restaurado.'),
+    }),
+    setThemeType: (themeType: ThemeType) => setThemeType.mutate(themeType, {
+      onSuccess: () => toast.success('Tema atualizado.'),
+    }),
     // Email template operations
     updateEmailTemplate: updateEmailTemplate.mutateAsync,
     isUpdatingEmailTemplate: updateEmailTemplate.isPending,

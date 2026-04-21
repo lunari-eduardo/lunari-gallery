@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { useGallerySettings } from './useGallerySettings';
+import { useGallerySettings, UpdateSettingsOptions } from './useGallerySettings';
 import { GlobalSettings } from '@/types/gallery';
 import { mockGlobalSettings } from '@/data/mockData';
 
 export interface UseSettingsReturn {
   settings: GlobalSettings;
   isLoading: boolean;
-  updateSettings: (data: Partial<GlobalSettings>) => void;
+  updateSettings: (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => void;
+  updateSettingsAsync: (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => Promise<void>;
+  isUpdating: boolean;
   resetSettings: () => void;
 }
 
@@ -17,6 +19,8 @@ export function useSettings(): UseSettingsReturn {
     isLoading,
     initializeSettings,
     updateSettings: updateDbSettings,
+    updateSettingsAsync: updateDbSettingsAsync,
+    isUpdating,
   } = useGallerySettings();
 
   // Ref to prevent multiple initialization calls (race condition fix)
@@ -34,8 +38,12 @@ export function useSettings(): UseSettingsReturn {
   // Use database settings or fallback to mock
   const settings: GlobalSettings = dbSettings || mockGlobalSettings;
 
-  const updateSettings = (data: Partial<GlobalSettings>) => {
-    updateDbSettings(data);
+  const updateSettings = (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
+    updateDbSettings(data, options);
+  };
+
+  const updateSettingsAsync = async (data: Partial<GlobalSettings>, options?: UpdateSettingsOptions) => {
+    await updateDbSettingsAsync(data, options);
   };
 
   const resetSettings = () => {
@@ -47,6 +55,8 @@ export function useSettings(): UseSettingsReturn {
     settings,
     isLoading,
     updateSettings,
+    updateSettingsAsync,
+    isUpdating,
     resetSettings,
   };
 }
