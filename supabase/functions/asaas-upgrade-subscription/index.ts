@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
         dueDate: getNextBusinessDay(),
         description: `Upgrade: ${cancelledNames.join(' + ')} → ${newPlan.name} (proporcional)`,
         externalReference: userId,
+        postalService: false,
         creditCard: {
           holderName: creditCard.holderName,
           number: creditCard.number.replace(/\s/g, ""),
@@ -276,6 +277,7 @@ Deno.serve(async (req) => {
         dueDate: getNextBusinessDay(),
         description: `Upgrade: ${cancelledNames.join(' + ')} → ${newPlan.name} (Anual ${installmentCount}x)`,
         externalReference: userId,
+        postalService: false,
         creditCard: {
           holderName: creditCard.holderName,
           number: creditCard.number.replace(/\s/g, ""),
