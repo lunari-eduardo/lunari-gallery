@@ -310,6 +310,27 @@ export function useGallerySettings() {
       if (data.defaultImageResize !== undefined) {
         updateData.default_image_resize = data.defaultImageResize;
       }
+      if (data.defaultChargeType !== undefined) {
+        updateData.default_charge_type = data.defaultChargeType;
+      }
+      if (data.defaultPricingModel !== undefined) {
+        updateData.default_pricing_model = data.defaultPricingModel;
+      }
+      if (data.defaultPaymentMethod !== undefined) {
+        updateData.default_payment_method = data.defaultPaymentMethod || null;
+      }
+      if (data.defaultAllowComments !== undefined) {
+        updateData.default_allow_comments = data.defaultAllowComments;
+      }
+      if (data.defaultAllowDownload !== undefined) {
+        updateData.default_allow_download = data.defaultAllowDownload;
+      }
+      if (data.defaultAllowExtraPhotos !== undefined) {
+        updateData.default_allow_extra_photos = data.defaultAllowExtraPhotos;
+      }
+      if (data.defaultWatermarkDisplay !== undefined) {
+        updateData.default_watermark_display = data.defaultWatermarkDisplay;
+      }
       if (data.emailSendingEnabled !== undefined) {
         updateData.email_sending_enabled = data.emailSendingEnabled;
       }
