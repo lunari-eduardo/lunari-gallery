@@ -13,6 +13,7 @@ const ASAAS_MIGRATABLE_FIELDS = [
   'habilitarPix', 'habilitarCartao', 'habilitarBoleto',
   'maxParcelas', 'absorverTaxa',
   'ireiAntecipar', 'repassarTaxaAntecipacao', 'incluirTaxaAntecipacao',
+  'centralizarEmailsLunari',
 ] as const;
 
 const MP_MIGRATABLE_FIELDS = [
