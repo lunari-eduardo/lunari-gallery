@@ -244,6 +244,153 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
           </div>
         </RadioGroup>
       </div>
+
+      {/* Default Charge Type */}
+      <div className="lunari-card p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Receipt className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">Tipo de Cobrança Padrão</h2>
+            <p className="text-sm text-muted-foreground">
+              Aplicado quando há venda ativa em novas galerias
+            </p>
+          </div>
+        </div>
+
+        <RadioGroup
+          value={settings.defaultChargeType ?? 'only_extras'}
+          onValueChange={(v) => updateSettings({ defaultChargeType: v as ChargeType }, { successMessage: 'Tipo de cobrança salvo.' })}
+          className="space-y-3"
+        >
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="only_extras" id="charge-extras" className="mt-0.5" />
+            <Label htmlFor="charge-extras" className="flex-1 cursor-pointer">
+              <p className="font-medium">Cobrar apenas as fotos extras</p>
+              <p className="text-sm text-muted-foreground">
+                As fotos incluídas no pacote são gratuitas
+              </p>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="all_selected" id="charge-all" className="mt-0.5" />
+            <Label htmlFor="charge-all" className="flex-1 cursor-pointer">
+              <p className="font-medium">Cobrar todas as fotos selecionadas</p>
+              <p className="text-sm text-muted-foreground">
+                Todas as fotos selecionadas pelo cliente serão cobradas
+              </p>
+            </Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {/* Default Pricing Model */}
+      <div className="lunari-card p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Package className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">Modelo de Preços Padrão</h2>
+            <p className="text-sm text-muted-foreground">
+              Como as fotos extras serão precificadas em novas galerias
+            </p>
+          </div>
+        </div>
+
+        <RadioGroup
+          value={settings.defaultPricingModel ?? 'fixed'}
+          onValueChange={(v) => updateSettings({ defaultPricingModel: v as PricingModel }, { successMessage: 'Modelo de preços salvo.' })}
+          className="space-y-3"
+        >
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="fixed" id="pricing-fixed" className="mt-0.5" />
+            <Label htmlFor="pricing-fixed" className="flex-1 cursor-pointer">
+              <p className="font-medium">Preço único</p>
+              <p className="text-sm text-muted-foreground">
+                Mesmo valor por foto extra independentemente da quantidade
+              </p>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="packages" id="pricing-packages" className="mt-0.5" />
+            <Label htmlFor="pricing-packages" className="flex-1 cursor-pointer">
+              <p className="font-medium">Pacotes com desconto</p>
+              <p className="text-sm text-muted-foreground">
+                Faixas progressivas de preço por quantidade
+              </p>
+            </Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {/* Default Payment Method */}
+      <div className="lunari-card p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <CreditCard className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium">Método de Pagamento Padrão</h2>
+            <p className="text-sm text-muted-foreground">
+              Pré-selecionado em novas galerias com pagamento ativo
+            </p>
+          </div>
+        </div>
+
+        <RadioGroup
+          value={settings.defaultPaymentMethod ?? 'auto'}
+          onValueChange={(v) => updateSettings(
+            { defaultPaymentMethod: v === 'auto' ? undefined : (v as PaymentMethod) },
+            { successMessage: 'Método de pagamento salvo.' }
+          )}
+          className="space-y-3"
+        >
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="auto" id="pm-auto" className="mt-0.5" />
+            <Label htmlFor="pm-auto" className="flex-1 cursor-pointer">
+              <p className="font-medium">Usar integração ativa</p>
+              <p className="text-sm text-muted-foreground">
+                Seleciona automaticamente o provedor configurado
+              </p>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="pix_manual" id="pm-pix" className="mt-0.5" />
+            <Label htmlFor="pm-pix" className="flex-1 cursor-pointer">
+              <p className="font-medium">PIX Manual</p>
+              <p className="text-sm text-muted-foreground">
+                Cliente envia comprovante; você confirma manualmente
+              </p>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="infinitepay" id="pm-ip" className="mt-0.5" />
+            <Label htmlFor="pm-ip" className="flex-1 cursor-pointer">
+              <p className="font-medium">InfinitePay</p>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="mercadopago" id="pm-mp" className="mt-0.5" />
+            <Label htmlFor="pm-mp" className="flex-1 cursor-pointer">
+              <p className="font-medium">Mercado Pago</p>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="asaas" id="pm-asaas" className="mt-0.5" />
+            <Label htmlFor="pm-asaas" className="flex-1 cursor-pointer">
+              <p className="font-medium">Asaas</p>
+            </Label>
+          </div>
+        </RadioGroup>
+      </div>
     </div>
   );
 }
