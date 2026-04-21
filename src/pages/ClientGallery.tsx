@@ -767,10 +767,10 @@ export default function ClientGallery() {
     };
   }, [galleryId, sessionId, isProcessingPaymentReturn]);
 
-  // Priority: theme.backgroundMode > clientMode > 'light'
+  // Priority: clientMode (gallery decision) > theme.backgroundMode > 'light'
   const effectiveBackgroundMode = useMemo(() => {
-    return galleryResponse?.theme?.backgroundMode || galleryResponse?.clientMode || 'light';
-  }, [galleryResponse?.theme?.backgroundMode, galleryResponse?.clientMode]);
+    return galleryResponse?.clientMode || galleryResponse?.theme?.backgroundMode || 'light';
+  }, [galleryResponse?.clientMode, galleryResponse?.theme?.backgroundMode]);
   const gallery = transformedGallery;
   const isLoading = isLoadingGallery || isLoadingPhotos;
 
@@ -806,8 +806,8 @@ export default function ClientGallery() {
   const themeStyles = useMemo(() => {
     const theme = galleryResponse?.theme;
     
-    // Use backgroundMode from theme, fallback to clientMode, then 'light'
-    const backgroundMode = theme?.backgroundMode || galleryResponse?.clientMode || 'light';
+    // Gallery's clientMode wins over theme's backgroundMode
+    const backgroundMode = galleryResponse?.clientMode || theme?.backgroundMode || 'light';
     
     // Base colors depend on background mode (always applied, even for system theme)
     const baseColors = backgroundMode === 'dark' ? {

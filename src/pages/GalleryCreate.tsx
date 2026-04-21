@@ -1851,9 +1851,14 @@ export default function GalleryCreate() {
                     </div>
                     
                     {/* Client Mode Toggle - Override per gallery */}
-                    <div className="flex items-center gap-3 pt-2">
-                      <Label className="text-sm">Modo para esta galeria:</Label>
-                      <div className="flex gap-2">
+                    <div className="flex items-start justify-between gap-3 pt-2 flex-wrap">
+                      <div className="min-w-0">
+                        <Label className="text-sm">Fundo desta galeria</Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          As cores do seu tema personalizado serão aplicadas sobre o fundo escolhido.
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
                         <Button type="button" variant={clientMode === 'light' ? 'default' : 'outline'} size="sm" onClick={() => { userTouchedClientModeRef.current = true; setClientMode('light'); }} className="gap-1">
                           <Sun className="h-3.5 w-3.5" />
                           Claro
