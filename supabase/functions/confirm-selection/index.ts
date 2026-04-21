@@ -369,15 +369,59 @@ Deno.serve(async (req) => {
     console.log(`📊 ChargeType: ${chargeType}, selectedCount=${selectedCount}, fotosIncluidas=${gallery.fotos_incluidas}, extrasNecessarias=${extrasNecessarias}`);
     
     // Get previously paid extras from gallery record
-    const extrasPagasTotal = gallery.total_fotos_extras_vendidas || 0;
-    const valorJaPago = gallery.valor_total_vendido || 0;
-    
+    let extrasPagasTotal = gallery.total_fotos_extras_vendidas || 0;
+    let valorJaPago = gallery.valor_total_vendido || 0;
+
+    // 🛡️ AUTO-HEAL preventivo (provedor-agnóstico)
+    // Se há cobranças pagas para esta galeria mas os contadores estão zerados,
+    // significa que algum webhook (Asaas + parcelas, MP, InfinitePay) deixou
+    // a galeria fora de sincronia. Chamamos finalize_gallery_payment para cada
+    // cobrança pendente de contabilização — a RPC é idempotente via
+    // `extras_contabilizados`, então é seguro chamar múltiplas vezes.
+    if (extrasPagasTotal === 0) {
+      const { data: paidCharges } = await supabase
+        .from('cobrancas')
+        .select('id, valor, qtd_fotos, extras_contabilizados, status')
+        .eq('galeria_id', galleryId)
+        .in('status', ['pago', 'pago_manual'])
+        .gt('qtd_fotos', 0);
+
+      const needsHeal = (paidCharges || []).filter((c) => c.extras_contabilizados !== true);
+      if (needsHeal.length > 0) {
+        console.warn(`⚠️ DIVERGÊNCIA: galeria ${galleryId} tem ${needsHeal.length} cobrança(s) paga(s) não contabilizada(s). Auto-heal disparado.`);
+        for (const c of needsHeal) {
+          try {
+            await supabase.rpc('finalize_gallery_payment', {
+              p_cobranca_id: c.id,
+              p_receipt_url: null,
+              p_paid_at: new Date().toISOString(),
+              p_manual_method: null,
+              p_manual_obs: null,
+            });
+          } catch (healErr) {
+            console.error(`❌ Auto-heal falhou para cobrança ${c.id}:`, healErr);
+          }
+        }
+        // Reler contadores após heal
+        const { data: refreshed } = await supabase
+          .from('galerias')
+          .select('total_fotos_extras_vendidas, valor_total_vendido')
+          .eq('id', galleryId)
+          .single();
+        if (refreshed) {
+          extrasPagasTotal = refreshed.total_fotos_extras_vendidas || 0;
+          valorJaPago = refreshed.valor_total_vendido || 0;
+          console.log(`✅ Auto-heal concluído: extras_pagas=${extrasPagasTotal}, valor_pago=R$${valorJaPago}`);
+        }
+      }
+    }
+
     // Calculate only the extras that need to be charged (quantity not yet paid)
     const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
-    
+
     // For response/display, use extrasNecessarias
     const extrasCount = extraCount ?? extrasNecessarias;
-    
+
     console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}`);
 
     // Try to get regras: session first, then gallery's own (standalone mode)
