@@ -15,7 +15,10 @@ import {
   EyeOff,
   Copy,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Palette,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -105,6 +108,10 @@ export default function GalleryEdit() {
   const [fotosIncluidas, setFotosIncluidas] = useState(0);
   const [valorFotoExtra, setValorFotoExtra] = useState(0);
   const [prazoSelecao, setPrazoSelecao] = useState<Date | undefined>();
+
+  // Theme state for client gallery
+  const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
+  const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
   
   // UI state
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -126,7 +133,16 @@ export default function GalleryEdit() {
       setFotosIncluidas(gallery.fotosIncluidas);
       setValorFotoExtra(gallery.valorFotoExtra);
       setPrazoSelecao(gallery.prazoSelecao || undefined);
-      
+
+      // Hydrate theme settings from configuracoes
+      const cfg = gallery.configuracoes || {};
+      if (cfg.clientMode === 'dark' || cfg.clientMode === 'light') {
+        setClientMode(cfg.clientMode);
+      }
+      if (cfg.themeId) {
+        setSelectedThemeId(cfg.themeId);
+      }
+
       // Initialize local photo count
       if (localPhotoCount === null) {
         setLocalPhotoCount(gallery.totalFotos);
@@ -268,7 +284,15 @@ export default function GalleryEdit() {
     try {
       // Clean phone number for storage
       const cleanPhone = clienteTelefone.replace(/\D/g, '');
-      
+
+      // Merge theme settings into existing configuracoes (preserve everything else)
+      const existingConfig = gallery.configuracoes || {};
+      const mergedConfig = {
+        ...existingConfig,
+        clientMode,
+        themeId: selectedThemeId,
+      };
+
       await updateGallery({
         id: gallery.id,
         data: {
@@ -280,6 +304,7 @@ export default function GalleryEdit() {
           fotosIncluidas,
           valorFotoExtra,
           prazoSelecao,  // Now saving the deadline
+          configuracoes: mergedConfig,
         }
       });
       navigate(`/gallery/${gallery.id}`);
@@ -588,6 +613,83 @@ export default function GalleryEdit() {
                     +30 dias
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Theme Card - Client gallery appearance */}
+          <Card className="glass">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5" />
+                Tema da Galeria
+              </CardTitle>
+              <CardDescription>
+                Aparência que o cliente verá nesta galeria
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Custom theme palette preview (read-only) */}
+              {settings?.themeType === 'custom' && settings.customTheme && (
+                <div className="space-y-2">
+                  <Label className="text-sm">Paleta personalizada</Label>
+                  <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                    <div className="flex gap-1.5">
+                      <div
+                        className="w-6 h-6 rounded-full border"
+                        style={{ backgroundColor: settings.customTheme.primaryColor }}
+                        title="Cor primária"
+                      />
+                      <div
+                        className="w-6 h-6 rounded-full border"
+                        style={{ backgroundColor: settings.customTheme.accentColor }}
+                        title="Cor de destaque"
+                      />
+                      <div
+                        className="w-6 h-6 rounded-full border"
+                        style={{ backgroundColor: settings.customTheme.emphasisColor }}
+                        title="Cor de ênfase"
+                      />
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {settings.customTheme.name}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Para editar a paleta, acesse Configurações &gt; Personalização.
+                  </p>
+                </div>
+              )}
+
+              {/* Light/Dark mode toggle */}
+              <div className="space-y-2">
+                <Label className="text-sm">Modo de fundo</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={clientMode === 'light' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setClientMode('light')}
+                    className="gap-1"
+                  >
+                    <Sun className="h-3.5 w-3.5" />
+                    Claro
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={clientMode === 'dark' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setClientMode('dark')}
+                    className="gap-1"
+                  >
+                    <Moon className="h-3.5 w-3.5" />
+                    Escuro
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Aplica-se a todas as telas que o cliente vê: senha, álbuns, grid,
+                  confirmação e pagamento.
+                </p>
               </div>
             </CardContent>
           </Card>
