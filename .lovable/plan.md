@@ -1,64 +1,157 @@
 
+# Plano: corrigir galerias afetadas e blindar o Gallery contra valores absurdos
 
-# Plano: limpar a aba "Geral" e simplificar a "Marca d'Água"
+## Diagnóstico (resumido)
 
-## Mudança 1 — remover "Método de Pagamento Padrão" da aba Geral
+5 galerias do usuário `db0ca3d8-…` ficaram com `valor_foto_extra = 250,05` ao serem criadas via Gestão. A causa real está no Gestão (pacote "Mães 26 5 fotos" foi salvo com `250,05` por um bug do `useCurrencyInput` que escala valores quando o select-all do focus falha). **O Gallery apenas copiou o que o Gestão enviou** — ele não tem nenhuma validação de sanidade que rejeitasse esse valor.
 
-**Por quê:** já existe a aba **Pagamentos** onde cada provedor configurado pode ser marcado como **Padrão** (chip "⭐ Padrão" visível na imagem 1). Ter um segundo seletor em "Geral" duplica a configuração e gera inconsistência (um valor pode dizer "InfinitePay" enquanto o `is_default=true` no banco aponta para outro).
+Nesta fase, **não mexemos no Gestão**. Apenas corrigimos as galerias afetadas e plantamos as defesas no Gallery para que esse tipo de erro pare de propagar daqui pra frente.
 
-**O que sai de `src/components/settings/GeneralSettings.tsx`:**
-- bloco completo "Método de Pagamento Padrão" (linhas 330-393) — todo o card com `RadioGroup` de `defaultPaymentMethod`;
-- import `CreditCard` do lucide-react (deixa de ser usado);
-- import do tipo `PaymentMethod`.
+## Parte 1 — Corrigir as galerias afetadas (one-shot)
 
-**Backend / dados:** o campo `defaultPaymentMethod` continua em `GlobalSettings` e na tabela (`useGallerySettings`) por **compatibilidade** com galerias antigas, mas deixa de ser editável pela UI. A fonte da verdade do "padrão" passa a ser exclusivamente `usuarios_integracoes.is_default`. Não é necessária migração — galerias futuras vão pegar o `is_default` da aba Pagamentos.
+5 galerias identificadas, todas do mesmo pacote/categoria:
 
-## Mudança 2 — remover bloco "Modelo de Preços Padrão" duplicado da aba Geral
+| id | nome_pacote | valor_foto_extra hoje | regras_congeladas.valorFotoExtra hoje |
+|---|---|---|---|
+| `4e4f061d-c0da-494b-beb7-f47b1ce58391` | Mães 26 5 fotos | 250,05 | 250,05 |
+| `622a5169-e4fe-486a-8fcf-e76dd353e551` | Mães 26 5 fotos | 250,05 | 250,05 |
+| `4336dc90-0af8-40c0-9962-39a1f51a8a2d` | Mães 26 5 fotos | 250,05 | 250,05 |
+| `6a4df771-27fc-4ab1-a433-13de03966e24` | Mães 26 5 fotos | 25,00 (já ok) | 250,05 (precisa sanear) |
+| `b99f2efc-80c9-47c5-9036-414555e3e3d4` | Mães 26 5 fotos | 25,00 (já ok) | 250,05 (precisa sanear) |
 
-**Achado adicional na imagem 2:** o bloco "Modelo de Preços Padrão" (linhas 289-328 do `GeneralSettings`) está **idêntico** ao mesmo card que aparece marcado em vermelho na sua imagem. Verificando, esse bloco já é configurável **por galeria** no fluxo de criação. Mantê-lo aqui faz sentido como default global — então **mantenho**, exceto se você confirmar que também quer remover.
+Operação SQL (executada via tool de inserção, não migração — são updates de dados):
 
-> *Atenção:* a sua imagem 2 marcou tanto "Modelo de Preços Padrão" quanto "Método de Pagamento Padrão". Estou removendo apenas o **Método de Pagamento** (que é o que tem a duplicação real com a aba Pagamentos). Se quiser remover também o "Modelo de Preços Padrão", confirme — basta uma linha extra de exclusão.
+```sql
+-- 1. Corrigir o valor_foto_extra das 3 galerias com valor errado
+UPDATE galerias
+SET valor_foto_extra = 25.00,
+    updated_at = now()
+WHERE id IN (
+  '4e4f061d-c0da-494b-beb7-f47b1ce58391',
+  '622a5169-e4fe-486a-8fcf-e76dd353e551',
+  '4336dc90-0af8-40c0-9962-39a1f51a8a2d'
+);
 
-## Mudança 3 — simplificar bloco de Marca d'Água em "Personalização"
+-- 2. Sanear o valorFotoExtra dentro do JSONB regras_congeladas das 5 galerias
+UPDATE galerias
+SET regras_congeladas = jsonb_set(
+      regras_congeladas,
+      '{pacote,valorFotoExtra}',
+      '25'::jsonb,
+      false
+    ),
+    updated_at = now()
+WHERE id IN (
+  '4e4f061d-c0da-494b-beb7-f47b1ce58391',
+  '622a5169-e4fe-486a-8fcf-e76dd353e551',
+  '4336dc90-0af8-40c0-9962-39a1f51a8a2d',
+  '6a4df771-27fc-4ab1-a433-13de03966e24',
+  'b99f2efc-80c9-47c5-9036-414555e3e3d4'
+);
+```
 
-**Por quê:** a opção "**Apenas em tela cheia**" (preview limpo, marca aparece ao ampliar) **não é funcional**. Confirmei no código:
-- a marca d'água é **burn-in**: aplicada no Canvas durante o upload (`uploadPipeline.ts`) e gravada na imagem do R2;
-- não existe nenhuma lógica em runtime que diferencie `watermarkDisplay === 'fullscreen'` de `'all'` — o valor é apenas persistido em `configuracoes` da galeria, mas nenhuma view o consulta para esconder/mostrar a marca;
-- portanto, hoje "Apenas em tela cheia" se comporta exatamente igual a "Em todas as fotos", e "Nunca" só funciona quando o **modo de proteção** já é "Nenhuma" (que controla o burn-in real).
+> Antes de executar, vou rodar um SELECT de confirmação mostrando os 5 registros e pedindo seu OK final. Se alguma dessas galerias já tem cobranças geradas (verificarei em `cobrancas` e `clientes_sessoes`), aviso antes de tocar para você decidir se reprocessa também.
 
-**Conclusão:** o bloco "Exibição Padrão da Marca d'Água" é redundante — quem decide se há ou não marca é o bloco superior ("Tipo de proteção": Padrão / Minha Marca / Nenhuma). O bloco inferior só confunde o fotógrafo prometendo um comportamento que o sistema não entrega.
+## Parte 2 — Blindar o Gallery (prevenção)
 
-**O que sai de `src/components/settings/PersonalizationSettings.tsx`:**
-- card completo "Exibição Padrão da Marca d'Água" (linhas 92-126);
-- import `WatermarkDisplay` do `@/types/gallery` (deixa de ser usado neste arquivo).
+### 2.1 — Validar `preco_da_foto_extra` na entrada via URL
 
-**Mantém:** o card superior "Proteção de Imagem" (`WatermarkSettings.tsx`) inteiro — Padrão do Sistema / Minha Marca / Nenhuma + slider de opacidade. É o único controle real.
+Arquivo: `src/hooks/useGestaoParams.ts` (linhas 67–69).
 
-**Backend / dados:** o campo `defaultWatermarkDisplay` permanece no schema e em `GlobalSettings` por compatibilidade, mas deixa de ser editável. Galerias novas usarão o default `'all'` (do `mockData`/`useGallerySettings`), que combinado com o modo de proteção dá o comportamento correto.
+Hoje qualquer número >= 0 é aceito. Adicionar teto de R$ 999,99 (cobre 100% dos pacotes premium reais; o p99 do banco hoje é R$ 140) e logar valores suspeitos:
 
-## Detalhes técnicos
+```ts
+preco_da_foto_extra: (() => {
+  if (!precoFotoExtra) return undefined;
+  const v = parseFloat(precoFotoExtra);
+  if (isNaN(v) || v < 0) return undefined;
+  if (v > 999.99) {
+    console.warn('[useGestaoParams] preco_da_foto_extra fora do range esperado, descartado:', v);
+    return undefined; // força o usuário a digitar manualmente
+  }
+  return v;
+})(),
+```
+
+### 2.2 — Substituir a "normalização heurística" por sanitização explícita
+
+Arquivos:
+- `src/lib/pricingUtils.ts` (função `normalizarValor`).
+- `src/pages/GalleryCreate.tsx` (linhas 437 e 481, onde tem `valor > 1000 ? valor/100 : valor`).
+- `src/pages/ClientGallery.tsx` (verificar uso indireto via `pricingUtils`).
+
+Hoje:
+```ts
+if (valor > 1000) return valor / 100; // assume centavos
+```
+
+Essa heurística:
+- não pegou o caso `250,05` (250 não é > 1000);
+- é perigosa para pacotes legítimos: um pacote de R$ 1.500 viraria R$ 15.
+
+Trocar por uma função clara que **não converte centavos** (Gestão hoje já grava em reais; quando algum dia houver migração de centavos, será explícita) e apenas faz clamp de segurança:
+
+```ts
+export function sanitizeExtraPrice(value: unknown): number {
+  const v = typeof value === 'number' ? value : parseFloat(String(value));
+  if (!isFinite(v) || v < 0) return 0;
+  if (v > 999.99) {
+    console.warn('[sanitizeExtraPrice] valor acima do limite esperado:', v);
+    return 999.99;
+  }
+  return Math.round(v * 100) / 100; // 2 casas decimais
+}
+```
+
+`normalizarValor` é mantido como alias deprecated por 1 ciclo para não quebrar imports, mas internamente delega para `sanitizeExtraPrice`. Removo as conversões inline em `GalleryCreate.tsx`.
+
+### 2.3 — Aviso visual no Passo 6 (Revisão) do GalleryCreate
+
+Arquivo: `src/pages/GalleryCreate.tsx` (perto da linha 2008, onde aparece "R$ {fixedPrice.toFixed(2)}").
+
+Quando `fixedPrice > 100`, adicionar um banner amarelo discreto:
+
+> ⚠️ **Confira: R$ XXX,XX por foto extra.** Valores acima de R$ 100 são incomuns. Se estiver errado, volte ao Passo 2.
+
+Isso dá uma última chance ao fotógrafo de pegar o erro antes de criar a galeria.
+
+### 2.4 — Máscara consistente no input manual do Passo 2
+
+Arquivo: `src/pages/GalleryCreate.tsx` (linha 1451).
+
+Hoje é `<Input type="number" step={0.01}>` cru. Adicionar `min={0}` e `max={999.99}` no atributo nativo + `onBlur` que aplica `sanitizeExtraPrice`. Não vou criar um hook de máscara monetária aqui (manteria simples para esta fase) — o `type="number"` nativo já evita digitar dígitos extras como aconteceu no Gestão.
+
+## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/settings/GeneralSettings.tsx` | remover bloco "Método de Pagamento Padrão" (linhas 330-393); limpar imports `CreditCard` e `PaymentMethod` não utilizados |
-| `src/components/settings/PersonalizationSettings.tsx` | remover card "Exibição Padrão da Marca d'Água" (linhas 92-126); limpar import `WatermarkDisplay` |
-| Sem alteração em | `useGallerySettings.ts`, `useWatermarkSettings.ts`, `WatermarkSettings.tsx` (card superior fica intacto), `types/gallery.ts` (`WatermarkDisplay` e `defaultPaymentMethod` preservados para retrocompat), `GalleryCreate`/`GalleryEdit` (continuam respeitando defaults persistidos), webhooks, edge functions, RLS, fluxos de pagamento, integração Gestão, RPC `prepare_gallery_share` |
-| Migração SQL | nenhuma — campos antigos permanecem no banco e seguem funcionando para galerias já criadas |
+| **DB (5 galerias)** | UPDATEs corrigindo `valor_foto_extra` e `regras_congeladas.pacote.valorFotoExtra` para 25.00 |
+| `src/hooks/useGestaoParams.ts` | validar `preco_da_foto_extra` (≤ 999.99), descartar valores fora do range |
+| `src/lib/pricingUtils.ts` | criar `sanitizeExtraPrice`, marcar `normalizarValor` como deprecated alias |
+| `src/pages/GalleryCreate.tsx` | usar `sanitizeExtraPrice` (remover `/100 if >1000`); banner amarelo no Passo 6 se >R$ 100; clamp no input do Passo 2 |
+| `src/pages/ClientGallery.tsx` | usar `sanitizeExtraPrice` onde aplicável |
+
+**Não mexemos** em: webhooks, edge functions de pagamento (Asaas/InfinitePay/MP), RLS, integração Studio, fluxo de upload, hooks de créditos.
 
 ## Validação
 
-1. abrir **Configurações → Geral**: lista contém apenas Estúdio, Permissão, Prazo, Modo de Venda, Tamanho de Imagens, Tipo de Cobrança, Modelo de Preços (sem mais Método de Pagamento);
-2. abrir **Configurações → Pagamentos**: o chip "⭐ Padrão" continua sendo a única forma de definir o provedor padrão;
-3. criar nova galeria → o método de pagamento pré-selecionado vem do `is_default` da aba Pagamentos (comportamento já existente em `usePaymentIntegration`);
-4. abrir **Configurações → Personalização**: bloco superior "Proteção de Imagem" continua; bloco "Exibição Padrão da Marca d'Água" desaparece;
-5. criar nova galeria → marca d'água respeita o modo de proteção configurado (Padrão/Minha Marca/Nenhuma) — comportamento idêntico ao de hoje;
-6. galerias antigas com `defaultPaymentMethod` ou `defaultWatermarkDisplay` salvos: continuam funcionando, valores não são apagados;
-7. `npm run build` sem erros TS.
+1. Rodar SELECT pré-update mostrando os 5 registros antes de aplicar (você confirma);
+2. Após UPDATE: SELECT mostrando os 5 registros já corrigidos com valor 25,00;
+3. Reabrir as 5 galerias afetadas como cliente final → preço da foto extra aparece R$ 25,00;
+4. Criar nova galeria via Gestão usando outro pacote → fluxo normal funciona;
+5. Simular URL maliciosa `?preco_da_foto_extra=99999` → param descartado, log no console;
+6. Criar galeria manual com `fixedPrice = 200` → banner amarelo aparece no Passo 6;
+7. Reabrir uma galeria antiga com pacote legítimo (ex: R$ 35 por foto) → continua funcionando, sem alteração;
+8. `npm run build` sem erros TS.
+
+## O que fica para depois
+
+O bug raiz no `useCurrencyInput` do **Lunari_gestão** (que escala valores quando o select-all falha no focus) **continuará reproduzível no Gestão** até ser corrigido lá. Recomendo abrir uma tarefa separada para isso quando você quiser. As defesas plantadas aqui no Gallery garantem que, mesmo se acontecer de novo, **o valor errado não chega a virar uma galeria** — o teto de R$ 999,99 e o banner de aviso pegariam.
 
 ## Resultado esperado
 
-- aba **Geral** focada apenas em defaults sem duplicação;
-- método de pagamento padrão tem **uma única fonte de verdade**: a aba Pagamentos;
-- marca d'água tem **um único bloco** de configuração honesto, sem prometer "preview limpo / marca em tela cheia" que o sistema não entrega;
-- nenhum impacto em pagamentos, webhooks, integração Gestão, créditos, ou no fluxo de upload com burn-in.
-
+- As 5 galerias afetadas voltam a cobrar R$ 25,00 por foto extra;
+- Galerias futuras vindas do Gestão são protegidas por validação de range;
+- A heurística "/100 if >1000" é eliminada (deixa de ser fonte silenciosa de bugs em pacotes premium);
+- Fotógrafo recebe aviso visual quando o valor é incomum, antes de a galeria ser publicada;
+- Nenhum impacto em pagamentos, integração Studio, ou em galerias com pacotes de preços legítimos.

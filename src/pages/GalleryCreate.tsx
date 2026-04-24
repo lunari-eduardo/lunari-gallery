@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon, Eye, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, Settings, Check, Upload, Calendar, MessageSquare, Download, Droplet, Plus, Ban, CreditCard, Receipt, Tag, Package, Trash2, Save, Globe, Lock, Link2, Pencil, TrendingDown, Palette, Sun, Moon, Eye, X, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,7 +32,7 @@ import { generateId } from '@/lib/storage';
 import { PhotoUploader, UploadedPhoto, QueueState } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
-import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay, buildRegrasFromDiscountPackages } from '@/lib/pricingUtils';
+import { RegrasCongeladas, getModeloDisplayName, getFaixasFromRegras, formatFaixaDisplay, buildRegrasFromDiscountPackages, sanitizeExtraPrice } from '@/lib/pricingUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { getDisplayUrl } from '@/lib/photoUrl';
@@ -432,10 +432,10 @@ export default function GalleryCreate() {
             setRegrasCongeladas(regras);
           }
 
-          // Use session's valor_foto_extra as fallback (normalized)
+          // Use session's valor_foto_extra as fallback (sanitized + clamped)
           if (data?.valor_foto_extra && data.valor_foto_extra > 0) {
-            const valorNormalizado = data.valor_foto_extra > 1000 ? data.valor_foto_extra / 100 : data.valor_foto_extra;
-            setFixedPrice(valorNormalizado);
+            const valorSanitizado = sanitizeExtraPrice(data.valor_foto_extra);
+            setFixedPrice(valorSanitizado);
           }
         }
       } catch (error) {
@@ -476,11 +476,11 @@ export default function GalleryCreate() {
       setSessionName(pacote.categoria);
     }
 
-    // valorFotoExtra from frozen rules - normalize if in cents
+    // valorFotoExtra from frozen rules - sanitize + clamp to safe range
     if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
-      const valorNormalizado = pacote.valorFotoExtra > 1000 ? pacote.valorFotoExtra / 100 : pacote.valorFotoExtra;
-      console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorNormalizado);
-      setFixedPrice(valorNormalizado);
+      const valorSanitizado = sanitizeExtraPrice(pacote.valorFotoExtra);
+      console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorSanitizado);
+      setFixedPrice(valorSanitizado);
     }
   }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, packageName, sessionName]);
 
@@ -1448,7 +1448,7 @@ export default function GalleryCreate() {
                               
                               {pricingModel === 'fixed' && <div className="pt-3 border-t border-border/50">
                                   <Label htmlFor="fixedPrice" className="text-sm">Valor por foto (R$)</Label>
-                                  <Input id="fixedPrice" type="number" min={0} step={0.01} value={fixedPrice || ''} onChange={(e) => setFixedPrice(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} className="mt-2" onClick={(e) => e.stopPropagation()} />
+                                  <Input id="fixedPrice" type="number" min={0} max={999.99} step={0.01} value={fixedPrice || ''} onChange={(e) => setFixedPrice(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))} onBlur={(e) => { const sanitized = sanitizeExtraPrice(e.target.value); if (sanitized !== fixedPrice) setFixedPrice(sanitized); }} className="mt-2" onClick={(e) => e.stopPropagation()} />
                                 </div>}
                             </Label>
                           </div>
@@ -2007,6 +2007,17 @@ export default function GalleryCreate() {
                         <span className="text-muted-foreground">Valor por foto</span>
                         <span className="font-medium">R$ {fixedPrice.toFixed(2)}</span>
                       </div>
+                      {fixedPrice > 100 && (
+                        <div className="mt-2 flex items-start gap-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-700 dark:text-yellow-300">
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-medium">Confira: R$ {fixedPrice.toFixed(2)} por foto extra.</p>
+                            <p className="text-yellow-700/80 dark:text-yellow-300/80">
+                              Valores acima de R$ 100 são incomuns. Se estiver errado, volte ao Passo 2.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       {pricingModel === 'packages' && discountPackages.length > 0 && <div className="flex justify-between">
                           <span className="text-muted-foreground">Pacotes de desconto</span>
                           <span className="font-medium">{discountPackages.length} configurados</span>
