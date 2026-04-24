@@ -301,9 +301,11 @@ export function calcularPrecoProgressivoComCredito(
         const faixa = encontrarFaixaPreco(qtdParaFaixa, regras.tabelaCategoria.faixas);
         if (faixa?.valor) displayUnitPrice = normalizarValor(faixa.valor);
       } else {
-        // Fixed pricing model
-        const valorPacote = regrasCongeladas.pacote?.valorFotoExtra;
-        if (valorPacote && valorPacote > 0) displayUnitPrice = normalizarValor(valorPacote);
+        // Fixed pricing model — gallery wins over frozen JSONB
+        const valorPacote = sanitizeExtraPrice(regrasCongeladas.pacote?.valorFotoExtra ?? 0);
+        const fixoNorm = sanitizeExtraPrice(valorFotoExtraFixo);
+        if (fixoNorm > 0) displayUnitPrice = fixoNorm;
+        else if (valorPacote > 0) displayUnitPrice = valorPacote;
       }
     }
     
