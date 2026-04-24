@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { getPhotoUrl as getPhotoUrlFromLib, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { WatermarkSettings, TitleCaseMode } from '@/types/gallery';
 import { Json } from '@/integrations/supabase/types';
-import { RegrasCongeladas } from '@/lib/pricingUtils';
+import { RegrasCongeladas, sanitizeExtraPrice } from '@/lib/pricingUtils';
 
 // Types based on database schema
 export interface GaleriaPhoto {
