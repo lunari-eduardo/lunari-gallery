@@ -322,9 +322,23 @@ export function calcularPrecoProgressivoComCredito(
   let faixaAtual: FaixaPreco | null = null;
   let modeloUsado: 'fixo' | 'global' | 'categoria' = 'fixo';
   
-  // Get base price for savings calculation
-  const valorPacoteRaw = regrasCongeladas?.pacote?.valorFotoExtra || valorFotoExtraFixo;
-  const precoBasePacote = normalizarValor(valorPacoteRaw);
+  // Resolve base price with "gallery wins" rule (see calcularPrecoProgressivo).
+  // The gallery's `valor_foto_extra` is the photographer's authoritative edit;
+  // the JSONB on `clientes_sessoes.regras_congeladas` may be stale until the
+  // sync trigger fires.
+  const fixoSanitizado = sanitizeExtraPrice(valorFotoExtraFixo);
+  const regrasSanitizado = sanitizeExtraPrice(regrasCongeladas?.pacote?.valorFotoExtra ?? 0);
+  if (
+    fixoSanitizado > 0 &&
+    regrasSanitizado > 0 &&
+    Math.abs(fixoSanitizado - regrasSanitizado) > 0.005
+  ) {
+    console.warn(
+      '[pricingUtils] Frozen rule price diverged from gallery price — using gallery price',
+      { gallery: fixoSanitizado, frozen: regrasSanitizado }
+    );
+  }
+  const precoBasePacote = fixoSanitizado > 0 ? fixoSanitizado : regrasSanitizado;
   
   if (regrasCongeladas?.precificacaoFotoExtra) {
     const regras = regrasCongeladas.precificacaoFotoExtra;
