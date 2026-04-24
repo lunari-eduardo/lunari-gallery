@@ -1,157 +1,119 @@
 
-# Plano: corrigir galerias afetadas e blindar o Gallery contra valores absurdos
+# Plano — corrigir propagação do "Valor Foto Extra" editado na galeria
 
-## Diagnóstico (resumido)
+## 1. Diagnóstico (já confirmado em produção)
 
-5 galerias do usuário `db0ca3d8-…` ficaram com `valor_foto_extra = 250,05` ao serem criadas via Gestão. A causa real está no Gestão (pacote "Mães 26 5 fotos" foi salvo com `250,05` por um bug do `useCurrencyInput` que escala valores quando o select-all do focus falha). **O Gallery apenas copiou o que o Gestão enviou** — ele não tem nenhuma validação de sanidade que rejeitasse esse valor.
+A consulta no banco mostrou exatamente o quadro descrito:
 
-Nesta fase, **não mexemos no Gestão**. Apenas corrigimos as galerias afetadas e plantamos as defesas no Gallery para que esse tipo de erro pare de propagar daqui pra frente.
-
-## Parte 1 — Corrigir as galerias afetadas (one-shot)
-
-5 galerias identificadas, todas do mesmo pacote/categoria:
-
-| id | nome_pacote | valor_foto_extra hoje | regras_congeladas.valorFotoExtra hoje |
-|---|---|---|---|
-| `4e4f061d-c0da-494b-beb7-f47b1ce58391` | Mães 26 5 fotos | 250,05 | 250,05 |
-| `622a5169-e4fe-486a-8fcf-e76dd353e551` | Mães 26 5 fotos | 250,05 | 250,05 |
-| `4336dc90-0af8-40c0-9962-39a1f51a8a2d` | Mães 26 5 fotos | 250,05 | 250,05 |
-| `6a4df771-27fc-4ab1-a433-13de03966e24` | Mães 26 5 fotos | 25,00 (já ok) | 250,05 (precisa sanear) |
-| `b99f2efc-80c9-47c5-9036-414555e3e3d4` | Mães 26 5 fotos | 25,00 (já ok) | 250,05 (precisa sanear) |
-
-Operação SQL (executada via tool de inserção, não migração — são updates de dados):
-
-```sql
--- 1. Corrigir o valor_foto_extra das 3 galerias com valor errado
-UPDATE galerias
-SET valor_foto_extra = 25.00,
-    updated_at = now()
-WHERE id IN (
-  '4e4f061d-c0da-494b-beb7-f47b1ce58391',
-  '622a5169-e4fe-486a-8fcf-e76dd353e551',
-  '4336dc90-0af8-40c0-9962-39a1f51a8a2d'
-);
-
--- 2. Sanear o valorFotoExtra dentro do JSONB regras_congeladas das 5 galerias
-UPDATE galerias
-SET regras_congeladas = jsonb_set(
-      regras_congeladas,
-      '{pacote,valorFotoExtra}',
-      '25'::jsonb,
-      false
-    ),
-    updated_at = now()
-WHERE id IN (
-  '4e4f061d-c0da-494b-beb7-f47b1ce58391',
-  '622a5169-e4fe-486a-8fcf-e76dd353e551',
-  '4336dc90-0af8-40c0-9962-39a1f51a8a2d',
-  '6a4df771-27fc-4ab1-a433-13de03966e24',
-  'b99f2efc-80c9-47c5-9036-414555e3e3d4'
-);
+```
+gallery_vfe | gallery_regras_vfe | sessao_vfe | sessao_regras_vfe
+   25,00    |        25          |    25      |     250,05    ← cliente vê R$ 250,05
+   25,00    |        25          |    25      |     250,05
+   25,00    |        25          |    25      |     250,05
+   25,00    |        25          |    25      |     250,05
+   25,00    |        25          |    25      |     250,05
+   25,00    |       2550         |    25      |      25       ← caso antigo (centavos)
 ```
 
-> Antes de executar, vou rodar um SELECT de confirmação mostrando os 5 registros e pedindo seu OK final. Se alguma dessas galerias já tem cobranças geradas (verificarei em `cobrancas` e `clientes_sessoes`), aviso antes de tocar para você decidir se reprocessa também.
+Cinco galerias do "Dia das Mães" estão com **`galerias.valor_foto_extra = 25`** (campo simples corrigido), porém **`clientes_sessoes.regras_congeladas.pacote.valorFotoExtra = 250.05`**. Ainda existe um caso antigo (Huimi Loreto) com **`galerias.regras_congeladas.pacote.valorFotoExtra = 2550`** (valor em centavos não normalizado).
 
-## Parte 2 — Blindar o Gallery (prevenção)
+### Por que o cliente continua vendo o preço errado
 
-### 2.1 — Validar `preco_da_foto_extra` na entrada via URL
+1. **`gallery-access` (linha 1006)** sobrescreve as regras da galeria pelas regras da sessão sempre que `session_id` existir:
+   ```ts
+   regrasCongeladas = sessao.regras_congeladas;   // ← traz o 250,05 antigo
+   ```
+2. **`pricingUtils.calcularPrecoProgressivoComCredito` (linha 164)** decide o preço unitário pelo modelo `fixo` lendo `regrasCongeladas.pacote.valorFotoExtra`, **ignorando** o `valorFotoExtraFixo` (que é justamente o `gallery.valor_foto_extra` corrigido).
+3. **`useSupabaseGalleries.updateGallery`** só faz `UPDATE galerias SET valor_foto_extra = …`. Não toca em `galerias.regras_congeladas` nem em `clientes_sessoes.regras_congeladas`.
+4. Existe o trigger **`sync_gallery_extras_to_session`**, que copia `valor_foto_extra` da galeria para `clientes_sessoes.valor_foto_extra` — mas **não mexe** nos campos JSONB `regras_congeladas->pacote->valorFotoExtra` (galeria nem sessão). É exatamente o JSONB que vence na precificação do cliente.
 
-Arquivo: `src/hooks/useGestaoParams.ts` (linhas 67–69).
+Resultado: a edição parece funcionar (Editar/Detalhes mostram 25), mas o cliente vê o preço antigo porque a fonte de verdade do cálculo é o JSONB que ninguém atualiza.
 
-Hoje qualquer número >= 0 é aceito. Adicionar teto de R$ 999,99 (cobre 100% dos pacotes premium reais; o p99 do banco hoje é R$ 140) e logar valores suspeitos:
+## 2. Estratégia da correção
 
-```ts
-preco_da_foto_extra: (() => {
-  if (!precoFotoExtra) return undefined;
-  const v = parseFloat(precoFotoExtra);
-  if (isNaN(v) || v < 0) return undefined;
-  if (v > 999.99) {
-    console.warn('[useGestaoParams] preco_da_foto_extra fora do range esperado, descartado:', v);
-    return undefined; // força o usuário a digitar manualmente
-  }
-  return v;
-})(),
-```
+Três frentes complementares:
 
-### 2.2 — Substituir a "normalização heurística" por sanitização explícita
+1. **Banco (idempotente, agora)**: subir o trigger `sync_gallery_extras_to_session` para também patchear o JSONB `regras_congeladas->pacote->valorFotoExtra` na sessão (e na própria galeria, por segurança), aplicando `sanitizeExtraPrice` (clamp 0–999,99). Isso resolve **automaticamente** todas as edições futuras — sem depender do front-end.
+2. **Backfill único (data fix)**: rodar uma migration que sincroniza, em todas as galerias com session_id, o JSONB da sessão e da galeria com o `galerias.valor_foto_extra` saneado. Corrige imediatamente as 5 galerias do Dia das Mães e o caso "Huimi Loreto".
+3. **App (defesa em profundidade)**: no `updateGallery` (front), além do `UPDATE galerias`, fazer um `UPDATE clientes_sessoes` complementar para garantir consistência mesmo se o trigger for desabilitado/futuramente migrado, e, no `pricingUtils`, deixar de ignorar o `valorFotoExtraFixo` quando ele divergir do JSONB (o JSONB vira um teto/sugestão, e o fixo da galeria — agora sempre saneado — é a fonte de verdade do "modelo fixo").
 
-Arquivos:
-- `src/lib/pricingUtils.ts` (função `normalizarValor`).
-- `src/pages/GalleryCreate.tsx` (linhas 437 e 481, onde tem `valor > 1000 ? valor/100 : valor`).
-- `src/pages/ClientGallery.tsx` (verificar uso indireto via `pricingUtils`).
+A combinação fecha a porta tanto no caminho de leitura (`pricingUtils`) quanto nos caminhos de escrita (trigger + backfill + UI).
 
-Hoje:
-```ts
-if (valor > 1000) return valor / 100; // assume centavos
-```
+## 3. O que muda — arquivos e responsabilidades
 
-Essa heurística:
-- não pegou o caso `250,05` (250 não é > 1000);
-- é perigosa para pacotes legítimos: um pacote de R$ 1.500 viraria R$ 15.
+### 3.1 Migração de banco (nova)
 
-Trocar por uma função clara que **não converte centavos** (Gestão hoje já grava em reais; quando algum dia houver migração de centavos, será explícita) e apenas faz clamp de segurança:
+`supabase/migrations/<timestamp>_sync_extra_price_to_frozen_rules.sql`
 
-```ts
-export function sanitizeExtraPrice(value: unknown): number {
-  const v = typeof value === 'number' ? value : parseFloat(String(value));
-  if (!isFinite(v) || v < 0) return 0;
-  if (v > 999.99) {
-    console.warn('[sanitizeExtraPrice] valor acima do limite esperado:', v);
-    return 999.99;
-  }
-  return Math.round(v * 100) / 100; // 2 casas decimais
-}
-```
+a) Reescrever a função `public.sync_gallery_extras_to_session()` para também atualizar o JSONB:
+- `clientes_sessoes.regras_congeladas = jsonb_set(regras_congeladas, '{pacote,valorFotoExtra}', to_jsonb(NEW.valor_foto_extra))` quando o caminho existir;
+- mesma lógica em `galerias.regras_congeladas` da própria linha (com `BEFORE` ou via `UPDATE` separado dentro do `AFTER`, evitando recursão usando `pg_trigger_depth()`);
+- aplicar `LEAST(GREATEST(NEW.valor_foto_extra, 0), 999.99)` (espelho de `sanitizeExtraPrice`) antes de gravar;
+- preservar todo o restante do JSONB.
 
-`normalizarValor` é mantido como alias deprecated por 1 ciclo para não quebrar imports, mas internamente delega para `sanitizeExtraPrice`. Removo as conversões inline em `GalleryCreate.tsx`.
+b) Backfill one-shot dentro da mesma migration:
+- para todas as `galerias` com `session_id IS NOT NULL` onde `(s.regras_congeladas->'pacote'->>'valorFotoExtra')::numeric` diverge de `g.valor_foto_extra`, atualizar o JSONB da sessão para o valor da galeria (clampado);
+- para galerias com `(g.regras_congeladas->'pacote'->>'valorFotoExtra')::numeric` divergente do `g.valor_foto_extra` (ex: caso "Huimi Loreto" com 2550), atualizar o JSONB da galeria para o valor saneado.
 
-### 2.3 — Aviso visual no Passo 6 (Revisão) do GalleryCreate
+c) Não tocar em `cobrancas` históricas — preço cobrado já registrado é imutável. O fix é apenas para precificação **futura/visual**.
 
-Arquivo: `src/pages/GalleryCreate.tsx` (perto da linha 2008, onde aparece "R$ {fixedPrice.toFixed(2)}").
+### 3.2 `src/hooks/useSupabaseGalleries.ts`
 
-Quando `fixedPrice > 100`, adicionar um banner amarelo discreto:
+Em `updateGalleryMutation`, quando `data.valorFotoExtra !== undefined`:
 
-> ⚠️ **Confira: R$ XXX,XX por foto extra.** Valores acima de R$ 100 são incomuns. Se estiver errado, volte ao Passo 2.
+1. Sanitizar o valor com `sanitizeExtraPrice` antes de mandar para o banco (defesa contra qualquer caminho que ainda chegasse com 250,05 vindos da UI).
+2. Após o `UPDATE galerias`, ler `session_id` da galeria. Se existir:
+   - `UPDATE galerias SET regras_congeladas = jsonb_set(...)` para corrigir o próprio JSONB da galeria (cobre o caso em que o trigger seja desabilitado em ambientes futuros);
+   - chamar uma RPC simples (`sync_session_extra_price(p_session_id text, p_valor numeric)`) ou um `UPDATE clientes_sessoes` direto (RLS já permite — `auth.uid() = user_id`) atualizando `valor_foto_extra` e `regras_congeladas.pacote.valorFotoExtra`.
+3. Manter `onSuccess` invalidando `['galerias']` e adicionar `['client-gallery-session-rules', sessionId]` para evitar cache stale na própria sessão de gestor.
 
-Isso dá uma última chance ao fotógrafo de pegar o erro antes de criar a galeria.
+A escrita continua atômica do ponto de vista do usuário porque cada UPDATE é independente; mesmo se a etapa 2 falhasse, o trigger garantirá a sincronização.
 
-### 2.4 — Máscara consistente no input manual do Passo 2
+### 3.3 `src/lib/pricingUtils.ts`
 
-Arquivo: `src/pages/GalleryCreate.tsx` (linha 1451).
+Evoluir `calcularPrecoProgressivo` e `calcularPrecoProgressivoComCredito` para o seguinte critério no modelo **fixo**:
 
-Hoje é `<Input type="number" step={0.01}>` cru. Adicionar `min={0}` e `max={999.99}` no atributo nativo + `onBlur` que aplica `sanitizeExtraPrice`. Não vou criar um hook de máscara monetária aqui (manteria simples para esta fase) — o `type="number"` nativo já evita digitar dígitos extras como aconteceu no Gestão.
+- `precoBase = sanitizeExtraPrice(valorFotoExtraFixo || regras.pacote.valorFotoExtra)`
+- Se `valorFotoExtraFixo > 0` e divergir de `regras.pacote.valorFotoExtra`, **vence o `valorFotoExtraFixo`** (vem de `galerias.valor_foto_extra`, que é o que o fotógrafo edita). Logar `console.warn` apontando o desencontro para diagnóstico.
+- Nos modelos `global` e `categoria`, manter as faixas como hoje, mas aplicar `sanitizeExtraPrice` em cada `faixa.valor` antes do cálculo (cobre regras antigas com valores em centavos, ex: 2550).
 
-## Arquivos modificados
+Esse ajuste é a **última linha de defesa**: mesmo que algum cache antigo do JSONB ainda traga 250,05, o cliente verá o preço correto se `gallery.extraPhotoPrice` estiver certo.
 
-| Arquivo | Mudança |
-|---|---|
-| **DB (5 galerias)** | UPDATEs corrigindo `valor_foto_extra` e `regras_congeladas.pacote.valorFotoExtra` para 25.00 |
-| `src/hooks/useGestaoParams.ts` | validar `preco_da_foto_extra` (≤ 999.99), descartar valores fora do range |
-| `src/lib/pricingUtils.ts` | criar `sanitizeExtraPrice`, marcar `normalizarValor` como deprecated alias |
-| `src/pages/GalleryCreate.tsx` | usar `sanitizeExtraPrice` (remover `/100 if >1000`); banner amarelo no Passo 6 se >R$ 100; clamp no input do Passo 2 |
-| `src/pages/ClientGallery.tsx` | usar `sanitizeExtraPrice` onde aplicável |
+### 3.4 `supabase/functions/gallery-access/index.ts`
 
-**Não mexemos** em: webhooks, edge functions de pagamento (Asaas/InfinitePay/MP), RLS, integração Studio, fluxo de upload, hooks de créditos.
+Adição cirúrgica entre as linhas 1006 e 1144:
 
-## Validação
+- Antes de retornar, **patchar em memória** `regrasCongeladas.pacote.valorFotoExtra` com `sanitizeExtraPrice(gallery.valor_foto_extra)` se houver divergência. Não grava no banco (a migration + trigger já cuidam disso); apenas garante que o payload entregue ao cliente seja coerente, mesmo em galerias que ainda não passaram pelo trigger novo (defesa para o intervalo entre deploy e backfill, e para galerias antigas que não recebam UPDATE).
+- Logar 1 linha quando aplicar o patch (`⚠️ Frozen rule price (X) diverged from gallery price (Y) — using gallery price`).
 
-1. Rodar SELECT pré-update mostrando os 5 registros antes de aplicar (você confirma);
-2. Após UPDATE: SELECT mostrando os 5 registros já corrigidos com valor 25,00;
-3. Reabrir as 5 galerias afetadas como cliente final → preço da foto extra aparece R$ 25,00;
-4. Criar nova galeria via Gestão usando outro pacote → fluxo normal funciona;
-5. Simular URL maliciosa `?preco_da_foto_extra=99999` → param descartado, log no console;
-6. Criar galeria manual com `fixedPrice = 200` → banner amarelo aparece no Passo 6;
-7. Reabrir uma galeria antiga com pacote legítimo (ex: R$ 35 por foto) → continua funcionando, sem alteração;
-8. `npm run build` sem erros TS.
+### 3.5 `src/components/DiscountProgressBar.tsx`
 
-## O que fica para depois
+Trocar a leitura `regras?.pacote?.valorFotoExtra || extraPhotoPrice` por `sanitizeExtraPrice(extraPhotoPrice || regras?.pacote?.valorFotoExtra)`. Mesma lógica de "preço da galeria vence" que está em `pricingUtils`.
 
-O bug raiz no `useCurrencyInput` do **Lunari_gestão** (que escala valores quando o select-all falha no focus) **continuará reproduzível no Gestão** até ser corrigido lá. Recomendo abrir uma tarefa separada para isso quando você quiser. As defesas plantadas aqui no Gallery garantem que, mesmo se acontecer de novo, **o valor errado não chega a virar uma galeria** — o teto de R$ 999,99 e o banner de aviso pegariam.
+## 4. Sequência de execução
 
-## Resultado esperado
+1. **Migration** (trigger + função + backfill). Já elimina o problema visual em **todas** as 5 galerias do Dia das Mães + Huimi Loreto.
+2. Atualizar `pricingUtils.ts` (mudança trivial, segura).
+3. Atualizar `gallery-access/index.ts` (patch in-memory + log).
+4. Atualizar `useSupabaseGalleries.ts` para também patchar a sessão no save.
+5. Atualizar `DiscountProgressBar.tsx`.
+6. Build TS + smoke test em uma das galerias afetadas (recarregar a galeria do cliente, conferir "+1 R$ 25,00" e barra de progresso).
 
-- As 5 galerias afetadas voltam a cobrar R$ 25,00 por foto extra;
-- Galerias futuras vindas do Gestão são protegidas por validação de range;
-- A heurística "/100 if >1000" é eliminada (deixa de ser fonte silenciosa de bugs em pacotes premium);
-- Fotógrafo recebe aviso visual quando o valor é incomum, antes de a galeria ser publicada;
-- Nenhum impacto em pagamentos, integração Studio, ou em galerias com pacotes de preços legítimos.
+## 5. O que NÃO muda
+
+- **Nenhuma cobrança histórica é tocada.** `cobrancas`, `transactions` e `galeria_acoes` permanecem intactas — preço pago já é imutável.
+- **Webhooks** (Asaas, InfinitePay, Mercado Pago) não dependem do JSONB de regras na hora de receber pagamento; usam o registro `cobrancas`. Sem risco para automações.
+- **Modo Assistido / Studio**: o caminho oposto (Gestão → Galeria) continua funcionando normalmente; a edição manual no Galeria agora também flui de volta para a sessão, fechando o ciclo.
+- **RLS / segurança**: nada muda. RPC nova, se criada, será `SECURITY DEFINER` com `WHERE user_id = auth.uid()`.
+
+## 6. Critérios de aceite
+
+1. Editar `valor_foto_extra` em qualquer galeria com `session_id` deve, **dentro da mesma transação**, atualizar:
+   - `galerias.valor_foto_extra` ✅
+   - `galerias.regras_congeladas->pacote->valorFotoExtra` ✅
+   - `clientes_sessoes.valor_foto_extra` ✅
+   - `clientes_sessoes.regras_congeladas->pacote->valorFotoExtra` ✅
+2. A galeria do cliente (após hard reload) deve exibir o novo preço unitário em: badge "+N extras", rodapé total, barra de desconto, lightbox e tela de confirmação.
+3. Para as 5 galerias do Dia das Mães + Huimi Loreto, abrir a galeria sem editar nada e confirmar que o preço já está coerente (efeito do backfill).
+4. Editar valor para algo absurdo (ex.: digitar "9999") deve ser **clampado em 999,99** em todas as 4 escritas acima.
+5. `npm run build` sem erros TS.

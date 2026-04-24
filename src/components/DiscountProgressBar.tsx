@@ -6,6 +6,7 @@ import {
   getFaixasFromRegras, 
   encontrarFaixaPreco, 
   normalizarValor,
+  sanitizeExtraPrice,
   buildRegrasFromDiscountPackages 
 } from '@/lib/pricingUtils';
 import { DiscountPackage } from '@/types/gallery';
@@ -56,10 +57,14 @@ export function useDiscountAnalysis({
     if (faixas.length < 2) return null;
 
     const sortedFaixas = [...faixas].sort((a, b) => a.min - b.min);
-    const basePrice = normalizarValor(regras?.pacote?.valorFotoExtra || extraPhotoPrice);
+    // Gallery wins: prefer the photographer-edited price (extraPhotoPrice =
+    // galerias.valor_foto_extra) over a possibly-stale frozen JSONB.
+    const fixoSan = sanitizeExtraPrice(extraPhotoPrice);
+    const regrasSan = sanitizeExtraPrice(regras?.pacote?.valorFotoExtra ?? 0);
+    const basePrice = fixoSan > 0 ? fixoSan : regrasSan;
     
     const faixaAtual = totalExtras > 0 ? encontrarFaixaPreco(totalExtras, sortedFaixas) : null;
-    const currentPrice = faixaAtual ? normalizarValor(faixaAtual.valor) : basePrice;
+    const currentPrice = faixaAtual ? sanitizeExtraPrice(faixaAtual.valor) : basePrice;
     
     const currentIdx = faixaAtual ? sortedFaixas.findIndex(f => f.min === faixaAtual.min && f.max === faixaAtual.max) : -1;
     const nextFaixa = currentIdx >= 0 && currentIdx < sortedFaixas.length - 1 ? sortedFaixas[currentIdx + 1] : null;
