@@ -64,9 +64,18 @@ export function useGestaoParams(): UseGestaoParamsResult {
       fotos_incluidas_no_pacote: fotosIncluidas 
         ? Math.max(0, Math.min(9999, parseInt(fotosIncluidas, 10))) 
         : undefined,
-      preco_da_foto_extra: precoFotoExtra 
-        ? Math.max(0, parseFloat(precoFotoExtra)) 
-        : undefined,
+      preco_da_foto_extra: (() => {
+        if (!precoFotoExtra) return undefined;
+        const v = parseFloat(precoFotoExtra);
+        if (isNaN(v) || v < 0) return undefined;
+        // Teto de segurança: valores acima de R$ 999,99 são improváveis para foto extra
+        // e provavelmente indicam erro de origem (ex: bug de máscara monetária no Gestão)
+        if (v > 999.99) {
+          console.warn('[useGestaoParams] preco_da_foto_extra fora do range esperado, descartado:', v);
+          return undefined;
+        }
+        return Math.max(0, v);
+      })(),
       modelo_de_cobranca: saleMode,
       modelo_de_preco: pricingModel,
     };
