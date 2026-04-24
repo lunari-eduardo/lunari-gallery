@@ -1008,6 +1008,44 @@ serve(async (req) => {
       }
     }
 
+    // 4.1 Defense in depth: clamp + reconcile frozen rules with the gallery's
+    // current `valor_foto_extra`. Guarantees the client sees a coherent price
+    // even if the sync trigger hasn't fired yet, and for legacy galleries
+    // whose JSONB still holds prices in cents (e.g. 2550 instead of 25.50).
+    // We never persist this — only the response payload is patched.
+    const sanitizeServerPrice = (v: unknown): number => {
+      const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+      if (!isFinite(n) || n < 0) return 0;
+      if (n > 999.99) return 999.99;
+      return Math.round(n * 100) / 100;
+    };
+    const galleryPriceSanitized = sanitizeServerPrice(gallery.valor_foto_extra);
+    if (
+      regrasCongeladas &&
+      typeof regrasCongeladas === "object" &&
+      (regrasCongeladas as any).pacote &&
+      typeof (regrasCongeladas as any).pacote === "object"
+    ) {
+      const frozenPrice = sanitizeServerPrice(
+        (regrasCongeladas as any).pacote.valorFotoExtra
+      );
+      if (
+        galleryPriceSanitized > 0 &&
+        Math.abs(galleryPriceSanitized - frozenPrice) > 0.005
+      ) {
+        console.warn(
+          `⚠️ Frozen rule price (${frozenPrice}) diverged from gallery price (${galleryPriceSanitized}) — patching response`
+        );
+        regrasCongeladas = {
+          ...(regrasCongeladas as any),
+          pacote: {
+            ...(regrasCongeladas as any).pacote,
+            valorFotoExtra: galleryPriceSanitized,
+          },
+        };
+      }
+    }
+
     // 5. Fetch photos for the gallery (paginated)
     const { data: photos, error: photosError, count: totalPhotoCount } = await supabase
       .from("galeria_fotos")
