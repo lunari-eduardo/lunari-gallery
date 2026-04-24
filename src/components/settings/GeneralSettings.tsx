@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Globe, Calendar, Building2, Shield, Lock, Tag, Image as ImageIcon, Receipt, Package, CreditCard } from 'lucide-react';
+import { Globe, Calendar, Building2, Shield, Lock, Tag, Image as ImageIcon, Receipt, Package } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { GlobalSettings, GalleryPermission, SaleMode, ImageResizeOption, ChargeType, PricingModel, PaymentMethod } from '@/types/gallery';
+import { GlobalSettings, GalleryPermission, SaleMode, ImageResizeOption, ChargeType, PricingModel } from '@/types/gallery';
 import { UpdateSettingsOptions } from '@/hooks/useGallerySettings';
 
 interface GeneralSettingsProps {
@@ -322,71 +322,6 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
               <p className="text-sm text-muted-foreground">
                 Faixas progressivas de preço por quantidade
               </p>
-            </Label>
-          </div>
-        </RadioGroup>
-      </div>
-
-      {/* Default Payment Method */}
-      <div className="lunari-card p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <CreditCard className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">Método de Pagamento Padrão</h2>
-            <p className="text-sm text-muted-foreground">
-              Pré-selecionado em novas galerias com pagamento ativo
-            </p>
-          </div>
-        </div>
-
-        <RadioGroup
-          value={settings.defaultPaymentMethod ?? 'auto'}
-          onValueChange={(v) => updateSettings(
-            { defaultPaymentMethod: v === 'auto' ? undefined : (v as PaymentMethod) },
-            { successMessage: 'Método de pagamento salvo.' }
-          )}
-          className="space-y-3"
-        >
-          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-            <RadioGroupItem value="auto" id="pm-auto" className="mt-0.5" />
-            <Label htmlFor="pm-auto" className="flex-1 cursor-pointer">
-              <p className="font-medium">Usar integração ativa</p>
-              <p className="text-sm text-muted-foreground">
-                Seleciona automaticamente o provedor configurado
-              </p>
-            </Label>
-          </div>
-
-          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-            <RadioGroupItem value="pix_manual" id="pm-pix" className="mt-0.5" />
-            <Label htmlFor="pm-pix" className="flex-1 cursor-pointer">
-              <p className="font-medium">PIX Manual</p>
-              <p className="text-sm text-muted-foreground">
-                Cliente envia comprovante; você confirma manualmente
-              </p>
-            </Label>
-          </div>
-
-          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-            <RadioGroupItem value="infinitepay" id="pm-ip" className="mt-0.5" />
-            <Label htmlFor="pm-ip" className="flex-1 cursor-pointer">
-              <p className="font-medium">InfinitePay</p>
-            </Label>
-          </div>
-
-          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-            <RadioGroupItem value="mercadopago" id="pm-mp" className="mt-0.5" />
-            <Label htmlFor="pm-mp" className="flex-1 cursor-pointer">
-              <p className="font-medium">Mercado Pago</p>
-            </Label>
-          </div>
-
-          <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-            <RadioGroupItem value="asaas" id="pm-asaas" className="mt-0.5" />
-            <Label htmlFor="pm-asaas" className="flex-1 cursor-pointer">
-              <p className="font-medium">Asaas</p>
             </Label>
           </div>
         </RadioGroup>

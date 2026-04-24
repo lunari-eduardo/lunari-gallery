@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { defaultWelcomeMessage } from '@/data/mockData';
-import { WatermarkDisplay } from '@/types/gallery';
+
 
 export function PersonalizationSettings() {
   const {
@@ -87,44 +87,6 @@ export function PersonalizationSettings() {
         <div className="lunari-card p-6">
           <WatermarkSettings />
         </div>
-
-        {/* Default Watermark Display */}
-        <div className="lunari-card p-6 space-y-4">
-          <div>
-            <Label className="text-base font-medium">Exibição Padrão da Marca d'Água</Label>
-            <p className="text-sm text-muted-foreground mt-1">
-              Como a marca d'água aparece nas fotos por padrão em novas galerias
-            </p>
-          </div>
-          <RadioGroup
-            value={settings.defaultWatermarkDisplay ?? 'all'}
-            onValueChange={(v) => updateSettings({ defaultWatermarkDisplay: v as WatermarkDisplay }, { successMessage: 'Exibição padrão salva.' })}
-            className="space-y-3"
-          >
-            <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-              <RadioGroupItem value="all" id="wd-all" className="mt-0.5" />
-              <Label htmlFor="wd-all" className="flex-1 cursor-pointer">
-                <p className="font-medium">Em todas as fotos</p>
-                <p className="text-sm text-muted-foreground">Proteção máxima</p>
-              </Label>
-            </div>
-            <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-              <RadioGroupItem value="fullscreen" id="wd-fs" className="mt-0.5" />
-              <Label htmlFor="wd-fs" className="flex-1 cursor-pointer">
-                <p className="font-medium">Apenas em tela cheia</p>
-                <p className="text-sm text-muted-foreground">Preview limpo, marca aparece ao ampliar</p>
-              </Label>
-            </div>
-            <div className="flex items-start gap-3 p-4 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
-              <RadioGroupItem value="none" id="wd-none" className="mt-0.5" />
-              <Label htmlFor="wd-none" className="flex-1 cursor-pointer">
-                <p className="font-medium">Nunca</p>
-                <p className="text-sm text-muted-foreground">Sem marca d'água</p>
-              </Label>
-            </div>
-          </RadioGroup>
-        </div>
-
         {/* Default Behavior Toggles */}
         <div className="lunari-card p-6 space-y-4">
           <div>
