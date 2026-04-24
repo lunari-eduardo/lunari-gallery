@@ -193,7 +193,7 @@ export function calcularPrecoProgressivo(
       if (regras.tabelaGlobal?.faixas) {
         // Use qtdParaBuscarFaixa for tier lookup (cumulative total)
         faixaAtual = encontrarFaixaPreco(qtdParaBuscarFaixa, regras.tabelaGlobal.faixas);
-        valorUnitario = faixaAtual?.valor || precoBasePacote;
+        valorUnitario = faixaAtual?.valor ? sanitizeExtraPrice(faixaAtual.valor) : precoBasePacote;
         modeloUsado = 'global';
       } else {
         valorUnitario = precoBasePacote;
@@ -208,7 +208,7 @@ export function calcularPrecoProgressivo(
       } else if (regras.tabelaCategoria?.faixas) {
         // Use qtdParaBuscarFaixa for tier lookup (cumulative total)
         faixaAtual = encontrarFaixaPreco(qtdParaBuscarFaixa, regras.tabelaCategoria.faixas);
-        valorUnitario = faixaAtual?.valor || precoBasePacote;
+        valorUnitario = faixaAtual?.valor ? sanitizeExtraPrice(faixaAtual.valor) : precoBasePacote;
         modeloUsado = 'categoria';
       } else {
         valorUnitario = precoBasePacote;
@@ -216,12 +216,12 @@ export function calcularPrecoProgressivo(
       break;
       
     default:
-      valorUnitario = valorFotoExtraFixo;
+      valorUnitario = sanitizeExtraPrice(valorFotoExtraFixo);
   }
 
   // Ensure we have a valid price
   if (!valorUnitario || valorUnitario <= 0) {
-    valorUnitario = valorFotoExtraFixo;
+    valorUnitario = sanitizeExtraPrice(valorFotoExtraFixo) || precoBasePacote;
   }
 
   const valorTotal = valorUnitario * quantidadeFotosExtras;
