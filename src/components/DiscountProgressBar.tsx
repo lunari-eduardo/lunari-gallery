@@ -6,6 +6,7 @@ import {
   getFaixasFromRegras, 
   encontrarFaixaPreco, 
   normalizarValor,
+  sanitizeExtraPrice,
   buildRegrasFromDiscountPackages 
 } from '@/lib/pricingUtils';
 import { DiscountPackage } from '@/types/gallery';
