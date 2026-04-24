@@ -378,7 +378,11 @@ export function useSupabaseGalleries() {
       if (data.nomeSessao !== undefined) updateData.nome_sessao = data.nomeSessao;
       if (data.nomePacote !== undefined) updateData.nome_pacote = data.nomePacote;
       if (data.fotosIncluidas !== undefined) updateData.fotos_incluidas = data.fotosIncluidas;
-      if (data.valorFotoExtra !== undefined) updateData.valor_foto_extra = data.valorFotoExtra;
+      // Sanitize extra-photo price (clamp 0..999.99) before persisting. Defends
+      // against any UI path that might still pass values like 250.05.
+      if (data.valorFotoExtra !== undefined) {
+        updateData.valor_foto_extra = sanitizeExtraPrice(data.valorFotoExtra);
+      }
       if (data.mensagemBoasVindas !== undefined) updateData.mensagem_boas_vindas = data.mensagemBoasVindas;
       if (data.configuracoes !== undefined) updateData.configuracoes = data.configuracoes;
       if (data.prazoSelecaoDias !== undefined) updateData.prazo_selecao_dias = data.prazoSelecaoDias;
@@ -391,9 +395,34 @@ export function useSupabaseGalleries() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // The DB trigger `sync_gallery_extras_to_session` already propagates
+      // `valor_foto_extra` to `clientes_sessoes.valor_foto_extra` AND patches
+      // both JSONB `regras_congeladas.pacote.valorFotoExtra` (gallery + session).
+      // We return the resolved session_id so onSuccess can invalidate the
+      // matching React Query caches, ensuring the photographer immediately
+      // sees the corrected price on their own UI without a hard reload.
+      let sessionId: string | null = null;
+      if (data.valorFotoExtra !== undefined) {
+        const { data: row } = await supabase
+          .from('galerias')
+          .select('session_id')
+          .eq('id', id)
+          .maybeSingle();
+        sessionId = row?.session_id ?? null;
+      }
+
+      return { id, sessionId };
     },
-    onSuccess: () => {
+    onSuccess: ({ id, sessionId }) => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
+      // Bust the session-rules cache used by ClientGallery so the corrected
+      // unit price is reflected without manual refresh.
+      if (sessionId) {
+        queryClient.invalidateQueries({ queryKey: ['client-gallery-session-rules', sessionId] });
+      }
+      // Bust the gallery-by-id queries used by GalleryDetail / GalleryEdit.
+      queryClient.invalidateQueries({ queryKey: ['galeria', id] });
     },
     onError: (error) => {
       console.error('Error updating gallery:', error);
