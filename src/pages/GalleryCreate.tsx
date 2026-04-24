@@ -2007,6 +2007,17 @@ export default function GalleryCreate() {
                         <span className="text-muted-foreground">Valor por foto</span>
                         <span className="font-medium">R$ {fixedPrice.toFixed(2)}</span>
                       </div>
+                      {fixedPrice > 100 && (
+                        <div className="mt-2 flex items-start gap-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-700 dark:text-yellow-300">
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-medium">Confira: R$ {fixedPrice.toFixed(2)} por foto extra.</p>
+                            <p className="text-yellow-700/80 dark:text-yellow-300/80">
+                              Valores acima de R$ 100 são incomuns. Se estiver errado, volte ao Passo 2.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       {pricingModel === 'packages' && discountPackages.length > 0 && <div className="flex justify-between">
                           <span className="text-muted-foreground">Pacotes de desconto</span>
                           <span className="font-medium">{discountPackages.length} configurados</span>
