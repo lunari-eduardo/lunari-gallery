@@ -160,9 +160,24 @@ export function calcularPrecoProgressivo(
   }
 
   const regras = regrasCongeladas.precificacaoFotoExtra;
-  // Normalize package base price (might be in cents from Gestão)
-  const valorPacoteRaw = regrasCongeladas.pacote?.valorFotoExtra || valorFotoExtraFixo;
-  const precoBasePacote = normalizarValor(valorPacoteRaw);
+  // Resolve base price with "gallery wins" rule:
+  // `valorFotoExtraFixo` is `galerias.valor_foto_extra` (the price the
+  // photographer edits in the Gallery UI). When it diverges from the
+  // frozen-rules JSONB, we trust the gallery value — the JSONB may be
+  // stale from before an edit reached `clientes_sessoes.regras_congeladas`.
+  const fixoSanitizado = sanitizeExtraPrice(valorFotoExtraFixo);
+  const regrasSanitizado = sanitizeExtraPrice(regrasCongeladas.pacote?.valorFotoExtra ?? 0);
+  if (
+    fixoSanitizado > 0 &&
+    regrasSanitizado > 0 &&
+    Math.abs(fixoSanitizado - regrasSanitizado) > 0.005
+  ) {
+    console.warn(
+      '[pricingUtils] Frozen rule price diverged from gallery price — using gallery price',
+      { gallery: fixoSanitizado, frozen: regrasSanitizado }
+    );
+  }
+  const precoBasePacote = fixoSanitizado > 0 ? fixoSanitizado : regrasSanitizado;
   
   let valorUnitario = 0;
   let faixaAtual: FaixaPreco | null = null;
