@@ -73,6 +73,55 @@ function getInitialExtraPrice(regras: RegrasCongeladas | null): number {
   // Fallback
   return regras.pacote?.valorFotoExtra || 0;
 }
+
+/**
+ * Resolve o preço unitário e regras congeladas para criação assistida (com session_id).
+ *
+ * Regra de precedência (ordem de freshness):
+ *   1. URL `preco_da_foto_extra` (gerada no clique de "Criar galeria" no Gestão — mais fresca)
+ *   2. JSONB `regras.pacote.valorFotoExtra` (pode estar stale se o trigger falhar)
+ *
+ * Quando há divergência > R$ 0,01 e a URL traz valor válido (>0), a URL vence:
+ * - patcheia o JSONB em memória para a galeria nascer já consistente,
+ * - emite warning para telemetria de divergência (problemas no trigger / race conditions).
+ */
+function resolveAssistedExtraPrice(
+  regras: RegrasCongeladas | null,
+  precoDaFotoExtraFromUrl: number | undefined
+): { valor: number; regras: RegrasCongeladas | null } {
+  if (!regras) {
+    return { valor: precoDaFotoExtraFromUrl ? sanitizeExtraPrice(precoDaFotoExtraFromUrl) : 0, regras: null };
+  }
+
+  const valorJsonb = sanitizeExtraPrice(getInitialExtraPrice(regras));
+  const valorUrl =
+    precoDaFotoExtraFromUrl !== undefined && precoDaFotoExtraFromUrl > 0
+      ? sanitizeExtraPrice(precoDaFotoExtraFromUrl)
+      : undefined;
+
+  // Apenas modelo "fixo" (ou ausente) deve sofrer override pela URL.
+  // Modelos "global" / "categoria" usam tabelas de faixas — a URL não tem como descrevê-las.
+  const modelo = regras.precificacaoFotoExtra?.modelo;
+  const allowUrlOverride = !modelo || modelo === 'fixo';
+
+  if (allowUrlOverride && valorUrl !== undefined && Math.abs(valorUrl - valorJsonb) > 0.01) {
+    console.warn(
+      '[GalleryCreate] Divergência preco_da_foto_extra: URL=',
+      valorUrl,
+      'JSONB=',
+      valorJsonb,
+      '— usando URL (mais fresca)'
+    );
+    const patchedRegras: RegrasCongeladas = {
+      ...regras,
+      pacote: { ...regras.pacote, valorFotoExtra: valorUrl },
+    };
+    return { valor: valorUrl, regras: patchedRegras };
+  }
+
+  return { valor: valorJsonb, regras };
+}
+
 const steps = [{
   id: 1,
   name: 'Cliente',
@@ -476,13 +525,27 @@ export default function GalleryCreate() {
       setSessionName(pacote.categoria);
     }
 
-    // valorFotoExtra from frozen rules - sanitize + clamp to safe range
+    // valorFotoExtra from frozen rules - URL vence JSONB quando divergir (mais fresca)
     if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
-      const valorSanitizado = sanitizeExtraPrice(pacote.valorFotoExtra);
-      console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorSanitizado);
-      setFixedPrice(valorSanitizado);
+      const valorJsonb = sanitizeExtraPrice(pacote.valorFotoExtra);
+      const valorUrl = gestaoParams?.preco_da_foto_extra;
+
+      if (valorUrl !== undefined && valorUrl > 0 && Math.abs(valorUrl - valorJsonb) > 0.01) {
+        const valorUrlSanitizado = sanitizeExtraPrice(valorUrl);
+        console.warn(
+          '[GalleryCreate] Divergência preco_da_foto_extra na hidratação: URL=',
+          valorUrlSanitizado,
+          'JSONB=',
+          valorJsonb,
+          '— usando URL (mais fresca)'
+        );
+        setFixedPrice(valorUrlSanitizado);
+      } else {
+        console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorJsonb);
+        setFixedPrice(valorJsonb);
+      }
     }
-  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, packageName, sessionName]);
+  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra, packageName, sessionName]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
   // Only runs once, then clears URL params to prevent re-application
@@ -554,7 +617,7 @@ export default function GalleryCreate() {
       setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
     }
     if (gestaoParams.preco_da_foto_extra) {
-      setFixedPrice(gestaoParams.preco_da_foto_extra);
+      setFixedPrice(sanitizeExtraPrice(gestaoParams.preco_da_foto_extra));
     }
 
     // Step 3: Sale Settings — Gestão params have priority; mark refs so settings won't overwrite
@@ -648,10 +711,10 @@ export default function GalleryCreate() {
       let valorFotoExtraFinal = fixedPrice;
       let finalRegrasCongeladas: RegrasCongeladas | null = null;
       if (hasSessionRegras) {
-        // Assisted mode with Gestão rules - use frozen rules
-        const valorRaw = regrasCongeladas.pacote?.valorFotoExtra || 0;
-        valorFotoExtraFinal = valorRaw > 1000 ? valorRaw / 100 : valorRaw;
-        finalRegrasCongeladas = regrasCongeladas;
+        // Assisted mode with Gestão rules — URL vence JSONB stale (mais fresca)
+        const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+        valorFotoExtraFinal = resolved.valor;
+        finalRegrasCongeladas = resolved.regras;
       } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
         // Standalone mode with discount packages - generate regrasCongeladas
         console.log('📦 Generating regrasCongeladas from standalone discount packages');
@@ -775,8 +838,9 @@ export default function GalleryCreate() {
           let valorFotoExtraFinal = fixedPrice;
           let finalRegrasCongeladas: RegrasCongeladas | null = null;
           if (hasSessionRegras) {
-            valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
-            finalRegrasCongeladas = regrasCongeladas;
+            const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+            valorFotoExtraFinal = resolved.valor;
+            finalRegrasCongeladas = resolved.regras;
           } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
             // Standalone mode with discount packages - generate regrasCongeladas
             finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
@@ -875,8 +939,9 @@ export default function GalleryCreate() {
         let valorFotoExtraFinal = fixedPrice;
         let finalRegrasCongeladas: RegrasCongeladas | null = null;
         if (hasSessionRegras) {
-          valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
-          finalRegrasCongeladas = regrasCongeladas;
+          const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+          valorFotoExtraFinal = resolved.valor;
+          finalRegrasCongeladas = resolved.regras;
         } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
           finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
           if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
@@ -927,8 +992,9 @@ export default function GalleryCreate() {
         let valorFotoExtraFinal = fixedPrice;
         let finalRegrasCongeladas: RegrasCongeladas | null = null;
         if (isAssistedMode && regrasCongeladas && !overridePricing) {
-          valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
-          finalRegrasCongeladas = regrasCongeladas;
+          const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+          valorFotoExtraFinal = resolved.valor;
+          finalRegrasCongeladas = resolved.regras;
         } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
           finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
           if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
