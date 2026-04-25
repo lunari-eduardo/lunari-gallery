@@ -73,6 +73,55 @@ function getInitialExtraPrice(regras: RegrasCongeladas | null): number {
   // Fallback
   return regras.pacote?.valorFotoExtra || 0;
 }
+
+/**
+ * Resolve o preço unitário e regras congeladas para criação assistida (com session_id).
+ *
+ * Regra de precedência (ordem de freshness):
+ *   1. URL `preco_da_foto_extra` (gerada no clique de "Criar galeria" no Gestão — mais fresca)
+ *   2. JSONB `regras.pacote.valorFotoExtra` (pode estar stale se o trigger falhar)
+ *
+ * Quando há divergência > R$ 0,01 e a URL traz valor válido (>0), a URL vence:
+ * - patcheia o JSONB em memória para a galeria nascer já consistente,
+ * - emite warning para telemetria de divergência (problemas no trigger / race conditions).
+ */
+function resolveAssistedExtraPrice(
+  regras: RegrasCongeladas | null,
+  precoDaFotoExtraFromUrl: number | undefined
+): { valor: number; regras: RegrasCongeladas | null } {
+  if (!regras) {
+    return { valor: precoDaFotoExtraFromUrl ? sanitizeExtraPrice(precoDaFotoExtraFromUrl) : 0, regras: null };
+  }
+
+  const valorJsonb = sanitizeExtraPrice(getInitialExtraPrice(regras));
+  const valorUrl =
+    precoDaFotoExtraFromUrl !== undefined && precoDaFotoExtraFromUrl > 0
+      ? sanitizeExtraPrice(precoDaFotoExtraFromUrl)
+      : undefined;
+
+  // Apenas modelo "fixo" (ou ausente) deve sofrer override pela URL.
+  // Modelos "global" / "categoria" usam tabelas de faixas — a URL não tem como descrevê-las.
+  const modelo = regras.precificacaoFotoExtra?.modelo;
+  const allowUrlOverride = !modelo || modelo === 'fixo';
+
+  if (allowUrlOverride && valorUrl !== undefined && Math.abs(valorUrl - valorJsonb) > 0.01) {
+    console.warn(
+      '[GalleryCreate] Divergência preco_da_foto_extra: URL=',
+      valorUrl,
+      'JSONB=',
+      valorJsonb,
+      '— usando URL (mais fresca)'
+    );
+    const patchedRegras: RegrasCongeladas = {
+      ...regras,
+      pacote: { ...regras.pacote, valorFotoExtra: valorUrl },
+    };
+    return { valor: valorUrl, regras: patchedRegras };
+  }
+
+  return { valor: valorJsonb, regras };
+}
+
 const steps = [{
   id: 1,
   name: 'Cliente',
