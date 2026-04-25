@@ -617,7 +617,7 @@ export default function GalleryCreate() {
       setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
     }
     if (gestaoParams.preco_da_foto_extra) {
-      setFixedPrice(gestaoParams.preco_da_foto_extra);
+      setFixedPrice(sanitizeExtraPrice(gestaoParams.preco_da_foto_extra));
     }
 
     // Step 3: Sale Settings — Gestão params have priority; mark refs so settings won't overwrite
