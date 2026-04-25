@@ -838,8 +838,9 @@ export default function GalleryCreate() {
           let valorFotoExtraFinal = fixedPrice;
           let finalRegrasCongeladas: RegrasCongeladas | null = null;
           if (hasSessionRegras) {
-            valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
-            finalRegrasCongeladas = regrasCongeladas;
+            const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+            valorFotoExtraFinal = resolved.valor;
+            finalRegrasCongeladas = resolved.regras;
           } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
             // Standalone mode with discount packages - generate regrasCongeladas
             finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
@@ -938,8 +939,9 @@ export default function GalleryCreate() {
         let valorFotoExtraFinal = fixedPrice;
         let finalRegrasCongeladas: RegrasCongeladas | null = null;
         if (hasSessionRegras) {
-          valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
-          finalRegrasCongeladas = regrasCongeladas;
+          const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+          valorFotoExtraFinal = resolved.valor;
+          finalRegrasCongeladas = resolved.regras;
         } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
           finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
           if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
@@ -990,8 +992,9 @@ export default function GalleryCreate() {
         let valorFotoExtraFinal = fixedPrice;
         let finalRegrasCongeladas: RegrasCongeladas | null = null;
         if (isAssistedMode && regrasCongeladas && !overridePricing) {
-          valorFotoExtraFinal = getInitialExtraPrice(regrasCongeladas);
-          finalRegrasCongeladas = regrasCongeladas;
+          const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+          valorFotoExtraFinal = resolved.valor;
+          finalRegrasCongeladas = resolved.regras;
         } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
           finalRegrasCongeladas = buildRegrasFromDiscountPackages(discountPackages, fixedPrice, includedPhotos, packageName);
           if (finalRegrasCongeladas.precificacaoFotoExtra?.tabelaGlobal?.faixas?.length) {
