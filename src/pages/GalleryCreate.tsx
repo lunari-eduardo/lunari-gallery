@@ -711,10 +711,10 @@ export default function GalleryCreate() {
       let valorFotoExtraFinal = fixedPrice;
       let finalRegrasCongeladas: RegrasCongeladas | null = null;
       if (hasSessionRegras) {
-        // Assisted mode with Gestão rules - use frozen rules
-        const valorRaw = regrasCongeladas.pacote?.valorFotoExtra || 0;
-        valorFotoExtraFinal = valorRaw > 1000 ? valorRaw / 100 : valorRaw;
-        finalRegrasCongeladas = regrasCongeladas;
+        // Assisted mode with Gestão rules — URL vence JSONB stale (mais fresca)
+        const resolved = resolveAssistedExtraPrice(regrasCongeladas, gestaoParams?.preco_da_foto_extra);
+        valorFotoExtraFinal = resolved.valor;
+        finalRegrasCongeladas = resolved.regras;
       } else if (!hasSessionId && saleMode !== 'no_sale' && pricingModel === 'packages' && discountPackages.length > 0) {
         // Standalone mode with discount packages - generate regrasCongeladas
         console.log('📦 Generating regrasCongeladas from standalone discount packages');
