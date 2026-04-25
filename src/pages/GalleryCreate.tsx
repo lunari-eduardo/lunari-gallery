@@ -525,13 +525,27 @@ export default function GalleryCreate() {
       setSessionName(pacote.categoria);
     }
 
-    // valorFotoExtra from frozen rules - sanitize + clamp to safe range
+    // valorFotoExtra from frozen rules - URL vence JSONB quando divergir (mais fresca)
     if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
-      const valorSanitizado = sanitizeExtraPrice(pacote.valorFotoExtra);
-      console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorSanitizado);
-      setFixedPrice(valorSanitizado);
+      const valorJsonb = sanitizeExtraPrice(pacote.valorFotoExtra);
+      const valorUrl = gestaoParams?.preco_da_foto_extra;
+
+      if (valorUrl !== undefined && valorUrl > 0 && Math.abs(valorUrl - valorJsonb) > 0.01) {
+        const valorUrlSanitizado = sanitizeExtraPrice(valorUrl);
+        console.warn(
+          '[GalleryCreate] Divergência preco_da_foto_extra na hidratação: URL=',
+          valorUrlSanitizado,
+          'JSONB=',
+          valorJsonb,
+          '— usando URL (mais fresca)'
+        );
+        setFixedPrice(valorUrlSanitizado);
+      } else {
+        console.log('🔗 Syncing fixedPrice from regrasCongeladas:', valorJsonb);
+        setFixedPrice(valorJsonb);
+      }
     }
-  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, packageName, sessionName]);
+  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra, packageName, sessionName]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
   // Only runs once, then clears URL params to prevent re-application
