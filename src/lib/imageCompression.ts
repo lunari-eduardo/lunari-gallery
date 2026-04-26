@@ -179,68 +179,74 @@ export async function compressImage(
 
   // Load the image
   const img = await loadImage(file);
-  const originalWidth = img.naturalWidth;
-  const originalHeight = img.naturalHeight;
+  try {
+    const originalWidth = img.naturalWidth;
+    const originalHeight = img.naturalHeight;
 
-  // Calculate new dimensions based on long edge
-  const { width, height } = calculateDimensions(
-    originalWidth,
-    originalHeight,
-    opts.maxLongEdge
-  );
-
-  // Create canvas and draw resized image
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Failed to get canvas context");
-  }
-
-  // Draw with high quality
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, width, height);
-
-  // Apply watermark if configured (MUST succeed or fail the upload)
-  if (opts.watermark && opts.watermark.mode !== 'none') {
-    await applyWatermark(canvas, ctx, opts.watermark);
-  }
-
-  // Convert to blob
-  // Using JPEG for photos (better compression), keep PNG for transparency
-  const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
-  const quality = mimeType === "image/png" ? 1 : opts.quality;
-
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => {
-        if (b) resolve(b);
-        else reject(new Error("Failed to compress image"));
-      },
-      mimeType,
-      quality
+    // Calculate new dimensions based on long edge
+    const { width, height } = calculateDimensions(
+      originalWidth,
+      originalHeight,
+      opts.maxLongEdge
     );
-  });
 
-  // Clean up
-  URL.revokeObjectURL(img.src);
+    // Create canvas and draw resized image
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
 
-  // Generate filename
-  const extension = mimeType === "image/jpeg" ? "jpg" : "png";
-  const baseName = file.name.replace(/\.[^/.]+$/, "");
-  const filename = `${baseName}.${extension}`;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Failed to get canvas context");
+    }
 
-  return {
-    blob,
-    width,
-    height,
-    originalSize: file.size,
-    compressedSize: blob.size,
-    filename,
-  };
+    // Draw with high quality
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Apply watermark if configured (MUST succeed or fail the upload)
+    if (opts.watermark && opts.watermark.mode !== 'none') {
+      await applyWatermark(canvas, ctx, opts.watermark);
+    }
+
+    // Convert to blob
+    // Using JPEG for photos (better compression), keep PNG for transparency
+    const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const quality = mimeType === "image/png" ? 1 : opts.quality;
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => {
+          if (b) resolve(b);
+          else reject(new Error("Failed to compress image"));
+        },
+        mimeType,
+        quality
+      );
+    });
+
+    // Generate filename
+    const extension = mimeType === "image/jpeg" ? "jpg" : "png";
+    const baseName = file.name.replace(/\.[^/.]+$/, "");
+    const filename = `${baseName}.${extension}`;
+
+    // Free canvas memory aggressively (some browsers don't GC large canvases quickly)
+    canvas.width = 0;
+    canvas.height = 0;
+
+    return {
+      blob,
+      width,
+      height,
+      originalSize: file.size,
+      compressedSize: blob.size,
+      filename,
+    };
+  } finally {
+    // Always release the object URL, even on error
+    URL.revokeObjectURL(img.src);
+  }
 }
 
 /**
