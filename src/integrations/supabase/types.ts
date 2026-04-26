@@ -1181,6 +1181,129 @@ export type Database = {
           },
         ]
       }
+      contrato_templates: {
+        Row: {
+          ativo: boolean
+          categoria: string | null
+          conteudo: string
+          created_at: string
+          descricao: string | null
+          id: string
+          is_padrao: boolean
+          nome: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: string | null
+          conteudo?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_padrao?: boolean
+          nome: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string | null
+          conteudo?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_padrao?: boolean
+          nome?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contratos: {
+        Row: {
+          arquivo_assinado_nome: string | null
+          arquivo_assinado_path: string | null
+          arquivo_assinado_tamanho: number | null
+          assinado_em: string | null
+          cliente_id: string
+          conteudo: string
+          created_at: string
+          enviado_em: string | null
+          id: string
+          observacoes: string | null
+          session_id: string | null
+          signature_external_id: string | null
+          signature_provider: string | null
+          signers: Json | null
+          status: string
+          template_id: string | null
+          titulo: string
+          updated_at: string
+          user_id: string
+          variaveis_snapshot: Json | null
+        }
+        Insert: {
+          arquivo_assinado_nome?: string | null
+          arquivo_assinado_path?: string | null
+          arquivo_assinado_tamanho?: number | null
+          assinado_em?: string | null
+          cliente_id: string
+          conteudo?: string
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          observacoes?: string | null
+          session_id?: string | null
+          signature_external_id?: string | null
+          signature_provider?: string | null
+          signers?: Json | null
+          status?: string
+          template_id?: string | null
+          titulo: string
+          updated_at?: string
+          user_id: string
+          variaveis_snapshot?: Json | null
+        }
+        Update: {
+          arquivo_assinado_nome?: string | null
+          arquivo_assinado_path?: string | null
+          arquivo_assinado_tamanho?: number | null
+          assinado_em?: string | null
+          cliente_id?: string
+          conteudo?: string
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          observacoes?: string | null
+          session_id?: string | null
+          signature_external_id?: string | null
+          signature_provider?: string | null
+          signers?: Json | null
+          status?: string
+          template_id?: string | null
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+          variaveis_snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contratos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           applies_to: string
