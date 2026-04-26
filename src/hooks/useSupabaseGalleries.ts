@@ -850,5 +850,6 @@ export function useSupabaseGalleries() {
     isUpdating: updateGalleryMutation.isPending,
     isDeleting: deleteGalleryMutation.isPending,
     isDeletingPhoto: deletePhotoMutation.isPending,
+    isDeletingPhotos: deletePhotosMutation.isPending,
   };
 }
