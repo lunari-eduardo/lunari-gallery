@@ -367,6 +367,49 @@ export default function GalleryEdit() {
   const handleDeletePhoto = async (photoId: string) => {
     await deletePhoto({ galleryId: gallery.id, photoId });
     setLocalPhotoCount(prev => Math.max(0, (prev || 1) - 1));
+    setSelectedIds(prev => {
+      if (!prev.has(photoId)) return prev;
+      const next = new Set(prev);
+      next.delete(photoId);
+      return next;
+    });
+  };
+
+  const toggleSelect = (photoId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (visibleIds: string[]) => {
+    setSelectedIds(prev => {
+      const allSelected = visibleIds.length > 0 && visibleIds.every(id => prev.has(id));
+      if (allSelected) {
+        const next = new Set(prev);
+        visibleIds.forEach(id => next.delete(id));
+        return next;
+      }
+      const next = new Set(prev);
+      visibleIds.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      await deletePhotos({ galleryId: gallery.id, photoIds: ids });
+      setLocalPhotoCount(prev => Math.max(0, (prev || ids.length) - ids.length));
+      toast.success(`${ids.length} foto${ids.length !== 1 ? 's' : ''} excluída${ids.length !== 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      setConfirmBulkDeleteOpen(false);
+    } catch (err) {
+      // Toast já tratado no hook; manter seleção e modal aberto para retry
+    }
   };
 
   const handleCopyPassword = () => {
