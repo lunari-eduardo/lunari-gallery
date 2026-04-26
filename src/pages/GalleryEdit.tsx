@@ -86,10 +86,12 @@ export default function GalleryEdit() {
     fetchGalleryPhotos,
     getPhotoUrl,
     deletePhoto,
+    deletePhotos,
     isLoading: isSupabaseLoading,
     isUpdating,
     isDeleting,
-    isDeletingPhoto
+    isDeletingPhoto,
+    isDeletingPhotos
   } = useSupabaseGalleries();
 
   const {
