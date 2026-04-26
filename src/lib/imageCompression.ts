@@ -315,39 +315,44 @@ export function isValidImageType(file: File): boolean {
  */
 export async function compressCover(file: File): Promise<CompressedImage> {
   const img = await loadImage(file);
-  const { width, height } = calculateDimensions(img.naturalWidth, img.naturalHeight, 600);
+  try {
+    const { width, height } = calculateDimensions(img.naturalWidth, img.naturalHeight, 600);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to get canvas context");
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Failed to get canvas context");
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, width, height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, width, height);
 
-  // No watermark applied — intentionally clean for cover display
+    // No watermark applied — intentionally clean for cover display
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Failed to compress cover"))),
-      "image/jpeg",
-      0.45 // Very low quality — prevents commercial use
-    );
-  });
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("Failed to compress cover"))),
+        "image/jpeg",
+        0.45 // Very low quality — prevents commercial use
+      );
+    });
 
-  URL.revokeObjectURL(img.src);
+    canvas.width = 0;
+    canvas.height = 0;
 
-  const baseName = file.name.replace(/\.[^/.]+$/, "");
-  return {
-    blob,
-    width,
-    height,
-    originalSize: file.size,
-    compressedSize: blob.size,
-    filename: `${baseName}-cover.jpg`,
-  };
+    const baseName = file.name.replace(/\.[^/.]+$/, "");
+    return {
+      blob,
+      width,
+      height,
+      originalSize: file.size,
+      compressedSize: blob.size,
+      filename: `${baseName}-cover.jpg`,
+    };
+  } finally {
+    URL.revokeObjectURL(img.src);
+  }
 }
 
 /**
