@@ -18,7 +18,10 @@ import {
   RotateCcw,
   Palette,
   Sun,
-  Moon
+  Moon,
+  Play,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
