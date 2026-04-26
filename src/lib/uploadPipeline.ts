@@ -218,7 +218,11 @@ export class UploadPipeline {
     }
   }
 
-  /** Retry a failed item */
+  /**
+   * Retry a failed item.
+   * If the original was already uploaded and the preview was already compressed,
+   * we resume from where we left off instead of starting from scratch.
+   */
   retry(id: string) {
     const item = this.queue.find(i => i.id === id);
     if (!item || item.status !== 'error') return;
