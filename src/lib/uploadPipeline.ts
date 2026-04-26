@@ -294,10 +294,12 @@ export class UploadPipeline {
 
   private async processItem(item: PipelineItem) {
     const signal = item._abortController.signal;
+    let compressionSlotHeld = true; // We entered processItem with a compression slot held
 
     try {
-      // ── Step 1: Upload original (if allowDownload) ──
-      if (this.opts.allowDownload) {
+      // ── Step 1: Upload original (if allowDownload and not yet done) ──
+      const alreadyHasOriginal = !!(item as any)._originalPath;
+      if (this.opts.allowDownload && !alreadyHasOriginal) {
         item.status = 'uploading-original';
         item.progress = 5;
         this.opts.onItemUpdate(item);
@@ -317,61 +319,66 @@ export class UploadPipeline {
         this.opts.onItemUpdate(item);
       }
 
-      // ── Step 2: Compress (or skip for video) ──
-      item.status = 'compressing';
-      item.progress = this.opts.allowDownload ? 25 : 10;
-      this.opts.onItemUpdate(item);
-
-      let compressed: CompressedImage;
+      // ── Step 2: Compress (or skip for video / reuse cached compression) ──
       const isVideo = isVideoFile(item.file);
+      let compressed: CompressedImage;
 
-      if (isVideo) {
-        // Videos: skip compression, use original blob directly
-        // Try to get dimensions from the video
-        const dims = await getVideoDimensions(item.file);
-        compressed = {
-          blob: item.file,
-          width: dims.width,
-          height: dims.height,
-          originalSize: item.file.size,
-          compressedSize: item.file.size,
-          filename: item.file.name,
-        };
-        console.log('[Pipeline] Video detected, skipping compression:', item.file.name);
+      if (item._compressed) {
+        // Resume from previous attempt — already compressed
+        compressed = item._compressed;
+        item.progress = this.opts.allowDownload ? 40 : 30;
+        this.opts.onItemUpdate(item);
       } else {
-        const compressionOptions: Partial<CompressionOptions> = {
-          maxLongEdge: this.opts.maxLongEdge,
-          quality: this.opts.quality,
-          removeExif: true,
-          watermark: this.opts.watermarkConfig,
-        };
+        item.status = 'compressing';
+        item.progress = this.opts.allowDownload ? 25 : 10;
+        this.opts.onItemUpdate(item);
 
-        try {
-          if (signal.aborted) throw new Error('Cancelado');
-          compressed = await compressImage(item.file, compressionOptions);
-        } catch (err) {
-          // Fallback: send original if compression fails and no watermark required
-          if (this.opts.watermarkConfig && this.opts.watermarkConfig.mode !== 'none') {
-            throw err; // Watermark is mandatory – do not fallback
-          }
-          console.warn('[Pipeline] Compression failed, using original as fallback:', err);
+        if (isVideo) {
+          const dims = await getVideoDimensions(item.file);
           compressed = {
             blob: item.file,
-            width: 0,
-            height: 0,
+            width: dims.width,
+            height: dims.height,
             originalSize: item.file.size,
             compressedSize: item.file.size,
             filename: item.file.name,
           };
+          console.log('[Pipeline] Video detected, skipping compression:', item.file.name);
+        } else {
+          const compressionOptions: Partial<CompressionOptions> = {
+            maxLongEdge: this.opts.maxLongEdge,
+            quality: this.opts.quality,
+            removeExif: true,
+            watermark: this.opts.watermarkConfig,
+          };
+
+          try {
+            if (signal.aborted) throw new Error('Cancelado');
+            compressed = await compressImage(item.file, compressionOptions);
+          } catch (err) {
+            if (this.opts.watermarkConfig && this.opts.watermarkConfig.mode !== 'none') {
+              throw err; // Watermark is mandatory – do not fallback
+            }
+            logUploadWarn('compress-fallback', item, err);
+            compressed = {
+              blob: item.file,
+              width: 0,
+              height: 0,
+              originalSize: item.file.size,
+              compressedSize: item.file.size,
+              filename: item.file.name,
+            };
+          }
         }
+
+        item._compressed = compressed;
+        item.progress = this.opts.allowDownload ? 40 : 30;
+        this.opts.onItemUpdate(item);
       }
 
-      item._compressed = compressed;
-      item.progress = this.opts.allowDownload ? 40 : 30;
-      this.opts.onItemUpdate(item);
-
-      // Compression slot done
+      // Compression slot done (release before waiting for upload slot)
       this.activeCompressions--;
+      compressionSlotHeld = false;
 
       // ── Step 3: Upload preview ──
       if (signal.aborted) throw new Error('Cancelado');
@@ -393,29 +400,32 @@ export class UploadPipeline {
       item.status = 'done';
       item.progress = 100;
       item.error = undefined;
-      this.cleanupItem(item);
+      this.cleanupItem(item, /* keepResumeState */ false);
       this.opts.onItemUpdate(item);
       this.opts.onItemDone(item);
 
       // ── Background: Upload cover variant (non-blocking) ──
       if (!isVideo) {
         this.uploadCoverInBackground(item).catch(err => {
-          console.warn('[Pipeline] Cover upload failed (non-critical):', err);
+          logUploadWarn('cover-upload', item, err);
         });
       }
     } catch (err) {
-      // Track if we were still in compression phase to release the slot
-      const wasCompressing = item.status === 'compressing';
       if (item.status !== 'error') {
         const errorObj = err instanceof Error ? err : new Error(String(err));
         item.status = 'error';
         item.error = signal.aborted ? 'Cancelado' : getUploadErrorMessage(errorObj);
-        console.error('[Pipeline] Item error:', item.file.name, err);
+        logUploadWarn('item-failed', item, err, {
+          retryCount: item.retryCount,
+          hasCompressed: !!item._compressed,
+          hasOriginal: !!(item as any)._originalPath,
+        });
       }
-      if (wasCompressing) {
+      if (compressionSlotHeld) {
         this.activeCompressions = Math.max(0, this.activeCompressions - 1);
       }
-      this.cleanupItem(item);
+      // Keep _compressed and _originalPath so retry can resume cheaply
+      this.cleanupItem(item, /* keepResumeState */ true);
       this.opts.onItemUpdate(item);
     }
 
