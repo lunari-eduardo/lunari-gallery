@@ -443,34 +443,65 @@ export class UploadPipeline {
   private async uploadOriginal(item: PipelineItem, signal: AbortSignal): Promise<string> {
     const R2_WORKER_URL = import.meta.env.VITE_R2_UPLOAD_URL || 'https://cdn.lunarihub.com';
 
-    const formData = new FormData();
-    formData.append('file', item.file, item.file.name);
-    formData.append('galleryId', this.opts.galleryId);
-    formData.append('originalFilename', item.file.name);
+    const result = await retryWithBackoff(
+      async () => {
+        if (signal.aborted) throw new Error('Cancelado');
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
+        // Build a fresh FormData per attempt (some browsers consume the body on retry)
+        const formData = new FormData();
+        formData.append('file', item.file, item.file.name);
+        formData.append('galleryId', this.opts.galleryId);
+        formData.append('originalFilename', item.file.name);
 
-    const resp = await fetch(`${R2_WORKER_URL}/upload-original`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      body: formData,
-      signal,
-    });
+        const accessToken = await this.getAccessToken();
 
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(`Falha no upload do original: ${data.error || 'Erro desconhecido'}`);
-    }
+        // Combine caller signal with a 90s per-attempt timeout to avoid stuck fetches
+        const timeoutSignal = (AbortSignal as any).timeout
+          ? (AbortSignal as any).timeout(90_000)
+          : (() => {
+              const c = new AbortController();
+              setTimeout(() => c.abort(new Error('Timeout')), 90_000);
+              return c.signal;
+            })();
+        const combined = combineSignals([signal, timeoutSignal]);
 
-    const data = await resp.json();
-    if (!data?.success || !data?.photo?.storageKey) {
-      throw new Error('Falha no upload do original: resposta inválida');
-    }
+        let resp: Response;
+        try {
+          resp = await fetch(`${R2_WORKER_URL}/upload-original`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: formData,
+            signal: combined,
+          });
+        } catch (netErr) {
+          // Network or timeout error — let retryWithBackoff handle it
+          throw new Error(`NETWORK ${netErr instanceof Error ? netErr.message : String(netErr)}`);
+        }
 
-    // Store originalPath on item for later use
-    (item as any)._originalPath = data.photo.storageKey;
-    return data.photo.storageKey;
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+          // Mark 5xx as retryable via prefix matching in retryFetch defaults
+          throw new Error(`${resp.status} ${data.error || 'Upload original falhou'}`);
+        }
+
+        const data = await resp.json();
+        if (!data?.success || !data?.photo?.storageKey) {
+          throw new Error('Falha no upload do original: resposta inválida');
+        }
+        return data.photo.storageKey as string;
+      },
+      {
+        maxAttempts: 3,
+        baseDelay: 2000,
+        signal,
+        onRetry: (attempt, error) => {
+          logUploadWarn('upload-original-retry', item, error, { attempt });
+        },
+      }
+    );
+
+    (item as any)._originalPath = result;
+    return result;
   }
 
   private async uploadPreview(item: PipelineItem, signal: AbortSignal): Promise<UploadResult> {
