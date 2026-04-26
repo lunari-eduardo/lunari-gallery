@@ -1024,6 +1024,40 @@ export default function GalleryEdit() {
         onSave={handleCreateClient}
       />
 
+      {/* Bulk Delete Confirmation */}
+      <AlertDialog open={confirmBulkDeleteOpen} onOpenChange={setConfirmBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Excluir {selectedIds.size} foto{selectedIds.size !== 1 ? 's' : ''}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. As fotos serão removidas permanentemente da galeria e do armazenamento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingPhotos}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleBulkDelete();
+              }}
+              disabled={isDeletingPhotos}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingPhotos ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Floating Save Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <Button
