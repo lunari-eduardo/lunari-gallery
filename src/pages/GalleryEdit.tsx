@@ -137,6 +137,15 @@ export default function GalleryEdit() {
   const [reactivateSuccessOpen, setReactivateSuccessOpen] = useState(false);
   const [reactivateDays, setReactivateDays] = useState(7);
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
+
+  // Reset selection when switching folders
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeFolderId]);
+
   // Initialize form with gallery data
   useEffect(() => {
     if (gallery) {
