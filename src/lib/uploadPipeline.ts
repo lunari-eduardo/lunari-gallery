@@ -570,14 +570,20 @@ export class UploadPipeline {
     };
   }
 
-  /** Release memory for an item */
-  private cleanupItem(item: PipelineItem) {
-    if (item._compressed) {
-      item._compressed = null;
+  /**
+   * Release memory for an item.
+   * @param item - the pipeline item
+   * @param keepResumeState - when true, preserve compressed blob and original path
+   *   so a retry can skip already-completed phases. Use false when the item is done.
+   */
+  private cleanupItem(item: PipelineItem, keepResumeState: boolean = false) {
+    if (!keepResumeState) {
+      if (item._compressed) {
+        item._compressed = null;
+      }
+      delete (item as any)._originalPath;
     }
-    // Keep preview URL alive for UI display until item is removed from list
-    // The component should call revokePreview when removing items
-    delete (item as any)._originalPath;
+    // Preview URL stays alive until the item is removed from the UI list
   }
 
   /** Call this when removing an item from the UI list */
