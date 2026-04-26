@@ -840,6 +840,7 @@ export function useSupabaseGalleries() {
     confirmSelection: confirmSelectionMutation.mutateAsync,
     reopenSelection: reopenSelectionMutation.mutateAsync,
     deletePhoto: deletePhotoMutation.mutateAsync,
+    deletePhotos: deletePhotosMutation.mutateAsync,
 
     // Helpers
     getPhotoUrl,
