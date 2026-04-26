@@ -143,10 +143,44 @@ export class UploadPipeline {
   private maxCompress: number;
   private maxUpload: number;
 
+  // ── Session token cache (avoid concurrent getSession calls during uploads) ──
+  private cachedAccessToken: string | null = null;
+  private cachedTokenExpiresAt = 0; // epoch ms
+  private sessionFetchPromise: Promise<string> | null = null;
+
   constructor(options: PipelineOptions) {
     this.opts = options as any;
     this.maxCompress = options.maxCompressionSlots ?? Math.min(Math.max(2, Math.floor((navigator.hardwareConcurrency || 4) / 2)), 4);
     this.maxUpload = options.maxUploadSlots ?? getDefaultUploadSlots();
+  }
+
+  /**
+   * Get a valid access token, cached across uploads.
+   * Refreshes only when <60s remain. Coalesces concurrent fetches into one promise.
+   */
+  private async getAccessToken(): Promise<string> {
+    const now = Date.now();
+    if (this.cachedAccessToken && this.cachedTokenExpiresAt - now > 60_000) {
+      return this.cachedAccessToken;
+    }
+    if (this.sessionFetchPromise) {
+      return this.sessionFetchPromise;
+    }
+    this.sessionFetchPromise = (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Sessão expirada. Faça login novamente.');
+        this.cachedAccessToken = session.access_token;
+        // expires_at is epoch seconds; fall back to 50 min if missing
+        this.cachedTokenExpiresAt = session.expires_at
+          ? session.expires_at * 1000
+          : Date.now() + 50 * 60 * 1000;
+        return session.access_token;
+      } finally {
+        this.sessionFetchPromise = null;
+      }
+    })();
+    return this.sessionFetchPromise;
   }
 
   /** Add files to the pipeline – processing starts immediately */
