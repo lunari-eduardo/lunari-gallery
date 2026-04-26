@@ -773,9 +773,9 @@ export function useSupabaseGalleries() {
     []
   );
 
-  // Delete single photo mutation
-  const deletePhotoMutation = useMutation({
-    mutationFn: async ({ galleryId, photoId }: { galleryId: string; photoId: string }) => {
+  // Delete photos mutation (single or bulk — Edge Function aceita array)
+  const deletePhotosMutation = useMutation({
+    mutationFn: async ({ galleryId, photoIds }: { galleryId: string; photoIds: string[] }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Não autenticado');
 
@@ -789,14 +789,14 @@ export function useSupabaseGalleries() {
           },
           body: JSON.stringify({
             galleryId,
-            photoIds: [photoId],
+            photoIds,
           }),
         }
       );
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Falha ao excluir foto');
+        throw new Error(error.error || 'Falha ao excluir fotos');
       }
 
       return response.json();
@@ -806,10 +806,17 @@ export function useSupabaseGalleries() {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
     },
     onError: (error) => {
-      console.error('Error deleting photo:', error);
-      toast.error('Erro ao excluir foto');
+      console.error('Error deleting photos:', error);
+      toast.error('Erro ao excluir fotos');
     },
   });
+
+  // Compat: single-photo wrapper mantém a API antiga
+  const deletePhotoMutation = {
+    mutateAsync: ({ galleryId, photoId }: { galleryId: string; photoId: string }) =>
+      deletePhotosMutation.mutateAsync({ galleryId, photoIds: [photoId] }),
+    isPending: deletePhotosMutation.isPending,
+  };
 
   return {
     // Data
