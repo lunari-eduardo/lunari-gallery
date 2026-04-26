@@ -75,15 +75,51 @@ export interface PipelineOptions {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Default parallel upload slots, tuned to avoid overloading the Cloudflare Worker
+ * and the browser's connection pool. Uploads include both originals (Worker)
+ * and previews (Edge Function), so 3 slots = up to 6 concurrent connections.
+ */
 function getDefaultUploadSlots(): number {
   const conn = (navigator as any).connection;
-  if (!conn) return 4;
+  if (!conn) return 3;
   switch (conn.effectiveType) {
-    case '4g': return 5;
+    case '4g': return 3;
     case '3g': return 2;
     case '2g': case 'slow-2g': return 1;
-    default: return 4;
+    default: return 3;
   }
+}
+
+/** Combine multiple AbortSignals into one (polyfill-safe). */
+function combineSignals(signals: AbortSignal[]): AbortSignal {
+  // Native API (modern browsers)
+  if (typeof (AbortSignal as any).any === 'function') {
+    return (AbortSignal as any).any(signals);
+  }
+  const controller = new AbortController();
+  for (const s of signals) {
+    if (s.aborted) {
+      controller.abort((s as any).reason);
+      break;
+    }
+    s.addEventListener('abort', () => controller.abort((s as any).reason), { once: true });
+  }
+  return controller.signal;
+}
+
+/** Structured warn for diagnostic visibility without spamming the console. */
+function logUploadWarn(phase: string, item: { id: string; file: File }, err: unknown, extra: Record<string, unknown> = {}) {
+  const e = err instanceof Error ? err : new Error(String(err));
+  console.warn('[UploadPipeline]', {
+    phase,
+    itemId: item.id,
+    file: item.file.name,
+    size: item.file.size,
+    errorName: e.name,
+    errorMessage: e.message,
+    ...extra,
+  });
 }
 
 async function generateUploadKey(galleryId: string, fileName: string, fileSize: number): Promise<string> {
