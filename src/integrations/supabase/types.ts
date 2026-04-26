@@ -4113,6 +4113,36 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_transacoes_orfas: {
+        Row: {
+          cliente_id: string | null
+          cliente_nome: string | null
+          cobranca_id: string | null
+          created_at: string | null
+          data_transacao: string | null
+          descricao: string | null
+          id: string | null
+          tipo: string | null
+          user_id: string | null
+          valor: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clientes_transacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       activate_referral_transfer_bonus: {
@@ -4169,6 +4199,10 @@ export type Database = {
       deduct_gallery_credit: { Args: { _user_id: string }; Returns: boolean }
       delete_appointment_cascade: {
         Args: { p_appointment_id: string; p_keep_payments?: boolean }
+        Returns: Json
+      }
+      delete_workflow_session_cascade: {
+        Args: { p_action?: string; p_session_pk: string }
         Returns: Json
       }
       ensure_referral_code: { Args: never; Returns: string }
