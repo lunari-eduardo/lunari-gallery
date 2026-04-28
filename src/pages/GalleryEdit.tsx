@@ -616,6 +616,7 @@ export default function GalleryEdit() {
                 <div className="space-y-2">
                   <Label>Template de Desconto (opcional)</Label>
                   <Select
+                    disabled={isBillingLocked}
                     onValueChange={(presetId) => {
                       const preset = settings.discountPresets.find(p => p.id === presetId);
                       if (preset && preset.packages.length > 0) {
