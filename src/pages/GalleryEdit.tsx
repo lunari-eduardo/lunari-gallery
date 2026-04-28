@@ -328,9 +328,10 @@ export default function GalleryEdit() {
           clienteNome,
           clienteEmail,
           clienteTelefone: cleanPhone || undefined,
-          nomePacote: nomePacote || undefined,
-          fotosIncluidas,
-          valorFotoExtra,
+          // Quando a galeria está concluída, preserva os parâmetros de cobrança originais.
+          nomePacote: isBillingLocked ? (gallery.nomePacote || undefined) : (nomePacote || undefined),
+          fotosIncluidas: isBillingLocked ? gallery.fotosIncluidas : fotosIncluidas,
+          valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
           prazoSelecao,  // Now saving the deadline
           configuracoes: mergedConfig,
         }
