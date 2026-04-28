@@ -1,72 +1,64 @@
-# Melhorias na lista de fotos da página Editar Galeria
+# Plano: Corrigir abertura do WhatsApp nos fluxos de compartilhamento
 
-## Objetivo
+## Diagnóstico
 
-Tornar a seção "Fotos da Galeria" em `GalleryEdit` realmente útil:
-1. Aumentar as miniaturas para reconhecimento visual real (sem depender só do nome do arquivo).
-2. Permitir seleção múltipla com checkbox para excluir várias fotos de uma vez.
+O botão "WhatsApp" no modal de compartilhar galeria está abrindo o seletor de conversas do WhatsApp Web (tela "Enviar mensagem para") em vez de abrir a conversa direta do cliente. Investigando os três pontos que usam `wa.me`:
 
-## Mudanças de UI/UX
+1. **`SendGalleryModal.tsx`** (modal "Compartilhar Galeria" — o do screenshot)
+   - Código: `phone ? wa.me/55{phone}?text=... : wa.me/?text=...`
+   - No screenshot do usuário, o cabeçalho mostra apenas "Até 01 de mai" e "Senha" — **não exibe o telefone**. Isso confirma que `gallery.clienteTelefone` está vazio/nulo para esse cliente, então cai no fallback `wa.me/?text=...`, que por design do WhatsApp abre o seletor de conversas.
+   - Causa raiz: a galeria foi criada/vinculada sem o telefone do cliente (campo opcional em `clientes.telefone` / `galerias.cliente_telefone`).
 
-### Layout das fotos
-- Substituir a `Table` atual (linhas com thumb 40x40 + nome) por um **grid responsivo de miniaturas**:
-  - 3 colunas no mobile, 4 em sm, 5 em md/lg dentro do `ScrollArea` (altura mantida em ~450px).
-  - Cada item: card quadrado (`aspect-square`), imagem `object-cover` ocupando todo o espaço, cantos arredondados, borda sutil.
-  - Nome do arquivo exibido abaixo da miniatura em texto pequeno truncado (1 linha) — mantém identificação textual sem competir com a imagem.
-  - Indicador de vídeo (ícone Play) no canto, reaproveitando padrão já usado em `DeliverPhotoManager`.
+2. **`ReactivateSuccessModal.tsx`** (modal de reativação)
+   - Usa a mesma lógica — funciona corretamente quando o telefone existe, mas tem o mesmo fallback silencioso.
 
-### Seleção múltipla
-- **Checkbox no canto superior esquerdo** de cada miniatura, visível em hover e sempre visível quando há ao menos 1 item selecionado.
-- Clique na miniatura (fora do checkbox) **não** abre lightbox — alterna seleção quando o "modo seleção" está ativo. Quando nenhum item está selecionado, clique simples também marca/desmarca (comportamento natural de seleção em grid).
-- **Barra de ações fixa no topo da lista** quando `selectedIds.length > 0`:
-  - Texto: "X foto(s) selecionada(s)".
-  - Botão "Selecionar todas" / "Limpar seleção" (toggle conforme estado).
-  - Botão destrutivo "Excluir selecionadas" (variant destructive) com ícone Trash2.
-- Botão de lixeira individual continua disponível em hover de cada card (atalho rápido para 1 foto), mas o fluxo principal vira a seleção múltipla.
+3. **`DeliverDetail.tsx`** (galerias Transfer/entrega)
+   - `openWhatsApp` **sempre** usa `wa.me/?text=...`, ignorando completamente o telefone do cliente mesmo quando existe. Bug explícito.
 
-### Confirmação e feedback
-- Antes de excluir em massa, abrir `AlertDialog` de confirmação:
-  - Título: "Excluir X fotos?"
-  - Descrição: "Esta ação não pode ser desfeita. As fotos serão removidas permanentemente da galeria e do armazenamento."
-  - Botões: "Cancelar" / "Excluir" (destructive).
-- Durante a exclusão: estado `isBulkDeleting` desativa botões, mostra `Loader2` no botão de excluir.
-- Após sucesso: toast "X foto(s) excluída(s)", limpar `selectedIds`, invalidar queries (`galeria-fotos`, `galerias`), atualizar `localPhotoCount`.
-- Em caso de erro: toast de erro, manter seleção para o usuário tentar novamente.
+Além disso, hoje o número é prefixado com `55` de forma cega. Se o cliente já tiver telefone salvo com DDI (ex.: colado como `+55 11 ...` e o sanitize deixar `5511...`), o resultado vira `555511...`, link inválido que também cai no seletor. Precisamos normalizar.
 
-### Preservação de comportamentos atuais
-- Filtro por pasta ativa (`activeFolderId`) continua funcionando — seleção fica restrita às fotos da pasta visível e é resetada ao trocar de pasta.
-- Botão "Adicionar Fotos" e `PhotoUploader` permanecem inalterados abaixo da grid.
-- `FolderManager` acima permanece inalterado.
+## O que vamos corrigir
 
-## Mudanças técnicas
+### 1. `SendGalleryModal.tsx` — UX quando não há telefone
+- Se `gallery.clienteTelefone` estiver vazio: em vez de abrir o seletor do WhatsApp silenciosamente, exibir um **toast informativo** ("Cliente sem telefone cadastrado. A mensagem será copiada e o WhatsApp abrirá para você escolher o contato.") e **copiar a mensagem automaticamente** para a área de transferência antes de abrir o `wa.me/?text=...`. Assim o usuário entende o porquê e já tem a mensagem pronta para colar.
+- Adicionar indicador visual: quando não há telefone, mostrar um pequeno texto auxiliar abaixo do botão WhatsApp: "Sem telefone — escolha o contato".
+- Quando há telefone: manter comportamento atual (abre conversa direta) e mostrar o número ao lado do botão (já existe esse padrão no `ReactivateSuccessModal`, aplicar aqui também — o screenshot mostra que hoje não aparece).
 
-### `src/pages/GalleryEdit.tsx`
-- Adicionar estado: `const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())`, `const [isBulkDeleting, setIsBulkDeleting] = useState(false)`, `const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)`.
-- Resetar `selectedIds` em `useEffect` quando `activeFolderId` muda.
-- Substituir o bloco `Table` (linhas 758–790) por:
-  - Barra de ações condicional (selecionadas > 0).
-  - `ScrollArea` envolvendo um `<div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 p-2">`.
-  - Componente de card de foto inline com checkbox (`@/components/ui/checkbox`), imagem (thumbnail via `getPhotoUrl`), badge de vídeo se `mimeType?.startsWith('video/')`, botão de delete individual em hover.
-- Novo handler `handleBulkDelete`:
-  - Chama nova mutation `deletePhotos({ galleryId, photoIds: Array.from(selectedIds) })`.
-  - Atualiza `localPhotoCount` subtraindo o tamanho.
-  - Limpa seleção e fecha o dialog.
-- Handler `toggleSelectAll`: marca/desmarca todas as `filteredPhotos`.
-- Handler `toggleSelect(id)`: adiciona/remove do Set.
+### 2. `ReactivateSuccessModal.tsx` — consistência
+- Aplicar a mesma UX de fallback (toast + auto-copiar mensagem) para alinhar os dois modais.
 
-### `src/hooks/useSupabaseGalleries.ts`
-- Adicionar nova mutation `deletePhotosMutation` (plural) que reaproveita a Edge Function `delete-photos` enviando `photoIds: string[]` completo (a função já aceita arrays — apenas chamamos uma única vez em vez de N).
-- Exportar `deletePhotos: deletePhotosMutation.mutateAsync` e `isDeletingPhotos`.
-- Manter `deletePhoto` (singular) para o botão individual e demais usos.
-- `onSuccess` invalida as mesmas queries que a versão singular.
+### 3. `DeliverDetail.tsx` — bug de telefone ignorado
+- Alterar `openWhatsApp` para usar `gallery.clienteTelefone` quando disponível, com a mesma regra de normalização dos outros fluxos.
+- Aplicar o mesmo fallback com toast + auto-copiar.
 
-### Sem mudanças em
-- Edge Functions (a `delete-photos` já suporta exclusão em lote).
-- Banco de dados / migrações.
-- Pipeline de upload, fluxo de pagamento, sessões `clientes_sessoes`, integração Gestão.
-- Outras telas (galeria do cliente, deliver, etc.).
+### 4. Normalização do telefone (utilitário novo)
+- Criar `src/lib/whatsappUrl.ts` com função `buildWhatsAppUrl(phone, message)` que:
+  - Remove tudo que não é dígito.
+  - Se começar com `55` e tiver 12 ou 13 dígitos: usa como está (já tem DDI).
+  - Se tiver 10 ou 11 dígitos (formato BR sem DDI): prefixa `55`.
+  - Caso contrário (formato inesperado): retorna `null` para cair no fallback controlado.
+  - Retorna a URL `https://wa.me/{digits}?text={encoded}` pronta.
+- Substituir as três ocorrências atuais por esta função centralizada.
 
-## Riscos e mitigações
-- **Performance com 100+ fotos no grid**: as imagens já usam `loading="lazy"` e `getPhotoUrl(..., 'thumbnail')` (variante 256px). O `ScrollArea` limita a altura visível. Sem impacto além do atual.
-- **Exclusão acidental em massa**: mitigada pelo `AlertDialog` de confirmação obrigatório e mensagem destacando irreversibilidade.
-- **Race condition entre delete individual e bulk**: ambos os botões ficam desabilitados enquanto qualquer mutation de delete está pendente.
+### 5. Sugestão preventiva (opcional, baixo custo)
+- Na tela de edição da galeria (`GalleryEdit.tsx`), adicionar um aviso discreto ao lado do campo Telefone: "Necessário para abrir conversa direta no WhatsApp." — ajuda o fotógrafo a entender que não preencher o campo leva ao comportamento de seletor.
+
+## Arquivos afetados
+
+- `src/lib/whatsappUrl.ts` (novo)
+- `src/components/SendGalleryModal.tsx` (handleWhatsApp + exibição do telefone)
+- `src/components/ReactivateSuccessModal.tsx` (handleWhatsApp)
+- `src/pages/DeliverDetail.tsx` (openWhatsApp)
+- `src/pages/GalleryEdit.tsx` (hint opcional no campo Telefone)
+
+## Fora do escopo
+
+- Nenhuma mudança em backend, edge functions, banco de dados ou integrações de pagamento.
+- Nada relacionado a InfinitePay/Asaas/Mercado Pago.
+- Nenhuma alteração na lógica de publicação (`prepare_gallery_share`).
+
+## Resultado esperado
+
+- Quando o cliente tiver telefone: clicar em "WhatsApp" abre **direto a conversa** com a mensagem preenchida.
+- Quando não tiver telefone: o usuário recebe feedback claro, a mensagem é copiada automaticamente, e o WhatsApp abre no seletor — sem surpresa.
+- Telefones já salvos com DDI não geram mais links quebrados.
