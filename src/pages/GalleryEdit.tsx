@@ -21,7 +21,8 @@ import {
   Moon,
   Play,
   CheckSquare,
-  Square
+  Square,
+  Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -304,6 +305,10 @@ export default function GalleryEdit() {
                         gallery.status === 'expirado' ||
                         gallery.status === 'expirada';
 
+  // Galeria concluída: bloqueia edição de parâmetros que afetam cobrança.
+  // Reativar a seleção libera novamente esses campos.
+  const isBillingLocked = gallery.statusSelecao === 'selecao_completa' || gallery.finalizedAt != null;
+
   const handleSave = async () => {
     try {
       // Clean phone number for storage
@@ -324,9 +329,10 @@ export default function GalleryEdit() {
           clienteNome,
           clienteEmail,
           clienteTelefone: cleanPhone || undefined,
-          nomePacote: nomePacote || undefined,
-          fotosIncluidas,
-          valorFotoExtra,
+          // Quando a galeria está concluída, preserva os parâmetros de cobrança originais.
+          nomePacote: isBillingLocked ? (gallery.nomePacote || undefined) : (nomePacote || undefined),
+          fotosIncluidas: isBillingLocked ? gallery.fotosIncluidas : fotosIncluidas,
+          valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
           prazoSelecao,  // Now saving the deadline
           configuracoes: mergedConfig,
         }
@@ -453,6 +459,17 @@ export default function GalleryEdit() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isBillingLocked && (
+                <div className="glass rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3">
+                  <Lock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium text-foreground">Galeria concluída</p>
+                    <p className="text-muted-foreground">
+                      Os parâmetros de cobrança (pacote, fotos incluídas, valor da foto extra e template de desconto) estão bloqueados para preservar o histórico de pagamentos. Para alterá-los, <span className="font-medium text-foreground">reative a seleção</span> usando o botão "Reativar" no topo da página.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="nomeSessao">Nome da Sessão</Label>
@@ -478,6 +495,7 @@ export default function GalleryEdit() {
                         }
                       }}
                       placeholder="Selecionar pacote..."
+                      disabled={isBillingLocked}
                     />
                   ) : (
                     <Input
@@ -485,6 +503,7 @@ export default function GalleryEdit() {
                       value={nomePacote}
                       onChange={(e) => setNomePacote(e.target.value)}
                       placeholder="Ex: Premium"
+                      disabled={isBillingLocked}
                     />
                   )}
                 </div>
@@ -574,6 +593,7 @@ export default function GalleryEdit() {
                     min="0"
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
+                    disabled={isBillingLocked}
                   />
                 </div>
                 
@@ -586,6 +606,7 @@ export default function GalleryEdit() {
                     step="0.01"
                     value={valorFotoExtra || ''}
                     onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                    disabled={isBillingLocked}
                   />
                 </div>
               </div>
@@ -595,6 +616,7 @@ export default function GalleryEdit() {
                 <div className="space-y-2">
                   <Label>Template de Desconto (opcional)</Label>
                   <Select
+                    disabled={isBillingLocked}
                     onValueChange={(presetId) => {
                       const preset = settings.discountPresets.find(p => p.id === presetId);
                       if (preset && preset.packages.length > 0) {
