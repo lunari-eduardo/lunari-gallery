@@ -25,6 +25,7 @@ import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { useSettings } from '@/hooks/useSettings';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { buildWhatsAppUrl } from '@/lib/whatsappUrl';
 import { getPhotoUrl } from '@/lib/photoUrl';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
