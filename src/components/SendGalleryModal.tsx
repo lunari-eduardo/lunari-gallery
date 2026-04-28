@@ -416,17 +416,24 @@ export function SendGalleryModal({
                 {isCopied ? 'Copiada!' : 'Copiar Mensagem'}
               </Button>
 
-              <Button
-                onClick={handleWhatsApp}
-                variant="terracotta"
-                className="justify-center gap-2 h-11"
-              >
-                <MessageCircle className="h-4 w-4" />
-                WhatsApp
-                {formattedPhone && (
-                  <span className="text-xs opacity-80">→ {formattedPhone}</span>
+              <div className="flex flex-col gap-1">
+                <Button
+                  onClick={handleWhatsApp}
+                  variant="terracotta"
+                  className="justify-center gap-2 h-11"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                  {formattedPhone && (
+                    <span className="text-xs opacity-80">→ {formattedPhone}</span>
+                  )}
+                </Button>
+                {!formattedPhone && (
+                  <span className="text-[11px] text-muted-foreground text-center">
+                    Sem telefone — escolha o contato
+                  </span>
                 )}
-              </Button>
+              </div>
 
               <Button
                 onClick={handleSendEmail}
