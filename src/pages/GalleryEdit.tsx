@@ -459,6 +459,17 @@ export default function GalleryEdit() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isBillingLocked && (
+                <div className="glass rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3">
+                  <Lock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium text-foreground">Galeria concluída</p>
+                    <p className="text-muted-foreground">
+                      Os parâmetros de cobrança (pacote, fotos incluídas, valor da foto extra e template de desconto) estão bloqueados para preservar o histórico de pagamentos. Para alterá-los, <span className="font-medium text-foreground">reative a seleção</span> usando o botão "Reativar" no topo da página.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="nomeSessao">Nome da Sessão</Label>
