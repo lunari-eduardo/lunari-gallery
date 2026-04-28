@@ -169,11 +169,16 @@ export function SendGalleryModal({
   };
 
   const handleWhatsApp = async () => {
-    const phone = gallery.clienteTelefone?.replace(/\D/g, '');
-    const message = encodeURIComponent(fullMessage);
-    const url = phone
-      ? `https://wa.me/55${phone}?text=${message}`
-      : `https://wa.me/?text=${message}`;
+    const { url, hasDirectContact } = buildWhatsAppUrl(gallery.clienteTelefone, fullMessage);
+    if (!hasDirectContact) {
+      // Sem telefone válido: copia a mensagem e avisa o usuário antes de abrir o seletor.
+      try {
+        await navigator.clipboard.writeText(fullMessage);
+      } catch {
+        // ignora falha de clipboard; seguimos abrindo o WhatsApp mesmo assim
+      }
+      toast.info('Cliente sem telefone cadastrado. A mensagem foi copiada — escolha o contato no WhatsApp e cole.');
+    }
     window.open(url, '_blank');
     await markAsSent();
   };
