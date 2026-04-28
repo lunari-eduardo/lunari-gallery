@@ -593,6 +593,7 @@ export default function GalleryEdit() {
                     min="0"
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
+                    disabled={isBillingLocked}
                   />
                 </div>
                 
@@ -605,6 +606,7 @@ export default function GalleryEdit() {
                     step="0.01"
                     value={valorFotoExtra || ''}
                     onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                    disabled={isBillingLocked}
                   />
                 </div>
               </div>
