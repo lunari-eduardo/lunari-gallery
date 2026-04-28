@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { GlobalSettings } from '@/types/gallery';
 import { Galeria } from '@/hooks/useSupabaseGalleries';
 import { supabase } from '@/integrations/supabase/client';
+import { buildWhatsAppUrl } from '@/lib/whatsappUrl';
 
 interface ReactivateSuccessModalProps {
   isOpen: boolean;
