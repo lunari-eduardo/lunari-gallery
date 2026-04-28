@@ -304,6 +304,10 @@ export default function GalleryEdit() {
                         gallery.status === 'expirado' ||
                         gallery.status === 'expirada';
 
+  // Galeria concluída: bloqueia edição de parâmetros que afetam cobrança.
+  // Reativar a seleção libera novamente esses campos.
+  const isBillingLocked = gallery.statusSelecao === 'selecao_completa' || gallery.finalizedAt != null;
+
   const handleSave = async () => {
     try {
       // Clean phone number for storage
