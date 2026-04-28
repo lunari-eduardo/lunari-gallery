@@ -495,6 +495,7 @@ export default function GalleryEdit() {
                         }
                       }}
                       placeholder="Selecionar pacote..."
+                      disabled={isBillingLocked}
                     />
                   ) : (
                     <Input
@@ -502,6 +503,7 @@ export default function GalleryEdit() {
                       value={nomePacote}
                       onChange={(e) => setNomePacote(e.target.value)}
                       placeholder="Ex: Premium"
+                      disabled={isBillingLocked}
                     />
                   )}
                 </div>
