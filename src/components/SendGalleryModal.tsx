@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { GlobalSettings } from '@/types/gallery';
 import { Galeria } from '@/hooks/useSupabaseGalleries';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { buildWhatsAppUrl } from '@/lib/whatsappUrl';
 import { supabase } from '@/integrations/supabase/client';
 
 interface SendGalleryModalProps {
@@ -168,11 +169,16 @@ export function SendGalleryModal({
   };
 
   const handleWhatsApp = async () => {
-    const phone = gallery.clienteTelefone?.replace(/\D/g, '');
-    const message = encodeURIComponent(fullMessage);
-    const url = phone
-      ? `https://wa.me/55${phone}?text=${message}`
-      : `https://wa.me/?text=${message}`;
+    const { url, hasDirectContact } = buildWhatsAppUrl(gallery.clienteTelefone, fullMessage);
+    if (!hasDirectContact) {
+      // Sem telefone válido: copia a mensagem e avisa o usuário antes de abrir o seletor.
+      try {
+        await navigator.clipboard.writeText(fullMessage);
+      } catch {
+        // ignora falha de clipboard; seguimos abrindo o WhatsApp mesmo assim
+      }
+      toast.info('Cliente sem telefone cadastrado. A mensagem foi copiada — escolha o contato no WhatsApp e cole.');
+    }
     window.open(url, '_blank');
     await markAsSent();
   };
@@ -410,17 +416,24 @@ export function SendGalleryModal({
                 {isCopied ? 'Copiada!' : 'Copiar Mensagem'}
               </Button>
 
-              <Button
-                onClick={handleWhatsApp}
-                variant="terracotta"
-                className="justify-center gap-2 h-11"
-              >
-                <MessageCircle className="h-4 w-4" />
-                WhatsApp
-                {formattedPhone && (
-                  <span className="text-xs opacity-80">→ {formattedPhone}</span>
+              <div className="flex flex-col gap-1">
+                <Button
+                  onClick={handleWhatsApp}
+                  variant="terracotta"
+                  className="justify-center gap-2 h-11"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                  {formattedPhone && (
+                    <span className="text-xs opacity-80">→ {formattedPhone}</span>
+                  )}
+                </Button>
+                {!formattedPhone && (
+                  <span className="text-[11px] text-muted-foreground text-center">
+                    Sem telefone — escolha o contato
+                  </span>
                 )}
-              </Button>
+              </div>
 
               <Button
                 onClick={handleSendEmail}

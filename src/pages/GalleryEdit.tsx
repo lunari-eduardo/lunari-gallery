@@ -522,6 +522,9 @@ export default function GalleryEdit() {
                     onChange={handlePhoneChange}
                     placeholder="(00) 00000-0000"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Necessário para abrir a conversa direta com o cliente no WhatsApp.
+                  </p>
                 </div>
               </div>
 

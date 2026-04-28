@@ -25,6 +25,7 @@ import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { useSettings } from '@/hooks/useSettings';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { buildWhatsAppUrl } from '@/lib/whatsappUrl';
 import { getPhotoUrl } from '@/lib/photoUrl';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -200,9 +201,18 @@ export default function DeliverDetail() {
     navigator.clipboard.writeText(text);
   };
 
-  const openWhatsApp = () => {
-    const text = encodeURIComponent(`${shareMessage}\n\n${galleryUrl}`);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+  const openWhatsApp = async () => {
+    const message = `${shareMessage}\n\n${galleryUrl}`;
+    const { url, hasDirectContact } = buildWhatsAppUrl(gallery.clienteTelefone, message);
+    if (!hasDirectContact) {
+      try {
+        await navigator.clipboard.writeText(message);
+      } catch {
+        // ignora
+      }
+      toast.info('Cliente sem telefone cadastrado. A mensagem foi copiada — escolha o contato no WhatsApp e cole.');
+    }
+    window.open(url, '_blank');
   };
 
   return (
