@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { GlobalSettings } from '@/types/gallery';
 import { Galeria } from '@/hooks/useSupabaseGalleries';
 import { getGalleryUrl } from '@/lib/galleryUrl';
+import { buildWhatsAppUrl } from '@/lib/whatsappUrl';
 import { supabase } from '@/integrations/supabase/client';
 
 interface SendGalleryModalProps {
