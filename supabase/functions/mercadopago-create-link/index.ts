@@ -36,6 +36,7 @@ interface CreateLinkRequest {
   galleryToken?: string;
   qtdFotos?: number;
   sessionId?: string;
+  visitorId?: string;
   
   // Campos comuns
   valor: number;
