@@ -108,7 +108,29 @@ Deno.serve(async (req) => {
     let cobrancaId = body.cobranca_id;
     if (!cobrancaId && body.galeriaId) {
       console.log('Criando nova cobrança para galeria:', body.galeriaId);
-      
+
+      // 🛡️ Inferência defensiva: se vier qtdFotos=0/null mas há valor>0,
+      // tentamos extrair "N foto" da descrição ou dividir valor pelo preço unitário.
+      let qtdFotosFinal = body.qtdFotos || 0;
+      if (qtdFotosFinal <= 0 && body.valor > 0) {
+        console.warn(`⚠️ [mercadopago-create-link] qtdFotos ausente/zero para galeria ${body.galeriaId} — tentando inferir`);
+        let inferred: number | null = null;
+        const m = body.descricao?.match(/(\d+)\s*foto/i);
+        if (m) inferred = parseInt(m[1], 10);
+        if (!inferred || inferred <= 0) {
+          const { data: g } = await supabase
+            .from('galerias').select('valor_foto_extra').eq('id', body.galeriaId).maybeSingle();
+          const unit = Number(g?.valor_foto_extra || 0);
+          if (unit > 0) inferred = Math.round(body.valor / unit);
+        }
+        if (inferred && inferred > 0) {
+          qtdFotosFinal = inferred;
+          console.warn(`✅ [mercadopago-create-link] qtdFotos inferido = ${inferred}`);
+        } else {
+          console.error(`❌ [mercadopago-create-link] não foi possível inferir qtdFotos para galeria ${body.galeriaId}`);
+        }
+      }
+
       const { data: novaCobranca, error: cobrancaError } = await supabase
         .from('cobrancas')
         .insert({
@@ -119,7 +141,7 @@ Deno.serve(async (req) => {
           valor: body.valor,
           descricao: body.descricao,
           tipo_cobranca: 'link',
-          qtd_fotos: body.qtdFotos || 0,
+          qtd_fotos: qtdFotosFinal,
           status: 'pendente',
           provedor: 'mercadopago',
           visitor_id: body.visitorId || null,
