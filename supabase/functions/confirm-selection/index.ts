@@ -379,12 +379,15 @@ Deno.serve(async (req) => {
     // cobrança pendente de contabilização — a RPC é idempotente via
     // `extras_contabilizados`, então é seguro chamar múltiplas vezes.
     if (extrasPagasTotal === 0) {
+      // 🛡️ Filtro relaxado: incluímos cobranças mesmo com qtd_fotos=0/null,
+      // pois a RPC `finalize_gallery_payment` agora infere qtd_fotos da descrição
+      // ou do preço unitário. Isso fecha o ciclo do bug em que cobranças InfinitePay
+      // gravadas com qtd_fotos=0 nunca eram contabilizadas.
       const { data: paidCharges } = await supabase
         .from('cobrancas')
         .select('id, valor, qtd_fotos, extras_contabilizados, status')
         .eq('galeria_id', galleryId)
-        .in('status', ['pago', 'pago_manual'])
-        .gt('qtd_fotos', 0);
+        .in('status', ['pago', 'pago_manual']);
 
       const needsHeal = (paidCharges || []).filter((c) => c.extras_contabilizados !== true);
       if (needsHeal.length > 0) {
