@@ -873,7 +873,7 @@ export default function GalleryDetail() {
                     sessionId={supabaseGallery.sessionId || undefined}
                     cobrancaId={cobrancaData?.id}
                     galleryId={supabaseGallery.id}
-                    extraCount={selectedPhotos.length - supabaseGallery.fotosIncluidas}
+                    extraCount={extrasACobrar}
                     variant="compact"
                     onStatusUpdated={() => {
                       queryClient.invalidateQueries({ queryKey: ['galerias'] });
@@ -1104,7 +1104,7 @@ export default function GalleryDetail() {
                 sessionId={supabaseGallery.sessionId || undefined}
                 cobrancaId={cobrancaData?.id}
                 galleryId={supabaseGallery.id}
-                extraCount={selectedPhotos.length - supabaseGallery.fotosIncluidas}
+                extraCount={extrasACobrar}
                 variant="full"
                 showPendingAmount={true}
                 onStatusUpdated={() => {
