@@ -94,7 +94,15 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, qtdFotos, visitorId }: RequestBody = await req.json();
+    const body: RequestBody = await req.json();
+    const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, visitorId } = body;
+    let { qtdFotos } = body;
+
+    // Log do body recebido (sem secrets) para rastrear regressões de qtd_fotos
+    console.log('💳 [infinitepay-create-link] body recebido:', JSON.stringify({
+      hasUserId: !!userId, hasClienteId: !!clienteId, galeriaId, visitorId,
+      valor, qtdFotos, descricao: descricao?.substring(0, 60),
+    }));
 
     // Validate required fields - userId is always required (passed in body, no JWT needed)
     if (!valor || !userId) {
@@ -107,6 +115,36 @@ Deno.serve(async (req) => {
 
     if (!clienteId && galeriaId) {
       console.log('⚠️ Criando cobrança InfinitePay para galeria pública (sem cliente vinculado)');
+    }
+
+    // 🛡️ Inferência defensiva: se vier qtdFotos=0/null mas há galeriaId e valor>0,
+    // tentamos extrair "N foto" da descrição ou dividir valor pelo preço unitário da galeria.
+    // Isso evita gravar cobranças com qtd_fotos=0 (que quebra finalize_gallery_payment).
+    if ((!qtdFotos || qtdFotos <= 0) && galeriaId && valor > 0) {
+      console.warn(`⚠️ [infinitepay-create-link] qtdFotos ausente/zero para galeria ${galeriaId} — tentando inferir`);
+      let inferred: number | null = null;
+
+      // Tentativa 1: regex na descrição
+      const m = descricao?.match(/(\d+)\s*foto/i);
+      if (m) inferred = parseInt(m[1], 10);
+
+      // Tentativa 2: dividir valor pelo preço unitário da galeria
+      if (!inferred || inferred <= 0) {
+        const { data: g } = await supabase
+          .from('galerias')
+          .select('valor_foto_extra')
+          .eq('id', galeriaId)
+          .maybeSingle();
+        const unit = Number(g?.valor_foto_extra || 0);
+        if (unit > 0) inferred = Math.round(valor / unit);
+      }
+
+      if (inferred && inferred > 0) {
+        qtdFotos = inferred;
+        console.warn(`✅ [infinitepay-create-link] qtdFotos inferido = ${inferred}`);
+      } else {
+        console.error(`❌ [infinitepay-create-link] não foi possível inferir qtdFotos para galeria ${galeriaId}`);
+      }
     }
 
     // 1. Fetch InfinitePay handle
