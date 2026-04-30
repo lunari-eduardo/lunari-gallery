@@ -131,10 +131,17 @@ export interface CreateGaleriaData {
   prazoSelecao?: Date;  // Direct deadline date (for edit page)
   permissao?: 'public' | 'private';
   galleryPassword?: string;  // Password for private galleries
-  sessionId?: string | null; // Session ID from Gestão system
+  sessionId?: string | null; // Session ID from Lunari Studio
   origin?: 'manual' | 'gestao'; // Track how gallery was created
-  regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Gestão
+  regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Lunari Studio
   tipo?: 'selecao' | 'entrega'; // Gallery type
+  /**
+   * When true, rewrites `regras_congeladas.precificacaoFotoExtra` to
+   * `{ modelo: 'fixo', valorFixo: <novoValor> }` on both gallery and linked
+   * session. Used when the photographer overrides a progressive discount
+   * model with a fixed price for THIS gallery only.
+   */
+  desativarProgressivo?: boolean;
 }
 
 // Transform database row to Galeria
@@ -371,7 +378,7 @@ export function useSupabaseGalleries() {
   const updateGalleryMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<CreateGaleriaData> }) => {
       const updateData: Record<string, any> = {};
-      
+
       if (data.clienteNome !== undefined) updateData.cliente_nome = data.clienteNome;
       if (data.clienteEmail !== undefined) updateData.cliente_email = data.clienteEmail;
       if (data.clienteTelefone !== undefined) updateData.cliente_telefone = data.clienteTelefone;
@@ -389,6 +396,22 @@ export function useSupabaseGalleries() {
       if (data.prazoSelecao !== undefined) updateData.prazo_selecao = data.prazoSelecao.toISOString();
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
 
+      // Snapshot pre-update for audit when overriding pricing rules
+      const willOverridePricing =
+        data.fotosIncluidas !== undefined
+        || data.valorFotoExtra !== undefined
+        || data.desativarProgressivo === true;
+
+      let preSnapshot: { regras_congeladas: any; fotos_incluidas: number; valor_foto_extra: number; session_id: string | null } | null = null;
+      if (willOverridePricing) {
+        const { data: pre } = await supabase
+          .from('galerias')
+          .select('regras_congeladas, fotos_incluidas, valor_foto_extra, session_id')
+          .eq('id', id)
+          .maybeSingle();
+        preSnapshot = pre as any;
+      }
+
       const { error } = await supabase
         .from('galerias')
         .update(updateData)
@@ -396,20 +419,91 @@ export function useSupabaseGalleries() {
 
       if (error) throw error;
 
-      // The DB trigger `sync_gallery_extras_to_session` already propagates
-      // `valor_foto_extra` to `clientes_sessoes.valor_foto_extra` AND patches
-      // both JSONB `regras_congeladas.pacote.valorFotoExtra` (gallery + session).
-      // We return the resolved session_id so onSuccess can invalidate the
-      // matching React Query caches, ensuring the photographer immediately
-      // sees the corrected price on their own UI without a hard reload.
-      let sessionId: string | null = null;
-      if (data.valorFotoExtra !== undefined) {
+      let sessionId: string | null = preSnapshot?.session_id ?? null;
+      if (!preSnapshot && data.valorFotoExtra !== undefined) {
         const { data: row } = await supabase
           .from('galerias')
           .select('session_id')
           .eq('id', id)
           .maybeSingle();
         sessionId = row?.session_id ?? null;
+      }
+
+      // ─── Override de regras congeladas ─────────────────────────────────
+      // Quando o fotógrafo desativa o desconto progressivo (override de
+      // preço único), reescrevemos `regras_congeladas.precificacaoFotoExtra`
+      // tanto na galeria quanto na sessão vinculada para `{ modelo: 'fixo' }`.
+      // Os contadores `total_fotos_extras_vendidas` / `valor_total_vendido`
+      // NUNCA são tocados — pagamentos já realizados continuam servindo de
+      // crédito em `confirm-selection` (extrasACobrar = max(0, devidas-pagas)).
+      // O sync de `valor_foto_extra` e `fotos_incluidas` em
+      // `clientes_sessoes.regras_congeladas.pacote` é feito pelo trigger DB
+      // `sync_gallery_extras_to_session`.
+      if (data.desativarProgressivo === true && preSnapshot) {
+        const novoValor = sanitizeExtraPrice(
+          data.valorFotoExtra !== undefined ? data.valorFotoExtra : preSnapshot.valor_foto_extra
+        );
+        const baseRegras = (preSnapshot.regras_congeladas as any) || {};
+        const pacote = (baseRegras.pacote as any) || {};
+        const novasRegras = {
+          ...baseRegras,
+          pacote: {
+            ...pacote,
+            valorFotoExtra: novoValor,
+          },
+          precificacaoFotoExtra: {
+            modelo: 'fixo',
+            valorFixo: novoValor,
+          },
+        };
+
+        await supabase
+          .from('galerias')
+          .update({ regras_congeladas: novasRegras as unknown as Json })
+          .eq('id', id);
+
+        if (sessionId) {
+          await supabase
+            .from('clientes_sessoes')
+            .update({
+              regras_congeladas: novasRegras as unknown as Json,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('session_id', sessionId);
+        }
+      }
+
+      // Audit log: registra qualquer override de precificação local
+      // (valor extra, fotos incluídas, ou desativação de progressivo).
+      if (willOverridePricing && preSnapshot) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          await supabase.from('audit_log').insert({
+            action: 'gallery_pricing_override',
+            actor_type: 'user',
+            actor_id: user?.id ?? null,
+            gallery_id: id,
+            resource_type: 'galeria',
+            resource_id: id,
+            metadata: {
+              before: {
+                fotos_incluidas: preSnapshot.fotos_incluidas,
+                valor_foto_extra: preSnapshot.valor_foto_extra,
+              },
+              after: {
+                fotos_incluidas: data.fotosIncluidas ?? preSnapshot.fotos_incluidas,
+                valor_foto_extra: data.valorFotoExtra !== undefined
+                  ? sanitizeExtraPrice(data.valorFotoExtra)
+                  : preSnapshot.valor_foto_extra,
+              },
+              desativou_progressivo: data.desativarProgressivo === true,
+              session_id: sessionId,
+            } as unknown as Json,
+          });
+        } catch (auditErr) {
+          // Audit não deve quebrar o save
+          console.warn('Falha ao registrar audit de override:', auditErr);
+        }
       }
 
       return { id, sessionId };

@@ -142,6 +142,9 @@ export default function GalleryEdit() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
 
+  // Confirmação para desativar desconto progressivo ao alterar valor da foto extra
+  const [confirmDisableProgressiveOpen, setConfirmDisableProgressiveOpen] = useState(false);
+
   // Reset selection when switching folders
   useEffect(() => {
     setSelectedIds(new Set());
@@ -309,12 +312,30 @@ export default function GalleryEdit() {
   // Reativar a seleção libera novamente esses campos.
   const isBillingLocked = gallery.statusSelecao === 'selecao_completa' || gallery.finalizedAt != null;
 
-  const handleSave = async () => {
-    try {
-      // Clean phone number for storage
-      const cleanPhone = clienteTelefone.replace(/\D/g, '');
+  // Galeria vinculada ao Lunari Studio (sessão do projeto Studio).
+  const isLunariLinked = !!gallery.sessionId;
 
-      // Merge theme settings into existing configuracoes (preserve everything else)
+  // Modelo de precificação atual nas regras congeladas (para detecção de progressivo)
+  const modeloAtual = gallery.regrasCongeladas?.precificacaoFotoExtra?.modelo ?? 'fixo';
+  const isProgressiveActive = modeloAtual === 'global' || modeloAtual === 'categoria';
+
+  // Mínimo permitido para "Fotos Incluídas": não pode ficar abaixo de
+  // (selecionadas - extras já vendidas). Reduzir abaixo disso transformaria
+  // fotos já cobradas como "incluídas" em extras a recobrar.
+  const minFotosIncluidasPermitido = Math.max(
+    0,
+    (gallery.fotosSelecionadas ?? 0) - (gallery.totalFotosExtrasVendidas ?? 0)
+  );
+  const fotosIncluidasAbaixoDoMinimo =
+    !isBillingLocked
+    && (gallery.totalFotosExtrasVendidas ?? 0) > 0
+    && fotosIncluidas < minFotosIncluidasPermitido;
+
+  const valorFotoExtraMudou = !isBillingLocked && valorFotoExtra !== gallery.valorFotoExtra;
+
+  const persistGallery = async (desativarProgressivo: boolean) => {
+    try {
+      const cleanPhone = clienteTelefone.replace(/\D/g, '');
       const existingConfig = gallery.configuracoes || {};
       const mergedConfig = {
         ...existingConfig,
@@ -333,14 +354,34 @@ export default function GalleryEdit() {
           nomePacote: isBillingLocked ? (gallery.nomePacote || undefined) : (nomePacote || undefined),
           fotosIncluidas: isBillingLocked ? gallery.fotosIncluidas : fotosIncluidas,
           valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
-          prazoSelecao,  // Now saving the deadline
+          prazoSelecao,
           configuracoes: mergedConfig,
+          desativarProgressivo,
         }
       });
       navigate(`/gallery/${gallery.id}`);
     } catch (error) {
       console.error('Error updating gallery:', error);
     }
+  };
+
+  const handleSave = async () => {
+    if (fotosIncluidasAbaixoDoMinimo) {
+      toast.error(
+        `Não é possível reduzir as fotos incluídas abaixo de ${minFotosIncluidasPermitido}: existem fotos já pagas como extras nesta galeria.`
+      );
+      return;
+    }
+
+    // Se o usuário alterou o valor da foto extra E há desconto progressivo ativo,
+    // confirmar antes de salvar (a alteração troca o modelo para 'fixo' apenas
+    // nesta galeria/sessão).
+    if (!isBillingLocked && valorFotoExtraMudou && isProgressiveActive) {
+      setConfirmDisableProgressiveOpen(true);
+      return;
+    }
+
+    await persistGallery(false);
   };
 
   const handleExtendDeadline = (days: number) => {
@@ -584,6 +625,20 @@ export default function GalleryEdit() {
                 </div>
               </div>
 
+              {isLunariLinked && !isBillingLocked && (
+                <div className="glass rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
+                  <p className="font-medium text-foreground">Galeria vinculada ao Lunari Studio</p>
+                  <p className="text-muted-foreground">
+                    Editar a quantidade incluída ou o valor da foto extra <span className="font-medium text-foreground">sobrescreve</span> as regras originais apenas para esta galeria. Pagamentos já confirmados são preservados — fotos extras já pagas não serão cobradas novamente.
+                  </p>
+                  {isProgressiveActive && (
+                    <p className="text-muted-foreground">
+                      Esta galeria usa <span className="font-medium text-foreground">desconto progressivo por faixas</span>. Definir um valor fixo desativa o progressivo nesta galeria.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fotosIncluidas">Fotos Incluídas</Label>
@@ -594,9 +649,15 @@ export default function GalleryEdit() {
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
                     disabled={isBillingLocked}
+                    aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
+                  {fotosIncluidasAbaixoDoMinimo && (
+                    <p className="text-xs text-destructive">
+                      Esta galeria já tem {gallery.totalFotosExtrasVendidas} foto{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} extra{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} paga{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''}. O mínimo permitido aqui é <span className="font-medium">{minFotosIncluidasPermitido}</span> para preservar o histórico de pagamentos.
+                    </p>
+                  )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="valorFotoExtra">Valor Foto Extra (R$)</Label>
                   <Input
@@ -1083,11 +1144,35 @@ export default function GalleryEdit() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Confirmação para desativar desconto progressivo */}
+      <AlertDialog open={confirmDisableProgressiveOpen} onOpenChange={setConfirmDisableProgressiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar desconto progressivo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta galeria usa <span className="font-medium">desconto progressivo por faixas</span> definido no Lunari Studio. Salvar um valor fixo de <span className="font-medium">R$ {valorFotoExtra.toFixed(2)}</span> por foto extra desativa o progressivo apenas para esta galeria e sessão. As regras originais do Lunari Studio não serão alteradas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdating}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isUpdating}
+              onClick={async () => {
+                setConfirmDisableProgressiveOpen(false);
+                await persistGallery(true);
+              }}
+            >
+              Desativar e salvar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Floating Save Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <Button
           onClick={handleSave}
-          disabled={isUpdating}
+          disabled={isUpdating || fotosIncluidasAbaixoDoMinimo}
           variant="terracotta"
           size="lg"
           className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
@@ -1099,3 +1184,4 @@ export default function GalleryEdit() {
     </div>
   );
 }
+
