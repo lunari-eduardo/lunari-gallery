@@ -131,10 +131,17 @@ export interface CreateGaleriaData {
   prazoSelecao?: Date;  // Direct deadline date (for edit page)
   permissao?: 'public' | 'private';
   galleryPassword?: string;  // Password for private galleries
-  sessionId?: string | null; // Session ID from Gestão system
+  sessionId?: string | null; // Session ID from Lunari Studio
   origin?: 'manual' | 'gestao'; // Track how gallery was created
-  regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Gestão
+  regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Lunari Studio
   tipo?: 'selecao' | 'entrega'; // Gallery type
+  /**
+   * When true, rewrites `regras_congeladas.precificacaoFotoExtra` to
+   * `{ modelo: 'fixo', valorFixo: <novoValor> }` on both gallery and linked
+   * session. Used when the photographer overrides a progressive discount
+   * model with a fixed price for THIS gallery only.
+   */
+  desativarProgressivo?: boolean;
 }
 
 // Transform database row to Galeria
