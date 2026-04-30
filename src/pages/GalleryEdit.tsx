@@ -625,6 +625,20 @@ export default function GalleryEdit() {
                 </div>
               </div>
 
+              {isLunariLinked && !isBillingLocked && (
+                <div className="glass rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
+                  <p className="font-medium text-foreground">Galeria vinculada ao Lunari Studio</p>
+                  <p className="text-muted-foreground">
+                    Editar a quantidade incluída ou o valor da foto extra <span className="font-medium text-foreground">sobrescreve</span> as regras originais apenas para esta galeria. Pagamentos já confirmados são preservados — fotos extras já pagas não serão cobradas novamente.
+                  </p>
+                  {isProgressiveActive && (
+                    <p className="text-muted-foreground">
+                      Esta galeria usa <span className="font-medium text-foreground">desconto progressivo por faixas</span>. Definir um valor fixo desativa o progressivo nesta galeria.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fotosIncluidas">Fotos Incluídas</Label>
@@ -635,9 +649,15 @@ export default function GalleryEdit() {
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
                     disabled={isBillingLocked}
+                    aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
+                  {fotosIncluidasAbaixoDoMinimo && (
+                    <p className="text-xs text-destructive">
+                      Esta galeria já tem {gallery.totalFotosExtrasVendidas} foto{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} extra{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} paga{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''}. O mínimo permitido aqui é <span className="font-medium">{minFotosIncluidasPermitido}</span> para preservar o histórico de pagamentos.
+                    </p>
+                  )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="valorFotoExtra">Valor Foto Extra (R$)</Label>
                   <Input
