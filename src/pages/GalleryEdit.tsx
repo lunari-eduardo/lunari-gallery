@@ -142,6 +142,9 @@ export default function GalleryEdit() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
 
+  // Confirmação para desativar desconto progressivo ao alterar valor da foto extra
+  const [confirmDisableProgressiveOpen, setConfirmDisableProgressiveOpen] = useState(false);
+
   // Reset selection when switching folders
   useEffect(() => {
     setSelectedIds(new Set());
