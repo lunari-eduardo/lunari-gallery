@@ -1433,9 +1433,9 @@ export default function GalleryCreate() {
                         </div> : <>
                           {/* Synced pricing banner */}
                           <div className="p-4 rounded-lg bg-accent/20 border border-accent/50">
-                            <div className="flex items-center gap-2 text-accent-foreground">
+                          <div className="flex items-center gap-2 text-accent-foreground">
                               <Link2 className="h-5 w-5" />
-                              <span className="font-medium">Preços sincronizados do Gestão</span>
+                              <span className="font-medium">Preços sincronizados do Lunari Studio</span>
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
                               Os preços de fotos extras estão configurados na sessão original.
