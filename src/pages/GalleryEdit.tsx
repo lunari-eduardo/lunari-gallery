@@ -312,12 +312,30 @@ export default function GalleryEdit() {
   // Reativar a seleção libera novamente esses campos.
   const isBillingLocked = gallery.statusSelecao === 'selecao_completa' || gallery.finalizedAt != null;
 
-  const handleSave = async () => {
-    try {
-      // Clean phone number for storage
-      const cleanPhone = clienteTelefone.replace(/\D/g, '');
+  // Galeria vinculada ao Lunari Studio (sessão do projeto Studio).
+  const isLunariLinked = !!gallery.sessionId;
 
-      // Merge theme settings into existing configuracoes (preserve everything else)
+  // Modelo de precificação atual nas regras congeladas (para detecção de progressivo)
+  const modeloAtual = gallery.regrasCongeladas?.precificacaoFotoExtra?.modelo ?? 'fixo';
+  const isProgressiveActive = modeloAtual === 'global' || modeloAtual === 'categoria';
+
+  // Mínimo permitido para "Fotos Incluídas": não pode ficar abaixo de
+  // (selecionadas - extras já vendidas). Reduzir abaixo disso transformaria
+  // fotos já cobradas como "incluídas" em extras a recobrar.
+  const minFotosIncluidasPermitido = Math.max(
+    0,
+    (gallery.fotosSelecionadas ?? 0) - (gallery.totalFotosExtrasVendidas ?? 0)
+  );
+  const fotosIncluidasAbaixoDoMinimo =
+    !isBillingLocked
+    && (gallery.totalFotosExtrasVendidas ?? 0) > 0
+    && fotosIncluidas < minFotosIncluidasPermitido;
+
+  const valorFotoExtraMudou = !isBillingLocked && valorFotoExtra !== gallery.valorFotoExtra;
+
+  const persistGallery = async (desativarProgressivo: boolean) => {
+    try {
+      const cleanPhone = clienteTelefone.replace(/\D/g, '');
       const existingConfig = gallery.configuracoes || {};
       const mergedConfig = {
         ...existingConfig,
@@ -336,14 +354,34 @@ export default function GalleryEdit() {
           nomePacote: isBillingLocked ? (gallery.nomePacote || undefined) : (nomePacote || undefined),
           fotosIncluidas: isBillingLocked ? gallery.fotosIncluidas : fotosIncluidas,
           valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
-          prazoSelecao,  // Now saving the deadline
+          prazoSelecao,
           configuracoes: mergedConfig,
+          desativarProgressivo,
         }
       });
       navigate(`/gallery/${gallery.id}`);
     } catch (error) {
       console.error('Error updating gallery:', error);
     }
+  };
+
+  const handleSave = async () => {
+    if (fotosIncluidasAbaixoDoMinimo) {
+      toast.error(
+        `Não é possível reduzir as fotos incluídas abaixo de ${minFotosIncluidasPermitido}: existem fotos já pagas como extras nesta galeria.`
+      );
+      return;
+    }
+
+    // Se o usuário alterou o valor da foto extra E há desconto progressivo ativo,
+    // confirmar antes de salvar (a alteração troca o modelo para 'fixo' apenas
+    // nesta galeria/sessão).
+    if (!isBillingLocked && valorFotoExtraMudou && isProgressiveActive) {
+      setConfirmDisableProgressiveOpen(true);
+      return;
+    }
+
+    await persistGallery(false);
   };
 
   const handleExtendDeadline = (days: number) => {
