@@ -1488,7 +1488,7 @@ export default function GalleryCreate() {
                             <span className="text-sm font-medium text-destructive">Modo personalizado ativo</span>
                           </div>
                           <Button type="button" variant="ghost" size="sm" onClick={() => setOverridePricing(false)} className="text-muted-foreground h-7">
-                            Reverter para Gestão
+                            Reverter para Lunari Studio
                           </Button>
                         </div>}
 
