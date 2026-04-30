@@ -1144,11 +1144,35 @@ export default function GalleryEdit() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Confirmação para desativar desconto progressivo */}
+      <AlertDialog open={confirmDisableProgressiveOpen} onOpenChange={setConfirmDisableProgressiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar desconto progressivo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta galeria usa <span className="font-medium">desconto progressivo por faixas</span> definido no Lunari Studio. Salvar um valor fixo de <span className="font-medium">R$ {valorFotoExtra.toFixed(2)}</span> por foto extra desativa o progressivo apenas para esta galeria e sessão. As regras originais do Lunari Studio não serão alteradas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdating}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isUpdating}
+              onClick={async () => {
+                setConfirmDisableProgressiveOpen(false);
+                await persistGallery(true);
+              }}
+            >
+              Desativar e salvar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Floating Save Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <Button
           onClick={handleSave}
-          disabled={isUpdating}
+          disabled={isUpdating || fotosIncluidasAbaixoDoMinimo}
           variant="terracotta"
           size="lg"
           className="shadow-2xl gap-2 rounded-full px-6 h-12 backdrop-blur-xl"
@@ -1160,3 +1184,4 @@ export default function GalleryEdit() {
     </div>
   );
 }
+
