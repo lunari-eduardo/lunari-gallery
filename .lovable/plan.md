@@ -1,150 +1,102 @@
-# Plano: Corrigir bug de cobrança duplicada de fotos extras após reativação (InfinitePay)
+## Objetivo
 
-## Diagnóstico
+Permitir que o fotógrafo **edite `fotosIncluidas` e `valorFotoExtra`** em galerias vinculadas ao **Lunari Studio**, sobrescrevendo regras congeladas localmente, sem quebrar pagamentos já realizados nem cobrar fotos extras já pagas em caso de reativação.
 
-### Sintoma
-Após a galeria "Lucca - 3 meses" (InfinitePay) ser finalizada e paga (1 extra = R$ 25), o fotógrafo reativou para o cliente trocar uma foto. Na nova confirmação, a mesma foto extra **foi cobrada novamente** em vez de ser reconhecida como já paga.
+---
 
-### Causa-raiz identificada (banco de dados)
+## Regras de quando a edição é permitida
 
-| Tabela / Campo | Valor atual | Esperado |
-|---|---|---|
-| `galerias.total_fotos_extras_vendidas` | **0** ❌ | 1 |
-| `galerias.valor_total_vendido` | **0** ❌ | 25 |
-| `cobrancas.qtd_fotos` (cobrança paga `6e59bacd…`) | **0** ❌ | 1 |
-| `cobrancas.extras_contabilizados` | **false** ❌ | true |
-| `cobrancas.status` | `pago` ✅ | `pago` |
+| Status da galeria | Pode editar valor extra / fotos incluídas? |
+|---|---|
+| Criada (rascunho) | ✅ Sim |
+| Enviada / em seleção | ✅ Sim |
+| Seleção concluída / paga / finalizada | ❌ Não — bloqueada |
+| Reativada (após conclusão) | ✅ Sim |
+| Expirada | ❌ Não (precisa reativar primeiro) |
 
-A RPC `finalize_gallery_payment` exige **`COALESCE(qtd_fotos, 0) > 0`** para incrementar `total_fotos_extras_vendidas`. Como a cobrança foi gravada com `qtd_fotos = 0`, a RPC fez nada → contadores zerados → próximo `confirm-selection` recalcula tudo do zero e cobra de novo.
+A flag `isBillingLocked` (atual: `statusSelecao === 'selecao_completa' || finalizedAt != null`) já cobre isso. A reativação limpa `finalized_at`, então liberar = manter a regra atual.
 
-O **auto-heal preventivo** dentro de `confirm-selection` (linhas 381-417) também filtra por `qtd_fotos > 0`, então não consegue se autocorrigir.
+**Validação extra**: bloquear redução de `fotosIncluidas` para um valor **menor** que `total_fotos_extras_vendidas + fotos_incluidas_originais_já_pagas` (ou seja, abaixo do que já foi cobrado). Mostrar erro inline e impedir o save.
 
-### Por que `qtd_fotos = 0` foi gravado
+---
 
-Levantamento das últimas 20 cobranças InfinitePay mostra padrão claro:
+## Diagnóstico do que precisa mudar
 
-- **Até 27/04** → `qtd_fotos` correto em todas as cobranças.
-- **A partir de 28/04** → todas as novas cobranças InfinitePay têm `qtd_fotos = 0`, mas a `descricao` ainda mostra "1 foto extra" corretamente.
+1. **UI (`GalleryEdit.tsx`)** — campos já existem e já respeitam `isBillingLocked`. Falta:
+   - Banner contextual quando galeria veio do Lunari Studio (`gallery.sessionId != null`).
+   - AlertDialog de confirmação antes de salvar quando o usuário alterar `valorFotoExtra` em galeria com **desconto progressivo ativo** (`regras_congeladas.precificacaoFotoExtra.modelo` ∈ `'global' | 'categoria'`).
+   - Validação inline da redução de `fotosIncluidas` abaixo do já vendido.
+2. **Mutation `updateGallery` (`useSupabaseGalleries.ts`)** — hoje só atualiza colunas escalares. Precisa também patchar `regras_congeladas` da galeria **e da sessão vinculada** quando houver override.
+3. **Trigger DB `sync_gallery_extras_to_session`** — hoje sincroniza apenas `valor_foto_extra`. Estender para sincronizar `fotos_incluidas` em `regras_congeladas.pacote.fotosIncluidas`.
+4. **Criação (`GalleryCreate.tsx`)** — quando vem do Lunari Studio, `fotosIncluidas` e `valorFotoExtra` chegam pré-preenchidos a partir de `regrasCongeladas`. Já existe a flag `overridePricing` para preço, mas não é exposta com clareza para o usuário, e não cobre `fotosIncluidas`. Adicionar botão **"Personalizar para esta galeria"** que libera ambos os campos no fluxo de criação.
 
-Cobranças Asaas no mesmo período permanecem com `qtd_fotos` correto. Isso indica regressão **específica do caminho InfinitePay**.
+---
 
-Análise do código atual:
-- `confirm-selection/index.ts:648` envia `qtdFotos: extrasACobrar` ✅ no body para `infinitepay-create-link`.
-- `infinitepay-create-link/index.ts:97` desestrutura `qtdFotos` corretamente.
-- `infinitepay-create-link/index.ts:223` grava `qtd_fotos: qtdFotos || 0`.
-- `gallery-create-payment/index.ts:151` envia `qtdFotos: extraCount` ao chamar `infinitepay-create-link`.
-- `PaymentStatusCard` (botão "Cobrar novamente") em `src/pages/GalleryDetail.tsx:876` calcula `extraCount={selectedPhotos.length - fotosIncluidas}` — **não desconta extras já pagos**, e em casos pós-reativação isso é a quantidade total, não "a cobrar".
+## Plano de implementação
 
-A ação `cliente_confirmou` da galeria Lucca em 28/04 19:59 (que gerou a cobrança paga `6e59bacd`) sugere que `confirm-selection` foi chamado normalmente — porém `qtd_fotos` saiu como 0. Há uma **possível race** ou perda do parâmetro `qtdFotos` no caminho do `confirm-selection → infinitepay-create-link`. As únicas explicações compatíveis com os dados:
+### Etapa 1 — UI de edição (`src/pages/GalleryEdit.tsx`)
 
-1. O body JSON sendo enviado de `confirm-selection` para `infinitepay-create-link` está perdendo o campo `qtdFotos` (precisa de log + correção defensiva).
-2. `extrasACobrar` chega como `0` em alguns cenários, mas a galeria recebe `descricao` com "1 foto extra" baseada em outra variável → confirmação do que ocorreu.
+- Banner informativo (glassmorphism) acima dos dois campos quando `gallery.sessionId != null`:
+  > "Esta galeria está vinculada ao **Lunari Studio**. Editar a quantidade incluída ou o valor da foto extra **sobrescreve** as regras originais apenas para esta galeria. Pagamentos já confirmados são preservados."
+- Validação inline em `fotosIncluidas`:
+  - Se `novoValor < (total_fotos_extras_vendidas_originalmente_consideradas)`: mostrar mensagem de erro e desabilitar botão Salvar.
+  - Para os dados, usar `gallery.totalFotosExtrasVendidas` e a quantidade incluída no momento dos pagamentos. Regra simples e segura: o novo `fotosIncluidas` **não pode ser menor** que `(selectedCount - total_fotos_extras_vendidas)` quando há cobranças pagas — porque essa parcela representa "fotos incluídas que já estão pagas" e reduzir geraria recobrança indevida.
+- AlertDialog antes de salvar quando `valorFotoExtra` foi alterado **e** `regras_congeladas.precificacaoFotoExtra.modelo` é progressivo:
+  > "Esta galeria usa **desconto progressivo por faixas**. Definir um valor fixo desativa o desconto progressivo apenas nesta galeria. Confirma?"
+  - Confirmação envia flag `desativarProgressivo: true` no save.
 
-Independente da raiz exata do `0`, **o sistema todo precisa ser blindado** para que `qtd_fotos` reflita a realidade.
+### Etapa 2 — UI de criação (`src/pages/GalleryCreate.tsx`)
 
-## Plano de correção
+- Quando há `regrasCongeladas` carregadas (Lunari Studio), ao lado dos campos de `fotosIncluidas` e `valorFotoExtra`, mostrar um link sutil **"Personalizar para esta galeria"**.
+- Ao clicar: ativa `overridePricing = true` e libera os dois campos para edição. Mostrar banner pequeno explicando que valores serão usados apenas nesta galeria. Mesmo AlertDialog da Etapa 1 se desconto progressivo estiver ativo.
 
-### Etapa 1 — Correção pontual da galeria "Lucca - 3 meses" (apenas dados)
+### Etapa 3 — Mutation `updateGallery` (`src/hooks/useSupabaseGalleries.ts`)
 
-Reconciliar a galeria já afetada: marcar a cobrança paga como contabilizada e aplicar os contadores na galeria/sessão. Cancelar a 2ª cobrança duplicada que está pendente.
+Estender `CreateGaleriaData` com flag opcional `desativarProgressivo?: boolean`. No mutation, **após** o `UPDATE galerias` atual:
 
-```sql
--- 1.1: Corrigir qtd_fotos da cobrança paga (origem do bug)
-UPDATE cobrancas
-SET qtd_fotos = 1, updated_at = now()
-WHERE id = '6e59bacd-85b6-4ecb-9a93-4535dac4b1f9'
-  AND qtd_fotos = 0;
+1. Buscar `regras_congeladas` atualizadas da galeria + `session_id`.
+2. Se houve mudança em `fotosIncluidas` → patch via `jsonb_set` em `regras_congeladas.pacote.fotosIncluidas` (galeria **e** sessão `clientes_sessoes` por `session_id`).
+3. Se houve mudança em `valorFotoExtra` → o trigger DB já cuida do `valorFotoExtra` base; nada a fazer aqui para esse campo isoladamente.
+4. Se `desativarProgressivo === true` → reescrever `regras_congeladas.precificacaoFotoExtra` para `{ modelo: 'fixo', valorFixo: <novoValor> }` na galeria e na sessão. **Manter o histórico** das faixas em `regras_congeladas.pacote.precificacaoFotoExtraOriginal` para auditoria/reversão futura, se necessário (ou apenas trocar o `modelo` — decidido: trocar apenas o `modelo`, sem preservar faixas, conforme resposta do usuário).
+5. Inserir registro em `audit_log` com `action='gallery_pricing_override'` e `metadata={ before, after }`.
+6. **Nunca** tocar em `total_fotos_extras_vendidas` nem `valor_total_vendido` — esses contadores garantem o crédito de pagamentos já realizados.
 
--- 1.2: Disparar a RPC de finalização (idempotente) para sincronizar contadores
-SELECT finalize_gallery_payment(
-  '6e59bacd-85b6-4ecb-9a93-4535dac4b1f9'::uuid,
-  'https://recibo.infinitepay.io/03ce8434-dba3-48b3-9a4d-83f9d2552e8f',
-  '2026-04-28 20:02:49.75+00'::timestamptz,
-  NULL, NULL
-);
+### Etapa 4 — Trigger `sync_gallery_extras_to_session` (migration)
 
--- 1.3: Cancelar a 2ª cobrança duplicada (R$ 25, pendente)
-UPDATE cobrancas
-SET status = 'cancelado', updated_at = now()
-WHERE id = '7d7ebd3b-808d-4759-83e9-813f615f44c4'
-  AND status = 'pendente';
+Estender o trigger atual para também propagar mudanças em `fotos_incluidas`:
+- Quando `NEW.fotos_incluidas IS DISTINCT FROM OLD.fotos_incluidas`, atualizar `clientes_sessoes.regras_congeladas` patcheando `pacote.fotosIncluidas` (mantém auditoria, sem zerar contadores).
 
--- 1.4: Reverter status da galeria — extras já estão pagos, deve voltar para selecao_completa
-UPDATE galerias
-SET status_selecao = 'selecao_completa',
-    status_pagamento = 'pago',
-    finalized_at = COALESCE(finalized_at, now()),
-    updated_at = now()
-WHERE id = 'f69e5e2d-bd4e-4241-8d12-96fcfe08e35c';
-```
+### Etapa 5 — Pricing engine
 
-### Etapa 2 — Reconciliação retroativa de outras galerias afetadas
+Não precisa alterar `confirm-selection` nem `pricingUtils.ts`. Após as etapas acima:
+- Próximo `confirm-selection` lê as regras já atualizadas;
+- Cálculo `extrasACobrar = max(0, extrasNecessarias - extrasPagasTotal)` continua válido;
+- Se faixas progressivas foram desativadas → cai no caminho fixo naturalmente.
 
-Buscar todas as cobranças InfinitePay/MP **pagas** em `qtd_fotos = 0` mas com descrição que revela quantidade ("N foto(s) extra(s)"), e aplicar o mesmo fix.
+### Etapa 6 — Renomear textos visíveis
 
-Migration usa parser regex sobre `descricao` para extrair quantidade — só toca cobranças seguramente identificáveis. Para cada uma:
-1. `UPDATE cobrancas SET qtd_fotos = <N>` (extraído da descrição).
-2. `SELECT finalize_gallery_payment(id, ...)` para rodar a RPC idempotente.
-3. Cancelar quaisquer cobranças duplicadas pendentes da mesma galeria criadas **após** o pagamento.
+Auditar `GalleryEdit.tsx`, `GalleryCreate.tsx` e componentes auxiliares para que **toda menção visível ao usuário** ao projeto vinculado use **"Lunari Studio"** (e não "Gestão"). Comentários e nomes técnicos podem permanecer como estão para evitar refactor amplo.
 
-### Etapa 3 — Blindagem em `finalize_gallery_payment` (RPC)
+---
 
-Tornar a RPC **mais resiliente**: quando `qtd_fotos = 0` mas a `descricao` da cobrança contém um padrão "N foto(s) extra(s)" e `valor > 0`, a RPC tenta inferir `qtd_fotos` da descrição (ou fallback `qtd = ROUND(valor / valor_foto_extra)` com base em `galerias.valor_foto_extra`).
+## Casos de borda cobertos
 
-Lógica defensiva — não sobrescreve valores corretos, só preenche zeros:
-```sql
-IF COALESCE(v_cobranca.qtd_fotos, 0) = 0 AND v_galeria_id IS NOT NULL THEN
-  -- Tenta extrair "N foto" da descricao, ou divide valor pelo preço unitário da galeria
-  -- Se conseguir, atualiza cobrancas.qtd_fotos antes do INSERT/UPDATE de contadores
-END IF;
-```
+- **Reativação após pagamento parcial**: `extrasPagasTotal` permanece intacto. Mesmo se valor extra for editado, fotos pagas não são recobradas. Apenas a diferença entre `(novoValor × totalExtras)` e `valorJaPago` é cobrada (ou zero, se já cobre).
+- **Redução de `valorFotoExtra` para abaixo do já pago**: o cliente não recebe estorno automático (intencional — `valorJaPago` cobre o ideal recalculado, `valorACobrar = 0`).
+- **Aumento de `valorFotoExtra` após reativação**: cobra apenas a diferença proporcional, nunca recobra fotos antigas individualmente.
+- **Override em galeria standalone (sem `sessionId`)**: funciona da mesma forma — o trigger e o mutation atualizam apenas `regras_congeladas` da galeria.
 
-### Etapa 4 — Hardening no `infinitepay-create-link` e `mercadopago-create-link`
-
-- Adicionar **validação obrigatória** no início: se a chamada vem com `galeriaId` mas `qtdFotos == null/0` E `valor > 0`, **logar warning crítico** e tentar inferir `qtdFotos = ROUND(valor / galerias.valor_foto_extra)` antes de gravar.
-- Logar o body recebido completo (sem segredos) para rastrear futuras regressões.
-
-### Etapa 5 — Hardening no `confirm-selection`
-
-- **Trocar o filtro do auto-heal** (linha 387) de `.gt('qtd_fotos', 0)` para incluir cobranças `pago/pago_manual` **mesmo com `qtd_fotos = 0`**, deixando a RPC (com a lógica defensiva da Etapa 3) decidir se reconcilia.
-- Logar explicitamente `extrasACobrar` antes de cada chamada de payment provider.
-
-### Etapa 6 — Hardening no `PaymentStatusCard` ("Cobrar novamente")
-
-Em `src/pages/GalleryDetail.tsx:876` e `:1107`, trocar:
-```tsx
-extraCount={selectedPhotos.length - supabaseGallery.fotosIncluidas}
-```
-por:
-```tsx
-extraCount={extrasACobrar}  // já calculado descontando extras pagos
-```
-
-Isso evita o caso onde, após reativação parcial, o usuário clique "Cobrar novamente" e gere outra cobrança do total ao invés de só do que falta.
-
-## Resultado esperado
-
-- **Galeria Lucca**: contadores corretos, cobrança duplicada cancelada, status volta para `selecao_completa`/`pago`.
-- **Outras galerias afetadas**: reconciliadas em lote pela Etapa 2.
-- **Futuras reativações**: `qtd_fotos` sempre coerente com a quantidade real cobrada; mesmo se algo na cadeia falhar, a RPC infere o valor pela descrição/preço unitário e a galeria nunca mais cobra duas vezes a mesma foto.
+---
 
 ## Arquivos afetados
 
-- **Migrations** (2): correção pontual + reconciliação retroativa.
-- **DB**: `finalize_gallery_payment` (RPC) — adicionar fallback de `qtd_fotos`.
-- `supabase/functions/infinitepay-create-link/index.ts` — validação defensiva + log.
-- `supabase/functions/mercadopago-create-link/index.ts` — validação defensiva + log.
-- `supabase/functions/confirm-selection/index.ts` — relaxar filtro do auto-heal + logs.
-- `src/pages/GalleryDetail.tsx` — usar `extrasACobrar` no `PaymentStatusCard`.
+- `src/pages/GalleryEdit.tsx` — banner + AlertDialog + validação inline.
+- `src/pages/GalleryCreate.tsx` — botão "Personalizar para esta galeria" + AlertDialog.
+- `src/hooks/useSupabaseGalleries.ts` — mutation estendida com patch JSONB e auditoria.
+- **Migration nova** — atualizar `sync_gallery_extras_to_session` para cobrir `fotos_incluidas`.
 
-## Fora do escopo
+## Fora de escopo
 
-- Não alterar `asaas-gallery-payment` nem o webhook do Asaas (funcionando corretamente).
-- Não alterar a lógica de reativação em `useSupabaseGalleries.ts` (já preserva contadores corretamente — o problema era os contadores estarem zerados na origem).
-- Não modificar `infinitepay-webhook` nem o `confirm-payment-manual` (recebem cobrança já criada e usam `qtd_fotos` da cobrança).
-
-## Pergunta antes de executar
-
-Confirma que posso:
-1. Cancelar a cobrança pendente duplicada da Lucca (`7d7ebd3b…`) — ela ainda não foi paga, é segura cancelar.
-2. Aplicar a Etapa 2 (reconciliação retroativa) em **todas** as outras galerias com cobrança paga InfinitePay/MP que tenham `qtd_fotos = 0` e padrão claro na descrição? Posso primeiro listar quantas galerias seriam afetadas para você validar antes de aplicar.
+- Não alterar `confirm-selection`, `pricingUtils.ts`, webhooks (Asaas/MP/InfinitePay) ou RPC `finalize_gallery_payment`.
+- Não retroagir mudanças para outras galerias nem para o Lunari Studio (override é estritamente local à galeria editada e à sessão dela 1:1).
+- Não alterar nomes técnicos no código (variáveis, queries, comentários) — só strings visíveis ao usuário.
