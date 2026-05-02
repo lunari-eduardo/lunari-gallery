@@ -133,6 +133,7 @@ export type Database = {
           created_at: string | null
           date: string
           description: string | null
+          duration_minutes: number | null
           google_event_id: string | null
           google_sync_status: string | null
           id: string
@@ -153,6 +154,7 @@ export type Database = {
           created_at?: string | null
           date: string
           description?: string | null
+          duration_minutes?: number | null
           google_event_id?: string | null
           google_sync_status?: string | null
           id?: string
@@ -173,6 +175,7 @@ export type Database = {
           created_at?: string | null
           date?: string
           description?: string | null
+          duration_minutes?: number | null
           google_event_id?: string | null
           google_sync_status?: string | null
           id?: string
@@ -699,6 +702,7 @@ export type Database = {
           descricao: string | null
           id: string
           nome: string
+          r2_storage_path: string | null
           storage_path: string
           tamanho: number
           tipo: string
@@ -710,6 +714,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome: string
+          r2_storage_path?: string | null
           storage_path: string
           tamanho: number
           tipo: string
@@ -721,6 +726,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome?: string
+          r2_storage_path?: string | null
           storage_path?: string
           tamanho?: number
           tipo?: string
@@ -1232,6 +1238,7 @@ export type Database = {
           enviado_em: string | null
           id: string
           observacoes: string | null
+          r2_arquivo_assinado_path: string | null
           session_id: string | null
           signature_external_id: string | null
           signature_provider: string | null
@@ -1254,6 +1261,7 @@ export type Database = {
           enviado_em?: string | null
           id?: string
           observacoes?: string | null
+          r2_arquivo_assinado_path?: string | null
           session_id?: string | null
           signature_external_id?: string | null
           signature_provider?: string | null
@@ -1276,6 +1284,7 @@ export type Database = {
           enviado_em?: string | null
           id?: string
           observacoes?: string | null
+          r2_arquivo_assinado_path?: string | null
           session_id?: string | null
           signature_external_id?: string | null
           signature_provider?: string | null
@@ -2690,6 +2699,48 @@ export type Database = {
           },
         ]
       }
+      google_calendar_sync_queue: {
+        Row: {
+          action: string
+          appointment_id: string
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json | null
+          processed_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          appointment_id: string
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json | null
+          processed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          appointment_id?: string
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json | null
+          processed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lead_follow_up_config: {
         Row: {
           ativo: boolean | null
@@ -3475,6 +3526,39 @@ export type Database = {
         }
         Relationships: []
       }
+      r2_migration_log: {
+        Row: {
+          bytes: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          source_bucket: string
+          source_path: string
+          status: string
+          target_path: string | null
+        }
+        Insert: {
+          bytes?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          source_bucket: string
+          source_path: string
+          status?: string
+          target_path?: string | null
+        }
+        Update: {
+          bytes?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          source_bucket?: string
+          source_path?: string
+          status?: string
+          target_path?: string | null
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           created_at: string | null
@@ -3690,6 +3774,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      task_attachments: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          nome: string
+          storage_path: string
+          tamanho: number
+          task_id: string
+          tipo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          storage_path: string
+          tamanho?: number
+          task_id: string
+          tipo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          storage_path?: string
+          tamanho?: number
+          task_id?: string
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       task_people: {
         Row: {
@@ -4327,6 +4450,15 @@ export type Database = {
       delete_workflow_session_cascade: {
         Args: { p_action?: string; p_session_pk: string }
         Returns: Json
+      }
+      enqueue_google_calendar_sync: {
+        Args: {
+          p_action: string
+          p_appointment_id: string
+          p_payload?: Json
+          p_user_id: string
+        }
+        Returns: undefined
       }
       ensure_referral_code: { Args: never; Returns: string }
       expire_subscription_credits: {
