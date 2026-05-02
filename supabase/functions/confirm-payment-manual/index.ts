@@ -111,34 +111,74 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      console.log(`📝 Creating manual cobrança: gallery=${resolvedGalleryId}, session=${resolvedSessionId}, valor=${resolvedValor}`);
-      const { data: newCobranca, error: insertError } = await supabase
-        .from('cobrancas')
-        .insert({
-          user_id: authenticatedUserId,
-          galeria_id: resolvedGalleryId || null,
-          session_id: resolvedSessionId || null,
-          cliente_id: resolvedClienteId || null,
-          valor: resolvedValor,
-          tipo_cobranca: 'foto_extra',
-          provedor: 'manual',
-          status: 'pendente',
-          metodo_manual: metodoManual || 'dinheiro',
-          obs_manual: observacao || null,
-        })
-        .select('id')
-        .single();
-
-      if (insertError || !newCobranca) {
-        console.error('❌ Error creating manual cobrança:', insertError?.message, insertError?.details);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento: ' + (insertError?.message || 'unknown') }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      // Dedup: tentar localizar cobrança manual idêntica recente (últimas 24h) antes de inserir
+      // Evita lançamento duplicado caso o usuário clique 2x no botão.
+      if (resolvedGalleryId) {
+        const { data: existingDup } = await supabase
+          .from('cobrancas')
+          .select('id, status')
+          .eq('galeria_id', resolvedGalleryId)
+          .eq('valor', resolvedValor)
+          .eq('provedor', 'manual')
+          .eq('metodo_manual', metodoManual || 'dinheiro')
+          .in('status', ['pendente', 'pago_manual'])
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingDup) {
+          targetCobrancaId = existingDup.id;
+          console.log(`♻️ Reusing existing manual cobrança (dedup): ${targetCobrancaId} status=${existingDup.status}`);
+        }
       }
 
-      targetCobrancaId = newCobranca.id;
-      console.log(`✅ Created manual cobrança: ${targetCobrancaId}`);
+      if (!targetCobrancaId) {
+        console.log(`📝 Creating manual cobrança: gallery=${resolvedGalleryId}, session=${resolvedSessionId}, valor=${resolvedValor}`);
+        const { data: newCobranca, error: insertError } = await supabase
+          .from('cobrancas')
+          .insert({
+            user_id: authenticatedUserId,
+            galeria_id: resolvedGalleryId || null,
+            session_id: resolvedSessionId || null,
+            cliente_id: resolvedClienteId || null,
+            valor: resolvedValor,
+            tipo_cobranca: 'foto_extra',
+            provedor: 'manual',
+            status: 'pendente',
+            metodo_manual: metodoManual || 'dinheiro',
+            obs_manual: observacao || null,
+          })
+          .select('id')
+          .single();
+
+        if (insertError || !newCobranca) {
+          // Pode ter colidido com índice único parcial cobrancas_manual_dedup_idx — tentar achar a existente
+          const { data: existingByIdx } = await supabase
+            .from('cobrancas')
+            .select('id')
+            .eq('galeria_id', resolvedGalleryId)
+            .eq('valor', resolvedValor)
+            .eq('provedor', 'manual')
+            .eq('metodo_manual', metodoManual || 'dinheiro')
+            .in('status', ['pendente', 'pago_manual'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (existingByIdx) {
+            targetCobrancaId = existingByIdx.id;
+            console.log(`♻️ Recovered after insert conflict: ${targetCobrancaId}`);
+          } else {
+            console.error('❌ Error creating manual cobrança:', insertError?.message, insertError?.details);
+            return new Response(
+              JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento: ' + (insertError?.message || 'unknown') }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        } else {
+          targetCobrancaId = newCobranca.id;
+          console.log(`✅ Created manual cobrança: ${targetCobrancaId}`);
+        }
+      }
     }
 
     // Fetch cobrança to verify ownership
