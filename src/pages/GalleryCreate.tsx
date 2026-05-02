@@ -1473,15 +1473,9 @@ export default function GalleryCreate() {
                               </div>}
                           </div>
 
-                          {/* Customize button */}
-                          <Button type="button" variant="ghost" size="sm" onClick={() => {
-                    setOverridePricing(true);
-                    // Initialize fixedPrice with the frozen value for editing
-                    setFixedPrice(regrasCongeladas.pacote?.valorFotoExtra || 25);
-                  }} className="text-muted-foreground">
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Personalizar preços para esta galeria
-                          </Button>
+                          {/* Botão "Personalizar" removido: o valor da foto extra agora é
+                              editado no editor da galeria após criação e propaga para a sessão
+                              do Lunari Studio. */}
                         </>}
                     </div> : <>
                       {/* Override mode banner (when user chose to customize) */}
