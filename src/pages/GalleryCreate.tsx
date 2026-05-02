@@ -235,8 +235,11 @@ export default function GalleryCreate() {
   const [isLoadingRegras, setIsLoadingRegras] = useState(false);
   const [regrasLoaded, setRegrasLoaded] = useState(false);
 
-  // Override pricing: when true, user wants to customize prices instead of using regrasCongeladas
-  const [overridePricing, setOverridePricing] = useState(false);
+  // Override pricing: removido. A sessão (Lunari Studio) é a fonte única
+  // do valor da foto extra. Para alterar, edite no editor da galeria após
+  // criar — a mudança propaga para a sessão.
+  const overridePricing = false;
+  const setOverridePricing = (_v: boolean) => {};
 
   // Supabase galleries hook
   const {
