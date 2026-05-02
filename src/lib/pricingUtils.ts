@@ -160,25 +160,15 @@ export function calcularPrecoProgressivo(
   }
 
   const regras = regrasCongeladas.precificacaoFotoExtra;
-  // Resolve base price with "gallery wins" rule:
-  // `valorFotoExtraFixo` is `galerias.valor_foto_extra` (the price the
-  // photographer edits in the Gallery UI). When it diverges from the
-  // frozen-rules JSONB, we trust the gallery value — the JSONB may be
-  // stale from before an edit reached `clientes_sessoes.regras_congeladas`.
+  // Resolve base price with "JSON wins" rule:
+  // The session's `regras_congeladas.pacote.valorFotoExtra` is the single
+  // source of truth (1 sessão = 1 galeria). The scalar `valorFotoExtraFixo`
+  // is only used as a fallback for legacy/standalone galleries that have no
+  // frozen rules JSON.
   const fixoSanitizado = sanitizeExtraPrice(valorFotoExtraFixo);
   const regrasSanitizado = sanitizeExtraPrice(regrasCongeladas.pacote?.valorFotoExtra ?? 0);
-  if (
-    fixoSanitizado > 0 &&
-    regrasSanitizado > 0 &&
-    Math.abs(fixoSanitizado - regrasSanitizado) > 0.005
-  ) {
-    console.warn(
-      '[pricingUtils] Frozen rule price diverged from gallery price — using gallery price',
-      { gallery: fixoSanitizado, frozen: regrasSanitizado }
-    );
-  }
-  const precoBasePacote = fixoSanitizado > 0 ? fixoSanitizado : regrasSanitizado;
-  
+  const precoBasePacote = regrasSanitizado > 0 ? regrasSanitizado : fixoSanitizado;
+
   let valorUnitario = 0;
   let faixaAtual: FaixaPreco | null = null;
   let modeloUsado: 'fixo' | 'global' | 'categoria' = 'fixo';
@@ -301,11 +291,11 @@ export function calcularPrecoProgressivoComCredito(
         const faixa = encontrarFaixaPreco(qtdParaFaixa, regras.tabelaCategoria.faixas);
         if (faixa?.valor) displayUnitPrice = normalizarValor(faixa.valor);
       } else {
-        // Fixed pricing model — gallery wins over frozen JSONB
+        // Fixed pricing model — JSON wins over scalar fallback
         const valorPacote = sanitizeExtraPrice(regrasCongeladas.pacote?.valorFotoExtra ?? 0);
         const fixoNorm = sanitizeExtraPrice(valorFotoExtraFixo);
-        if (fixoNorm > 0) displayUnitPrice = fixoNorm;
-        else if (valorPacote > 0) displayUnitPrice = valorPacote;
+        if (valorPacote > 0) displayUnitPrice = valorPacote;
+        else if (fixoNorm > 0) displayUnitPrice = fixoNorm;
       }
     }
     
@@ -324,23 +314,11 @@ export function calcularPrecoProgressivoComCredito(
   let faixaAtual: FaixaPreco | null = null;
   let modeloUsado: 'fixo' | 'global' | 'categoria' = 'fixo';
   
-  // Resolve base price with "gallery wins" rule (see calcularPrecoProgressivo).
-  // The gallery's `valor_foto_extra` is the photographer's authoritative edit;
-  // the JSONB on `clientes_sessoes.regras_congeladas` may be stale until the
-  // sync trigger fires.
+  // Resolve base price with "JSON wins" rule (see calcularPrecoProgressivo).
+  // The session's frozen JSON is the single source of truth.
   const fixoSanitizado = sanitizeExtraPrice(valorFotoExtraFixo);
   const regrasSanitizado = sanitizeExtraPrice(regrasCongeladas?.pacote?.valorFotoExtra ?? 0);
-  if (
-    fixoSanitizado > 0 &&
-    regrasSanitizado > 0 &&
-    Math.abs(fixoSanitizado - regrasSanitizado) > 0.005
-  ) {
-    console.warn(
-      '[pricingUtils] Frozen rule price diverged from gallery price — using gallery price',
-      { gallery: fixoSanitizado, frozen: regrasSanitizado }
-    );
-  }
-  const precoBasePacote = fixoSanitizado > 0 ? fixoSanitizado : regrasSanitizado;
+  const precoBasePacote = regrasSanitizado > 0 ? regrasSanitizado : fixoSanitizado;
   
   if (regrasCongeladas?.precificacaoFotoExtra) {
     const regras = regrasCongeladas.precificacaoFotoExtra;

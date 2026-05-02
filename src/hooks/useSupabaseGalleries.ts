@@ -135,13 +135,6 @@ export interface CreateGaleriaData {
   origin?: 'manual' | 'gestao'; // Track how gallery was created
   regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Lunari Studio
   tipo?: 'selecao' | 'entrega'; // Gallery type
-  /**
-   * When true, rewrites `regras_congeladas.precificacaoFotoExtra` to
-   * `{ modelo: 'fixo', valorFixo: <novoValor> }` on both gallery and linked
-   * session. Used when the photographer overrides a progressive discount
-   * model with a fixed price for THIS gallery only.
-   */
-  desativarProgressivo?: boolean;
 }
 
 // Transform database row to Galeria
@@ -385,31 +378,42 @@ export function useSupabaseGalleries() {
       if (data.nomeSessao !== undefined) updateData.nome_sessao = data.nomeSessao;
       if (data.nomePacote !== undefined) updateData.nome_pacote = data.nomePacote;
       if (data.fotosIncluidas !== undefined) updateData.fotos_incluidas = data.fotosIncluidas;
-      // Sanitize extra-photo price (clamp 0..999.99) before persisting. Defends
-      // against any UI path that might still pass values like 250.05.
-      if (data.valorFotoExtra !== undefined) {
-        updateData.valor_foto_extra = sanitizeExtraPrice(data.valorFotoExtra);
-      }
       if (data.mensagemBoasVindas !== undefined) updateData.mensagem_boas_vindas = data.mensagemBoasVindas;
       if (data.configuracoes !== undefined) updateData.configuracoes = data.configuracoes;
       if (data.prazoSelecaoDias !== undefined) updateData.prazo_selecao_dias = data.prazoSelecaoDias;
       if (data.prazoSelecao !== undefined) updateData.prazo_selecao = data.prazoSelecao.toISOString();
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
 
-      // Snapshot pre-update for audit when overriding pricing rules
-      const willOverridePricing =
-        data.fotosIncluidas !== undefined
-        || data.valorFotoExtra !== undefined
-        || data.desativarProgressivo === true;
+      // ─── Valor da foto extra: sessão é a fonte única de verdade ────────
+      // Quando há sessão vinculada (1 sessão = 1 galeria), o valor é gravado
+      // em `clientes_sessoes.valor_foto_extra`. O trigger DB
+      // `sync_session_extra_price_to_frozen` propaga para
+      // `regras_congeladas.pacote.valorFotoExtra` automaticamente.
+      // A coluna `galerias.valor_foto_extra` é mantida como espelho visual
+      // mas nenhum código de cálculo mais a usa como fonte primária.
+      const novoValorExtra =
+        data.valorFotoExtra !== undefined ? sanitizeExtraPrice(data.valorFotoExtra) : null;
 
-      let preSnapshot: { regras_congeladas: any; fotos_incluidas: number; valor_foto_extra: number; session_id: string | null } | null = null;
-      if (willOverridePricing) {
+      // Snapshot pré-update para audit + descoberta de session_id/standalone
+      let sessionId: string | null = null;
+      let preValorExtra: number | null = null;
+      let preFotosIncluidas: number | null = null;
+      let preRegras: any = null;
+      if (novoValorExtra !== null || data.fotosIncluidas !== undefined) {
         const { data: pre } = await supabase
           .from('galerias')
           .select('regras_congeladas, fotos_incluidas, valor_foto_extra, session_id')
           .eq('id', id)
           .maybeSingle();
-        preSnapshot = pre as any;
+        sessionId = (pre as any)?.session_id ?? null;
+        preValorExtra = (pre as any)?.valor_foto_extra ?? null;
+        preFotosIncluidas = (pre as any)?.fotos_incluidas ?? null;
+        preRegras = (pre as any)?.regras_congeladas ?? null;
+      }
+
+      // Espelho na galeria (não é fonte de verdade quando há sessão).
+      if (novoValorExtra !== null) {
+        updateData.valor_foto_extra = novoValorExtra;
       }
 
       const { error } = await supabase
@@ -419,67 +423,41 @@ export function useSupabaseGalleries() {
 
       if (error) throw error;
 
-      let sessionId: string | null = preSnapshot?.session_id ?? null;
-      if (!preSnapshot && data.valorFotoExtra !== undefined) {
-        const { data: row } = await supabase
-          .from('galerias')
-          .select('session_id')
-          .eq('id', id)
-          .maybeSingle();
-        sessionId = row?.session_id ?? null;
+      // Propaga para a sessão (fonte de verdade).
+      if (novoValorExtra !== null && sessionId) {
+        const { error: sessErr } = await supabase
+          .from('clientes_sessoes')
+          .update({
+            valor_foto_extra: novoValorExtra,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('session_id', sessionId);
+
+        if (sessErr) {
+          console.warn('Falha ao sincronizar valor da foto extra na sessão:', sessErr);
+        }
       }
 
-      // ─── Override de regras congeladas ─────────────────────────────────
-      // Quando o fotógrafo desativa o desconto progressivo (override de
-      // preço único), reescrevemos `regras_congeladas.precificacaoFotoExtra`
-      // tanto na galeria quanto na sessão vinculada para `{ modelo: 'fixo' }`.
-      // Os contadores `total_fotos_extras_vendidas` / `valor_total_vendido`
-      // NUNCA são tocados — pagamentos já realizados continuam servindo de
-      // crédito em `confirm-selection` (extrasACobrar = max(0, devidas-pagas)).
-      // O sync de `valor_foto_extra` e `fotos_incluidas` em
-      // `clientes_sessoes.regras_congeladas.pacote` é feito pelo trigger DB
-      // `sync_gallery_extras_to_session`.
-      if (data.desativarProgressivo === true && preSnapshot) {
-        const novoValor = sanitizeExtraPrice(
-          data.valorFotoExtra !== undefined ? data.valorFotoExtra : preSnapshot.valor_foto_extra
-        );
-        const baseRegras = (preSnapshot.regras_congeladas as any) || {};
+      // Standalone (sem sessão): garante que o JSON local também reflita.
+      if (novoValorExtra !== null && !sessionId && preRegras && typeof preRegras === 'object') {
+        const baseRegras = preRegras as any;
         const pacote = (baseRegras.pacote as any) || {};
         const novasRegras = {
           ...baseRegras,
-          pacote: {
-            ...pacote,
-            valorFotoExtra: novoValor,
-          },
-          precificacaoFotoExtra: {
-            modelo: 'fixo',
-            valorFixo: novoValor,
-          },
+          pacote: { ...pacote, valorFotoExtra: novoValorExtra },
         };
-
         await supabase
           .from('galerias')
           .update({ regras_congeladas: novasRegras as unknown as Json })
           .eq('id', id);
-
-        if (sessionId) {
-          await supabase
-            .from('clientes_sessoes')
-            .update({
-              regras_congeladas: novasRegras as unknown as Json,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('session_id', sessionId);
-        }
       }
 
-      // Audit log: registra qualquer override de precificação local
-      // (valor extra, fotos incluídas, ou desativação de progressivo).
-      if (willOverridePricing && preSnapshot) {
+      // Audit log: apenas mudança simples de valor/fotos incluídas.
+      if (novoValorExtra !== null || data.fotosIncluidas !== undefined) {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           await supabase.from('audit_log').insert({
-            action: 'gallery_pricing_override',
+            action: 'gallery_extra_price_changed',
             actor_type: 'user',
             actor_id: user?.id ?? null,
             gallery_id: id,
@@ -487,22 +465,18 @@ export function useSupabaseGalleries() {
             resource_id: id,
             metadata: {
               before: {
-                fotos_incluidas: preSnapshot.fotos_incluidas,
-                valor_foto_extra: preSnapshot.valor_foto_extra,
+                fotos_incluidas: preFotosIncluidas,
+                valor_foto_extra: preValorExtra,
               },
               after: {
-                fotos_incluidas: data.fotosIncluidas ?? preSnapshot.fotos_incluidas,
-                valor_foto_extra: data.valorFotoExtra !== undefined
-                  ? sanitizeExtraPrice(data.valorFotoExtra)
-                  : preSnapshot.valor_foto_extra,
+                fotos_incluidas: data.fotosIncluidas ?? preFotosIncluidas,
+                valor_foto_extra: novoValorExtra ?? preValorExtra,
               },
-              desativou_progressivo: data.desativarProgressivo === true,
               session_id: sessionId,
             } as unknown as Json,
           });
         } catch (auditErr) {
-          // Audit não deve quebrar o save
-          console.warn('Falha ao registrar audit de override:', auditErr);
+          console.warn('Falha ao registrar audit:', auditErr);
         }
       }
 

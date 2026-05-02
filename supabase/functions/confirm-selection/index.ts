@@ -427,15 +427,17 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}`);
 
-    // Try to get regras: session first, then gallery's own (standalone mode)
+    // Sessão é a fonte única de verdade do valor da foto extra.
+    // `regrasCongeladas.pacote.valorFotoExtra` (vindo da sessão) prevalece.
+    // O fallback escalar de galeria só é usado para galerias standalone sem
+    // regras_congeladas (legado).
     let regrasCongeladasSource: RegrasCongeladas | null = null;
-    let fallbackPrice = gallery.valor_foto_extra || 0;
+    let fallbackPrice = 0;
 
     if (gallery.session_id) {
-      // Fetch session data with frozen rules (Gestão flow)
       const { data: sessao, error: sessaoError } = await supabase
         .from('clientes_sessoes')
-        .select('id, regras_congeladas, valor_foto_extra')
+        .select('id, regras_congeladas')
         .eq('session_id', gallery.session_id)
         .single();
 
@@ -444,16 +446,26 @@ Deno.serve(async (req) => {
       }
 
       if (sessao?.regras_congeladas) {
-        console.log('📊 Using regrasCongeladas from session (Gestão mode)');
+        console.log('📊 Using regrasCongeladas from session (Lunari Studio mode)');
         regrasCongeladasSource = sessao.regras_congeladas as RegrasCongeladas;
-        fallbackPrice = sessao.valor_foto_extra || gallery.valor_foto_extra || 0;
       }
     }
 
-    // Fallback: check gallery's own regrasCongeladas (standalone mode with discount packages)
+    // Standalone: usa regras_congeladas da própria galeria, se houver.
     if (!regrasCongeladasSource && gallery.regras_congeladas) {
       console.log('📊 Using regrasCongeladas from gallery (standalone mode)');
       regrasCongeladasSource = gallery.regras_congeladas as RegrasCongeladas;
+    }
+
+    // Fallback final: coluna escalar da galeria (só para galerias antigas
+    // sem regras_congeladas em nenhum dos lados).
+    if (!regrasCongeladasSource) {
+      fallbackPrice = gallery.valor_foto_extra || 0;
+    } else {
+      fallbackPrice =
+        Number((regrasCongeladasSource as any)?.pacote?.valorFotoExtra ?? 0)
+        || gallery.valor_foto_extra
+        || 0;
     }
 
     // Calculate using credit system with whatever regras we found (or null)

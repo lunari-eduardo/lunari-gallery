@@ -142,8 +142,7 @@ export default function GalleryEdit() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
 
-  // Confirmação para desativar desconto progressivo ao alterar valor da foto extra
-  const [confirmDisableProgressiveOpen, setConfirmDisableProgressiveOpen] = useState(false);
+
 
   // Reset selection when switching folders
   useEffect(() => {
@@ -315,10 +314,6 @@ export default function GalleryEdit() {
   // Galeria vinculada ao Lunari Studio (sessão do projeto Studio).
   const isLunariLinked = !!gallery.sessionId;
 
-  // Modelo de precificação atual nas regras congeladas (para detecção de progressivo)
-  const modeloAtual = gallery.regrasCongeladas?.precificacaoFotoExtra?.modelo ?? 'fixo';
-  const isProgressiveActive = modeloAtual === 'global' || modeloAtual === 'categoria';
-
   // Mínimo permitido para "Fotos Incluídas": não pode ficar abaixo de
   // (selecionadas - extras já vendidas). Reduzir abaixo disso transformaria
   // fotos já cobradas como "incluídas" em extras a recobrar.
@@ -331,9 +326,7 @@ export default function GalleryEdit() {
     && (gallery.totalFotosExtrasVendidas ?? 0) > 0
     && fotosIncluidas < minFotosIncluidasPermitido;
 
-  const valorFotoExtraMudou = !isBillingLocked && valorFotoExtra !== gallery.valorFotoExtra;
-
-  const persistGallery = async (desativarProgressivo: boolean) => {
+  const persistGallery = async () => {
     try {
       const cleanPhone = clienteTelefone.replace(/\D/g, '');
       const existingConfig = gallery.configuracoes || {};
@@ -356,7 +349,6 @@ export default function GalleryEdit() {
           valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
           prazoSelecao,
           configuracoes: mergedConfig,
-          desativarProgressivo,
         }
       });
       navigate(`/gallery/${gallery.id}`);
@@ -373,15 +365,7 @@ export default function GalleryEdit() {
       return;
     }
 
-    // Se o usuário alterou o valor da foto extra E há desconto progressivo ativo,
-    // confirmar antes de salvar (a alteração troca o modelo para 'fixo' apenas
-    // nesta galeria/sessão).
-    if (!isBillingLocked && valorFotoExtraMudou && isProgressiveActive) {
-      setConfirmDisableProgressiveOpen(true);
-      return;
-    }
-
-    await persistGallery(false);
+    await persistGallery();
   };
 
   const handleExtendDeadline = (days: number) => {
@@ -629,13 +613,8 @@ export default function GalleryEdit() {
                 <div className="glass rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
                   <p className="font-medium text-foreground">Galeria vinculada ao Lunari Studio</p>
                   <p className="text-muted-foreground">
-                    Editar a quantidade incluída ou o valor da foto extra <span className="font-medium text-foreground">sobrescreve</span> as regras originais apenas para esta galeria. Pagamentos já confirmados são preservados — fotos extras já pagas não serão cobradas novamente.
+                    O valor da foto extra é compartilhado com a sessão. Alterações feitas aqui refletem imediatamente no Lunari Studio. Demais regras (pacote, faixas e descontos progressivos) permanecem inalteradas.
                   </p>
-                  {isProgressiveActive && (
-                    <p className="text-muted-foreground">
-                      Esta galeria usa <span className="font-medium text-foreground">desconto progressivo por faixas</span>. Definir um valor fixo desativa o progressivo nesta galeria.
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -648,9 +627,14 @@ export default function GalleryEdit() {
                     min="0"
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
-                    disabled={isBillingLocked}
+                    disabled={isBillingLocked || isLunariLinked}
                     aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
+                  {isLunariLinked && !isBillingLocked && (
+                    <p className="text-xs text-muted-foreground">
+                      Definido na sessão do Lunari Studio.
+                    </p>
+                  )}
                   {fotosIncluidasAbaixoDoMinimo && (
                     <p className="text-xs text-destructive">
                       Esta galeria já tem {gallery.totalFotosExtrasVendidas} foto{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} extra{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} paga{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''}. O mínimo permitido aqui é <span className="font-medium">{minFotosIncluidasPermitido}</span> para preservar o histórico de pagamentos.
@@ -659,7 +643,7 @@ export default function GalleryEdit() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="valorFotoExtra">Valor Foto Extra (R$)</Label>
+                  <Label htmlFor="valorFotoExtra">Valor da foto extra (R$)</Label>
                   <Input
                     id="valorFotoExtra"
                     type="number"
@@ -669,6 +653,11 @@ export default function GalleryEdit() {
                     onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                     disabled={isBillingLocked}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {isLunariLinked
+                      ? 'Este valor é compartilhado com a sessão.'
+                      : 'Este valor vale apenas para esta galeria.'}
+                  </p>
                 </div>
               </div>
 
@@ -1144,29 +1133,7 @@ export default function GalleryEdit() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Confirmação para desativar desconto progressivo */}
-      <AlertDialog open={confirmDisableProgressiveOpen} onOpenChange={setConfirmDisableProgressiveOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desativar desconto progressivo?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta galeria usa <span className="font-medium">desconto progressivo por faixas</span> definido no Lunari Studio. Salvar um valor fixo de <span className="font-medium">R$ {valorFotoExtra.toFixed(2)}</span> por foto extra desativa o progressivo apenas para esta galeria e sessão. As regras originais do Lunari Studio não serão alteradas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isUpdating}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isUpdating}
-              onClick={async () => {
-                setConfirmDisableProgressiveOpen(false);
-                await persistGallery(true);
-              }}
-            >
-              Desativar e salvar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Floating Save Button (anchor) */}
 
       {/* Floating Save Button */}
       <div className="fixed bottom-6 right-6 z-50">
