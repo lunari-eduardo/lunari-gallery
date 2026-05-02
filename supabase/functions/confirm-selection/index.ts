@@ -766,14 +766,10 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Update gallery aggregated totals (extras + valor) atomically
-      if (shouldFinalizeNow && extrasACobrar > 0) {
-        await supabase.from('galerias').update({
-          total_fotos_extras_vendidas: (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar,
-          valor_total_vendido: (gallery.valor_total_vendido || 0) + valorTotal,
-          updated_at: new Date().toISOString(),
-        }).eq('id', galleryId);
-      }
+      // ⚠️ NÃO incrementar total_fotos_extras_vendidas/valor_total_vendido aqui.
+      // Esses agregados são consolidados EXCLUSIVAMENTE pela RPC finalize_gallery_payment
+      // (via SUM idempotente das cobranças pagas). Incrementar aqui causa double-count
+      // quando a cobrança é depois paga (manual ou via gateway).
 
       // Add PIX data to gallery configuracoes if PIX Manual
       if (paymentResponse?.provedor === 'pix_manual') {
