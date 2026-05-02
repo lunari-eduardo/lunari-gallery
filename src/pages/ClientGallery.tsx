@@ -367,7 +367,15 @@ export default function ClientGallery() {
       sessionName: (isEdgeFunctionFormat ? supabaseGallery.sessionName : supabaseGallery.nome_sessao) || 'Sessão de Fotos',
       packageName: (isEdgeFunctionFormat ? supabaseGallery.packageName : supabaseGallery.nome_pacote) || 'Pacote',
       includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) ?? 0,
-      extraPhotoPrice: (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) ?? 0,
+      extraPhotoPrice: (() => {
+        // Sessão (regras_congeladas.pacote.valorFotoExtra) é a fonte única.
+        const regras: any = isEdgeFunctionFormat
+          ? (supabaseGallery as any).regrasCongeladas
+          : (supabaseGallery as any).regras_congeladas;
+        const fromRegras = Number(regras?.pacote?.valorFotoExtra ?? 0);
+        if (fromRegras > 0) return fromRegras;
+        return (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) ?? 0;
+      })(),
       status: 'sent' as Gallery['status'],
       selectionStatus: (isEdgeFunctionFormat ? supabaseGallery.selectionStatus : supabaseGallery.status_selecao) === 'selecao_completa' ? 'confirmed' : 'in_progress',
       createdAt: new Date(),
@@ -379,12 +387,20 @@ export default function ClientGallery() {
           : null;
         const configSettings = config?.saleSettings as Record<string, unknown> | null;
         const rawSettings = explicitSettings || configSettings;
-        
+
+        const regras: any = isEdgeFunctionFormat
+          ? (supabaseGallery as any).regrasCongeladas
+          : (supabaseGallery as any).regras_congeladas;
+        const precoExtraFromRegras = Number(regras?.pacote?.valorFotoExtra ?? 0);
+
         return {
           mode: (rawSettings?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment') || 'sale_without_payment',
           pricingModel: (rawSettings?.pricingModel as 'fixed' | 'packages') || 'fixed',
           chargeType: (rawSettings?.chargeType as 'all_selected' | 'only_extras') || 'only_extras',
-          fixedPrice: (rawSettings?.fixedPrice as number) || (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) || 25,
+          fixedPrice: (rawSettings?.fixedPrice as number)
+            || (precoExtraFromRegras > 0 ? precoExtraFromRegras : undefined)
+            || (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra)
+            || 25,
           discountPackages: (rawSettings?.discountPackages as DiscountPackage[]) || [],
           paymentMethod: (rawSettings?.paymentMethod as 'pix_manual' | 'infinitepay' | 'mercadopago' | undefined),
         };
