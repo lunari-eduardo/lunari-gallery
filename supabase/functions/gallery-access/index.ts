@@ -1137,7 +1137,7 @@ serve(async (req) => {
           clientName: gallery.cliente_nome,
           clienteId: gallery.cliente_id,
           includedPhotos: gallery.fotos_incluidas,
-          extraPhotoPrice: gallery.valor_foto_extra,
+          extraPhotoPrice: ((regrasCongeladas as any)?.pacote?.valorFotoExtra ?? gallery.valor_foto_extra) || 0,
           welcomeMessage: gallery.mensagem_boas_vindas,
           deadline: gallery.prazo_selecao,
           status: gallery.status,
