@@ -314,10 +314,6 @@ export default function GalleryEdit() {
   // Galeria vinculada ao Lunari Studio (sessão do projeto Studio).
   const isLunariLinked = !!gallery.sessionId;
 
-  // Modelo de precificação atual nas regras congeladas (para detecção de progressivo)
-  const modeloAtual = gallery.regrasCongeladas?.precificacaoFotoExtra?.modelo ?? 'fixo';
-  const isProgressiveActive = modeloAtual === 'global' || modeloAtual === 'categoria';
-
   // Mínimo permitido para "Fotos Incluídas": não pode ficar abaixo de
   // (selecionadas - extras já vendidas). Reduzir abaixo disso transformaria
   // fotos já cobradas como "incluídas" em extras a recobrar.
@@ -329,8 +325,6 @@ export default function GalleryEdit() {
     !isBillingLocked
     && (gallery.totalFotosExtrasVendidas ?? 0) > 0
     && fotosIncluidas < minFotosIncluidasPermitido;
-
-  const valorFotoExtraMudou = !isBillingLocked && valorFotoExtra !== gallery.valorFotoExtra;
 
   const persistGallery = async () => {
     try {
