@@ -619,13 +619,8 @@ export default function GalleryEdit() {
                 <div className="glass rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
                   <p className="font-medium text-foreground">Galeria vinculada ao Lunari Studio</p>
                   <p className="text-muted-foreground">
-                    Editar a quantidade incluída ou o valor da foto extra <span className="font-medium text-foreground">sobrescreve</span> as regras originais apenas para esta galeria. Pagamentos já confirmados são preservados — fotos extras já pagas não serão cobradas novamente.
+                    O valor da foto extra é compartilhado com a sessão. Alterações feitas aqui refletem imediatamente no Lunari Studio. Demais regras (pacote, faixas e descontos progressivos) permanecem inalteradas.
                   </p>
-                  {isProgressiveActive && (
-                    <p className="text-muted-foreground">
-                      Esta galeria usa <span className="font-medium text-foreground">desconto progressivo por faixas</span>. Definir um valor fixo desativa o progressivo nesta galeria.
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -638,9 +633,14 @@ export default function GalleryEdit() {
                     min="0"
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
-                    disabled={isBillingLocked}
+                    disabled={isBillingLocked || isLunariLinked}
                     aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
+                  {isLunariLinked && !isBillingLocked && (
+                    <p className="text-xs text-muted-foreground">
+                      Definido na sessão do Lunari Studio.
+                    </p>
+                  )}
                   {fotosIncluidasAbaixoDoMinimo && (
                     <p className="text-xs text-destructive">
                       Esta galeria já tem {gallery.totalFotosExtrasVendidas} foto{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} extra{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} paga{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''}. O mínimo permitido aqui é <span className="font-medium">{minFotosIncluidasPermitido}</span> para preservar o histórico de pagamentos.
@@ -649,7 +649,7 @@ export default function GalleryEdit() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="valorFotoExtra">Valor Foto Extra (R$)</Label>
+                  <Label htmlFor="valorFotoExtra">Valor da foto extra (R$)</Label>
                   <Input
                     id="valorFotoExtra"
                     type="number"
@@ -659,6 +659,11 @@ export default function GalleryEdit() {
                     onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                     disabled={isBillingLocked}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {isLunariLinked
+                      ? 'Este valor é compartilhado com a sessão.'
+                      : 'Este valor vale apenas para esta galeria.'}
+                  </p>
                 </div>
               </div>
 
