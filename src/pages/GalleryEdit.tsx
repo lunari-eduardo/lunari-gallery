@@ -333,7 +333,7 @@ export default function GalleryEdit() {
 
   const valorFotoExtraMudou = !isBillingLocked && valorFotoExtra !== gallery.valorFotoExtra;
 
-  const persistGallery = async (desativarProgressivo: boolean) => {
+  const persistGallery = async () => {
     try {
       const cleanPhone = clienteTelefone.replace(/\D/g, '');
       const existingConfig = gallery.configuracoes || {};
@@ -356,7 +356,6 @@ export default function GalleryEdit() {
           valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
           prazoSelecao,
           configuracoes: mergedConfig,
-          desativarProgressivo,
         }
       });
       navigate(`/gallery/${gallery.id}`);
@@ -373,15 +372,7 @@ export default function GalleryEdit() {
       return;
     }
 
-    // Se o usuário alterou o valor da foto extra E há desconto progressivo ativo,
-    // confirmar antes de salvar (a alteração troca o modelo para 'fixo' apenas
-    // nesta galeria/sessão).
-    if (!isBillingLocked && valorFotoExtraMudou && isProgressiveActive) {
-      setConfirmDisableProgressiveOpen(true);
-      return;
-    }
-
-    await persistGallery(false);
+    await persistGallery();
   };
 
   const handleExtendDeadline = (days: number) => {
