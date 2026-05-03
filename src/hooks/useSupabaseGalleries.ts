@@ -457,13 +457,15 @@ export function useSupabaseGalleries() {
       }
 
       // Standalone (sem sessão): garante que o JSON local também reflita.
-      if (novoValorExtra !== null && !sessionId && preRegras && typeof preRegras === 'object') {
+      if (!sessionId && (novoValorExtra !== null || data.fotosIncluidas !== undefined) && preRegras && typeof preRegras === 'object') {
         const baseRegras = preRegras as any;
         const pacote = (baseRegras.pacote as any) || {};
-        const novasRegras = {
-          ...baseRegras,
-          pacote: { ...pacote, valorFotoExtra: novoValorExtra },
-        };
+        const novoPacote: any = { ...pacote };
+        if (novoValorExtra !== null) novoPacote.valorFotoExtra = novoValorExtra;
+        if (data.fotosIncluidas !== undefined) {
+          novoPacote.fotosIncluidas = Math.max(0, Math.min(9999, Number(data.fotosIncluidas) || 0));
+        }
+        const novasRegras = { ...baseRegras, pacote: novoPacote };
         await supabase
           .from('galerias')
           .update({ regras_congeladas: novasRegras as unknown as Json })
