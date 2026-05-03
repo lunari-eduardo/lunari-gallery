@@ -424,17 +424,35 @@ export function useSupabaseGalleries() {
       if (error) throw error;
 
       // Propaga para a sessão (fonte de verdade).
-      if (novoValorExtra !== null && sessionId) {
+      if (sessionId && (novoValorExtra !== null || data.fotosIncluidas !== undefined)) {
+        const sessUpdate: Record<string, any> = { updated_at: new Date().toISOString() };
+        if (novoValorExtra !== null) sessUpdate.valor_foto_extra = novoValorExtra;
+
+        // Patch idempotente em regras_congeladas.pacote.fotosIncluidas
+        if (data.fotosIncluidas !== undefined) {
+          const novoFotos = Math.max(0, Math.min(9999, Number(data.fotosIncluidas) || 0));
+          const { data: sess } = await supabase
+            .from('clientes_sessoes')
+            .select('regras_congeladas')
+            .eq('session_id', sessionId)
+            .maybeSingle();
+          const baseRegras = (sess as any)?.regras_congeladas;
+          if (baseRegras && typeof baseRegras === 'object') {
+            const pacote = (baseRegras.pacote as any) || {};
+            sessUpdate.regras_congeladas = {
+              ...baseRegras,
+              pacote: { ...pacote, fotosIncluidas: novoFotos },
+            };
+          }
+        }
+
         const { error: sessErr } = await supabase
           .from('clientes_sessoes')
-          .update({
-            valor_foto_extra: novoValorExtra,
-            updated_at: new Date().toISOString(),
-          })
+          .update(sessUpdate)
           .eq('session_id', sessionId);
 
         if (sessErr) {
-          console.warn('Falha ao sincronizar valor da foto extra na sessão:', sessErr);
+          console.warn('Falha ao sincronizar sessão (valor/fotos incluídas):', sessErr);
         }
       }
 
