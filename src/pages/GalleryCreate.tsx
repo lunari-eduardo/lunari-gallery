@@ -1174,7 +1174,7 @@ export default function GalleryCreate() {
               {/* Assisted Mode Badge */}
               {isAssistedMode && <Badge variant="secondary" className="gap-1.5">
                   <Link2 className="h-3 w-3" />
-                  Vinculada à sessão do Gestão
+                  Vinculada à sessão do Studio
                 </Badge>}
             </div>
 
