@@ -627,12 +627,12 @@ export default function GalleryEdit() {
                     min="0"
                     value={fotosIncluidas || ''}
                     onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
-                    disabled={isBillingLocked || isLunariLinked}
+                    disabled={isBillingLocked}
                     aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
                   {isLunariLinked && !isBillingLocked && (
                     <p className="text-xs text-muted-foreground">
-                      Definido na sessão do Lunari Studio.
+                      Compartilhado com a sessão do Lunari Studio. Alterações refletem na sessão.
                     </p>
                   )}
                   {fotosIncluidasAbaixoDoMinimo && (
