@@ -1,109 +1,49 @@
-## Diagnóstico
+## Problema
 
-**Galeria afetada:** `Lorena - 9 meses` (`edfa1c5c-…`)  
-**Sessão:** `workflow-1771081690976-x5fdrwzkz9j`
+Após a refatoração SSoT (1 sessão = 1 galeria), o campo **"Fotos Incluídas"** em `GalleryEdit` ficou **bloqueado** para galerias vinculadas ao Lunari Studio (`isLunariLinked`). Isso quebrou um fluxo legítimo: o fotógrafo precisa poder ajustar quantas fotos estão incluídas (ex.: deu uma foto de cortesia, esqueceu de contar, cliente negociou +1) — sem isso, o cliente é cobrado indevidamente como "extra".
 
-**Estado real (uma cobrança paga manual):**
-- `cobrancas`: 1 registro, `qtd_fotos=4`, `valor=92`, `extras_contabilizados=true`, `pago_manual` ✅
-- `clientes_transacoes`: 1 lançamento de R$ 92 ✅
-- `galerias`: `total_fotos_extras_vendidas=8`, `valor_total_vendido=184` ❌ (dobrado)
-- `clientes_sessoes`: `qtd_fotos_extra=8`, `valor_total_foto_extra=184` ❌ (dobrado, propagado pelo trigger `sync_gallery_extras_to_session`)
-- UI exibe "Fotos extras totais +8 / Extras já pagas −8 / Valor R$ 23 / Total R$ 184"
+## Decisão de arquitetura
 
-**Causa raiz — múltiplos pontos somando os mesmos extras:**
+Aplicar exatamente a **mesma lógica que já vale para `valor_foto_extra`**:
 
-Existem **três caminhos** que mutam `galerias.total_fotos_extras_vendidas` / `valor_total_vendido`, todos não-idempotentes entre si:
+- A sessão continua sendo SSoT.
+- Editar "Fotos Incluídas" na galeria é permitido e **propaga para a sessão** (`regras_congeladas.pacote.fotosIncluidas` em `clientes_sessoes`).
+- Edição bloqueada **apenas** quando `isBillingLocked` (galeria finalizada / seleção concluída) — comportamento já existente.
+- Mantém a trava de segurança: não pode reduzir abaixo de `(fotos_selecionadas − total_fotos_extras_vendidas)`.
 
-1. `confirm-selection` (Edge) linha 770-776: incrementa `gallery + extrasACobrar` (somente para visitante público hoje, mas `set_session_extras` aplica valor ABSOLUTO `gallery + extras` direto na sessão).
-2. `finalize_gallery_payment` (RPC, Branches 1/2/3): incrementa `gallery + cobranca.qtd_fotos` quando `extras_contabilizados IS NOT TRUE`.
-3. `sync_gallery_extras_to_session` (trigger): copia `gallery.total_fotos_extras_vendidas` e `valor_total_vendido` para a sessão e patcha `regras_congeladas->'pacote'->'valorFotoExtraEfetivo'`.
+## Mudanças
 
-A galeria foi confirmada em 19/03 (`cliente_confirmou` 4 extras, R$ 92) e o pagamento manual lançado em 02/05. Entre essas datas, um caminho intermediário (provavelmente um reprocessamento manual / reativação / refresh da galeria ou o próprio `confirm-selection` quando rodou em modo Lunari Studio com `set_session_extras` absoluto somando a sessão a um total de galeria já parcialmente preenchido) gravou os 4/92 em `galerias`. Depois, `finalize_gallery_payment` rodou Branch 3 (`v_should_count=true`, pois `extras_contabilizados=false`) e somou +4/+92 de novo — resultando em 8/184. O trigger replicou para a sessão e o JSONB.
+### 1. UI — `src/pages/GalleryEdit.tsx`
+- Remover `isLunariLinked` do `disabled` do input "Fotos Incluídas". Manter apenas `isBillingLocked`.
+- Substituir o helper text "Definido na sessão do Lunari Studio." por:
+  > "Compartilhado com a sessão do Lunari Studio. Alterações refletem na sessão."
+- Manter a mensagem de erro do mínimo permitido.
 
-**Por que o `extras_contabilizados` não protegeu:**  
-A flag só é setada DENTRO de `finalize_gallery_payment`. O caminho que pré-incrementou (confirm-selection / set_session_extras) não consulta nem atualiza essa flag, então a RPC viu `false` e contou de novo.
+### 2. Hook — `src/hooks/useSupabaseGalleries.ts` (`updateGalleryMutation`)
 
----
+Quando `data.fotosIncluidas !== undefined` **e** existe `sessionId`:
+- Ler `regras_congeladas` atual da `clientes_sessoes` (não da galeria — sessão é SSoT).
+- Fazer patch idempotente em `regras_congeladas.pacote.fotosIncluidas` com o novo valor (clamp 0–9999).
+- Atualizar `clientes_sessoes.regras_congeladas` + `updated_at`.
+- O espelho em `galerias.fotos_incluidas` continua sendo escrito (já existe).
+- Audit log já cobre o `before/after` de `fotos_incluidas`.
 
-## Plano de correção
+### 3. Banco — Migration (trigger de simetria)
 
-### 1. Tornar `total_fotos_extras_vendidas` agregado por cobrança (única fonte)
+Criar trigger `sync_session_included_photos_to_frozen` em `clientes_sessoes` (espelho do já existente `sync_session_extra_price_to_frozen`), para o caso de edição vinda do Studio:
+- Quando algum campo "fotos incluídas no pacote" da sessão mudar, faz `jsonb_set` em `regras_congeladas.pacote.fotosIncluidas`.
+- Garante que ambos os lados (Studio ↔ Gallery) mantenham o JSON consistente.
 
-Migration:
-- Recalcular ambos os campos por GROUP BY:
-  ```
-  galerias.total_fotos_extras_vendidas = SUM(c.qtd_fotos) WHERE c.galeria_id = g.id AND c.status IN ('pago','pago_manual')
-  galerias.valor_total_vendido        = SUM(c.valor)     WHERE c.galeria_id = g.id AND c.status IN ('pago','pago_manual')
-  ```
-- Marcar todas as cobranças pagas/pago_manual como `extras_contabilizados=true`.
-- Reconciliar TODA a base (a divergência da Lorena pode existir em outras galerias).
+> Observação: a sessão **não** tem coluna escalar `fotos_incluidas` própria — o valor canônico mora em `regras_congeladas.pacote.fotosIncluidas`. Por isso a propagação Gallery→Studio é feita via patch direto no JSONB pelo hook, sem necessidade de coluna nova.
 
-### 2. `finalize_gallery_payment` — substituir incremento por recompute
+### 4. Edge Functions — sem alteração
 
-Em vez de `COALESCE(total,0) + qtd_fotos`, fazer:
-```sql
-UPDATE galerias g SET
-  total_fotos_extras_vendidas = (SELECT COALESCE(SUM(qtd_fotos),0) FROM cobrancas
-                                  WHERE galeria_id=g.id AND status IN ('pago','pago_manual')),
-  valor_total_vendido         = (SELECT COALESCE(SUM(valor),0)     FROM cobrancas
-                                  WHERE galeria_id=g.id AND status IN ('pago','pago_manual'))
-WHERE id = v_galeria_id;
-```
-Mantém `extras_contabilizados=true` apenas como auditoria. Aplicar nos três Branches (1, 2, 3) da RPC. Isso elimina double-count permanentemente — independente de quantos caminhos chamem.
+`gallery-access` e `confirm-selection` já leem `fotos_incluidas` da galeria como espelho operacional, e `regras_congeladas.pacote.fotosIncluidas` da sessão como SSoT na hora de renovar/recongelar. Como o hook escreve nos dois lugares, nada quebra.
 
-### 3. `confirm-selection` — parar de mexer em `total_fotos_extras_vendidas`
+## Validação pós-implementação
 
-- Remover o `UPDATE galerias SET total_fotos_extras_vendidas = + extrasACobrar` (linha 770-776) — o pagamento confirma o conteúdo.
-- `valor_extras` (espelho do ciclo atual) pode ficar.
-- `set_session_extras`: passar a usar **somente os valores já consolidados da galeria** (recompute via SUM de `cobrancas`), não somar `+ extrasACobrar`. Para a UI mostrar "valor a pagar" antes do pagamento, usar campos derivados (não persistir como pago).
-
-### 4. Trigger `sync_gallery_extras_to_session`
-
-Já está bem desenhada (copia da galeria → sessão). Após (1)+(2), os valores na galeria serão sempre corretos, então o trigger fica seguro.
-
-### 5. Idempotência das cobranças manuais
-
-Adicionar **índice único parcial** para evitar lançamento duplicado pelo botão "Confirmar pagamento manual":
-```sql
-CREATE UNIQUE INDEX cobrancas_manual_dedup_idx
-ON cobrancas (galeria_id, valor, qtd_fotos, metodo_manual)
-WHERE provedor = 'manual' AND status IN ('pago_manual','pendente');
-```
-Em `confirm-payment-manual` Edge: usar `upsert` com `onConflict` ou pré-checar antes de `insert`, retornando a cobrança existente.
-
-### 6. Reconciliação imediata da Lorena
-
-Migration corretiva:
-```sql
-UPDATE galerias SET total_fotos_extras_vendidas=4, valor_total_vendido=92
-WHERE id='edfa1c5c-d17c-4386-ae02-d6ac53d2e86e';
--- trigger sync_gallery_extras_to_session propaga para sessão e regras_congeladas
-```
-
-### 7. Testes de regressão
-
-- Galeria standalone: cliente confirma 4 extras → paga via InfinitePay → verificar `total_fotos_extras_vendidas=4`.
-- Galeria Lunari Studio: cliente confirma 4 extras → fotógrafo lança pagamento manual → verificar 4 (não 8).
-- Reativação após pago: cliente seleciona +2 → paga → verificar 6 (acumulado correto).
-- Idempotência: clicar 2× no botão "Confirmar manual" → 1 cobrança apenas.
-
----
-
-## Arquivos impactados
-
-- **Nova migration**: recompute global + reconciliação Lorena + índice único + redefinição da RPC.
-- `supabase/functions/confirm-selection/index.ts`: remover incremento direto + ajustar `set_session_extras`.
-- `supabase/functions/confirm-payment-manual/index.ts`: dedup antes do insert.
-- `set_session_extras` RPC: aceitar recompute em vez de absolutos calculados pelo cliente (ou ser substituída por chamada ao `finalize_gallery_payment` no fluxo de "venda sem pagamento exigido").
-
-InfinitePay (`infinitepay-create-link`, `infinitepay-webhook`) **não** precisam mudar — o webhook continua chamando `finalize_gallery_payment`, que após (2) será naturalmente idempotente.
-
----
-
-## Riscos & mitigações
-
-- **Risco**: galerias antigas podem ter `cobrancas.qtd_fotos=0` (regressão histórica). A RPC já tem inferência defensiva (regex + valor/preço unitário). Manter.
-- **Risco**: trigger `protect_session_extras_consistency` força sessão a refletir galeria — após (1)+(2) isso é desejado. Sem mudança.
-- **Risco**: cobranças Asaas com parcelas — Branch 2 também passa a usar SUM, mas só conta quando `current_status='pago'`. Sem regressão.
-
-Após aprovação, implemento na ordem: migration (1+6+índice) → RPC (2) → confirm-selection (3) → confirm-payment-manual (5) → testes.
+1. Galeria vinculada ao Studio, não finalizada → input editável, salva 8 (era 10).
+2. Conferir `clientes_sessoes.regras_congeladas->'pacote'->>'fotosIncluidas'` = `8`.
+3. Cliente seleciona 9 fotos → cobrança gera 1 extra (não 0, não 2).
+4. Tentar reduzir abaixo de extras já vendidas → toast de erro, salvamento bloqueado.
+5. Galeria finalizada → input continua bloqueado.
