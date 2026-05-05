@@ -1,123 +1,111 @@
-## Diagnóstico aprofundado
+# Plano: Corrigir Registro de Recebimento Manual em Galerias Reativadas
 
-### O que aconteceu (causa raiz)
+## Diagnóstico do Bug
 
-Investiguei o banco e confirmei o padrão. Existem **7 galerias da campanha "Dia das Mães"** (Leticia, Gabriela, Julia, Paula, Luize, Amanda, Emily) onde:
+Na galeria da Gisele (reativada), o cliente já havia pago R$50 (2 extras) na rodada anterior. Após reativação, selecionou +4 extras (R$100) e pagou externamente. Ao clicar **"Registrar recebimento"**, o modal mostrou R$50 e estava prestes a marcar a **cobrança antiga já paga** como "paga manualmente" novamente.
 
-- A cobrança **InfinitePay foi paga** (status `pago`, `extras_contabilizados = true`).
-- Mas a cobrança foi gravada com **`qtd_fotos = 0`**.
-- Resultado:
-  - `galerias.valor_total_vendido` foi atualizado corretamente (vem de `SUM(valor)`).
-  - `galerias.total_fotos_extras_vendidas` ficou em **0** (vem de `SUM(qtd_fotos)`).
-  - `clientes_sessoes.qtd_fotos_extra` e `valor_total_foto_extra` ficaram em **0** (no Studio).
+### Causa raiz (3 falhas combinadas)
 
-Como `total_fotos_extras_vendidas = 0`, o sistema interpreta o valor pago como **"crédito" / saldo positivo** em vez de pagamento de extras vendidas. É exatamente o que aparece no print ("+R$ 50,00", "+R$ 200,00", "+R$ 275,00" como crédito).
+1. **`GalleryDetail.tsx` — query `galeria-cobranca-pendente`** (linha 244–276) busca a *última* cobrança da galeria/sessão **sem filtrar status**. Em galerias reativadas, retorna a cobrança `pago_manual` antiga (R$50), não a pendente atual.
 
-### Por que a cobrança ficou com qtd_fotos = 0
+2. **`PaymentStatusCard`** recebe esse `cobrancaId` antigo + um `valor` confuso (mistura de `valorTotalVendido`, `valorExtras`, `calculatedExtraTotal`) e pré-preenche o campo com `valor.toFixed(2)`.
 
-A função `infinitepay-create-link` recebe `qtdFotos` no body da requisição. Em algum momento o frontend chamou esta função **sem enviar `qtdFotos`** (ou com `0`). A inferência defensiva (regex na descrição "11 fotos extras…" ou divisão `valor / valor_foto_extra`) **só foi adicionada depois** que essas cobranças foram criadas — por isso elas escaparam.
+3. **`confirm-payment-manual`** recebe `cobrancaId` de cobrança já paga → o RPC `finalize_gallery_payment` retorna `already_paid: true` (idempotente), mas no caminho de `valorManual !== cobranca.valor` ele **sobrescreve `cobrancas.valor`** ANTES da checagem de idempotência (linhas 175–181), corrompendo o histórico.
 
-A descrição de todas as cobranças problemáticas casa o regex `(\d+)\s*foto`:
-- "3 fotos extras - Amanda" → 3
-- "11 fotos extras - Paula" → 11
-- "8 fotos extras - Emily" → 8
-- "2 fotos extras - Gabriela" → 2
-- "11 fotos extras - Leticia" → 11
-- etc.
-
-E `valor / valor_foto_extra` também bate (ex.: 75/25 = 3, 275/25 = 11).
-
-### Por que reconciliação anterior não corrigiu
-
-A migration de 02/05 (`20260502230510`) recalculou `galerias` somando `qtd_fotos`, mas **as cobranças continuavam com `qtd_fotos = 0`**, então a soma deu 0. A migration NÃO refez a inferência de `qtd_fotos` para cobranças antigas, NEM tocou em `clientes_sessoes`.
-
-Total de cobranças InfinitePay pagas com `qtd_fotos = 0` no histórico: **28** (11 com quantidade extraível por regex; outras 17 só por divisão valor/preço).
+### Cenário do usuário (não registrou) — o que teria acontecido se confirmasse R$100
+- Cobrança antiga (R$50, qtd_fotos=2) seria sobrescrita para R$100 → trigger `cobranca_infer_qtd_fotos` poderia recalcular qtd_fotos para 4 → contadores agregados duplicariam fotos vendidas.
+- Saldo de R$100 da nova rodada continuaria contando como pendente → cliente apareceria devendo R$100 mesmo após pago.
 
 ---
 
-## Plano de correção
+## Solução
 
-### 1. Migration de cura retroativa (one-shot, idempotente)
+Princípio: **toda rodada de extras pendente vive em sua própria cobrança**. O modal sempre opera sobre o saldo da rodada atual, nunca sobre cobranças finalizadas.
 
-Em uma única migration:
+### 1. Frontend — `GalleryDetail.tsx`
 
-**1.a — Inferir `qtd_fotos` para cobranças pagas com 0**
-Para todas as cobranças `provedor = 'infinitepay'`, `status IN ('pago','pago_manual')`, `tipo_cobranca IN ('foto_extra','link','venda_galeria')`, `COALESCE(qtd_fotos,0) = 0`, `galeria_id IS NOT NULL`, `valor > 0`:
-
-1. Tentar regex `(\d+)\s*foto` na `descricao` → usar match.
-2. Se falhar, dividir `valor / galerias.valor_foto_extra` (arredondado), apenas se `valor_foto_extra > 0` e o resultado for inteiro razoável (≤ 999).
-3. Atualizar `cobrancas.qtd_fotos` somente quando a inferência for confiável. Logar (via `RAISE NOTICE`) os casos sem inferência possível.
-
-**1.b — Recompute por SUM nas galerias afetadas**
-Reaplicar a mesma lógica de SUM da `finalize_gallery_payment` para todas as galerias cujas cobranças foram tocadas em 1.a, atualizando `total_fotos_extras_vendidas`, `valor_total_vendido`, `status_pagamento`, `status_selecao`, `finalized_at`.
-
-**1.c — Propagação para `clientes_sessoes`**
-Para cada `session_id` envolvido, aplicar:
-```sql
-UPDATE clientes_sessoes SET
-  qtd_fotos_extra = <sum_qtd>,
-  valor_total_foto_extra = <sum_val>,
-  status_galeria = 'selecao_completa',
-  status_pagamento_fotos_extra = '<status>'
-```
-
-### 2. Blindagem na criação da cobrança (definitiva)
-
-Em `supabase/functions/infinitepay-create-link/index.ts`:
-
-- Promover a inferência defensiva atual a **bloqueio crítico**: se após inferência ainda houver `qtdFotos <= 0` para `tipo_cobranca` que afeta extras, **abortar com 400** em vez de gravar `qtd_fotos = 0`.
-- Logar com mais clareza (incluir `descricao` e `valor_foto_extra` no warning).
-
-Isso impede que **novas** cobranças InfinitePay (e por simetria, manuais) entrem com `qtd_fotos = 0`.
-
-### 3. Trigger de integridade no banco (defesa em profundidade)
-
-Adicionar um BEFORE INSERT/UPDATE trigger em `cobrancas` que, **somente quando** `status` muda para `pago`/`pago_manual` e `tipo_cobranca IN ('foto_extra','link','venda_galeria')` e `galeria_id IS NOT NULL`:
-
-- Se `qtd_fotos` é 0/null, executa a mesma inferência (regex na descrição, depois `valor / valor_foto_extra`).
-- Se ainda assim não consegue, registra na tabela `audit_log` (sem bloquear o pagamento — não queremos perder dinheiro confirmado).
-
-Isso garante que mesmo que algum webhook/edge function futuro escape, o banco corrige antes que `finalize_gallery_payment` rode.
-
-### 4. Job de reconciliação periódica (opcional, recomendado)
-
-Função SQL `reconcile_gallery_extras_counters()` (sem agendamento por enquanto, executável sob demanda) que:
-- Detecta divergências entre `SUM(cobrancas.qtd_fotos)` e `galerias.total_fotos_extras_vendidas`.
-- Detecta divergências entre `galerias.*` e `clientes_sessoes.*`.
-- Corrige e retorna lista do que foi corrigido.
-
-Pode ser exposta no Admin futuramente, mas a função em si já fica disponível.
-
----
-
-## Detalhes técnicos
-
-**Arquivos a alterar:**
-- Nova migration `supabase/migrations/<timestamp>_heal_infinitepay_qtd_fotos.sql` (passos 1, 3 e 4).
-- `supabase/functions/infinitepay-create-link/index.ts` (passo 2 — bloqueio quando inferência falha).
-
-**Galerias que serão curadas (confirmadas):**
+**Separar a query em três conceitos distintos:**
 
 ```text
-c837dd6c… Leticia    cobr R$275 → 11 fotos
-9d570e17… Gabriela   cobr R$50  →  2 fotos
-9c530b9c… Julia      cobr R$75  →  3 fotos
-5eef8014… Paula      cobr R$275 → 11 fotos
-3b729ddd… Luize      cobr R$25  →  1 foto
-5e390ed1… Amanda     cobr R$75  →  3 fotos
-8a9f354c… Emily      cobr R$200 →  8 fotos
+cobrancasPagas         → histórico (já existe, ok)
+cobrancaPendenteAtiva  → status IN ('pendente','aguardando_confirmacao') APENAS
+                         da rodada atual (created_at > último pagamento OU
+                         valor === extrasACobrar × valor_foto_extra)
+saldoPendente          → extrasACobrar × valor_foto_extra (sempre derivado)
 ```
-+ até 21 cobranças adicionais que serão tentadas por inferência (logadas para revisão manual se a inferência não for segura).
 
-**Impacto após correção:**
-- `galerias.total_fotos_extras_vendidas` ficará correto.
-- `clientes_sessoes.qtd_fotos_extra` e `valor_total_foto_extra` refletirão o pago.
-- Coluna "Fotos Extras" na tela do Studio passará a mostrar 11, 8, 3, etc. em vez de 0.
-- Coluna "Crédito" deixará de exibir o valor das fotos extras como saldo positivo (porque o sistema reconhecerá que é pagamento de extras já vendidas).
+A query `galeria-cobranca-pendente` passa a filtrar `.in('status', ['pendente','aguardando_confirmacao'])`. Se nada retornar e `extrasACobrar > 0`, `cobrancaPendenteAtiva = null` (será criada nova manual ao confirmar).
 
-**Garantias de não-regressão:**
-- Migration usa `WHERE` filtros conservadores e só age onde a inferência é confiável.
-- Bloqueio na edge function vale só para cobranças NOVAS — não afeta retentativas/healing existentes.
-- Trigger não bloqueia pagamento (apenas tenta corrigir + audita).
+**No `PaymentStatusCard` props:**
+- `valor` = `saldoPendente` (não mais `valorTotalVendido`).
+- `cobrancaId` = `cobrancaPendenteAtiva?.id` (pode ser `null` → função cria nova).
+- `extraCount` = `extrasACobrar`.
 
-Aguardando aprovação para executar.
+### 2. Frontend — `PaymentStatusCard.tsx`
+
+- `openReceiptModal()` pré-preenche com `valor` (já será o saldo pendente, R$100 no caso).
+- Adicionar **dica visual** abaixo do input: *"Saldo pendente: R$ 100,00. Você pode registrar valores parciais."*
+- Remover assunção de que `cobrancaId` sempre existe — passar `null` é válido (back cria cobrança manual nova).
+- Após sucesso: `toast.success('Recebimento de R$ X registrado')` + invalidar queries.
+
+### 3. Backend — `confirm-payment-manual/index.ts`
+
+**Bloco crítico a reescrever:**
+
+a) **Validação de cobrança alvo:** se `cobrancaId` fornecido aponta para cobrança com status `pago` ou `pago_manual`, **rejeitar** (HTTP 409 `COBRANCA_JA_QUITADA`) e instruir frontend a criar nova. Evita a sobrescrita acidental.
+
+b) **Cancelar cobrança digital pendente** quando criar manual nova: se existir `cobrancas` com `status='pendente'` e `provedor IN ('infinitepay','mercadopago','asaas','pix_manual')` para a mesma galeria, marcar como `cancelada` com `obs_cancelamento='Substituída por recebimento manual #<novo_id>'`. Conforme escolha do usuário (opção 2 da pergunta 3).
+
+c) **Suportar pagamentos parciais:** ao criar cobrança manual, usar exatamente `valorManual` (não o saldo total). O RPC `finalize_gallery_payment` já recalcula `valor_extras_pago` somando todas as cobranças `pago/pago_manual` da galeria — portanto múltiplos recebimentos parciais somam corretamente até atingir o total e mudar status para `pago_manual`.
+
+d) **Inferência de `qtd_fotos`:** ao criar manual parcial, calcular `qtd_fotos = ROUND(valorManual / valor_foto_extra)` para alimentar o trigger e contadores corretamente.
+
+e) **Remover sobrescrita de valor** (linhas 175–181 atuais) — nunca alterar `cobrancas.valor` de cobrança existente.
+
+### 4. RPC `finalize_gallery_payment` (verificação)
+
+Confirmar que já implementa pagamentos parciais corretamente:
+- Se `SUM(valor pago) < valor_total_devido` → status galeria = `parcialmente_pago`.
+- Se `SUM(valor pago) >= valor_total_devido` → status = `pago_manual` (ou `pago` se algum digital).
+
+Se não suportar, adicionar lógica condicional. (Memória *Finalize Pay RPC Logic* já indica suporte a parciais — apenas validar com query.)
+
+### 5. Hardening adicional
+
+- **Constraint defensiva:** trigger `BEFORE UPDATE ON cobrancas` que bloqueia mudança de `valor` quando `status IN ('pago','pago_manual')` salvo via flag `_allow_value_correction` na sessão.
+- **Audit log enriquecido:** registrar saldo antes/depois e cobrança cancelada em metadata.
+
+---
+
+## Detalhes Técnicos (resumo de arquivos)
+
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/GalleryDetail.tsx` | Filtrar `cobrancaData` por status pendente; passar `saldoPendente` ao card |
+| `src/components/PaymentStatusCard.tsx` | Pré-preencher saldo correto; texto auxiliar; aceitar `cobrancaId=null` |
+| `supabase/functions/confirm-payment-manual/index.ts` | Rejeitar cobrança quitada; cancelar pendente digital; criar manual com `qtd_fotos` inferido; remover sobrescrita de valor |
+| Migration nova | Trigger anti-sobrescrita de `valor` em cobranças quitadas |
+
+---
+
+## Fluxo Esperado Pós-Correção (cenário Gisele)
+
+```text
+Estado: cobrança#1 pago_manual R$50 (2 fotos) | saldo pendente R$100 (4 fotos)
+
+[Fotógrafo clica "Registrar recebimento"]
+  ↓
+Modal abre com Valor = R$100,00 (saldo correto)
+Dica: "Saldo pendente: R$ 100,00 — pode registrar parcial"
+  ↓
+[Confirma R$100 em Dinheiro]
+  ↓
+Backend: cobrancaId=null → cria cobrança#2 manual R$100 qtd_fotos=4
+       → finalize_gallery_payment(cobrança#2)
+       → SUM pago = 50+100 = 150 = total devido
+       → galeria.status = 'pago_manual', valor_extras_pago=150
+  ↓
+UI: Status "Pago manualmente" | Histórico mostra 2 recebimentos
+```
+
+Para parcial (R$60 + R$40 depois): mesmo fluxo cria 2 cobranças manuais, status fica `parcialmente_pago` até o segundo recebimento fechar o saldo.
