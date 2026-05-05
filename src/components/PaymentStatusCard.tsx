@@ -41,13 +41,16 @@ interface PaymentStatusCardProps {
   provedor?: string | null;
   valor?: number;
   valorPago?: number;
+  /** Saldo ainda pendente desta rodada de extras. Se omitido, usa max(0, valor - valorPago). */
+  saldoPendente?: number;
   dataPagamento?: Date | string | null;
   receiptUrl?: string | null;
   checkoutUrl?: string | null;
   variant?: 'compact' | 'full';
   showPendingAmount?: boolean;
   sessionId?: string;
-  cobrancaId?: string;
+  /** ID de cobrança PENDENTE existente. Pode ser null/undefined — backend criará nova manual. */
+  cobrancaId?: string | null;
   galleryId?: string;
   extraCount?: number;
   descricao?: string;
@@ -83,6 +86,7 @@ export function PaymentStatusCard({
   provedor,
   valor = 0,
   valorPago = 0,
+  saldoPendente,
   dataPagamento,
   receiptUrl,
   checkoutUrl,
@@ -112,11 +116,15 @@ export function PaymentStatusCard({
   const statusKey = status || 'sem_vendas';
   const config = statusConfig[statusKey] || statusConfig.sem_vendas;
   const StatusIcon = config.icon;
-  const valorPendente = Math.max(0, valor - valorPago);
+  // Saldo efetivo: prioridade ao saldoPendente explícito (rodada atual em galerias reativadas)
+  const saldoEfetivo = saldoPendente !== undefined
+    ? Math.max(0, saldoPendente)
+    : Math.max(0, valor - valorPago);
+  const valorPendente = saldoEfetivo;
 
-  // Open receipt modal with pre-filled value
+  // Open receipt modal with pre-filled value (saldo pendente da rodada atual)
   const openReceiptModal = () => {
-    setManualValor(valor > 0 ? valor.toFixed(2) : '');
+    setManualValor(saldoEfetivo > 0 ? saldoEfetivo.toFixed(2) : '');
     setManualMethod('dinheiro');
     setManualObs('');
     setShowReceiptModal(true);
@@ -161,6 +169,8 @@ export function PaymentStatusCard({
       const data = response.data;
 
       if (data.success) {
+        const valorRegistrado = parsedValor.toFixed(2).replace('.', ',');
+        toast.success(`Recebimento de R$ ${valorRegistrado} registrado`);
         setShowReceiptModal(false);
         onStatusUpdated?.();
       } else {
@@ -319,6 +329,12 @@ export function PaymentStatusCard({
               onChange={(e) => setManualValor(e.target.value)}
               placeholder="0,00"
             />
+            {saldoEfetivo > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Saldo pendente: <strong>R$ {saldoEfetivo.toFixed(2).replace('.', ',')}</strong>
+                {' — '}você pode registrar valores parciais.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

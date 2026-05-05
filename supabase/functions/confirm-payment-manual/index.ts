@@ -80,6 +80,23 @@ Deno.serve(async (req: Request) => {
     console.log('📦 Body received:', JSON.stringify({ cobrancaId, galleryId, sessionId, metodoManual, valorManual }));
 
     let targetCobrancaId = cobrancaId;
+    let cancelledPendingIds: string[] = [];
+
+    // ── PRE-CHECK: se cobrancaId aponta para cobrança JÁ QUITADA/CANCELADA, REJEITAR.
+    // Cenário: galeria reativada onde a "última cobrança" da galeria é uma já paga
+    // de rodada anterior. Sobrescrever valor/status corromperia o histórico.
+    // Frontend deve enviar cobrancaId=null para criarmos cobrança manual nova da rodada atual.
+    if (targetCobrancaId) {
+      const { data: existingCheck } = await supabase
+        .from('cobrancas')
+        .select('id, status')
+        .eq('id', targetCobrancaId)
+        .maybeSingle();
+      if (existingCheck && ['pago', 'pago_manual', 'cancelado'].includes(existingCheck.status)) {
+        console.warn(`⚠️ Cobrança ${targetCobrancaId} status=${existingCheck.status} — não pode ser reutilizada. Criando nova manual.`);
+        targetCobrancaId = null;
+      }
+    }
 
     // If no cobrancaId, create a manual cobrança
     if (!targetCobrancaId) {
@@ -111,24 +128,52 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Dedup: tentar localizar cobrança manual idêntica recente (últimas 24h) antes de inserir
-      // Evita lançamento duplicado caso o usuário clique 2x no botão.
+      // ── CANCELAR cobranças digitais pendentes da mesma galeria
+      // (escolha do usuário: substituir link digital por recebimento manual).
+      if (resolvedGalleryId) {
+        const { data: pendingDigital } = await supabase
+          .from('cobrancas')
+          .select('id, provedor')
+          .eq('galeria_id', resolvedGalleryId)
+          .eq('status', 'pendente')
+          .neq('provedor', 'manual');
+        if (pendingDigital && pendingDigital.length > 0) {
+          for (const p of pendingDigital) {
+            const { error: cancelErr } = await supabase
+              .from('cobrancas')
+              .update({
+                status: 'cancelado',
+                obs_manual: `Cancelada — substituída por recebimento manual em ${new Date().toISOString()}`,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', p.id);
+            if (!cancelErr) {
+              cancelledPendingIds.push(p.id);
+              console.log(`🚫 Cobrança digital pendente cancelada: ${p.id} (${p.provedor})`);
+            } else {
+              console.warn(`⚠️ Falha ao cancelar cobrança ${p.id}:`, cancelErr.message);
+            }
+          }
+        }
+      }
+
+      // Dedup contra duplo-click: cobrança manual pendente idêntica nos últimos 60s
       if (resolvedGalleryId) {
         const { data: existingDup } = await supabase
           .from('cobrancas')
-          .select('id, status')
+          .select('id')
           .eq('galeria_id', resolvedGalleryId)
           .eq('valor', resolvedValor)
           .eq('provedor', 'manual')
           .eq('metodo_manual', metodoManual || 'dinheiro')
-          .in('status', ['pendente', 'pago_manual'])
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .eq('status', 'pendente')
+          .gte('created_at', new Date(Date.now() - 60 * 1000).toISOString())
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
         if (existingDup) {
           targetCobrancaId = existingDup.id;
-          console.log(`♻️ Reusing existing manual cobrança (dedup): ${targetCobrancaId} status=${existingDup.status}`);
+          console.log(`♻️ Reusing pending manual cobrança (dedup 60s): ${targetCobrancaId}`);
         }
       }
 
@@ -152,32 +197,14 @@ Deno.serve(async (req: Request) => {
           .single();
 
         if (insertError || !newCobranca) {
-          // Pode ter colidido com índice único parcial cobrancas_manual_dedup_idx — tentar achar a existente
-          const { data: existingByIdx } = await supabase
-            .from('cobrancas')
-            .select('id')
-            .eq('galeria_id', resolvedGalleryId)
-            .eq('valor', resolvedValor)
-            .eq('provedor', 'manual')
-            .eq('metodo_manual', metodoManual || 'dinheiro')
-            .in('status', ['pendente', 'pago_manual'])
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (existingByIdx) {
-            targetCobrancaId = existingByIdx.id;
-            console.log(`♻️ Recovered after insert conflict: ${targetCobrancaId}`);
-          } else {
-            console.error('❌ Error creating manual cobrança:', insertError?.message, insertError?.details);
-            return new Response(
-              JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento: ' + (insertError?.message || 'unknown') }),
-              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-        } else {
-          targetCobrancaId = newCobranca.id;
-          console.log(`✅ Created manual cobrança: ${targetCobrancaId}`);
+          console.error('❌ Error creating manual cobrança:', insertError?.message, insertError?.details);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Erro ao criar registro de recebimento: ' + (insertError?.message || 'unknown') }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
+        targetCobrancaId = newCobranca.id;
+        console.log(`✅ Created manual cobrança: ${targetCobrancaId}`);
       }
     }
 
@@ -206,13 +233,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Update valor if manual amount provided
-    if (valorManual && valorManual !== cobranca.valor) {
-      console.log(`💰 Updating valor: ${cobranca.valor} → ${valorManual}`);
+    // ── ATUALIZAR valor APENAS se cobrança ainda está pendente.
+    // Para cobranças já pagas, NUNCA sobrescrever valor (corrompe histórico e contadores).
+    if (valorManual && valorManual !== Number(cobranca.valor) && cobranca.status === 'pendente') {
+      console.log(`💰 Updating valor (pendente): ${cobranca.valor} → ${valorManual}`);
       await supabase
         .from('cobrancas')
         .update({ valor: valorManual })
         .eq('id', targetCobrancaId);
+    } else if (valorManual && valorManual !== Number(cobranca.valor)) {
+      console.warn(`🛡️ Bloqueado: tentativa de alterar valor de cobrança status=${cobranca.status} (${cobranca.valor} → ${valorManual})`);
     }
 
     // Call RPC for atomic payment finalization
@@ -259,7 +289,12 @@ Deno.serve(async (req: Request) => {
       resource_id: targetCobrancaId,
       gallery_id: cobranca.galeria_id || null,
       user_agent: req.headers.get('user-agent') || null,
-      metadata: { valor: valorManual || cobranca.valor, provedor: metodoManual || 'manual', observacao },
+      metadata: {
+        valor: valorManual || cobranca.valor,
+        provedor: metodoManual || 'manual',
+        observacao,
+        cancelled_pending_ids: cancelledPendingIds,
+      },
     }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
 
     return new Response(
