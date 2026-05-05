@@ -143,7 +143,16 @@ Deno.serve(async (req) => {
         qtdFotos = inferred;
         console.warn(`✅ [infinitepay-create-link] qtdFotos inferido = ${inferred}`);
       } else {
-        console.error(`❌ [infinitepay-create-link] não foi possível inferir qtdFotos para galeria ${galeriaId}`);
+        // 🛡️ BLOQUEIO CRÍTICO: nunca gravar cobrança de extras com qtd_fotos=0.
+        // Se chegou aqui, nem o frontend mandou nem regex/divisão funcionaram.
+        // Gravar 0 leva a divergência permanente entre cobranças e contadores.
+        console.error(`❌ [infinitepay-create-link] BLOQUEADO: não foi possível inferir qtdFotos para galeria ${galeriaId} (valor=${valor}, descricao="${descricao}")`);
+        return errorResponse(
+          400,
+          'Não foi possível determinar a quantidade de fotos extras. Recarregue a página e tente novamente.',
+          'QTD_FOTOS_INDETERMINADA',
+          `valor=${valor} descricao="${descricao}"`,
+        );
       }
     }
 
