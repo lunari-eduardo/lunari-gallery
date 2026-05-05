@@ -86,6 +86,7 @@ export function PaymentStatusCard({
   provedor,
   valor = 0,
   valorPago = 0,
+  saldoPendente,
   dataPagamento,
   receiptUrl,
   checkoutUrl,
@@ -115,11 +116,15 @@ export function PaymentStatusCard({
   const statusKey = status || 'sem_vendas';
   const config = statusConfig[statusKey] || statusConfig.sem_vendas;
   const StatusIcon = config.icon;
-  const valorPendente = Math.max(0, valor - valorPago);
+  // Saldo efetivo: prioridade ao saldoPendente explícito (rodada atual em galerias reativadas)
+  const saldoEfetivo = saldoPendente !== undefined
+    ? Math.max(0, saldoPendente)
+    : Math.max(0, valor - valorPago);
+  const valorPendente = saldoEfetivo;
 
-  // Open receipt modal with pre-filled value
+  // Open receipt modal with pre-filled value (saldo pendente da rodada atual)
   const openReceiptModal = () => {
-    setManualValor(valor > 0 ? valor.toFixed(2) : '');
+    setManualValor(saldoEfetivo > 0 ? saldoEfetivo.toFixed(2) : '');
     setManualMethod('dinheiro');
     setManualObs('');
     setShowReceiptModal(true);
