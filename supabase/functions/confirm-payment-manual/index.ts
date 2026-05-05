@@ -289,7 +289,12 @@ Deno.serve(async (req: Request) => {
       resource_id: targetCobrancaId,
       gallery_id: cobranca.galeria_id || null,
       user_agent: req.headers.get('user-agent') || null,
-      metadata: { valor: valorManual || cobranca.valor, provedor: metodoManual || 'manual', observacao },
+      metadata: {
+        valor: valorManual || cobranca.valor,
+        provedor: metodoManual || 'manual',
+        observacao,
+        cancelled_pending_ids: cancelledPendingIds,
+      },
     }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
 
     return new Response(
