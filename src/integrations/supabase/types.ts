@@ -4541,6 +4541,7 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      reconcile_gallery_extras_counters: { Args: never; Returns: Json }
       reconcile_session_extras: {
         Args: {
           p_destino_sobra?: string
