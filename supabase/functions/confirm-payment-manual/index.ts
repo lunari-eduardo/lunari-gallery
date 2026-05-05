@@ -233,13 +233,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Update valor if manual amount provided
-    if (valorManual && valorManual !== cobranca.valor) {
-      console.log(`💰 Updating valor: ${cobranca.valor} → ${valorManual}`);
+    // ── ATUALIZAR valor APENAS se cobrança ainda está pendente.
+    // Para cobranças já pagas, NUNCA sobrescrever valor (corrompe histórico e contadores).
+    if (valorManual && valorManual !== Number(cobranca.valor) && cobranca.status === 'pendente') {
+      console.log(`💰 Updating valor (pendente): ${cobranca.valor} → ${valorManual}`);
       await supabase
         .from('cobrancas')
         .update({ valor: valorManual })
         .eq('id', targetCobrancaId);
+    } else if (valorManual && valorManual !== Number(cobranca.valor)) {
+      console.warn(`🛡️ Bloqueado: tentativa de alterar valor de cobrança status=${cobranca.status} (${cobranca.valor} → ${valorManual})`);
     }
 
     // Call RPC for atomic payment finalization
