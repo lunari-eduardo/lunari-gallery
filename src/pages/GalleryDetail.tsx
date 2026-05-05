@@ -240,36 +240,41 @@ export default function GalleryDetail() {
     enabled: !!supabaseGallery,
   });
 
-  // Fetch latest pending cobranca for payment status actions
+  // Fetch latest PENDING cobranca for payment status actions
+  // CRITICAL: only pending/awaiting — never reuse a paid cobrança (avoid overwrite bug
+  // in reactivated galleries where last cobrança was a previously paid one).
   const { data: cobrancaData, refetch: refetchCobranca } = useQuery({
     queryKey: ['galeria-cobranca-pendente', id],
     queryFn: async () => {
       const sessionId = supabaseGallery?.sessionId;
-      
+      const PENDING_STATUSES = ['pendente', 'aguardando_confirmacao'];
+
       // First try by galeria_id
       if (id) {
         const { data } = await supabase
           .from('cobrancas')
           .select('*')
           .eq('galeria_id', id)
+          .in('status', PENDING_STATUSES)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
         if (data) return data;
       }
-      
+
       // Fallback to session_id
       if (sessionId) {
         const { data } = await supabase
           .from('cobrancas')
           .select('*')
           .eq('session_id', sessionId)
+          .in('status', PENDING_STATUSES)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
         return data;
       }
-      
+
       return null;
     },
     enabled: !!supabaseGallery,
