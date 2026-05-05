@@ -169,6 +169,8 @@ export function PaymentStatusCard({
       const data = response.data;
 
       if (data.success) {
+        const valorRegistrado = parsedValor.toFixed(2).replace('.', ',');
+        toast.success(`Recebimento de R$ ${valorRegistrado} registrado`);
         setShowReceiptModal(false);
         onStatusUpdated?.();
       } else {
