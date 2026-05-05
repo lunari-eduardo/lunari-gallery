@@ -870,8 +870,9 @@ export default function GalleryDetail() {
                 <div className="mt-4">
                   <PaymentStatusCard
                     status={supabaseGallery.statusPagamento}
-                    provedor={cobrancasPagas[0]?.provedor || cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
-                    valor={supabaseGallery.valorTotalVendido || supabaseGallery.valorExtras || calculatedExtraTotal}
+                    provedor={cobrancaData?.provedor || cobrancasPagas[0]?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
+                    valor={calculatedExtraTotal > 0 ? calculatedExtraTotal : (supabaseGallery.valorTotalVendido || supabaseGallery.valorExtras || 0)}
+                    valorPago={valorJaPago}
                     dataPagamento={cobrancasPagas[0]?.data_pagamento || cobrancaData?.data_pagamento}
                     receiptUrl={cobrancasPagas[0]?.ip_receipt_url || cobrancaData?.ip_receipt_url}
                     checkoutUrl={cobrancaData?.ip_checkout_url}
@@ -879,6 +880,7 @@ export default function GalleryDetail() {
                     cobrancaId={cobrancaData?.id}
                     galleryId={supabaseGallery.id}
                     extraCount={extrasACobrar}
+                    saldoPendente={calculatedExtraTotal}
                     variant="compact"
                     onStatusUpdated={() => {
                       queryClient.invalidateQueries({ queryKey: ['galerias'] });
