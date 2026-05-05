@@ -329,6 +329,12 @@ export function PaymentStatusCard({
               onChange={(e) => setManualValor(e.target.value)}
               placeholder="0,00"
             />
+            {saldoEfetivo > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Saldo pendente: <strong>R$ {saldoEfetivo.toFixed(2).replace('.', ',')}</strong>
+                {' — '}você pode registrar valores parciais.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
