@@ -41,13 +41,16 @@ interface PaymentStatusCardProps {
   provedor?: string | null;
   valor?: number;
   valorPago?: number;
+  /** Saldo ainda pendente desta rodada de extras. Se omitido, usa max(0, valor - valorPago). */
+  saldoPendente?: number;
   dataPagamento?: Date | string | null;
   receiptUrl?: string | null;
   checkoutUrl?: string | null;
   variant?: 'compact' | 'full';
   showPendingAmount?: boolean;
   sessionId?: string;
-  cobrancaId?: string;
+  /** ID de cobrança PENDENTE existente. Pode ser null/undefined — backend criará nova manual. */
+  cobrancaId?: string | null;
   galleryId?: string;
   extraCount?: number;
   descricao?: string;
