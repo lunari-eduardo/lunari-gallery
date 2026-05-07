@@ -775,60 +775,13 @@ export function useSupabaseGalleries() {
   // duplicada das mesmas fotos extras na próxima seleção.
   const reopenSelectionMutation = useMutation({
     mutationFn: async ({ id, days }: { id: string; days: number }) => {
-      const prazoSelecao = new Date();
-      prazoSelecao.setDate(prazoSelecao.getDate() + days);
-
-      const { error } = await supabase
-        .from('galerias')
-        .update({
-          status: 'selecao_iniciada',
-          status_selecao: 'em_andamento',
-          status_pagamento: 'sem_vendas',
-          prazo_selecao: prazoSelecao.toISOString(),
-          prazo_selecao_dias: days,
-          finalized_at: null,
-          updated_at: new Date().toISOString(),
-          // NÃO incluir: total_fotos_extras_vendidas, valor_total_vendido (preservar histórico)
-        })
-        .eq('id', id);
-
+      // RPC atômica: preserva total_fotos_extras_vendidas e valor_total_vendido (crédito do cliente),
+      // zera valor_extras (saldo da rodada), cancela cobranças pendentes, sincroniza sessão e audita.
+      const { error } = await supabase.rpc('reopen_gallery_selection', {
+        p_gallery_id: id,
+        p_days: days,
+      });
       if (error) throw error;
-
-      // Cancel any pending charges from the previous cycle
-      await supabase
-        .from('cobrancas')
-        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
-        .eq('galeria_id', id)
-        .eq('status', 'pendente');
-
-      // Sync clientes_sessoes so Gestão sees the reactivation
-      const { data: gallery } = await supabase
-        .from('galerias')
-        .select('session_id')
-        .eq('id', id)
-        .single();
-
-      if (gallery?.session_id) {
-        await supabase
-          .from('clientes_sessoes')
-          .update({ 
-            status_galeria: 'em_selecao', 
-            status_pagamento_fotos_extra: 'sem_vendas',
-            updated_at: new Date().toISOString() 
-          })
-          .eq('session_id', gallery.session_id);
-      }
-
-      // Add action
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('galeria_acoes').insert({
-          galeria_id: id,
-          user_id: user.id,
-          tipo: 'selecao_reaberta',
-          descricao: `Seleção reaberta pelo fotógrafo (${days} dias de prazo)`,
-        });
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galerias'] });

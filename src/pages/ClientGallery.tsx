@@ -1920,6 +1920,8 @@ export default function ClientGallery() {
         selectedCount={selectedCount}
         includedPhotos={gallery.includedPhotos}
         extraCount={extraCount}
+        extrasPagasAnteriormente={extrasPagasTotal}
+        extrasACobrar={extrasACobrar}
         studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
         studioName={galleryResponse?.studioSettings?.studio_name}
         contactEmail={null}

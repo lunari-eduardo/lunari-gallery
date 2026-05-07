@@ -1,111 +1,161 @@
-# Plano: Corrigir Registro de Recebimento Manual em Galerias Reativadas
+# Galerias reativadas — extras pagos contabilizados de novo (UI completa)
 
-## Diagnóstico do Bug
+## Confirmação dos pontos do usuário
 
-Na galeria da Gisele (reativada), o cliente já havia pago R$50 (2 extras) na rodada anterior. Após reativação, selecionou +4 extras (R$100) e pagou externamente. Ao clicar **"Registrar recebimento"**, o modal mostrou R$50 e estava prestes a marcar a **cobrança antiga já paga** como "paga manualmente" novamente.
+Investiguei especificamente o que o usuário levantou:
 
-### Causa raiz (3 falhas combinadas)
+### 1. Painel do fotógrafo (já mapeado antes)
+`GalleryDetail.tsx` linha 874 usa fallback `valorTotalVendido` (R$ já pagos) quando `calculatedExtraTotal=0`. Resultado: card "Pendente R$ 50" para crédito que JÁ foi pago.
 
-1. **`GalleryDetail.tsx` — query `galeria-cobranca-pendente`** (linha 244–276) busca a *última* cobrança da galeria/sessão **sem filtrar status**. Em galerias reativadas, retorna a cobrança `pago_manual` antiga (R$50), não a pendente atual.
+### 2. Contador do cliente durante seleção (NOVO ponto confirmado)
+- **`ClientGalleryHeader.tsx` (linhas 187‑197)** — mostra `+{extraCount} extras`. `extraCount = selectedCount - includedPhotos` inclui as fotos pagas no ciclo anterior, porque `reopenSelection` NÃO desmarca (`is_selected=true` é preservado na DB).
+- **`SelectionSummary.tsx` bottom-bar (linhas 78‑87)** — exibe `R$ {displayTotal.toFixed(2)}` que vem de `calcularPrecoProgressivoComCredito`. Esse cálculo já desconta `valorJaPago` corretamente, MAS depende do prop `extrasACobrar`. Se o `ClientGallery.tsx` passar `extrasACobrar` correto (linha 1709 — passa), o valor está certo. **Confirmei: o R$ no bottom-bar mostra apenas o saldo a cobrar.**
+- **Problema real**: o "+6 extras" no header dá impressão de que o cliente vai pagar 6 × R$25, quando só 4 são cobráveis. Falta exibir "+2 já pagas" no header.
 
-2. **`PaymentStatusCard`** recebe esse `cobrancaId` antigo + um `valor` confuso (mistura de `valorTotalVendido`, `valorExtras`, `calculatedExtraTotal`) e pré-preenche o campo com `valor.toFixed(2)`.
+### 3. Finalização cliente (`SelectionConfirmation.tsx`)
+Linhas 214-217 já mostram `+{extrasPagasAnteriormente}` em verde e linhas 221-224 mostram `{extraCount}` total. O cálculo está correto. Falta só evidenciar visualmente que o "Valor total ideal" não é o que será cobrado.
 
-3. **`confirm-payment-manual`** recebe `cobrancaId` de cobrança já paga → o RPC `finalize_gallery_payment` retorna `already_paid: true` (idempotente), mas no caminho de `valorManual !== cobranca.valor` ele **sobrescreve `cobrancas.valor`** ANTES da checagem de idempotência (linhas 175–181), corrompendo o histórico.
+### 4. Backend (verificado, está correto)
+- `confirm-selection` linha 423: `extrasACobrar = max(0, extrasNecessarias - extrasPagasTotal)` ✅
+- `infinitepay-create-link`: recebe `qtdFotos: extrasACobrar` e cria cobrança apenas do delta ✅
+- `finalize_gallery_payment`: usa `SUM` das cobranças pagas, idempotente ✅
+- **Cobrança real está correta** — os R$ 100 cobrados eram só os 4 novos.
 
-### Cenário do usuário (não registrou) — o que teria acontecido se confirmasse R$100
-- Cobrança antiga (R$50, qtd_fotos=2) seria sobrescrita para R$100 → trigger `cobranca_infer_qtd_fotos` poderia recalcular qtd_fotos para 4 → contadores agregados duplicariam fotos vendidas.
-- Saldo de R$100 da nova rodada continuaria contando como pendente → cliente apareceria devendo R$100 mesmo após pago.
+### Conclusão
+**O backend NÃO duplica cobrança.** O cliente NÃO foi cobrado pelas 2 já pagas. Mas a UI em 3 lugares dá a impressão visual de duplicidade — o que é um bug de confiança do produto, igualmente grave.
 
----
+## Correções
 
-## Solução
+### A. Painel do fotógrafo (`GalleryDetail.tsx`)
+1. Remover fallback `valorTotalVendido` no prop `valor` do `PaymentStatusCard` (linhas 874 e 1104). Usar SOMENTE `calculatedExtraTotal`.
+2. Esconder o card quando `extrasACobrar === 0 && !cobrancaData`. Substituir condição atual baseada apenas em `statusPagamento`.
+3. Sempre exibir `valorJaPago` como "Crédito do ciclo anterior: R$ X" no `PaymentStatusCard` (informativo, não cobrável).
 
-Princípio: **toda rodada de extras pendente vive em sua própria cobrança**. O modal sempre opera sobre o saldo da rodada atual, nunca sobre cobranças finalizadas.
+### B. Header do cliente (`ClientGalleryHeader.tsx`)
+1. Adicionar prop `extrasPagasAnteriormente?: number`.
+2. Quando > 0, exibir badge informativo: `+{extraCount} extras` com tooltip/sub-label `({extrasPagasAnteriormente} já pagas, {extrasACobrar} a pagar)`.
+3. Receber a prop de `ClientGallery.tsx` (já existe `extrasPagasTotal` no escopo).
 
-### 1. Frontend — `GalleryDetail.tsx`
+### C. Bottom-bar (`SelectionSummary.tsx` variant=bottom-bar)
+1. Quando `extrasPagasTotal > 0`, exibir mini-segmento: `+{totalExtras}` com sub-texto `(−{extrasPagasTotal} já pagas)` em cor secundária.
+2. Confirmar que `displayTotal` reflete só o saldo a cobrar (já está, mas adicionar `data-testid` para testes).
 
-**Separar a query em três conceitos distintos:**
+### D. Confirmação cliente (`SelectionConfirmation.tsx`)
+1. Reordenar exibição: mostrar PRIMEIRO "Valor a pagar agora: R$ {valorACobrar}" em destaque grande.
+2. Mover "Valor total ideal" e "Já pago" para uma seção colapsável "Ver detalhes do cálculo".
+3. Adicionar texto explicativo: `"Você já pagou R$ {valorJaPago} por {extrasPagasAnteriormente} foto(s) extras anteriormente. Agora pagará apenas o adicional."`
 
-```text
-cobrancasPagas         → histórico (já existe, ok)
-cobrancaPendenteAtiva  → status IN ('pendente','aguardando_confirmacao') APENAS
-                         da rodada atual (created_at > último pagamento OU
-                         valor === extrasACobrar × valor_foto_extra)
-saldoPendente          → extrasACobrar × valor_foto_extra (sempre derivado)
+### E. Hook — `reopenSelectionMutation` (useSupabaseGalleries.ts)
+1. Substituir UPDATEs separados pela nova RPC atômica `reopen_gallery_selection`.
+2. RPC além de cancelar pendentes, **também zera `valor_extras` da galeria** (limpa fallback contaminado) e preserva `total_fotos_extras_vendidas`/`valor_total_vendido`.
+
+### F. Backend — defesa em profundidade
+
+**Migration nova:**
+
+```sql
+-- 1) RPC atômica de reabertura
+CREATE OR REPLACE FUNCTION public.reopen_gallery_selection(
+  p_gallery_id uuid, p_days int
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_g RECORD; v_prazo timestamptz;
+BEGIN
+  SELECT * INTO v_g FROM galerias WHERE id=p_gallery_id FOR UPDATE;
+  IF v_g IS NULL THEN RAISE EXCEPTION 'Galeria não encontrada'; END IF;
+  IF v_g.user_id <> auth.uid() THEN RAISE EXCEPTION 'Acesso negado'; END IF;
+  v_prazo := now() + (p_days || ' days')::interval;
+  UPDATE galerias SET
+    status='selecao_iniciada', status_selecao='em_andamento',
+    status_pagamento='sem_vendas', prazo_selecao=v_prazo,
+    prazo_selecao_dias=p_days, finalized_at=NULL,
+    valor_extras=0,                    -- limpa fallback contaminado
+    updated_at=now()
+  WHERE id=p_gallery_id;
+  -- Cancela cobranças pendentes do ciclo anterior
+  UPDATE cobrancas SET status='cancelado', updated_at=now()
+   WHERE galeria_id=p_gallery_id AND status='pendente';
+  -- Sincroniza sessão
+  IF v_g.session_id IS NOT NULL THEN
+    UPDATE clientes_sessoes
+       SET status_galeria='em_selecao', status_pagamento_fotos_extra='sem_vendas',
+           updated_at=now()
+     WHERE session_id=v_g.session_id;
+  END IF;
+  -- Audit
+  INSERT INTO galeria_acoes(galeria_id,user_id,tipo,descricao)
+    VALUES (p_gallery_id, auth.uid(), 'selecao_reaberta',
+            FORMAT('Seleção reaberta (%s dias). Crédito preservado: %s extras / R$ %s',
+                   p_days, v_g.total_fotos_extras_vendidas, v_g.valor_total_vendido));
+  RETURN jsonb_build_object('success',true,
+    'creditos_extras', v_g.total_fotos_extras_vendidas,
+    'creditos_valor', v_g.valor_total_vendido);
+END $$;
+
+-- 2) Trigger anti-overcharge: bloqueia INSERT de cobrança que excederia o devido
+CREATE OR REPLACE FUNCTION public.tg_protect_no_overcharge()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_g RECORD; v_pago numeric; v_max numeric; v_extras_necess int;
+BEGIN
+  IF NEW.galeria_id IS NULL OR COALESCE(NEW.valor,0)<=0 THEN RETURN NEW; END IF;
+  IF NEW.tipo_cobranca NOT IN ('foto_extra','link','venda_galeria') THEN RETURN NEW; END IF;
+  SELECT * INTO v_g FROM galerias WHERE id=NEW.galeria_id;
+  IF v_g IS NULL THEN RETURN NEW; END IF;
+  v_extras_necess := GREATEST(0,
+    COALESCE(v_g.fotos_selecionadas,0) - COALESCE(v_g.fotos_incluidas,0));
+  v_max := v_extras_necess * COALESCE(v_g.valor_foto_extra,0);
+  SELECT COALESCE(SUM(valor),0) INTO v_pago
+    FROM cobrancas WHERE galeria_id=NEW.galeria_id
+      AND status IN ('pago','pago_manual') AND id<>NEW.id;
+  IF v_max > 0 AND (v_pago + NEW.valor) > v_max + 0.01 THEN
+    RAISE EXCEPTION 'Cobrança excederia o saldo devido. Pago=R$% + Nova=R$% > Max=R$%',
+      v_pago, NEW.valor, v_max;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER trg_protect_no_overcharge BEFORE INSERT ON cobrancas
+  FOR EACH ROW EXECUTE FUNCTION tg_protect_no_overcharge();
 ```
 
-A query `galeria-cobranca-pendente` passa a filtrar `.in('status', ['pendente','aguardando_confirmacao'])`. Se nada retornar e `extrasACobrar > 0`, `cobrancaPendenteAtiva = null` (será criada nova manual ao confirmar).
+### G. Edge function — `confirm-selection`
+Adicionar log estruturado quando `extrasACobrar=0 && extrasNecessarias>0` (crédito cobre tudo) — pular criação de cobrança e marcar `status='selecao_completa'` direto. Validar com sanity check `valorTotal === extrasACobrar × valorUnitario`.
 
-**No `PaymentStatusCard` props:**
-- `valor` = `saldoPendente` (não mais `valorTotalVendido`).
-- `cobrancaId` = `cobrancaPendenteAtiva?.id` (pode ser `null` → função cria nova).
-- `extraCount` = `extrasACobrar`.
+## Snippet UI principal (GalleryDetail)
 
-### 2. Frontend — `PaymentStatusCard.tsx`
+```tsx
+const temSaldoNovo = extrasACobrar > 0 && calculatedExtraTotal > 0;
+const temCobrancaPendente = !!cobrancaData;
+const mostrarCard = temSaldoNovo || temCobrancaPendente;
 
-- `openReceiptModal()` pré-preenche com `valor` (já será o saldo pendente, R$100 no caso).
-- Adicionar **dica visual** abaixo do input: *"Saldo pendente: R$ 100,00. Você pode registrar valores parciais."*
-- Remover assunção de que `cobrancaId` sempre existe — passar `null` é válido (back cria cobrança manual nova).
-- Após sucesso: `toast.success('Recebimento de R$ X registrado')` + invalidar queries.
-
-### 3. Backend — `confirm-payment-manual/index.ts`
-
-**Bloco crítico a reescrever:**
-
-a) **Validação de cobrança alvo:** se `cobrancaId` fornecido aponta para cobrança com status `pago` ou `pago_manual`, **rejeitar** (HTTP 409 `COBRANCA_JA_QUITADA`) e instruir frontend a criar nova. Evita a sobrescrita acidental.
-
-b) **Cancelar cobrança digital pendente** quando criar manual nova: se existir `cobrancas` com `status='pendente'` e `provedor IN ('infinitepay','mercadopago','asaas','pix_manual')` para a mesma galeria, marcar como `cancelada` com `obs_cancelamento='Substituída por recebimento manual #<novo_id>'`. Conforme escolha do usuário (opção 2 da pergunta 3).
-
-c) **Suportar pagamentos parciais:** ao criar cobrança manual, usar exatamente `valorManual` (não o saldo total). O RPC `finalize_gallery_payment` já recalcula `valor_extras_pago` somando todas as cobranças `pago/pago_manual` da galeria — portanto múltiplos recebimentos parciais somam corretamente até atingir o total e mudar status para `pago_manual`.
-
-d) **Inferência de `qtd_fotos`:** ao criar manual parcial, calcular `qtd_fotos = ROUND(valorManual / valor_foto_extra)` para alimentar o trigger e contadores corretamente.
-
-e) **Remover sobrescrita de valor** (linhas 175–181 atuais) — nunca alterar `cobrancas.valor` de cobrança existente.
-
-### 4. RPC `finalize_gallery_payment` (verificação)
-
-Confirmar que já implementa pagamentos parciais corretamente:
-- Se `SUM(valor pago) < valor_total_devido` → status galeria = `parcialmente_pago`.
-- Se `SUM(valor pago) >= valor_total_devido` → status = `pago_manual` (ou `pago` se algum digital).
-
-Se não suportar, adicionar lógica condicional. (Memória *Finalize Pay RPC Logic* já indica suporte a parciais — apenas validar com query.)
-
-### 5. Hardening adicional
-
-- **Constraint defensiva:** trigger `BEFORE UPDATE ON cobrancas` que bloqueia mudança de `valor` quando `status IN ('pago','pago_manual')` salvo via flag `_allow_value_correction` na sessão.
-- **Audit log enriquecido:** registrar saldo antes/depois e cobrança cancelada em metadata.
-
----
-
-## Detalhes Técnicos (resumo de arquivos)
-
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/GalleryDetail.tsx` | Filtrar `cobrancaData` por status pendente; passar `saldoPendente` ao card |
-| `src/components/PaymentStatusCard.tsx` | Pré-preencher saldo correto; texto auxiliar; aceitar `cobrancaId=null` |
-| `supabase/functions/confirm-payment-manual/index.ts` | Rejeitar cobrança quitada; cancelar pendente digital; criar manual com `qtd_fotos` inferido; remover sobrescrita de valor |
-| Migration nova | Trigger anti-sobrescrita de `valor` em cobranças quitadas |
-
----
-
-## Fluxo Esperado Pós-Correção (cenário Gisele)
-
-```text
-Estado: cobrança#1 pago_manual R$50 (2 fotos) | saldo pendente R$100 (4 fotos)
-
-[Fotógrafo clica "Registrar recebimento"]
-  ↓
-Modal abre com Valor = R$100,00 (saldo correto)
-Dica: "Saldo pendente: R$ 100,00 — pode registrar parcial"
-  ↓
-[Confirma R$100 em Dinheiro]
-  ↓
-Backend: cobrancaId=null → cria cobrança#2 manual R$100 qtd_fotos=4
-       → finalize_gallery_payment(cobrança#2)
-       → SUM pago = 50+100 = 150 = total devido
-       → galeria.status = 'pago_manual', valor_extras_pago=150
-  ↓
-UI: Status "Pago manualmente" | Histórico mostra 2 recebimentos
+{mostrarCard && (
+  <PaymentStatusCard
+    valor={calculatedExtraTotal}        // SEM fallback para valorTotalVendido
+    valorPago={valorJaPago}             // só histórico/exibição
+    saldoPendente={calculatedExtraTotal}
+    extraCount={extrasACobrar}
+    cobrancaId={cobrancaData?.id}
+    ...
+  />
+)}
 ```
 
-Para parcial (R$60 + R$40 depois): mesmo fluxo cria 2 cobranças manuais, status fica `parcialmente_pago` até o segundo recebimento fechar o saldo.
+## Arquivos modificados
+
+- `src/pages/GalleryDetail.tsx` — condição de exibição + props (2 ocorrências).
+- `src/components/PaymentStatusCard.tsx` — exibir crédito anterior informativo, esconder ações se saldo=0.
+- `src/components/ClientGalleryHeader.tsx` — nova prop `extrasPagasAnteriormente`, exibir desconto visual.
+- `src/components/SelectionSummary.tsx` — bottom-bar mostra `(−X já pagas)`.
+- `src/components/SelectionConfirmation.tsx` — destacar saldo, colapsar detalhes do total.
+- `src/pages/ClientGallery.tsx` — passar `extrasPagasTotal` ao `ClientGalleryHeader`.
+- `src/hooks/useSupabaseGalleries.ts` — `reopenSelectionMutation` chama RPC atômica.
+- `supabase/migrations/<novo>.sql` — RPC `reopen_gallery_selection` + trigger `tg_protect_no_overcharge`.
+- `supabase/functions/confirm-selection/index.ts` — sanity check + log quando crédito cobre tudo.
+
+**Não tocar:** `infinitepay-create-link`, `infinitepay-webhook`, `finalize_gallery_payment`, contrato compartilhado com Gestão preservado.
+
+## Validação manual
+
+1. Galeria reativada com 2 extras pagas: painel não mostra "Pendente R$ 50".
+2. Cliente abre galeria reativada: header mostra "+6 extras (2 já pagas)", bottom-bar mostra `R$ 100` (não R$ 150).
+3. Cliente confirma: tela final destaca "Valor a pagar agora: R$ 100" — detalhamento colapsado.
+4. Trigger DB: tentativa de inserir cobrança extra que excede saldo é bloqueada com erro claro.
+5. Fluxo normal de galeria nova (sem crédito) permanece idêntico.

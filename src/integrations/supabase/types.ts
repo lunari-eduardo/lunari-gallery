@@ -4608,6 +4608,10 @@ export type Database = {
         Args: { _amount: number; _user_id: string }
         Returns: undefined
       }
+      reopen_gallery_selection: {
+        Args: { p_days: number; p_gallery_id: string }
+        Returns: Json
+      }
       set_session_extras: {
         Args: {
           p_session_id: string
