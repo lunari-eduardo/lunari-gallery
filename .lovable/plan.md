@@ -1,98 +1,94 @@
-# Galeria reativada cobra extras já pagas — causa raiz e correção
+## Correção da causa raiz
 
-## Diagnóstico (validado no banco da galeria afetada)
+### O que está acontecendo (validado no banco da galeria de teste)
 
-**Galeria `ab834051-…`** (Teste, 8 selecionadas, 1 incluída, 7 extras).
-**Cobrança paga (1º ciclo)**: R$ 5,00 InfinitePay (`c86be48b`), `qtd_fotos = 0`, `extras_contabilizados = false`.
-**Galeria após reativação**: `total_fotos_extras_vendidas = 0`, `valor_total_vendido = 0`, `valor_extras = 5`.
+Galeria `9b90dbb7-…`: `fotos_selecionadas=5`, `fotos_incluidas=1` → **4 extras reais selecionados** (UI da galeria mostra corretamente).
 
-### Por que acontece
-O webhook InfinitePay original gravou a cobrança com `qtd_fotos=0` e nunca chamou `finalize_gallery_payment` com sucesso (era a versão antiga, antes do auto-heal). Resultado:
+| Cobrança | Provedor | Valor | qtd_fotos | status |
+|---|---|---|---|---|
+| `ec2a02d4` | Asaas | R$ 10 | **2** | pago |
+| `486895ac` | manual | R$ 2 | **0** (não enviado) | pago_manual |
 
-- `total_fotos_extras_vendidas` ficou `0` → não há crédito preservado.
-- `valor_total_vendido` ficou `0` → não há valor já pago registrado.
+Galeria fica com `total_fotos_extras_vendidas = SUM(qtd_fotos pagos) = 2` e `valor_total_vendido = 12`. A trigger `sync_gallery_extras_to_session` propaga `qtd_fotos_extra = 2` para `clientes_sessoes` → card do workflow no Gestão mostra **2 extras** em vez de **4**.
 
-Ao reabrir a galeria, a RPC `reopen_gallery_selection` preserva 0/0 (não havia o que preservar). O `confirm-selection` tem auto-heal, **mas ele só roda quando o cliente reconfirma a seleção** — no painel do fotógrafo (cobrar novamente / registrar recebimento) os números aparecem errados ANTES do cliente abrir a tela de seleção de novo.
+### Onde está o erro de contrato
 
-Então o painel calcula:
-`extrasACobrar = 7 (necess) − 0 (pagas) = 7` → R$ 14,00 (correto: deveria ser 6 extras / R$ 9,00 com a sequência progressiva R$ 2,00/foto a partir da 5ª).
+A `finalize_gallery_payment` faz `qtd_fotos_extra = SUM(cobrancas.qtd_fotos pagos)`, e a `sync_gallery_extras_to_session` propaga isso para a sessão. Isso confunde dois conceitos diferentes:
 
-### Por que a sequência progressiva também quebra
-`calcularPrecoProgressivoComCredito` usa `totalExtras = extrasPagasTotal + extrasNovas`. Como `extrasPagasTotal=0`, ele entra na faixa errada (vê só 7 novas, calcula 7×R$2 = R$14, sem deduzir os R$5 já pagos). Após o heal, `totalExtras = 1 + 6 = 7`, entra corretamente na faixa "5+" (R$2/foto), aplica desconto e desconta o R$5 pago → **R$ 9,00**.
+- **Quantidade de extras** = característica da seleção do cliente (`fotos_selecionadas − fotos_incluidas`). Pagamento manual **não deve influenciar isso**.
+- **Valor pago / status** = característica financeira. Sim, reflete soma das cobranças pagas.
 
-## Correção (3 frentes)
+Como o pagamento manual não enviou `qtd_fotos`, o agregado ficou subnotificado e quebrou o card. A regra correta é: **a quantidade de extras nunca deriva de cobranças**; deriva da seleção da galeria.
 
-### 1) Migration — healing automático no momento da reabertura
-Atualizar `reopen_gallery_selection` para, **antes** de zerar `valor_extras` e gravar o snapshot de preservação:
+## Plano de correção (cirúrgico)
 
-```sql
--- Antes do UPDATE galerias da reabertura:
-FOR v_c IN
-  SELECT id FROM cobrancas
-  WHERE galeria_id = p_gallery_id
-    AND status IN ('pago','pago_manual')
-    AND extras_contabilizados IS NOT TRUE
-LOOP
-  PERFORM public.finalize_gallery_payment(v_c.id, NULL, NULL, NULL, NULL);
-END LOOP;
+### 1) Migration — corrigir fonte de verdade nas RPCs/triggers
 
--- Reler galeria DEPOIS do heal para capturar contadores reais
-SELECT * INTO v_g FROM galerias WHERE id = p_gallery_id FOR UPDATE;
-```
-
-A `finalize_gallery_payment` já infere `qtd_fotos` quando 0 (via descrição "1 foto extra" ou via `valor / valor_foto_extra`). Após o heal:
-- `total_fotos_extras_vendidas` ← soma real (1 no caso da galeria afetada)
-- `valor_total_vendido` ← R$ 5,00
-- `extras_contabilizados=true` na cobrança histórica.
-
-Em seguida o `UPDATE galerias` da reabertura só zera `valor_extras` (saldo do ciclo) e mantém `total_fotos_extras_vendidas` / `valor_total_vendido` intactos. O comprovante (`ip_receipt_url`) continua acessível porque a cobrança paga não é tocada.
-
-### 2) Migration — backfill da galeria já afetada
-Mesma migration, no final, executa o heal pontual para destravar a galeria `ab834051-…` agora (antes do próximo ciclo):
+**A) `finalize_gallery_payment`**: trocar a fórmula de `total_fotos_extras_vendidas` em todos os 3 branches:
 
 ```sql
-DO $$
-DECLARE v_c uuid;
-BEGIN
-  FOR v_c IN
-    SELECT c.id FROM cobrancas c
-    WHERE c.status IN ('pago','pago_manual')
-      AND c.extras_contabilizados IS NOT TRUE
-      AND c.galeria_id IS NOT NULL
-  LOOP
-    BEGIN PERFORM public.finalize_gallery_payment(v_c, NULL, NULL, NULL, NULL);
-    EXCEPTION WHEN OTHERS THEN NULL; END;
-  END LOOP;
-END $$;
+-- Antes:
+SELECT COALESCE(SUM(qtd_fotos), 0)::int, COALESCE(SUM(valor), 0)::numeric
+INTO v_sum_qtd, v_sum_val
+FROM cobrancas WHERE galeria_id = v_galeria_id AND status IN ('pago','pago_manual') ...
+
+-- Depois:
+SELECT GREATEST(COALESCE(fotos_selecionadas,0) - COALESCE(fotos_incluidas,0), 0)
+INTO v_sum_qtd FROM galerias WHERE id = v_galeria_id;
+SELECT COALESCE(SUM(valor),0) INTO v_sum_val FROM cobrancas
+  WHERE galeria_id = v_galeria_id AND status IN ('pago','pago_manual') AND tipo_cobranca IN (...);
 ```
 
-Isso conserta TODAS as galerias com cobranças pagas órfãs (não só a do teste), de qualquer provedor.
+`valor_total_vendido` continua sendo soma dos pagos (financeiro). `total_fotos_extras_vendidas` passa a refletir a seleção real.
 
-### 3) Defesa adicional na invalidação após reabertura
-Em `useSupabaseGalleries.ts > reopenSelectionMutation`: após a RPC, invalidar `['galerias']`, `['galeria-cobrancas-pagas']` e `['galeria-cobranca-pendente']` (algumas já estão; garantir as três). Sem isso o painel pode mostrar valores cacheados.
+**B) `sync_gallery_extras_to_session`**: ao recalcular `v_unit_efetivo`, usar `qtd_pagos` apenas para o cálculo do unitário (preço médio efetivo do que foi cobrado), mas propagar `s.qtd_fotos_extra = total_fotos_extras_vendidas` (que agora vem da seleção). Fica:
+
+```sql
+v_qtd_pagos := (SELECT COALESCE(SUM(qtd_fotos),0) FROM cobrancas
+                WHERE galeria_id = NEW.id AND status IN ('pago','pago_manual'));
+v_unit_efetivo := CASE WHEN v_qtd_pagos > 0 AND NEW.valor_total_vendido > 0
+                       THEN ROUND(NEW.valor_total_vendido / v_qtd_pagos, 2)
+                       ELSE v_unit_base END;
+-- propaga NEW.total_fotos_extras_vendidas (= extras selecionados) para s.qtd_fotos_extra
+```
+
+**C) `protect_gallery_extras_downgrade`**: ajustar exceção para não bloquear quando a queda decorre de mudança em `fotos_selecionadas` legítima (já existe lógica via `confirm-selection`; basta permitir `total_fotos_extras_vendidas` igualar a `fotos_selecionadas - fotos_incluidas` mesmo se for menor que o anterior).
+
+**D) `reconcile_gallery_extras_counters`**: mesma troca da fonte de `qtd_fotos_extra`.
+
+### 2) Backfill da galeria afetada (mesma migration)
+
+DO block: para cada galeria com cobrança paga e `total_fotos_extras_vendidas <> fotos_selecionadas - fotos_incluidas`, atualizar para a seleção real e reexecutar `reconcile_gallery_extras_counters()`.
+
+### 3) Edge function `confirm-payment-manual` — defesa adicional (opcional, mas recomendada)
+
+Continuar gravando `qtd_fotos = 0` para manuais (não inferir do valor); a fonte de verdade passa a ser sempre a seleção. Adicionar comentário explícito no código documentando a decisão. Sem mudança de contrato externo.
+
+### 4) Lado Gestão (`Lunari_gestão`) — nada a alterar
+
+`useWorkflowPackageData` e `useAppointmentWorkflowInfo` leem `clientes_sessoes.qtd_fotos_extra`. A trigger `sync_gallery_extras_to_session` já propaga; basta a fonte estar correta. Realtime (`useSessionsRealtime`/`useWorkflowRealtime`) atualiza o card automaticamente.
 
 ## Resultado esperado para a galeria do teste
 
-| Antes | Depois |
-|---|---|
-| Resumo: "+7 extras / Valor a pagar R$ 14,00" | "+7 extras (1 já paga, 6 a pagar) / R$ 9,00" |
-| Status do Pagamento: "Pendente R$ 14,00" | "Pendente R$ 9,00" (ou nenhum, se ainda não houver nova cobrança) |
-| Comprovante R$ 5,00 visível | Continua visível (cobrança histórica intacta) |
-| Tela do cliente "Valor a pagar agora R$ 14,00" | "Valor a pagar agora R$ 9,00" |
-
-A sequência progressiva (R$5 → R$3 → R$2) volta a funcionar entre ciclos porque `totalExtras` agora reflete o histórico real.
+| | Antes | Depois |
+|---|---|---|
+| `galerias.total_fotos_extras_vendidas` | 2 | **4** |
+| `galerias.valor_total_vendido` | 12 | 12 (inalterado) |
+| `clientes_sessoes.qtd_fotos_extra` | 2 | **4** |
+| `clientes_sessoes.valor_foto_extra` (unit efetivo) | 6,00 | 3,00 (12 / 4) |
+| Card workflow Gestão | "2 extras" | **"4 extras"** |
 
 ## Garantias / não-regressão
 
-- **InfinitePay create-link e webhook NÃO são alterados** — só DB.
-- O contrato com Gestão (`clientes_sessoes`) continua sincronizado dentro da mesma RPC.
-- Trigger `tg_protect_no_overcharge` permanece ativo; após heal correto ele não bloqueia (R$5 + R$9 = R$14 ≤ teto progressivo).
-- Idempotência: `finalize_gallery_payment` já tem advisory lock + `extras_contabilizados`, é seguro chamar múltiplas vezes.
-- Galerias sem cobranças órfãs não sofrem mudança.
+- **InfinitePay e Asaas (create-link, webhooks)**: zero alteração — continuam gravando `qtd_fotos` próprio.
+- `tg_protect_no_overcharge`: continua válido (limita pelo valor unitário × extras, não pela contagem de pagos).
+- Idempotência de `finalize_gallery_payment`: mantida (advisory lock + flag).
+- Galerias finalizadas integralmente (qtd_fotos pagos = extras selecionados) ficam idênticas após o backfill.
+- Pagamento manual passa a fazer só o que diz o nome: atualiza status financeiro, não interfere na contagem de extras.
 
 ## Arquivos
 
-- `supabase/migrations/<novo>.sql` — atualiza `reopen_gallery_selection` + backfill DO block.
-- `src/hooks/useSupabaseGalleries.ts` — garantir invalidações pós-RPC (ajuste mínimo).
+- `supabase/migrations/<novo>.sql` — atualiza `finalize_gallery_payment`, `sync_gallery_extras_to_session`, `protect_gallery_extras_downgrade`, `reconcile_gallery_extras_counters` + DO block backfill + chamada `reconcile_gallery_extras_counters()`.
+- `supabase/functions/confirm-payment-manual/index.ts` — comentário de contrato (sem mudança funcional).
 
-Nenhum outro arquivo precisa mudar — UI já consome `extrasPagasTotal` / `extrasACobrar` / `valorJaPago` corretamente; bastam os números corretos no banco.
+Nenhuma outra alteração necessária.
