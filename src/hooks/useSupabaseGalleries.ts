@@ -784,7 +784,11 @@ export function useSupabaseGalleries() {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalida todas as queries que dependem dos contadores da galeria
+      // após reabertura (heal automático pode ter alterado totais/cobranças).
       queryClient.invalidateQueries({ queryKey: ['galerias'] });
+      queryClient.invalidateQueries({ queryKey: ['galeria-cobrancas-pagas'] });
+      queryClient.invalidateQueries({ queryKey: ['galeria-cobranca-pendente'] });
     },
   });
 
