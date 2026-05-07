@@ -865,14 +865,16 @@ export default function GalleryDetail() {
                 valorJaPago={valorJaPago}
               />
 
-              {/* Payment Status Card in Selection tab */}
-              {supabaseGallery.statusPagamento && supabaseGallery.statusPagamento !== 'sem_vendas' && (
+              {/* Payment Status Card — só aparece quando há saldo NOVO ou cobrança pendente atual.
+                  Histórico (valorTotalVendido) NÃO entra como pendente para evitar a falsa impressão
+                  de que o cliente deve novamente o que já pagou em ciclos anteriores. */}
+              {(calculatedExtraTotal > 0 || (cobrancaData && !['pago','pago_manual','cancelado'].includes(cobrancaData.status))) && (
                 <div className="mt-4">
                   <PaymentStatusCard
-                    status={supabaseGallery.statusPagamento}
+                    status={cobrancaData?.status || (calculatedExtraTotal > 0 ? 'pendente' : supabaseGallery.statusPagamento)}
                     provedor={cobrancaData?.provedor || cobrancasPagas[0]?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
-                    valor={calculatedExtraTotal > 0 ? calculatedExtraTotal : (supabaseGallery.valorTotalVendido || supabaseGallery.valorExtras || 0)}
-                    valorPago={valorJaPago}
+                    valor={calculatedExtraTotal}
+                    valorPago={0}
                     dataPagamento={cobrancasPagas[0]?.data_pagamento || cobrancaData?.data_pagamento}
                     receiptUrl={cobrancasPagas[0]?.ip_receipt_url || cobrancaData?.ip_receipt_url}
                     checkoutUrl={cobrancaData?.ip_checkout_url}
