@@ -196,8 +196,13 @@ export function ClientGalleryHeader({
               <span className="text-muted-foreground">/{includedPhotos} selecionadas</span>
             </span>
             {extraCount > 0 && (
-              <span className="text-primary font-medium">
+              <span className="text-primary font-medium flex items-center gap-1">
                 +{extraCount} extras
+                {extrasPagasAnteriormente > 0 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({extrasPagasAnteriormente} já pagas{typeof extrasACobrar === 'number' ? `, ${extrasACobrar} a pagar` : ''})
+                  </span>
+                )}
               </span>
             )}
           </div>
