@@ -32,6 +32,10 @@ interface ClientGalleryHeaderProps {
   selectedCount: number;
   includedPhotos: number;
   extraCount: number;
+  /** Quantidade de fotos extras já pagas em ciclo anterior (galeria reativada). */
+  extrasPagasAnteriormente?: number;
+  /** Quantidade de fotos extras a pagar nesta rodada (extraCount - extrasPagasAnteriormente). */
+  extrasACobrar?: number;
   studioLogoUrl?: string | null;
   studioName?: string | null;
   contactEmail?: string | null;
