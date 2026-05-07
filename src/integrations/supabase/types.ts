@@ -4588,6 +4588,10 @@ export type Database = {
         }
         Returns: Json
       }
+      reconcile_session_payments: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
       record_device_fingerprint: {
         Args: {
           _event_type?: string
