@@ -82,6 +82,11 @@ export function SelectionSummary({
             {isOverLimit && (
               <div className={cn("flex items-center gap-1 text-primary", isMobile ? "text-[10px]" : "text-sm")}>
                 <span className="font-medium">+{totalExtras}</span>
+                {extrasPagasTotal > 0 && (
+                  <span className={cn("text-muted-foreground font-normal", isMobile ? "text-[9px]" : "text-xs")}>
+                    (−{extrasPagasTotal} já pagas)
+                  </span>
+                )}
                 <span className="font-bold">R$ {displayTotal.toFixed(2)}</span>
               </div>
             )}
