@@ -1,161 +1,98 @@
-# Galerias reativadas — extras pagos contabilizados de novo (UI completa)
+# Galeria reativada cobra extras já pagas — causa raiz e correção
 
-## Confirmação dos pontos do usuário
+## Diagnóstico (validado no banco da galeria afetada)
 
-Investiguei especificamente o que o usuário levantou:
+**Galeria `ab834051-…`** (Teste, 8 selecionadas, 1 incluída, 7 extras).
+**Cobrança paga (1º ciclo)**: R$ 5,00 InfinitePay (`c86be48b`), `qtd_fotos = 0`, `extras_contabilizados = false`.
+**Galeria após reativação**: `total_fotos_extras_vendidas = 0`, `valor_total_vendido = 0`, `valor_extras = 5`.
 
-### 1. Painel do fotógrafo (já mapeado antes)
-`GalleryDetail.tsx` linha 874 usa fallback `valorTotalVendido` (R$ já pagos) quando `calculatedExtraTotal=0`. Resultado: card "Pendente R$ 50" para crédito que JÁ foi pago.
+### Por que acontece
+O webhook InfinitePay original gravou a cobrança com `qtd_fotos=0` e nunca chamou `finalize_gallery_payment` com sucesso (era a versão antiga, antes do auto-heal). Resultado:
 
-### 2. Contador do cliente durante seleção (NOVO ponto confirmado)
-- **`ClientGalleryHeader.tsx` (linhas 187‑197)** — mostra `+{extraCount} extras`. `extraCount = selectedCount - includedPhotos` inclui as fotos pagas no ciclo anterior, porque `reopenSelection` NÃO desmarca (`is_selected=true` é preservado na DB).
-- **`SelectionSummary.tsx` bottom-bar (linhas 78‑87)** — exibe `R$ {displayTotal.toFixed(2)}` que vem de `calcularPrecoProgressivoComCredito`. Esse cálculo já desconta `valorJaPago` corretamente, MAS depende do prop `extrasACobrar`. Se o `ClientGallery.tsx` passar `extrasACobrar` correto (linha 1709 — passa), o valor está certo. **Confirmei: o R$ no bottom-bar mostra apenas o saldo a cobrar.**
-- **Problema real**: o "+6 extras" no header dá impressão de que o cliente vai pagar 6 × R$25, quando só 4 são cobráveis. Falta exibir "+2 já pagas" no header.
+- `total_fotos_extras_vendidas` ficou `0` → não há crédito preservado.
+- `valor_total_vendido` ficou `0` → não há valor já pago registrado.
 
-### 3. Finalização cliente (`SelectionConfirmation.tsx`)
-Linhas 214-217 já mostram `+{extrasPagasAnteriormente}` em verde e linhas 221-224 mostram `{extraCount}` total. O cálculo está correto. Falta só evidenciar visualmente que o "Valor total ideal" não é o que será cobrado.
+Ao reabrir a galeria, a RPC `reopen_gallery_selection` preserva 0/0 (não havia o que preservar). O `confirm-selection` tem auto-heal, **mas ele só roda quando o cliente reconfirma a seleção** — no painel do fotógrafo (cobrar novamente / registrar recebimento) os números aparecem errados ANTES do cliente abrir a tela de seleção de novo.
 
-### 4. Backend (verificado, está correto)
-- `confirm-selection` linha 423: `extrasACobrar = max(0, extrasNecessarias - extrasPagasTotal)` ✅
-- `infinitepay-create-link`: recebe `qtdFotos: extrasACobrar` e cria cobrança apenas do delta ✅
-- `finalize_gallery_payment`: usa `SUM` das cobranças pagas, idempotente ✅
-- **Cobrança real está correta** — os R$ 100 cobrados eram só os 4 novos.
+Então o painel calcula:
+`extrasACobrar = 7 (necess) − 0 (pagas) = 7` → R$ 14,00 (correto: deveria ser 6 extras / R$ 9,00 com a sequência progressiva R$ 2,00/foto a partir da 5ª).
 
-### Conclusão
-**O backend NÃO duplica cobrança.** O cliente NÃO foi cobrado pelas 2 já pagas. Mas a UI em 3 lugares dá a impressão visual de duplicidade — o que é um bug de confiança do produto, igualmente grave.
+### Por que a sequência progressiva também quebra
+`calcularPrecoProgressivoComCredito` usa `totalExtras = extrasPagasTotal + extrasNovas`. Como `extrasPagasTotal=0`, ele entra na faixa errada (vê só 7 novas, calcula 7×R$2 = R$14, sem deduzir os R$5 já pagos). Após o heal, `totalExtras = 1 + 6 = 7`, entra corretamente na faixa "5+" (R$2/foto), aplica desconto e desconta o R$5 pago → **R$ 9,00**.
 
-## Correções
+## Correção (3 frentes)
 
-### A. Painel do fotógrafo (`GalleryDetail.tsx`)
-1. Remover fallback `valorTotalVendido` no prop `valor` do `PaymentStatusCard` (linhas 874 e 1104). Usar SOMENTE `calculatedExtraTotal`.
-2. Esconder o card quando `extrasACobrar === 0 && !cobrancaData`. Substituir condição atual baseada apenas em `statusPagamento`.
-3. Sempre exibir `valorJaPago` como "Crédito do ciclo anterior: R$ X" no `PaymentStatusCard` (informativo, não cobrável).
-
-### B. Header do cliente (`ClientGalleryHeader.tsx`)
-1. Adicionar prop `extrasPagasAnteriormente?: number`.
-2. Quando > 0, exibir badge informativo: `+{extraCount} extras` com tooltip/sub-label `({extrasPagasAnteriormente} já pagas, {extrasACobrar} a pagar)`.
-3. Receber a prop de `ClientGallery.tsx` (já existe `extrasPagasTotal` no escopo).
-
-### C. Bottom-bar (`SelectionSummary.tsx` variant=bottom-bar)
-1. Quando `extrasPagasTotal > 0`, exibir mini-segmento: `+{totalExtras}` com sub-texto `(−{extrasPagasTotal} já pagas)` em cor secundária.
-2. Confirmar que `displayTotal` reflete só o saldo a cobrar (já está, mas adicionar `data-testid` para testes).
-
-### D. Confirmação cliente (`SelectionConfirmation.tsx`)
-1. Reordenar exibição: mostrar PRIMEIRO "Valor a pagar agora: R$ {valorACobrar}" em destaque grande.
-2. Mover "Valor total ideal" e "Já pago" para uma seção colapsável "Ver detalhes do cálculo".
-3. Adicionar texto explicativo: `"Você já pagou R$ {valorJaPago} por {extrasPagasAnteriormente} foto(s) extras anteriormente. Agora pagará apenas o adicional."`
-
-### E. Hook — `reopenSelectionMutation` (useSupabaseGalleries.ts)
-1. Substituir UPDATEs separados pela nova RPC atômica `reopen_gallery_selection`.
-2. RPC além de cancelar pendentes, **também zera `valor_extras` da galeria** (limpa fallback contaminado) e preserva `total_fotos_extras_vendidas`/`valor_total_vendido`.
-
-### F. Backend — defesa em profundidade
-
-**Migration nova:**
+### 1) Migration — healing automático no momento da reabertura
+Atualizar `reopen_gallery_selection` para, **antes** de zerar `valor_extras` e gravar o snapshot de preservação:
 
 ```sql
--- 1) RPC atômica de reabertura
-CREATE OR REPLACE FUNCTION public.reopen_gallery_selection(
-  p_gallery_id uuid, p_days int
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_g RECORD; v_prazo timestamptz;
-BEGIN
-  SELECT * INTO v_g FROM galerias WHERE id=p_gallery_id FOR UPDATE;
-  IF v_g IS NULL THEN RAISE EXCEPTION 'Galeria não encontrada'; END IF;
-  IF v_g.user_id <> auth.uid() THEN RAISE EXCEPTION 'Acesso negado'; END IF;
-  v_prazo := now() + (p_days || ' days')::interval;
-  UPDATE galerias SET
-    status='selecao_iniciada', status_selecao='em_andamento',
-    status_pagamento='sem_vendas', prazo_selecao=v_prazo,
-    prazo_selecao_dias=p_days, finalized_at=NULL,
-    valor_extras=0,                    -- limpa fallback contaminado
-    updated_at=now()
-  WHERE id=p_gallery_id;
-  -- Cancela cobranças pendentes do ciclo anterior
-  UPDATE cobrancas SET status='cancelado', updated_at=now()
-   WHERE galeria_id=p_gallery_id AND status='pendente';
-  -- Sincroniza sessão
-  IF v_g.session_id IS NOT NULL THEN
-    UPDATE clientes_sessoes
-       SET status_galeria='em_selecao', status_pagamento_fotos_extra='sem_vendas',
-           updated_at=now()
-     WHERE session_id=v_g.session_id;
-  END IF;
-  -- Audit
-  INSERT INTO galeria_acoes(galeria_id,user_id,tipo,descricao)
-    VALUES (p_gallery_id, auth.uid(), 'selecao_reaberta',
-            FORMAT('Seleção reaberta (%s dias). Crédito preservado: %s extras / R$ %s',
-                   p_days, v_g.total_fotos_extras_vendidas, v_g.valor_total_vendido));
-  RETURN jsonb_build_object('success',true,
-    'creditos_extras', v_g.total_fotos_extras_vendidas,
-    'creditos_valor', v_g.valor_total_vendido);
-END $$;
+-- Antes do UPDATE galerias da reabertura:
+FOR v_c IN
+  SELECT id FROM cobrancas
+  WHERE galeria_id = p_gallery_id
+    AND status IN ('pago','pago_manual')
+    AND extras_contabilizados IS NOT TRUE
+LOOP
+  PERFORM public.finalize_gallery_payment(v_c.id, NULL, NULL, NULL, NULL);
+END LOOP;
 
--- 2) Trigger anti-overcharge: bloqueia INSERT de cobrança que excederia o devido
-CREATE OR REPLACE FUNCTION public.tg_protect_no_overcharge()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_g RECORD; v_pago numeric; v_max numeric; v_extras_necess int;
-BEGIN
-  IF NEW.galeria_id IS NULL OR COALESCE(NEW.valor,0)<=0 THEN RETURN NEW; END IF;
-  IF NEW.tipo_cobranca NOT IN ('foto_extra','link','venda_galeria') THEN RETURN NEW; END IF;
-  SELECT * INTO v_g FROM galerias WHERE id=NEW.galeria_id;
-  IF v_g IS NULL THEN RETURN NEW; END IF;
-  v_extras_necess := GREATEST(0,
-    COALESCE(v_g.fotos_selecionadas,0) - COALESCE(v_g.fotos_incluidas,0));
-  v_max := v_extras_necess * COALESCE(v_g.valor_foto_extra,0);
-  SELECT COALESCE(SUM(valor),0) INTO v_pago
-    FROM cobrancas WHERE galeria_id=NEW.galeria_id
-      AND status IN ('pago','pago_manual') AND id<>NEW.id;
-  IF v_max > 0 AND (v_pago + NEW.valor) > v_max + 0.01 THEN
-    RAISE EXCEPTION 'Cobrança excederia o saldo devido. Pago=R$% + Nova=R$% > Max=R$%',
-      v_pago, NEW.valor, v_max;
-  END IF;
-  RETURN NEW;
-END $$;
-CREATE TRIGGER trg_protect_no_overcharge BEFORE INSERT ON cobrancas
-  FOR EACH ROW EXECUTE FUNCTION tg_protect_no_overcharge();
+-- Reler galeria DEPOIS do heal para capturar contadores reais
+SELECT * INTO v_g FROM galerias WHERE id = p_gallery_id FOR UPDATE;
 ```
 
-### G. Edge function — `confirm-selection`
-Adicionar log estruturado quando `extrasACobrar=0 && extrasNecessarias>0` (crédito cobre tudo) — pular criação de cobrança e marcar `status='selecao_completa'` direto. Validar com sanity check `valorTotal === extrasACobrar × valorUnitario`.
+A `finalize_gallery_payment` já infere `qtd_fotos` quando 0 (via descrição "1 foto extra" ou via `valor / valor_foto_extra`). Após o heal:
+- `total_fotos_extras_vendidas` ← soma real (1 no caso da galeria afetada)
+- `valor_total_vendido` ← R$ 5,00
+- `extras_contabilizados=true` na cobrança histórica.
 
-## Snippet UI principal (GalleryDetail)
+Em seguida o `UPDATE galerias` da reabertura só zera `valor_extras` (saldo do ciclo) e mantém `total_fotos_extras_vendidas` / `valor_total_vendido` intactos. O comprovante (`ip_receipt_url`) continua acessível porque a cobrança paga não é tocada.
 
-```tsx
-const temSaldoNovo = extrasACobrar > 0 && calculatedExtraTotal > 0;
-const temCobrancaPendente = !!cobrancaData;
-const mostrarCard = temSaldoNovo || temCobrancaPendente;
+### 2) Migration — backfill da galeria já afetada
+Mesma migration, no final, executa o heal pontual para destravar a galeria `ab834051-…` agora (antes do próximo ciclo):
 
-{mostrarCard && (
-  <PaymentStatusCard
-    valor={calculatedExtraTotal}        // SEM fallback para valorTotalVendido
-    valorPago={valorJaPago}             // só histórico/exibição
-    saldoPendente={calculatedExtraTotal}
-    extraCount={extrasACobrar}
-    cobrancaId={cobrancaData?.id}
-    ...
-  />
-)}
+```sql
+DO $$
+DECLARE v_c uuid;
+BEGIN
+  FOR v_c IN
+    SELECT c.id FROM cobrancas c
+    WHERE c.status IN ('pago','pago_manual')
+      AND c.extras_contabilizados IS NOT TRUE
+      AND c.galeria_id IS NOT NULL
+  LOOP
+    BEGIN PERFORM public.finalize_gallery_payment(v_c, NULL, NULL, NULL, NULL);
+    EXCEPTION WHEN OTHERS THEN NULL; END;
+  END LOOP;
+END $$;
 ```
 
-## Arquivos modificados
+Isso conserta TODAS as galerias com cobranças pagas órfãs (não só a do teste), de qualquer provedor.
 
-- `src/pages/GalleryDetail.tsx` — condição de exibição + props (2 ocorrências).
-- `src/components/PaymentStatusCard.tsx` — exibir crédito anterior informativo, esconder ações se saldo=0.
-- `src/components/ClientGalleryHeader.tsx` — nova prop `extrasPagasAnteriormente`, exibir desconto visual.
-- `src/components/SelectionSummary.tsx` — bottom-bar mostra `(−X já pagas)`.
-- `src/components/SelectionConfirmation.tsx` — destacar saldo, colapsar detalhes do total.
-- `src/pages/ClientGallery.tsx` — passar `extrasPagasTotal` ao `ClientGalleryHeader`.
-- `src/hooks/useSupabaseGalleries.ts` — `reopenSelectionMutation` chama RPC atômica.
-- `supabase/migrations/<novo>.sql` — RPC `reopen_gallery_selection` + trigger `tg_protect_no_overcharge`.
-- `supabase/functions/confirm-selection/index.ts` — sanity check + log quando crédito cobre tudo.
+### 3) Defesa adicional na invalidação após reabertura
+Em `useSupabaseGalleries.ts > reopenSelectionMutation`: após a RPC, invalidar `['galerias']`, `['galeria-cobrancas-pagas']` e `['galeria-cobranca-pendente']` (algumas já estão; garantir as três). Sem isso o painel pode mostrar valores cacheados.
 
-**Não tocar:** `infinitepay-create-link`, `infinitepay-webhook`, `finalize_gallery_payment`, contrato compartilhado com Gestão preservado.
+## Resultado esperado para a galeria do teste
 
-## Validação manual
+| Antes | Depois |
+|---|---|
+| Resumo: "+7 extras / Valor a pagar R$ 14,00" | "+7 extras (1 já paga, 6 a pagar) / R$ 9,00" |
+| Status do Pagamento: "Pendente R$ 14,00" | "Pendente R$ 9,00" (ou nenhum, se ainda não houver nova cobrança) |
+| Comprovante R$ 5,00 visível | Continua visível (cobrança histórica intacta) |
+| Tela do cliente "Valor a pagar agora R$ 14,00" | "Valor a pagar agora R$ 9,00" |
 
-1. Galeria reativada com 2 extras pagas: painel não mostra "Pendente R$ 50".
-2. Cliente abre galeria reativada: header mostra "+6 extras (2 já pagas)", bottom-bar mostra `R$ 100` (não R$ 150).
-3. Cliente confirma: tela final destaca "Valor a pagar agora: R$ 100" — detalhamento colapsado.
-4. Trigger DB: tentativa de inserir cobrança extra que excede saldo é bloqueada com erro claro.
-5. Fluxo normal de galeria nova (sem crédito) permanece idêntico.
+A sequência progressiva (R$5 → R$3 → R$2) volta a funcionar entre ciclos porque `totalExtras` agora reflete o histórico real.
+
+## Garantias / não-regressão
+
+- **InfinitePay create-link e webhook NÃO são alterados** — só DB.
+- O contrato com Gestão (`clientes_sessoes`) continua sincronizado dentro da mesma RPC.
+- Trigger `tg_protect_no_overcharge` permanece ativo; após heal correto ele não bloqueia (R$5 + R$9 = R$14 ≤ teto progressivo).
+- Idempotência: `finalize_gallery_payment` já tem advisory lock + `extras_contabilizados`, é seguro chamar múltiplas vezes.
+- Galerias sem cobranças órfãs não sofrem mudança.
+
+## Arquivos
+
+- `supabase/migrations/<novo>.sql` — atualiza `reopen_gallery_selection` + backfill DO block.
+- `src/hooks/useSupabaseGalleries.ts` — garantir invalidações pós-RPC (ajuste mínimo).
+
+Nenhum outro arquivo precisa mudar — UI já consome `extrasPagasTotal` / `extrasACobrar` / `valorJaPago` corretamente; bastam os números corretos no banco.
