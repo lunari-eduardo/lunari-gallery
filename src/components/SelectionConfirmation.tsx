@@ -240,23 +240,33 @@ export function SelectionConfirmation({
             {hasCharge ? (
               <div className="space-y-2">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-base font-medium">Total adicional</span>
-                  <span className="text-xl font-bold text-primary">
+                  <span className="text-base font-medium">Valor a pagar agora</span>
+                  <span className="text-2xl font-bold text-primary">
                     R$ {priceInfo.total.toFixed(2)}
                   </span>
                 </div>
-                
+
                 {valorJaPago > 0 && (
-                  <div className="space-y-1 mt-2">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Valor total ({totalExtras} fotos)</span>
-                      <span>R$ {priceInfo.valorTotalIdeal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Já pago anteriormente</span>
-                      <span className="text-green-600 dark:text-green-400">- R$ {valorJaPago.toFixed(2)}</span>
-                    </div>
-                  </div>
+                  <>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Você já pagou R$ {valorJaPago.toFixed(2)} por {extrasPagasAnteriormente} foto{extrasPagasAnteriormente === 1 ? '' : 's'} extra{extrasPagasAnteriormente === 1 ? '' : 's'} anteriormente. Agora paga apenas o adicional.
+                    </p>
+                    <details className="mt-2 text-xs text-muted-foreground">
+                      <summary className="cursor-pointer select-none hover:text-foreground transition-colors">
+                        Ver detalhes do cálculo
+                      </summary>
+                      <div className="mt-2 space-y-1 pl-2 border-l-2 border-border/40">
+                        <div className="flex justify-between">
+                          <span>Valor total ({totalExtras} fotos)</span>
+                          <span>R$ {priceInfo.valorTotalIdeal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Já pago anteriormente</span>
+                          <span className="text-green-600 dark:text-green-400">- R$ {valorJaPago.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </details>
+                  </>
                 )}
               </div>
             ) : (
