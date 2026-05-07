@@ -59,6 +59,8 @@ export function ClientGalleryHeader({
   selectedCount,
   includedPhotos,
   extraCount,
+  extrasPagasAnteriormente = 0,
+  extrasACobrar,
   studioLogoUrl,
   studioName,
   contactEmail,
