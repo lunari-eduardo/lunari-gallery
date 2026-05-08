@@ -832,7 +832,10 @@ export default function GalleryCreate() {
         if (isAssistedMode && !regrasLoaded) {
           return;
         }
-        await createSupabaseGalleryForUploads();
+        // Gate por ref evita corrida entre cliques rápidos / StrictMode
+        if (creatingGalleryRef.current) return;
+        const ok = await createSupabaseGalleryForUploads();
+        if (!ok) return; // não avança se falhou
       }
 
       // Block advancing from step 4 (Fotos) with pending uploads or errors
