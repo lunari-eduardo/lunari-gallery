@@ -782,7 +782,7 @@ export default function ClientGallery() {
     
     return () => {
       if (paymentRetryRef.current) {
-        clearInterval(paymentRetryRef.current);
+        clearTimeout(paymentRetryRef.current as unknown as number);
         paymentRetryRef.current = null;
       }
     };
