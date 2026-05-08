@@ -301,7 +301,24 @@ export function useSupabaseGalleries() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
-      const { data: result, error } = await supabase
+      // Idempotência server-aware: se já existe galeria para esta sessão+user, reutiliza
+      if (data.sessionId) {
+        const { data: existing } = await supabase
+          .from('galerias')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('session_id', data.sessionId)
+          .maybeSingle();
+        if (existing) {
+          if (existing.status !== 'rascunho') {
+            throw new Error('Já existe uma galeria publicada para esta sessão');
+          }
+          console.log('♻️ Reusing existing draft gallery for session:', data.sessionId);
+          return transformGaleria(existing);
+        }
+      }
+
+      const insertResult = await supabase
         .from('galerias')
         .insert([{
           user_id: user.id,
