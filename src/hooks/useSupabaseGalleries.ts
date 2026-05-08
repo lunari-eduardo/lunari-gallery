@@ -343,8 +343,27 @@ export function useSupabaseGalleries() {
         .select()
         .single();
 
+      let result = insertResult.data;
+      let error = insertResult.error;
+
+      // Recovery em caso de race que escapa da pré-checagem (UNIQUE 23505)
+      if (error && (error as any).code === '23505' && data.sessionId) {
+        console.warn('⚠️ 23505 caught — recovering existing gallery for session:', data.sessionId);
+        const { data: recovered, error: recoverErr } = await supabase
+          .from('galerias')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('session_id', data.sessionId)
+          .maybeSingle();
+        if (recovered) {
+          return transformGaleria(recovered);
+        }
+        if (recoverErr) throw recoverErr;
+      }
+
       if (error) throw error;
-      
+      if (!result) throw new Error('Falha ao criar galeria');
+
       // If gallery was created from Gestão session, link it to clientes_sessoes
       // Note: sessionId from URL is the workflow string 'session_id' column
       if (data.sessionId && result.id) {
@@ -355,7 +374,8 @@ export function useSupabaseGalleries() {
             status_galeria: 'enviada',
             updated_at: new Date().toISOString(),
           })
-          .eq('session_id', data.sessionId);
+          .eq('session_id', data.sessionId)
+          .eq('user_id', user.id);
         
         if (sessionLinkError) {
           console.error('Error linking gallery to session:', sessionLinkError);
