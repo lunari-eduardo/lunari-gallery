@@ -770,34 +770,48 @@ export default function GalleryCreate() {
       if (result?.id) {
         setSupabaseGalleryId(result.id);
         
-        // Auto-create default folder with session name
+        // Auto-create default folder with session name (idempotente — verifica se já existe)
         try {
           const { data: { user: currentUser } } = await supabase.auth.getUser();
           if (currentUser) {
-            const folderName = sessionName?.trim() || 'Todas as fotos';
-            const { data: folder } = await supabase
+            const { data: existingFolders } = await supabase
               .from('galeria_pastas')
-              .insert({
-                galeria_id: result.id,
-                user_id: currentUser.id,
-                nome: folderName,
-                ordem: 0,
-              })
-              .select()
-              .single();
-            if (folder) {
-              setActiveFolderId(folder.id);
+              .select('id')
+              .eq('galeria_id', result.id)
+              .order('ordem', { ascending: true })
+              .limit(1);
+            if (existingFolders && existingFolders.length > 0) {
+              setActiveFolderId(existingFolders[0].id);
+            } else {
+              const folderName = sessionName?.trim() || 'Todas as fotos';
+              const { data: folder } = await supabase
+                .from('galeria_pastas')
+                .insert({
+                  galeria_id: result.id,
+                  user_id: currentUser.id,
+                  nome: folderName,
+                  ordem: 0,
+                })
+                .select()
+                .single();
+              if (folder) {
+                setActiveFolderId(folder.id);
+              }
             }
           }
         } catch (err) {
           console.error('Error creating default folder:', err);
         }
+        return true;
       }
-    } catch (error) {
+      return false;
+    } catch (error: any) {
       console.error('Error creating gallery:', error);
-      toast.error('Erro ao criar galeria para upload');
+      toast.error(error?.message || 'Erro ao criar galeria para upload');
+      return false;
     } finally {
       setIsCreatingGallery(false);
+      creatingGalleryRef.current = false;
     }
   };
   const handleNext = async () => {
