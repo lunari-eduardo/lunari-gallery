@@ -673,13 +673,15 @@ export default function GalleryCreate() {
     paymentMethod: saleMode === 'sale_with_payment' ? selectedPaymentMethod || undefined : undefined
   });
   // Create Supabase gallery when entering step 3 (for uploads)
-  const createSupabaseGalleryForUploads = async () => {
+  const createSupabaseGalleryForUploads = async (): Promise<boolean> => {
     // For private galleries, client selection is required (for ALL plans)
     if (galleryPermission === 'private' && !selectedClient) {
       toast.error('Selecione um cliente para galeria privada');
-      return;
+      return false;
     }
-    if (supabaseGalleryId) return;
+    if (supabaseGalleryId) return true;
+    if (creatingGalleryRef.current) return false;
+    creatingGalleryRef.current = true;
     setIsCreatingGallery(true);
     try {
       // Determine password for private gallery
