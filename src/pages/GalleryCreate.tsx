@@ -217,6 +217,7 @@ export default function GalleryCreate() {
   const [uploadedCount, setUploadedCount] = useState(0);
   const [supabaseGalleryId, setSupabaseGalleryId] = useState<string | null>(null);
   const [isCreatingGallery, setIsCreatingGallery] = useState(false);
+  const creatingGalleryRef = useRef(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [showUploadedPhotos, setShowUploadedPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
@@ -672,13 +673,15 @@ export default function GalleryCreate() {
     paymentMethod: saleMode === 'sale_with_payment' ? selectedPaymentMethod || undefined : undefined
   });
   // Create Supabase gallery when entering step 3 (for uploads)
-  const createSupabaseGalleryForUploads = async () => {
+  const createSupabaseGalleryForUploads = async (): Promise<boolean> => {
     // For private galleries, client selection is required (for ALL plans)
     if (galleryPermission === 'private' && !selectedClient) {
       toast.error('Selecione um cliente para galeria privada');
-      return;
+      return false;
     }
-    if (supabaseGalleryId) return;
+    if (supabaseGalleryId) return true;
+    if (creatingGalleryRef.current) return false;
+    creatingGalleryRef.current = true;
     setIsCreatingGallery(true);
     try {
       // Determine password for private gallery
@@ -767,34 +770,48 @@ export default function GalleryCreate() {
       if (result?.id) {
         setSupabaseGalleryId(result.id);
         
-        // Auto-create default folder with session name
+        // Auto-create default folder with session name (idempotente — verifica se já existe)
         try {
           const { data: { user: currentUser } } = await supabase.auth.getUser();
           if (currentUser) {
-            const folderName = sessionName?.trim() || 'Todas as fotos';
-            const { data: folder } = await supabase
+            const { data: existingFolders } = await supabase
               .from('galeria_pastas')
-              .insert({
-                galeria_id: result.id,
-                user_id: currentUser.id,
-                nome: folderName,
-                ordem: 0,
-              })
-              .select()
-              .single();
-            if (folder) {
-              setActiveFolderId(folder.id);
+              .select('id')
+              .eq('galeria_id', result.id)
+              .order('ordem', { ascending: true })
+              .limit(1);
+            if (existingFolders && existingFolders.length > 0) {
+              setActiveFolderId(existingFolders[0].id);
+            } else {
+              const folderName = sessionName?.trim() || 'Todas as fotos';
+              const { data: folder } = await supabase
+                .from('galeria_pastas')
+                .insert({
+                  galeria_id: result.id,
+                  user_id: currentUser.id,
+                  nome: folderName,
+                  ordem: 0,
+                })
+                .select()
+                .single();
+              if (folder) {
+                setActiveFolderId(folder.id);
+              }
             }
           }
         } catch (err) {
           console.error('Error creating default folder:', err);
         }
+        return true;
       }
-    } catch (error) {
+      return false;
+    } catch (error: any) {
       console.error('Error creating gallery:', error);
-      toast.error('Erro ao criar galeria para upload');
+      toast.error(error?.message || 'Erro ao criar galeria para upload');
+      return false;
     } finally {
       setIsCreatingGallery(false);
+      creatingGalleryRef.current = false;
     }
   };
   const handleNext = async () => {
@@ -815,7 +832,10 @@ export default function GalleryCreate() {
         if (isAssistedMode && !regrasLoaded) {
           return;
         }
-        await createSupabaseGalleryForUploads();
+        // Gate por ref evita corrida entre cliques rápidos / StrictMode
+        if (creatingGalleryRef.current) return;
+        const ok = await createSupabaseGalleryForUploads();
+        if (!ok) return; // não avança se falhou
       }
 
       // Block advancing from step 4 (Fotos) with pending uploads or errors
