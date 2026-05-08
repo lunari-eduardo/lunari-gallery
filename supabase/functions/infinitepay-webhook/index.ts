@@ -387,12 +387,14 @@ Deno.serve(async (req: Request) => {
     console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
     await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, cobranca.id);
 
-    // Update webhook log to success
+    // Update webhook log to success — captura gallery_synced=false para observabilidade
     if (initialLogId) {
+      const gallerySynced = (rpcResult as { gallery_synced?: boolean })?.gallery_synced;
       await supabase.from('webhook_logs')
-        .update({ 
-          status: 'processed', 
-          processed_at: new Date().toISOString()
+        .update({
+          status: 'processed',
+          processed_at: new Date().toISOString(),
+          error_message: gallerySynced === false ? 'RPC returned gallery_synced=false' : null,
         })
         .eq('id', initialLogId);
     }
