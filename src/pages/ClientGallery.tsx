@@ -738,11 +738,11 @@ export default function ClientGallery() {
               )
               .subscribe();
 
-            // Fallback polling every 60s (safety net if realtime misses)
+            // Polling adaptativo: 3s nos primeiros 30s, depois 60s (safety net)
             const startTime = Date.now();
-            paymentRetryRef.current = setInterval(async () => {
+            const tick = async () => {
               if (Date.now() - startTime > 10 * 60 * 1000) {
-                if (paymentRetryRef.current) clearInterval(paymentRetryRef.current);
+                if (paymentRetryRef.current) clearTimeout(paymentRetryRef.current as unknown as number);
                 supabase.removeChannel(channel);
                 return;
               }
@@ -754,16 +754,21 @@ export default function ClientGallery() {
                 });
                 const retryResult = await retryResponse.json();
                 if (retryResult.status === 'pago' || retryResult.updated) {
-                  if (paymentRetryRef.current) clearInterval(paymentRetryRef.current);
+                  if (paymentRetryRef.current) clearTimeout(paymentRetryRef.current as unknown as number);
                   supabase.removeChannel(channel);
                   setCurrentStep('confirmed');
                   setIsConfirmed(true);
                   refetchGallery();
+                  return;
                 }
               } catch (e) {
                 console.error('[Auto-retry] Error:', e);
               }
-            }, 60000);
+              const elapsed = Date.now() - startTime;
+              const nextDelay = elapsed < 30_000 ? 3_000 : 60_000;
+              paymentRetryRef.current = setTimeout(tick, nextDelay) as unknown as ReturnType<typeof setInterval>;
+            };
+            paymentRetryRef.current = setTimeout(tick, 3_000) as unknown as ReturnType<typeof setInterval>;
           }
         } catch (error) {
           console.error('❌ Erro ao verificar pagamento:', error);
