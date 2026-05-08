@@ -217,6 +217,7 @@ export default function GalleryCreate() {
   const [uploadedCount, setUploadedCount] = useState(0);
   const [supabaseGalleryId, setSupabaseGalleryId] = useState<string | null>(null);
   const [isCreatingGallery, setIsCreatingGallery] = useState(false);
+  const creatingGalleryRef = useRef(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [showUploadedPhotos, setShowUploadedPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
