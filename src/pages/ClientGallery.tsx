@@ -728,7 +728,7 @@ export default function ClientGallery() {
                 (payload) => {
                   if ((payload.new as any).status === 'pago') {
                     console.log('✅ Realtime: pagamento confirmado');
-                    if (paymentRetryRef.current) clearInterval(paymentRetryRef.current);
+                    if (paymentRetryRef.current) clearTimeout(paymentRetryRef.current as unknown as number);
                     supabase.removeChannel(channel);
                     setCurrentStep('confirmed');
                     setIsConfirmed(true);
