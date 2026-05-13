@@ -790,6 +790,8 @@ export type Database = {
           desconto: number | null
           descricao: string | null
           detalhes: string | null
+          extras_overridden: boolean
+          extras_overridden_at: string | null
           galeria_id: string | null
           hora_sessao: string
           id: string
@@ -824,6 +826,8 @@ export type Database = {
           desconto?: number | null
           descricao?: string | null
           detalhes?: string | null
+          extras_overridden?: boolean
+          extras_overridden_at?: string | null
           galeria_id?: string | null
           hora_sessao: string
           id?: string
@@ -858,6 +862,8 @@ export type Database = {
           desconto?: number | null
           descricao?: string | null
           detalhes?: string | null
+          extras_overridden?: boolean
+          extras_overridden_at?: string | null
           galeria_id?: string | null
           hora_sessao?: string
           id?: string
