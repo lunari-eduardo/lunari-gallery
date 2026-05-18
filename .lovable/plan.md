@@ -1,77 +1,113 @@
-# Investigação: uso alto de Database Size
+# Investigação: erros no upload de imagens em galerias
 
-## Diagnóstico
+## Causa raiz identificada
 
-DB total: **0.6 GB**. Distribuição real:
+Olhando o console do print, há **três sintomas** acontecendo ao mesmo tempo:
 
-| Objeto | Tamanho | % | Observação |
-|---|---|---|---|
-| `cron.job_run_details` | 340 MB | 55.6% | 301.827 linhas desde 04/fev/2026, **nunca foi limpo** |
-| `net._http_response` | 193 MB | 31.5% | Apenas 792 linhas (6h) — `n_live_tup=0`, **bloat severo, autovacuum nunca rodou** |
-| `public.galeria_fotos` | 16 MB | 2.5% | Normal |
-| Demais tabelas `public.*` | ~25 MB | ~4% | Normal |
+### 1. ❌ CORS bloqueando watermark do sistema (CAUSA PRIMÁRIA das falhas)
+```
+Access to image at 'https://media.lunarihub.com/system-assets/default-watermark-h.png'
+from origin 'https://gallery.lunarihub.com' has been blocked by CORS policy:
+No 'Access-Control-Allow-Origin' header is present
+```
 
-**87% do banco é overhead operacional de cron + net.http**, não dados de negócio.
+No `src/lib/imageCompression.ts` (linha 69) o watermark é carregado com `img.crossOrigin = 'anonymous'` — obrigatório porque depois o Canvas precisa exportar `toBlob`. Se o asset não vier com header `Access-Control-Allow-Origin: *`, o navegador rejeita.
 
-## Causas-raiz identificadas
+E em `processItem` (linha 358-361):
+```ts
+if (this.opts.watermarkConfig && this.opts.watermarkConfig.mode !== 'none') {
+  throw err; // Watermark is mandatory – do not fallback
+}
+```
+→ Quando o watermark falha, **a foto inteira falha**.
 
-### 1. Jobs duplicados rodando `process-photos` a cada minuto
-- **jobid 7** — `body: {batchSize: 10}`, **service_role_key hardcoded no SQL** (risco de segurança).
-- **jobid 8** — `body: {batchSize: 1}`, usa `current_setting('app.settings.service_role_key')`.
-- Ambos ativos, schedule `* * * * *`. Geram **2 execuções/min × 90 dias ≈ 280k linhas** em `cron.job_run_details` (93% do total dessa tabela).
+**Por que algumas falham e outras não, no mesmo computador?**
+Race com o cache do navegador: o primeiro request da watermark é feito quase em paralelo para várias fotos. O navegador faz uma busca de rede sem CORS válido, armazena em cache como "não-CORS", e os requests subsequentes com `crossOrigin='anonymous'` falham. Já em sessões anteriores o asset pode estar em cache válido — por isso "só uma falhou" no seu PC e **todas falham no outro PC** (cache limpo / regras de cache diferentes).
 
-### 2. `cron.job_run_details` sem retention
-pg_cron não limpa histórico automaticamente. Cresce ~3.300 linhas/dia (com os 4 jobs ativos).
+A pista definitiva está no próprio console:
+```
+GET https://media.lunarihub.com/system-assets/default-watermark-h.png
+net::ERR_FAILED 200 (OK)
+```
+HTTP 200, mas falhou no canvas pela ausência do header CORS.
 
-### 3. `net._http_response` com bloat de tabela
-Heap de 188 MB com `n_live_tup=0` e `last_autovacuum=NULL`. A pg_net faz expurgo lógico mas o espaço físico nunca foi recuperado. Precisa `VACUUM FULL`.
+### 2. ❌ Worker desatualizado em produção — `POST /upload-cover` 404
+```
+POST https://cdn.lunarihub.com/upload-cover 404 (Not Found)
+```
+O código fonte do worker (`cloudflare/workers/gallery-upload/index.ts` linha 707) tem a rota, mas o worker em produção retorna 404 → **deploy desatualizado**. Esse upload é "best effort" (não quebra a foto), mas polui o console e impede que galerias usem covers sem watermark.
 
-### 4. Outros jobs ativos (saudáveis)
-- jobid 9 — `autentique-cron-sync`, a cada 5 min (3.634 runs).
-- jobid 10 — `google-calendar-sync-worker`, a cada 1 min (15.762 runs).
+### 3. ⚠️ Botão "Tentar novamente" parece inerte
+A lógica em `retry()` está correta (reseta status, chama `tick()`). O motivo dele "não fazer nada" visualmente é que a falha é instantânea: o watermark já está marcado como erro no cache do navegador, então o retry falha em milissegundos e o item volta ao estado de erro. **Não é bug do botão — é o mesmo problema #1 se repetindo.**
 
-### Itens verificados — sem problema
-- Webhooks chamando a si mesmos: não encontrado.
-- Edge functions com retry agressivo: `webhook_logs` tem só 640 KB.
-- Triggers em UPDATE desnecessários: tabelas `public.*` totalizam <30 MB, não há sinal de write-amplification.
-- Logs aplicacionais (`audit_log`, `galeria_acoes`): <1 MB cada.
+---
 
 ## Plano de correção
 
-### Etapa 1 — Unificar process-photos (elimina 50% do crescimento futuro)
-- `cron.unschedule(7)` — remove o job duplicado com service_role_key hardcoded.
-- Manter **apenas jobid 8** (que usa `current_setting`, mais seguro).
-- Ajustar `batchSize` do jobid 8 para `10` (valor original do job 7) para não regredir throughput.
+### Etapa 1 — Configurar CORS no bucket R2 `lunari-previews` (correção crítica)
+Esta correção é fora do código (painel Cloudflare R2 → bucket `lunari-previews` → Settings → CORS Policy). Adicionar:
 
-### Etapa 2 — Limpeza imediata (libera ~530 MB)
-```sql
--- Apaga histórico de cron com mais de 7 dias
-DELETE FROM cron.job_run_details WHERE start_time < now() - interval '7 days';
-VACUUM FULL cron.job_run_details;
-
--- Recupera espaço físico do net._http_response (já está logicamente vazio)
-VACUUM FULL net._http_response;
+```json
+[
+  {
+    "AllowedOrigins": [
+      "https://gallery.lunarihub.com",
+      "https://lunari-gallery.lovable.app",
+      "https://*.lovable.app",
+      "http://localhost:*"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
 ```
-Resultado esperado: DB cai de **0.6 GB → ~0.07 GB**.
 
-### Etapa 3 — Retention recorrente (impede recorrência)
-Novo cron diário (03:00 UTC):
-```sql
-SELECT cron.schedule('cleanup-cron-history','0 3 * * *', $$
-  DELETE FROM cron.job_run_details WHERE start_time < now() - interval '7 days';
-$$);
+Vou te passar o passo-a-passo exato após aprovação do plano. **Sem isto, qualquer ajuste em código continuará falhando para navegadores sem cache.**
+
+### Etapa 2 — Redeploy do Cloudflare Worker `gallery-upload`
+A rota `/upload-cover` existe no fonte mas não em produção. Solução: rodar `wrangler deploy` no diretório `cloudflare/workers/gallery-upload/`. Vou te passar o comando exato.
+
+### Etapa 3 — Hardening no `imageCompression.ts` (defesa em profundidade)
+Mudanças mínimas para tornar o upload resiliente mesmo se o CORS voltar a falhar no futuro:
+
+1. **Fetch + Blob URL para watermark do sistema**: em vez de carregar a imagem direto pela URL com `crossOrigin`, fazer `fetch(url)` → `URL.createObjectURL(blob)` → carregar no `<img>`. Isso isola o problema de CORS de imagem (o `fetch` de assets públicos via mesma origem que aceita `*` funciona melhor com Workers/R2).
+2. **Retry com cache-buster** dentro do `loadImageFromUrl`: se o primeiro `onerror` disparar, tentar novamente com `?cb=<timestamp>` para forçar bypass do cache "envenenado".
+3. **Mensagem de erro mais clara**: em vez de "Erro ao enviar", mostrar "Falha ao carregar marca d'água — recarregue a página" para o usuário entender que F5 resolve.
+
+### Etapa 4 — Robustecer botão "Tentar novamente" no `uploadPipeline.ts`
+- Ao chamar `retry()`, **invalidar o cache local** do watermark loader (ver Etapa 3) para que a próxima tentativa busque a watermark do zero.
+- Após 3 retries com a mesma causa (watermark CORS), exibir mensagem específica em vez de simplesmente desabilitar o botão.
+
+### Etapa 5 — Verificação
+1. Limpar cache do navegador no PC problemático.
+2. Subir 5+ fotos numa galeria de teste com watermark sistema.
+3. Confirmar zero erros 4xx/CORS no console.
+4. Testar botão "Tentar novamente" forçando falha (offline momentâneo).
+
+---
+
+## Arquivos a alterar (código)
+
+```text
+src/lib/imageCompression.ts        ← loadImageFromUrl via fetch+blob, retry com cache-buster
+src/lib/uploadPipeline.ts          ← reset de cache do watermark no retry()
+src/components/PhotoUploader.tsx   ← mensagem específica para falha de watermark
 ```
-A pg_net já faz expurgo próprio de `_http_response` (TTL ~6h confirmado pelas métricas).
 
-### Etapa 4 — Hardening
-- Conferir e remover qualquer outro lugar onde `service_role_key` esteja em texto puro em comandos de cron.
-- Documentar política: novos cron jobs devem usar `current_setting('app.settings.service_role_key')` ou Vault.
+**Fora do código (ações suas no Cloudflare):**
+- Aplicar política CORS no bucket R2 `lunari-previews`
+- Redeploy do Worker `gallery-upload`
 
-## Arquivos
-- 1 migration nova em `supabase/migrations/` contendo: `unschedule(7)`, ajuste do jobid 8 (batchSize=10), DELETE + VACUUM FULL nas duas tabelas, e o `cron.schedule` de retention.
+---
 
-## Impacto
-- **-87% no tamanho do DB** imediatamente.
-- **-50% na taxa de crescimento de cron history** ao remover o job duplicado.
-- Crescimento estabilizado em ~7 dias × 4.300 runs/dia ≈ 30k linhas máx (~30 MB), com poda diária automática.
-- Bônus de segurança: remove service_role_key em texto puro do catálogo do banco.
+## Resumo executivo
+
+| Problema | Causa | Correção |
+|---|---|---|
+| Fotos falham (1 ou todas) | CORS ausente em `media.lunarihub.com` para asset de watermark | Configurar CORS no R2 + fetch+blob no client |
+| `POST /upload-cover` 404 | Worker em produção desatualizado | `wrangler deploy` |
+| "Tentar novamente" inerte | Cache do navegador envenenado pelo erro CORS | Cache-buster + reset no retry |
+
+Aprovando, eu já implemento as Etapas 3, 4 e 5 (código) e te passo os comandos exatos das Etapas 1 e 2 (Cloudflare).
