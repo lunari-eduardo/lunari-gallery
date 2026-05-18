@@ -86,6 +86,9 @@ export async function retryWithBackoff<T>(
 export function getUploadErrorMessage(error: Error): string {
   const msg = error.message.toLowerCase();
 
+  if (msg.includes("marca d'água") || msg.includes('watermark') || msg.includes('cors')) {
+    return "Falha ao carregar marca d'água. Recarregue a página (F5) e tente novamente.";
+  }
   if (msg.includes('timeout') || msg.includes('etimedout')) {
     return 'Tempo esgotado. Tente com arquivos menores ou conexão mais estável.';
   }
