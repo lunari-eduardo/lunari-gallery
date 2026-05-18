@@ -227,6 +227,14 @@ export class UploadPipeline {
   retry(id: string) {
     const item = this.queue.find(i => i.id === id);
     if (!item || item.status !== 'error') return;
+    // If previous failure was watermark-related, the browser may have a
+    // poisoned image cache entry. Clear the in-memory watermark blob cache
+    // so the next attempt refetches with a cache-buster.
+    if (item.error && /marca d'água|watermark/i.test(item.error)) {
+      try { clearWatermarkCache(); } catch { /* noop */ }
+      // Drop cached compression so we recompress with a fresh watermark
+      item._compressed = undefined;
+    }
     item.status = 'queued';
     item.progress = 0;
     item.error = undefined;
