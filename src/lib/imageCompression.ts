@@ -60,19 +60,79 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 }
 
 /**
- * Load an image from a URL (for watermark assets)
- * Throws error if CORS or network fails - this MUST succeed
+ * In-memory cache of watermark blob URLs (per page load).
+ * Avoids re-downloading the same watermark for every photo and bypasses
+ * the "non-CORS poisoned" image cache that some browsers create when the
+ * first request is fired in parallel with the CORS-tagged ones.
  */
-function loadImageFromUrl(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous'; // Required for canvas access
-    
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Falha ao carregar watermark: ${url}`));
-    
-    img.src = url;
-  });
+const watermarkBlobCache = new Map<string, string>();
+
+export function clearWatermarkCache() {
+  for (const blobUrl of watermarkBlobCache.values()) {
+    try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+  }
+  watermarkBlobCache.clear();
+}
+
+async function fetchAsBlobUrl(url: string, attempt = 0): Promise<string> {
+  const cached = watermarkBlobCache.get(url);
+  if (cached) return cached;
+  // Cache-buster on retry to bypass any "poisoned" cached entry
+  const finalUrl = attempt === 0 ? url : `${url}${url.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+  const resp = await fetch(finalUrl, { mode: 'cors', cache: attempt === 0 ? 'default' : 'reload' });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} ao buscar watermark`);
+  const blob = await resp.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  watermarkBlobCache.set(url, blobUrl);
+  return blobUrl;
+}
+
+/**
+ * Load an image from a URL (for watermark assets)
+ * Throws error if CORS or network fails - this MUST succeed.
+ *
+ * Strategy: fetch the bytes via fetch() and turn them into a blob: URL.
+ * Blob URLs are same-origin from the canvas's perspective so we never
+ * trip the "tainted canvas" / CORS image-cache race. Falls back to
+ * direct <img crossOrigin> loading if fetch fails.
+ */
+async function loadImageFromUrl(url: string): Promise<HTMLImageElement> {
+  // Try fetch + blob URL first (most resilient)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const blobUrl = await fetchAsBlobUrl(url, attempt);
+      return await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('decode-failed'));
+        img.src = blobUrl;
+      });
+    } catch (err) {
+      // Drop the cached blob URL on failure so retry refetches
+      const stale = watermarkBlobCache.get(url);
+      if (stale) {
+        try { URL.revokeObjectURL(stale); } catch { /* noop */ }
+        watermarkBlobCache.delete(url);
+      }
+      if (attempt === 1) {
+        // Last-resort: direct <img crossOrigin> (depends on R2 CORS header)
+        try {
+          return await new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(
+              new Error(`Falha ao carregar marca d'água (CORS). Recarregue a página (F5). URL: ${url}`)
+            );
+            img.src = `${url}${url.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+          });
+        } catch (finalErr) {
+          throw finalErr;
+        }
+      }
+    }
+  }
+  throw new Error(`Falha ao carregar marca d'água: ${url}`);
 }
 
 /**
