@@ -30,6 +30,8 @@ import DeliverDetail from "./pages/DeliverDetail";
 import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Referrals from "./pages/Referrals";
+import Privacidade from "./pages/Privacidade";
+import Termos from "./pages/Termos";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +60,8 @@ const App = () => (
               {/* Public routes */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/access-denied" element={<AccessDenied />} />
+              <Route path="/privacidade" element={<Privacidade />} />
+              <Route path="/termos" element={<Termos />} />
               {/* Client gallery access via public token - new route */}
               <Route path="/g/:token" element={<ClientGallery />} />
               {/* Legacy route - redirect to new format (will be handled in component) */}
