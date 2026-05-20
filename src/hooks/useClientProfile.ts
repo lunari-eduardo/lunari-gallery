@@ -21,6 +21,7 @@ export interface ClientPayment {
   id: string;
   valor: number;
   provedor: string | null;
+  metodo_manual: string | null;
   status: string | null;
   qtd_fotos: number | null;
   data_pagamento: string | null;
