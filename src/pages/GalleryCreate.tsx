@@ -180,12 +180,21 @@ export default function GalleryCreate() {
     settings,
     updateSettings
   } = useSettings();
+  const {
+    createDiscountPreset,
+    updateDiscountPreset,
+    deleteDiscountPreset,
+  } = useGallerySettings();
   const { settings: watermarkSettings } = useWatermarkSettings();
   const [currentStep, setCurrentStep] = useState(1);
 
   // Preset dialog state
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
   const [presetName, setPresetName] = useState('');
+  const [renamingPreset, setRenamingPreset] = useState<DiscountPreset | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
+
 
   // Step 1: Client Info
   const [galleryPermission, setGalleryPermission] = useState<GalleryPermission>('private');
