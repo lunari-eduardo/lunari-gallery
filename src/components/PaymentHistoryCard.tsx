@@ -105,7 +105,7 @@ export function PaymentHistoryCard({
                       </span>
                     )}
                     {cobranca.provedor && (
-                      <span>• {provedorLabels[cobranca.provedor] || cobranca.provedor}</span>
+                      <span>• {formatProvedor(cobranca)}</span>
                     )}
                   </div>
                 </div>
