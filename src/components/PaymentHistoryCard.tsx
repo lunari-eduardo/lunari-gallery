@@ -14,6 +14,7 @@ interface Cobranca {
   valor: number;
   qtd_fotos: number | null;
   provedor: string | null;
+  metodo_manual?: string | null;
   data_pagamento: string | null;
   ip_receipt_url: string | null;
   created_at: string;
@@ -30,6 +31,20 @@ const provedorLabels: Record<string, string> = {
   mercadopago: 'Mercado Pago',
   pix_manual: 'PIX Manual',
 };
+
+const manualMethodLabels: Record<string, string> = {
+  dinheiro: 'Dinheiro',
+  pix_externo: 'PIX Externo',
+  transferencia: 'Transferência',
+  outro: 'Outro',
+};
+
+function formatProvedor(c: Cobranca): string {
+  if (c.provedor === 'manual') {
+    return c.metodo_manual ? (manualMethodLabels[c.metodo_manual] || c.metodo_manual) : 'Manual';
+  }
+  return c.provedor ? (provedorLabels[c.provedor] || c.provedor) : '';
+}
 
 export function PaymentHistoryCard({
   cobrancas,
