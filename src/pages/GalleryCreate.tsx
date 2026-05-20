@@ -24,6 +24,7 @@ import { PackageSelect } from '@/components/PackageSelect';
 import { PaymentMethodSelector } from '@/components/PaymentMethodSelector';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSettings } from '@/hooks/useSettings';
+import { useGallerySettings } from '@/hooks/useGallerySettings';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useGestaoParams } from '@/hooks/useGestaoParams';
 import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
