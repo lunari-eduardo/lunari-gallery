@@ -1593,9 +1593,7 @@ export default function GalleryCreate() {
                           <div>
                             <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
                             <Label htmlFor="pricing-packages" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'packages' ? "border-primary bg-primary/5" : "border-border")}>
-                              <Badge className="absolute -top-2 right-2 text-xs bg-primary text-primary-foreground">
-                                Novo
-                              </Badge>
+
                               <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'packages' ? "bg-primary/20" : "bg-muted")}>
                                 <Package className={cn("h-4 w-4", pricingModel === 'packages' ? "text-primary" : "text-muted-foreground")} />
                               </div>
