@@ -211,7 +211,7 @@ export default function GalleryDetail() {
       if (id) {
         const { data: byGaleria } = await supabase
           .from('cobrancas')
-          .select('id, valor, qtd_fotos, provedor, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
+          .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
           .eq('galeria_id', id)
           .in('status', ['pago', 'pago_manual'])
           .order('created_at', { ascending: false });
