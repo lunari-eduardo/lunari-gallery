@@ -341,8 +341,8 @@ export default function ClientProfile() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {getProviderLogo(payment.provedor)}
-                            <span className="hidden sm:inline">{getProviderLabel(payment.provedor)}</span>
+                            {getProviderLogo(payment.provedor, payment.metodo_manual)}
+                            <span className="hidden sm:inline">{getProviderLabel(payment.provedor, payment.metodo_manual)}</span>
                           </div>
                         </TableCell>
                         <TableCell className="font-medium text-primary">
