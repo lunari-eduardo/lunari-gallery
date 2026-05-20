@@ -1662,7 +1662,46 @@ export default function GalleryCreate() {
                               </Button>
                             </div>)}
                         </div>}
+
+                      {/* Predefinições salvas */}
+                      {settings.discountPresets && settings.discountPresets.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            Predefinições salvas
+                          </Label>
+                          <div className="space-y-1.5">
+                            {settings.discountPresets.map((preset) => {
+                              const prices = preset.packages.map((p) => p.pricePerPhoto).filter((v) => typeof v === 'number');
+                              const minP = prices.length ? Math.min(...prices) : 0;
+                              const maxP = prices.length ? Math.max(...prices) : 0;
+                              const priceLabel = prices.length
+                                ? (minP === maxP ? `R$ ${minP.toFixed(2)}` : `R$ ${minP.toFixed(2)}–${maxP.toFixed(2)}`)
+                                : '—';
+                              return (
+                                <div key={preset.id} className="flex items-center gap-2 p-2.5 rounded-lg bg-background border border-border/50">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{preset.name}</p>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {preset.packages.length} faixa{preset.packages.length !== 1 ? 's' : ''} · {priceLabel}
+                                    </p>
+                                  </div>
+                                  <Button type="button" variant="outline" size="sm" onClick={() => loadPreset(preset.id)} className="h-7 text-xs">
+                                    Carregar
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setRenamingPreset(preset); setRenameValue(preset.name); }}>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeletingPresetId(preset.id)}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>}
+
 
                   {/* Charge Type */}
                   <div className="space-y-3">
