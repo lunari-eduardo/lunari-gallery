@@ -1751,6 +1751,42 @@ export default function GalleryCreate() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            {/* Dialog renomear predefinição */}
+            <Dialog open={!!renamingPreset} onOpenChange={(open) => { if (!open) { setRenamingPreset(null); setRenameValue(''); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Renomear predefinição</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label htmlFor="renamePreset">Novo nome</Label>
+                  <Input id="renamePreset" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => { setRenamingPreset(null); setRenameValue(''); }}>Cancelar</Button>
+                  <Button onClick={renamePreset}>Salvar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Confirmar exclusão de predefinição */}
+            <AlertDialog open={!!deletingPresetId} onOpenChange={(open) => { if (!open) setDeletingPresetId(null); }}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir predefinição?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Galerias já criadas não são afetadas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={confirmDeletePreset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
           </div>;
       case 4:
         return <div className="space-y-6 animate-fade-in">
