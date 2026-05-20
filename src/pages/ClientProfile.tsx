@@ -58,7 +58,14 @@ export default function ClientProfile() {
     }
   };
 
-  const getProviderLogo = (provedor: string | null) => {
+  const manualMethodLabels: Record<string, string> = {
+    dinheiro: 'Dinheiro',
+    pix_externo: 'PIX Externo',
+    transferencia: 'Transferência',
+    outro: 'Outro',
+  };
+
+  const getProviderLogo = (provedor: string | null, metodoManual?: string | null) => {
     switch (provedor) {
       case 'pix_manual':
         return <img src={pixLogo} alt="PIX" className="h-5 w-5 object-contain" />;
@@ -66,16 +73,20 @@ export default function ClientProfile() {
         return <img src={infinitepayLogo} alt="InfinitePay" className="h-5 w-5 object-contain" />;
       case 'mercadopago':
         return <img src={mercadopagoLogo} alt="Mercado Pago" className="h-5 w-5 object-contain" />;
+      case 'manual':
+        return <DollarSign className="h-5 w-5 text-muted-foreground" />;
       default:
         return <CreditCard className="h-5 w-5 text-muted-foreground" />;
     }
   };
 
-  const getProviderLabel = (provedor: string | null) => {
+  const getProviderLabel = (provedor: string | null, metodoManual?: string | null) => {
     switch (provedor) {
       case 'pix_manual': return 'PIX Manual';
       case 'infinitepay': return 'InfinitePay';
       case 'mercadopago': return 'Mercado Pago';
+      case 'manual':
+        return metodoManual ? (manualMethodLabels[metodoManual] || metodoManual) : 'Manual';
       default: return provedor || 'Desconhecido';
     }
   };
