@@ -89,11 +89,23 @@ Deno.serve(async (req: Request) => {
     if (targetCobrancaId) {
       const { data: existingCheck } = await supabase
         .from('cobrancas')
-        .select('id, status')
+        .select('id, status, provedor')
         .eq('id', targetCobrancaId)
         .maybeSingle();
       if (existingCheck && ['pago', 'pago_manual', 'cancelado'].includes(existingCheck.status)) {
         console.warn(`⚠️ Cobrança ${targetCobrancaId} status=${existingCheck.status} — não pode ser reutilizada. Criando nova manual.`);
+        targetCobrancaId = null;
+      } else if (
+        existingCheck &&
+        metodoManual &&
+        existingCheck.provedor &&
+        existingCheck.provedor !== 'manual' &&
+        (galleryId || sessionId)
+      ) {
+        // Recebimento manual em cima de cobrança digital pendente:
+        // descartamos o cobrancaId p/ criar nova cobrança 'manual' e cancelar a digital.
+        // Mantém histórico fiel ao método escolhido pelo fotógrafo.
+        console.log(`🔁 Manual sobre digital pendente (${existingCheck.provedor}) — criando nova cobrança manual e cancelando a digital`);
         targetCobrancaId = null;
       }
     }
