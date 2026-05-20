@@ -1137,33 +1137,76 @@ export default function GalleryCreate() {
     } : pkg));
   };
   const savePreset = () => {
-    if (!presetName.trim()) {
+    const trimmed = presetName.trim();
+    if (!trimmed) {
       toast.error('Digite um nome para a predefinição');
       return;
     }
-    const newPreset: DiscountPreset = {
-      id: generateId(),
-      name: presetName.trim(),
-      packages: discountPackages,
-      createdAt: new Date()
-    };
-    updateSettings({
-      discountPresets: [...(settings.discountPresets || []), newPreset]
-    });
-    setPresetName('');
-    setShowSavePresetDialog(false);
+    const existing = settings.discountPresets || [];
+    if (existing.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Já existe uma predefinição com esse nome');
+      return;
+    }
+    createDiscountPreset(
+      { name: trimmed, packages: discountPackages },
+      {
+        onSuccess: () => {
+          toast.success('Predefinição salva');
+          setPresetName('');
+          setShowSavePresetDialog(false);
+        },
+        onError: () => {
+          toast.error('Erro ao salvar predefinição');
+        },
+      } as any
+    );
   };
   const loadPreset = (presetId: string) => {
     const preset = settings.discountPresets?.find((p) => p.id === presetId);
     if (preset) {
-      // Clonar os pacotes com novos IDs
       const clonedPackages = preset.packages.map((pkg) => ({
         ...pkg,
         id: generateId()
       }));
       setDiscountPackages(clonedPackages);
+      toast.success(`Predefinição "${preset.name}" carregada`);
     }
   };
+  const renamePreset = () => {
+    if (!renamingPreset) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      toast.error('Digite um nome');
+      return;
+    }
+    const others = (settings.discountPresets || []).filter((p) => p.id !== renamingPreset.id);
+    if (others.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Já existe uma predefinição com esse nome');
+      return;
+    }
+    updateDiscountPreset(
+      { ...renamingPreset, name: trimmed },
+      {
+        onSuccess: () => {
+          toast.success('Predefinição renomeada');
+          setRenamingPreset(null);
+          setRenameValue('');
+        },
+        onError: () => toast.error('Erro ao renomear'),
+      } as any
+    );
+  };
+  const confirmDeletePreset = () => {
+    if (!deletingPresetId) return;
+    deleteDiscountPreset(deletingPresetId, {
+      onSuccess: () => {
+        toast.success('Predefinição excluída');
+        setDeletingPresetId(null);
+      },
+      onError: () => toast.error('Erro ao excluir'),
+    } as any);
+  };
+
   const removeDiscountPackage = (id: string) => {
     setDiscountPackages(discountPackages.filter((pkg) => pkg.id !== id));
   };
