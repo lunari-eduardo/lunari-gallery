@@ -1614,19 +1614,8 @@ export default function GalleryCreate() {
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <Label className="text-sm font-medium">Configurar faixas</Label>
                         <div className="flex gap-2 flex-wrap">
-                          {/* Select para carregar predefinição */}
-                          {settings.discountPresets && settings.discountPresets.length > 0 && <Select onValueChange={loadPreset}>
-                              <SelectTrigger className="h-8 w-[140px]">
-                                <SelectValue placeholder="Carregar" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {settings.discountPresets.map((preset) => <SelectItem key={preset.id} value={preset.id}>
-                                    {preset.name}
-                                  </SelectItem>)}
-                              </SelectContent>
-                            </Select>}
-                          
                           {/* Botão salvar predefinição */}
+
                           {discountPackages.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => setShowSavePresetDialog(true)} className="gap-1">
                               <Save className="h-4 w-4" />
                               Salvar
