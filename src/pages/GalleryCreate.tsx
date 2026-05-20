@@ -24,6 +24,7 @@ import { PackageSelect } from '@/components/PackageSelect';
 import { PaymentMethodSelector } from '@/components/PaymentMethodSelector';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useSettings } from '@/hooks/useSettings';
+import { useGallerySettings } from '@/hooks/useGallerySettings';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useGestaoParams } from '@/hooks/useGestaoParams';
 import { useGestaoPackages, GestaoPackage } from '@/hooks/useGestaoPackages';
@@ -179,12 +180,21 @@ export default function GalleryCreate() {
     settings,
     updateSettings
   } = useSettings();
+  const {
+    createDiscountPreset,
+    updateDiscountPreset,
+    deleteDiscountPreset,
+  } = useGallerySettings();
   const { settings: watermarkSettings } = useWatermarkSettings();
   const [currentStep, setCurrentStep] = useState(1);
 
   // Preset dialog state
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
   const [presetName, setPresetName] = useState('');
+  const [renamingPreset, setRenamingPreset] = useState<DiscountPreset | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
+
 
   // Step 1: Client Info
   const [galleryPermission, setGalleryPermission] = useState<GalleryPermission>('private');
@@ -1127,33 +1137,76 @@ export default function GalleryCreate() {
     } : pkg));
   };
   const savePreset = () => {
-    if (!presetName.trim()) {
+    const trimmed = presetName.trim();
+    if (!trimmed) {
       toast.error('Digite um nome para a predefinição');
       return;
     }
-    const newPreset: DiscountPreset = {
-      id: generateId(),
-      name: presetName.trim(),
-      packages: discountPackages,
-      createdAt: new Date()
-    };
-    updateSettings({
-      discountPresets: [...(settings.discountPresets || []), newPreset]
-    });
-    setPresetName('');
-    setShowSavePresetDialog(false);
+    const existing = settings.discountPresets || [];
+    if (existing.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Já existe uma predefinição com esse nome');
+      return;
+    }
+    createDiscountPreset(
+      { name: trimmed, packages: discountPackages },
+      {
+        onSuccess: () => {
+          toast.success('Predefinição salva');
+          setPresetName('');
+          setShowSavePresetDialog(false);
+        },
+        onError: () => {
+          toast.error('Erro ao salvar predefinição');
+        },
+      } as any
+    );
   };
   const loadPreset = (presetId: string) => {
     const preset = settings.discountPresets?.find((p) => p.id === presetId);
     if (preset) {
-      // Clonar os pacotes com novos IDs
       const clonedPackages = preset.packages.map((pkg) => ({
         ...pkg,
         id: generateId()
       }));
       setDiscountPackages(clonedPackages);
+      toast.success(`Predefinição "${preset.name}" carregada`);
     }
   };
+  const renamePreset = () => {
+    if (!renamingPreset) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      toast.error('Digite um nome');
+      return;
+    }
+    const others = (settings.discountPresets || []).filter((p) => p.id !== renamingPreset.id);
+    if (others.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Já existe uma predefinição com esse nome');
+      return;
+    }
+    updateDiscountPreset(
+      { ...renamingPreset, name: trimmed },
+      {
+        onSuccess: () => {
+          toast.success('Predefinição renomeada');
+          setRenamingPreset(null);
+          setRenameValue('');
+        },
+        onError: () => toast.error('Erro ao renomear'),
+      } as any
+    );
+  };
+  const confirmDeletePreset = () => {
+    if (!deletingPresetId) return;
+    deleteDiscountPreset(deletingPresetId, {
+      onSuccess: () => {
+        toast.success('Predefinição excluída');
+        setDeletingPresetId(null);
+      },
+      onError: () => toast.error('Erro ao excluir'),
+    } as any);
+  };
+
   const removeDiscountPackage = (id: string) => {
     setDiscountPackages(discountPackages.filter((pkg) => pkg.id !== id));
   };
@@ -1540,9 +1593,7 @@ export default function GalleryCreate() {
                           <div>
                             <RadioGroupItem value="packages" id="pricing-packages" className="peer sr-only" />
                             <Label htmlFor="pricing-packages" className={cn("flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative", "hover:border-primary/50 hover:bg-muted/50", pricingModel === 'packages' ? "border-primary bg-primary/5" : "border-border")}>
-                              <Badge className="absolute -top-2 right-2 text-xs bg-primary text-primary-foreground">
-                                Novo
-                              </Badge>
+
                               <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", pricingModel === 'packages' ? "bg-primary/20" : "bg-muted")}>
                                 <Package className={cn("h-4 w-4", pricingModel === 'packages' ? "text-primary" : "text-muted-foreground")} />
                               </div>
@@ -1563,19 +1614,8 @@ export default function GalleryCreate() {
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <Label className="text-sm font-medium">Configurar faixas</Label>
                         <div className="flex gap-2 flex-wrap">
-                          {/* Select para carregar predefinição */}
-                          {settings.discountPresets && settings.discountPresets.length > 0 && <Select onValueChange={loadPreset}>
-                              <SelectTrigger className="h-8 w-[140px]">
-                                <SelectValue placeholder="Carregar" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {settings.discountPresets.map((preset) => <SelectItem key={preset.id} value={preset.id}>
-                                    {preset.name}
-                                  </SelectItem>)}
-                              </SelectContent>
-                            </Select>}
-                          
                           {/* Botão salvar predefinição */}
+
                           {discountPackages.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => setShowSavePresetDialog(true)} className="gap-1">
                               <Save className="h-4 w-4" />
                               Salvar
@@ -1622,7 +1662,46 @@ export default function GalleryCreate() {
                               </Button>
                             </div>)}
                         </div>}
+
+                      {/* Predefinições salvas */}
+                      {settings.discountPresets && settings.discountPresets.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            Predefinições salvas
+                          </Label>
+                          <div className="space-y-1.5">
+                            {settings.discountPresets.map((preset) => {
+                              const prices = preset.packages.map((p) => p.pricePerPhoto).filter((v) => typeof v === 'number');
+                              const minP = prices.length ? Math.min(...prices) : 0;
+                              const maxP = prices.length ? Math.max(...prices) : 0;
+                              const priceLabel = prices.length
+                                ? (minP === maxP ? `R$ ${minP.toFixed(2)}` : `R$ ${minP.toFixed(2)}–${maxP.toFixed(2)}`)
+                                : '—';
+                              return (
+                                <div key={preset.id} className="flex items-center gap-2 p-2.5 rounded-lg bg-background border border-border/50">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{preset.name}</p>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {preset.packages.length} faixa{preset.packages.length !== 1 ? 's' : ''} · {priceLabel}
+                                    </p>
+                                  </div>
+                                  <Button type="button" variant="outline" size="sm" onClick={() => loadPreset(preset.id)} className="h-7 text-xs">
+                                    Carregar
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setRenamingPreset(preset); setRenameValue(preset.name); }}>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeletingPresetId(preset.id)}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>}
+
 
                   {/* Charge Type */}
                   <div className="space-y-3">
@@ -1672,6 +1751,42 @@ export default function GalleryCreate() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            {/* Dialog renomear predefinição */}
+            <Dialog open={!!renamingPreset} onOpenChange={(open) => { if (!open) { setRenamingPreset(null); setRenameValue(''); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Renomear predefinição</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label htmlFor="renamePreset">Novo nome</Label>
+                  <Input id="renamePreset" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => { setRenamingPreset(null); setRenameValue(''); }}>Cancelar</Button>
+                  <Button onClick={renamePreset}>Salvar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Confirmar exclusão de predefinição */}
+            <AlertDialog open={!!deletingPresetId} onOpenChange={(open) => { if (!open) setDeletingPresetId(null); }}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir predefinição?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Galerias já criadas não são afetadas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={confirmDeletePreset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
           </div>;
       case 4:
         return <div className="space-y-6 animate-fade-in">
