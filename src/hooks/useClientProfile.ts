@@ -101,7 +101,7 @@ export function useClientProfile(clientId: string | undefined) {
       const { data, error } = await supabase
         .from('cobrancas')
         .select(`
-          id, valor, provedor, status, qtd_fotos, 
+          id, valor, provedor, metodo_manual, status, qtd_fotos, 
           data_pagamento, ip_receipt_url, galeria_id, created_at
         `)
         .eq('cliente_id', clientId)
