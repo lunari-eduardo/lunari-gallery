@@ -4174,6 +4174,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_theme_preferences: {
+        Row: {
+          mode: string
+          preset_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          mode?: string
+          preset_id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          mode?: string
+          preset_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       usuarios_integracoes: {
         Row: {
           access_token: string | null
