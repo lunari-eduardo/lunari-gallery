@@ -26,6 +26,7 @@ import { differenceInDays, format, startOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useBrandColor } from '@/lib/brandColor';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -62,7 +63,6 @@ function getStatusBadge(status: string) {
 }
 
 /* ─── 3D Orbital Scene — Premium Orbital Field ─── */
-const COPPER = '#F28C52';
 
 const RING_CONFIGS = [
   // Ring 1 — tilted horizontal, clockwise, 36s period
@@ -80,7 +80,7 @@ const SPHERE_CONFIGS = [
   { ringIndex: 2, offset: Math.PI, size: 0.08 },
 ];
 
-function TorusRing({ index, isDark, children }: { index: number; isDark: boolean; children?: React.ReactNode }) {
+function TorusRing({ index, isDark, brandHex, children }: { index: number; isDark: boolean; brandHex: string; children?: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null!);
   const cfg = RING_CONFIGS[index];
   const speed = (2 * Math.PI / cfg.period) * cfg.direction;
@@ -99,14 +99,14 @@ function TorusRing({ index, isDark, children }: { index: number; isDark: boolean
     <group ref={ref} rotation={cfg.initialRotation}>
       <mesh>
         <torusGeometry args={[6.0, cfg.tube, 16, 120]} />
-        <meshBasicMaterial color={COPPER} transparent opacity={opacity} />
+        <meshBasicMaterial color={brandHex} transparent opacity={opacity} />
       </mesh>
       {children}
     </group>
   );
 }
 
-function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
+function OrbitingSphere({ index, isDark, brandHex }: { index: number; isDark: boolean; brandHex: string }) {
   const ref = useRef<THREE.Mesh>(null!);
   const cfg = SPHERE_CONFIGS[index];
   const ringCfg = RING_CONFIGS[cfg.ringIndex];
@@ -124,22 +124,22 @@ function OrbitingSphere({ index, isDark }: { index: number; isDark: boolean }) {
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[cfg.size, 16, 16]} />
-      <meshBasicMaterial color={COPPER} transparent opacity={opacity} />
+      <meshBasicMaterial color={brandHex} transparent opacity={opacity} />
     </mesh>
   );
 }
 
-function OrbitalScene({ isDark }: { isDark: boolean }) {
+function OrbitalScene({ isDark, brandHex }: { isDark: boolean; brandHex: string }) {
   return (
     <group>
-      <TorusRing index={0} isDark={isDark}>
-        <OrbitingSphere index={0} isDark={isDark} />
+      <TorusRing index={0} isDark={isDark} brandHex={brandHex}>
+        <OrbitingSphere index={0} isDark={isDark} brandHex={brandHex} />
       </TorusRing>
-      <TorusRing index={1} isDark={isDark} />
-      <TorusRing index={2} isDark={isDark}>
-        <OrbitingSphere index={1} isDark={isDark} />
+      <TorusRing index={1} isDark={isDark} brandHex={brandHex} />
+      <TorusRing index={2} isDark={isDark} brandHex={brandHex}>
+        <OrbitingSphere index={1} isDark={isDark} brandHex={brandHex} />
       </TorusRing>
-      <TorusRing index={3} isDark={isDark} />
+      <TorusRing index={3} isDark={isDark} brandHex={brandHex} />
     </group>
   );
 }
@@ -147,6 +147,7 @@ function OrbitalScene({ isDark }: { isDark: boolean }) {
 /* ─── Background with 3D orbits + glow + noise ─── */
 function DashboardBackground() {
   const [isDark, setIsDark] = useState(false);
+  const brand = useBrandColor();
 
   useEffect(() => {
     const check = () => setIsDark(document.documentElement.classList.contains('dark'));
@@ -165,15 +166,27 @@ function DashboardBackground() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
+  const { h, s, l, glowL } = brand;
+  const auroraLight = `
+    linear-gradient(120deg, hsl(${h} ${s}% ${l}% / 0.25), transparent 50%),
+    linear-gradient(240deg, hsl(${h} ${Math.max(s - 15, 0)}% ${Math.min(l + 20, 75)}% / 0.20), transparent 50%),
+    linear-gradient(0deg,   hsl(${h} ${s}% ${l}% / 0.15), transparent 60%)
+  `;
+  const auroraDark = `
+    linear-gradient(120deg, hsl(${h} ${s}% ${glowL}% / 0.05), transparent 50%),
+    linear-gradient(240deg, hsl(${h} ${Math.max(s - 10, 0)}% ${Math.min(glowL + 10, 90)}% / 0.04), transparent 50%),
+    linear-gradient(0deg,   hsl(${h} ${s}% ${glowL}% / 0.03), transparent 60%)
+  `;
+
   return (
     <div className="fixed inset-0 z-0 pointer-events-none">
-      {/* Base gradient */}
+      {/* Base gradient — light usa o token de surface para casar com --background */}
       <div
         className="absolute inset-0 transition-colors duration-700"
         style={{
           background: isDark
             ? 'linear-gradient(135deg, #0D0A08 0%, #141010 50%, #0D0A08 100%)'
-            : '#FFFFFF',
+            : 'hsl(var(--surface-hue) calc(var(--surface-sat) * 4) 98%)',
         }}
       />
 
@@ -186,7 +199,7 @@ function DashboardBackground() {
             style={{ background: 'transparent' }}
             dpr={[1, 1.5]}
           >
-            <OrbitalScene isDark={isDark} />
+            <OrbitalScene isDark={isDark} brandHex={brand.hex} />
           </Canvas>
         </div>
       )}
@@ -195,13 +208,7 @@ function DashboardBackground() {
       <div
         className="absolute inset-[-20%] aurora-animate"
         style={{
-          background: isDark
-            ? `linear-gradient(120deg, rgba(242,170,100,0.05), transparent 50%),
-               linear-gradient(240deg, rgba(255,200,140,0.04), transparent 50%),
-               linear-gradient(0deg, rgba(230,180,130,0.03), transparent 60%)`
-            : `linear-gradient(120deg, rgba(172,94,58,0.25), transparent 50%),
-               linear-gradient(240deg, rgba(194,149,106,0.20), transparent 50%),
-               linear-gradient(0deg, rgba(172,94,58,0.15), transparent 60%)`,
+          background: isDark ? auroraDark : auroraLight,
           filter: isDark ? 'blur(60px)' : 'blur(40px)',
         }}
       />
