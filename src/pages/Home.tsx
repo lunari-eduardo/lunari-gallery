@@ -26,6 +26,7 @@ import { differenceInDays, format, startOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useBrandColor } from '@/lib/brandColor';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -62,7 +63,6 @@ function getStatusBadge(status: string) {
 }
 
 /* ─── 3D Orbital Scene — Premium Orbital Field ─── */
-const COPPER = '#F28C52';
 
 const RING_CONFIGS = [
   // Ring 1 — tilted horizontal, clockwise, 36s period
