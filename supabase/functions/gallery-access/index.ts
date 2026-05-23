@@ -1073,6 +1073,21 @@ serve(async (req) => {
       .eq("user_id", gallery.user_id)
       .single();
 
+    // 6b. Fetch photographer's Studio theme preference (preset + mode).
+    // Used as fallback global theme for the public gallery view. Não expõe user_id.
+    let studioTheme: { presetId: string; mode: string } = { presetId: 'lunari', mode: 'system' };
+    try {
+      const { data: themePref } = await supabase
+        .from('user_theme_preferences')
+        .select('preset_id, mode')
+        .eq('user_id', gallery.user_id)
+        .maybeSingle();
+      if (themePref?.preset_id && themePref?.mode) {
+        studioTheme = { presetId: themePref.preset_id, mode: themePref.mode };
+      }
+    } catch { /* preset default */ }
+
+
     // 7. Build theme data - always return a theme object for consistent styling
     const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
     const themeId = galleryConfig?.themeId as string | undefined;
@@ -1162,6 +1177,7 @@ serve(async (req) => {
         folders: folders || [],
         studioSettings: settings || null,
         theme: themeData,
+        studioTheme,
         clientMode: clientMode,
         ...(resolvedVisitorId ? { visitorId: resolvedVisitorId, visitorName: resolvedVisitorName } : {}),
       }),
