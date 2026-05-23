@@ -12,8 +12,10 @@ import {
   CreditCard,
   MousePointerClick,
   Send,
-  Gift
+  Gift,
+  Palette
 } from 'lucide-react';
+import { AppearanceModal } from '@/components/preferences/AppearanceModal';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -52,6 +54,7 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const { user, signOut } = useAuthContext();
 
   const handleLogout = async () => {
@@ -193,12 +196,18 @@ export function Layout({ children }: LayoutProps) {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setAppearanceOpen(true)} className="cursor-pointer">
+                  <Palette className="mr-2 h-4 w-4" />
+                  Aparência
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <AppearanceModal open={appearanceOpen} onOpenChange={setAppearanceOpen} />
           </div>
         </div>
 

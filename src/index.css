@@ -6,29 +6,41 @@
 
 @layer base {
   :root {
-    /* Premium Glassmorphism — Terra-cota palette */
-    --background: 30 40% 96%;
+    /* ── BRAND (controlado por applyTheme em runtime) ────────── */
+    --brand-h: 19;
+    --brand-s: 49%;
+    --brand-l: 45%;
+    --brand-hover-l: 38%;
+    --brand-glow-l: 60%;
+
+    /* Surface tilt (também controlado por applyTheme) */
+    --surface-hue: 30;
+    --surface-sat: 10%;
+
+    /* Backgrounds neutros com leve tilt na hue da marca */
+    --background: var(--surface-hue) calc(var(--surface-sat) * 4) 96%;
     --foreground: 20 20% 12%;
 
-    --card: 30 30% 98% / 0.38;
+    --card: var(--surface-hue) calc(var(--surface-sat) * 3) 98% / 0.38;
     --card-foreground: 20 20% 12%;
 
-    --popover: 30 30% 98%;
+    --popover: var(--surface-hue) calc(var(--surface-sat) * 3) 98%;
     --popover-foreground: 20 20% 12%;
 
-    --primary: 19 49% 45%;
-    --primary-foreground: 30 30% 98%;
-    --primary-hover: 24 35% 59%;
-    --primary-glow: 19 49% 60%;
+    /* Brand-derived */
+    --primary: var(--brand-h) var(--brand-s) var(--brand-l);
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: var(--brand-h) var(--brand-s) var(--brand-hover-l);
+    --primary-glow: var(--brand-h) var(--brand-s) var(--brand-glow-l);
 
-    --secondary: 30 20% 92%;
+    --secondary: var(--surface-hue) calc(var(--surface-sat) * 2) 92%;
     --secondary-foreground: 20 15% 25%;
 
-    --muted: 30 15% 90%;
+    --muted: var(--surface-hue) calc(var(--surface-sat) * 1.5) 90%;
     --muted-foreground: 20 10% 45%;
 
-    --accent: 19 49% 45%;
-    --accent-foreground: 30 30% 98%;
+    --accent: var(--brand-h) var(--brand-s) var(--brand-l);
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -39,53 +51,51 @@
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    --border: 30 30% 80%;
-    --input: 30 30% 80%;
-    --ring: 19 49% 45%;
+    --border: var(--surface-hue) calc(var(--surface-sat) * 3) 80%;
+    --input: var(--surface-hue) calc(var(--surface-sat) * 3) 80%;
+    --ring: var(--brand-h) var(--brand-s) var(--brand-l);
 
     --radius: 0.625rem;
 
-    /* Terra-cota scale */
-    --terra-50: 30 40% 95%;
-    --terra-100: 28 38% 88%;
-    --terra-200: 26 35% 78%;
-    --terra-300: 24 35% 68%;
-    --terra-400: 24 35% 59%;
-    --terra-500: 19 49% 45%;
-    --terra-600: 16 55% 40%;
-    --terra-700: 14 52% 33%;
-    --terra-800: 12 50% 26%;
-    --terra-900: 10 45% 20%;
+    /* Terra scale — agora derivada da marca */
+    --terra-50:  var(--brand-h) calc(var(--brand-s) * 0.3) 95%;
+    --terra-100: var(--brand-h) calc(var(--brand-s) * 0.4) 88%;
+    --terra-200: var(--brand-h) calc(var(--brand-s) * 0.5) 78%;
+    --terra-300: var(--brand-h) calc(var(--brand-s) * 0.6) 68%;
+    --terra-400: var(--brand-h) var(--brand-s) var(--brand-glow-l);
+    --terra-500: var(--brand-h) var(--brand-s) var(--brand-l);
+    --terra-600: var(--brand-h) var(--brand-s) var(--brand-hover-l);
+    --terra-700: var(--brand-h) var(--brand-s) calc(var(--brand-hover-l) - 7%);
+    --terra-800: var(--brand-h) var(--brand-s) calc(var(--brand-hover-l) - 14%);
+    --terra-900: var(--brand-h) var(--brand-s) calc(var(--brand-hover-l) - 20%);
 
-    /* Glass tokens */
+    /* Glass tokens (neutros) */
     --glass-bg: 0 0% 100% / 0.55;
     --glass-border: 0 0% 100% / 0.60;
     --glass-shadow: 0 8px 25px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
-    --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
+    --glass-hover-shadow: 0 8px 32px hsl(var(--brand-h) var(--brand-s) var(--brand-l) / 0.15);
 
-    /* Legacy tokens kept for compatibility */
-    --terracotta: 19 49% 45%;
-    --terracotta-light: 28 38% 88%;
+    /* Legacy aliases */
+    --terracotta: var(--brand-h) var(--brand-s) var(--brand-l);
+    --terracotta-light: var(--brand-h) calc(var(--brand-s) * 0.4) 88%;
     --sage: 220 10% 50%;
     --sage-light: 220 10% 92%;
-    --cream: 30 40% 95%;
-    --warm-gray: 30 10% 60%;
+    --cream: var(--surface-hue) calc(var(--surface-sat) * 4) 95%;
+    --warm-gray: var(--surface-hue) 10% 60%;
 
-    /* Shadows */
     --shadow-sm: 0 1px 2px hsl(20 20% 12% / 0.03);
     --shadow-md: 0 3px 8px hsl(20 20% 12% / 0.04);
     --shadow-lg: 0 6px 16px hsl(20 20% 12% / 0.06);
-    --shadow-glow: 0 0 30px hsl(19 49% 45% / 0.15);
+    --shadow-glow: 0 0 30px hsl(var(--brand-h) var(--brand-s) var(--brand-l) / 0.15);
 
-    /* Sidebar */
-    --sidebar-background: 30 30% 98%;
+    --sidebar-background: var(--surface-hue) calc(var(--surface-sat) * 3) 98%;
     --sidebar-foreground: 20 20% 12%;
-    --sidebar-primary: 19 49% 45%;
-    --sidebar-primary-foreground: 30 30% 98%;
-    --sidebar-accent: 30 20% 92%;
+    --sidebar-primary: var(--brand-h) var(--brand-s) var(--brand-l);
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: var(--surface-hue) calc(var(--surface-sat) * 2) 92%;
     --sidebar-accent-foreground: 20 20% 12%;
-    --sidebar-border: 30 30% 80%;
-    --sidebar-ring: 19 49% 45%;
+    --sidebar-border: var(--surface-hue) calc(var(--surface-sat) * 3) 80%;
+    --sidebar-ring: var(--brand-h) var(--brand-s) var(--brand-l);
   }
 
   .dark {
@@ -98,10 +108,10 @@
     --popover: 20 12% 10%;
     --popover-foreground: 30 15% 95%;
 
-    --primary: 19 49% 45%;
-    --primary-foreground: 30 15% 95%;
-    --primary-hover: 24 35% 59%;
-    --primary-glow: 19 49% 35%;
+    --primary: var(--brand-h) var(--brand-s) var(--brand-l);
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: var(--brand-h) var(--brand-s) var(--brand-hover-l);
+    --primary-glow: var(--brand-h) var(--brand-s) var(--brand-glow-l);
 
     --secondary: 20 10% 15%;
     --secondary-foreground: 30 15% 85%;
@@ -109,8 +119,8 @@
     --muted: 20 10% 15%;
     --muted-foreground: 30 10% 55%;
 
-    --accent: 19 49% 45%;
-    --accent-foreground: 30 15% 95%;
+    --accent: var(--brand-h) var(--brand-s) var(--brand-l);
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -123,25 +133,25 @@
 
     --border: 20 15% 20%;
     --input: 20 15% 20%;
-    --ring: 19 49% 45%;
+    --ring: var(--brand-h) var(--brand-s) var(--brand-l);
 
-    --terra-50: 20 15% 12%;
+    --terra-50:  20 15% 12%;
     --terra-100: 20 12% 16%;
     --terra-200: 20 15% 22%;
     --terra-300: 22 20% 30%;
-    --terra-400: 24 35% 45%;
-    --terra-500: 19 49% 45%;
-    --terra-600: 16 55% 40%;
-    --terra-700: 14 52% 33%;
-    --terra-800: 12 50% 26%;
-    --terra-900: 10 45% 20%;
+    --terra-400: var(--brand-h) var(--brand-s) var(--brand-hover-l);
+    --terra-500: var(--brand-h) var(--brand-s) var(--brand-l);
+    --terra-600: var(--brand-h) var(--brand-s) var(--brand-glow-l);
+    --terra-700: var(--brand-h) calc(var(--brand-s) * 0.85) calc(var(--brand-glow-l) - 5%);
+    --terra-800: var(--brand-h) calc(var(--brand-s) * 0.7) calc(var(--brand-glow-l) - 12%);
+    --terra-900: var(--brand-h) calc(var(--brand-s) * 0.6) calc(var(--brand-glow-l) - 20%);
 
     --glass-bg: 0 0% 100% / 0.03;
     --glass-border: 0 0% 100% / 0.05;
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    --glass-hover-shadow: 0 8px 32px rgba(194, 149, 106, 0.15);
+    --glass-hover-shadow: 0 8px 32px hsl(var(--brand-h) var(--brand-s) var(--brand-l) / 0.15);
 
-    --terracotta: 19 49% 50%;
+    --terracotta: var(--brand-h) var(--brand-s) var(--brand-l);
     --terracotta-light: 20 15% 22%;
     --sage: 220 10% 45%;
     --sage-light: 220 10% 20%;
@@ -151,16 +161,16 @@
     --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.2);
     --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.3);
     --shadow-lg: 0 8px 24px hsl(0 0% 0% / 0.4);
-    --shadow-glow: 0 0 30px hsl(19 49% 50% / 0.2);
+    --shadow-glow: 0 0 30px hsl(var(--brand-h) var(--brand-s) var(--brand-l) / 0.2);
 
     --sidebar-background: 20 12% 8%;
     --sidebar-foreground: 30 15% 95%;
-    --sidebar-primary: 19 49% 45%;
-    --sidebar-primary-foreground: 30 15% 95%;
+    --sidebar-primary: var(--brand-h) var(--brand-s) var(--brand-l);
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 20 10% 15%;
     --sidebar-accent-foreground: 30 15% 95%;
     --sidebar-border: 20 15% 20%;
-    --sidebar-ring: 19 49% 45%;
+    --sidebar-ring: var(--brand-h) var(--brand-s) var(--brand-l);
   }
 }
 
@@ -326,11 +336,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(24 35% 59% / 0.3);
+  background: hsl(var(--brand-h) var(--brand-s) var(--brand-glow-l) / 0.3);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(24 35% 59% / 0.5);
+  background: hsl(var(--brand-h) var(--brand-s) var(--brand-glow-l) / 0.5);
 }
 
 @layer utilities {
