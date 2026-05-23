@@ -49,6 +49,7 @@ import { getFontFamilyById } from '@/components/FontSelect';
 import { applyTitleCase } from '@/lib/textTransform';
 import { useImageProtection } from '@/hooks/useImageProtection';
 import ClientDeliverGallery from '@/pages/ClientDeliverGallery';
+import { applyTheme, DEFAULT_THEME, type ThemePresetId, type VisualThemeMode } from '@/lib/visualTheme';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
@@ -268,6 +269,25 @@ export default function ClientGallery() {
         localStorage.setItem(`gallery_visitor_name_${identifier}`, galleryResponse.gallery.visitorName);
       }
     }
+  }, [galleryResponse]);
+
+  // Aplicar tema do Studio do fotógrafo (preset + mode) na galeria pública.
+  // Não persiste no localStorage — apenas overlay temporário enquanto o visitante
+  // está na rota pública. Ao desmontar, restaura o tema default.
+  useEffect(() => {
+    const studioTheme = (galleryResponse as any)?.studioTheme;
+    if (studioTheme?.presetId && studioTheme?.mode) {
+      applyTheme({
+        presetId: studioTheme.presetId as ThemePresetId,
+        mode: studioTheme.mode as VisualThemeMode,
+      });
+    } else if (galleryResponse) {
+      applyTheme(DEFAULT_THEME);
+    }
+    return () => {
+      // Restaurar default ao sair da rota pública
+      applyTheme(DEFAULT_THEME);
+    };
   }, [galleryResponse]);
 
   // Extract gallery data from response (handle both legacy and new format)
