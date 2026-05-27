@@ -1,37 +1,37 @@
-import { Aperture } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import logoLight from '@/assets/logo-light.png';
+import logoDark from '@/assets/logo-dark.png';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
-  showText?: boolean;
+  showText?: boolean; // kept for API compatibility (unused now)
   variant?: 'default' | 'gallery';
   className?: string;
 }
 
-export function Logo({ size = 'md', showText = true, variant = 'default', className }: LogoProps) {
-  const sizes = {
-    sm: { icon: 20, text: 'text-lg' },
-    md: { icon: 28, text: 'text-2xl' },
-    lg: { icon: 36, text: 'text-3xl' },
+export function Logo({ size = 'md', className }: LogoProps) {
+  const heights = {
+    sm: 'h-5',
+    md: 'h-7',
+    lg: 'h-9',
   };
 
-  const text = variant === 'gallery' ? 'Lunari Gallery' : 'Lunari';
-
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <div className="relative">
-        <Aperture 
-          size={sizes[size].icon} 
-          className="text-primary" 
-          strokeWidth={1.5}
-        />
-        <div className="absolute inset-0 bg-primary/20 blur-lg rounded-full" />
-      </div>
-      {showText && (
-        <span className={cn('font-semibold tracking-tight', sizes[size].text)}>
-          {text}
-        </span>
-      )}
+    <div className={cn('flex items-center', className)}>
+      {/* Light mode */}
+      <img
+        src={logoLight}
+        alt="Lunari"
+        className={cn(heights[size], 'w-auto object-contain block dark:hidden select-none')}
+        draggable={false}
+      />
+      {/* Dark mode */}
+      <img
+        src={logoDark}
+        alt="Lunari"
+        className={cn(heights[size], 'w-auto object-contain hidden dark:block select-none')}
+        draggable={false}
+      />
     </div>
   );
 }
