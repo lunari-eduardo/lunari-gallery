@@ -174,7 +174,9 @@ export default function GalleryCreate() {
     clients,
     isLoading: isLoadingClients,
     createClient,
-    updateClient
+    updateClient,
+    fetchClientById,
+    addClientToCache,
   } = useGalleryClients();
   const {
     settings,
