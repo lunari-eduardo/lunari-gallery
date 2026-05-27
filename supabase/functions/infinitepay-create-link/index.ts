@@ -23,6 +23,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// ============================================================
+// InfinitePay endpoints — centralizados para troca rápida
+// ============================================================
+const INFINITEPAY_API_BASE =
+  Deno.env.get('INFINITEPAY_API_BASE') || 'https://api.checkout.infinitepay.io';
+const INFINITEPAY_LINKS_URL = `${INFINITEPAY_API_BASE}/links`;
+console.log(`[INFINITEPAY_ENDPOINT_VERSION] v2-checkout-api base=${INFINITEPAY_API_BASE}`);
+
 interface RequestBody {
   clienteId: string;
   sessionId?: string;
