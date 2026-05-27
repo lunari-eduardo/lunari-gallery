@@ -296,7 +296,7 @@ async function checkInfinitePayStatusPublic(
       return { status: 'error' };
     }
     
-    const response = await fetch('https://api.infinitepay.io/invoices/public/checkout/payment_check', {
+    const response = await fetch('https://api.checkout.infinitepay.io/payment_check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
