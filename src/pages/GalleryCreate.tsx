@@ -483,11 +483,15 @@ export default function GalleryCreate() {
         const {
           data,
           error
-        } = await supabase.from('clientes_sessoes').select('id, session_id, regras_congeladas, valor_foto_extra').eq('session_id', sessionId).single();
+        } = await supabase.from('clientes_sessoes').select('id, session_id, cliente_id, regras_congeladas, valor_foto_extra').eq('session_id', sessionId).single();
         if (error) {
           console.warn('Session not found or error:', error.message);
         } else {
           console.log('🔗 Session data found:', data);
+          if (data?.cliente_id) {
+            console.log('[AssistedMode] sessionClienteId resolvido via clientes_sessoes:', data.cliente_id);
+            setSessionClienteId(data.cliente_id);
+          }
           if (data?.regras_congeladas) {
             const regras = data.regras_congeladas as unknown as RegrasCongeladas;
             console.log('🔗 regrasCongeladas loaded:', {
