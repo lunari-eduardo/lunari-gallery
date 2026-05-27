@@ -18,6 +18,8 @@ interface UseGalleryClientsReturn {
   deleteClient: (id: string) => Promise<void>;
   searchClients: (query: string) => Client[];
   getClientById: (id: string) => Client | undefined;
+  fetchClientById: (id: string) => Promise<Client | null>;
+  addClientToCache: (client: Client) => void;
   refetch: () => Promise<void>;
 }
 
