@@ -564,26 +564,11 @@ export default function GalleryCreate() {
   }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra, packageName, sessionName]);
 
   // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
-  // Only runs once, then clears URL params to prevent re-application
+  // Two-stage:
+  //   Stage A — non-client fields run as soon as packages are ready (no client dependency)
+  //   Stage B — client resolution: cache → DB fallback → auto-create from cliente_nome
   useEffect(() => {
-    // Only pre-fill if:
-    // 1. In assisted mode (has session_id AND user has Gestão integration)
-    // 2. Params haven't been processed yet
     if (!isAssistedMode || !gestaoParams || paramsProcessed) return;
-
-    // Wait for clients to load if we have a cliente_id
-    // Must wait for BOTH isLoading to be false AND clients array to be populated
-    if (gestaoParams.cliente_id) {
-      if (isLoadingClients) {
-        console.log('🔗 Waiting for clients to load...');
-        return;
-      }
-      // Also wait if clients array is empty (data still fetching after accessLoading finished)
-      if (clients.length === 0) {
-        console.log('🔗 Clients loaded but array is empty, waiting for data...');
-        return;
-      }
-    }
 
     // Wait for packages to load if we have a pacote_nome (to lookup fotos_incluidas)
     if (gestaoParams.pacote_nome && isLoadingPackages) {
@@ -591,44 +576,27 @@ export default function GalleryCreate() {
       return;
     }
     console.log('🔗 Assisted Mode - Processing params:', gestaoParams);
-    console.log('🔗 Clients available:', clients.length);
     console.log('🔗 Packages available:', gestaoPackages.length);
 
-    // Step 1: Session name from category
+    // ─── Stage A: pacote/sessão/preço/sale settings (independem de clients) ───
     if (gestaoParams.pacote_categoria) {
       setSessionName(gestaoParams.pacote_categoria);
     }
 
-    // Step 2: Package name and lookup package data
     if (gestaoParams.pacote_nome) {
       setPackageName(gestaoParams.pacote_nome);
-
-      // Lookup package to get fotos_incluidas and valor_foto_extra
       const packageFromGestao = gestaoPackages.find((pkg) => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
       if (packageFromGestao) {
         console.log('🔗 Found package:', packageFromGestao);
-
-        // Use package fotos_incluidas ONLY if:
-        // 1. Not explicitly provided in URL
-        // 2. This is a TEMPORARY value - regrasCongeladas useEffect will override when loaded
-        // regrasCongeladas.pacote.fotosIncluidas takes HIGHEST priority when available
         if (!gestaoParams.fotos_incluidas_no_pacote && packageFromGestao.fotosIncluidas) {
-          console.log('🔗 Setting temporary includedPhotos from package (will be overridden by regrasCongeladas if available):', packageFromGestao.fotosIncluidas);
           setIncludedPhotos(packageFromGestao.fotosIncluidas);
         }
-
-        // Only use package valor_foto_extra if:
-        // 1. Not explicitly provided in URL
-        // 2. No frozen rules exist (regrasCongeladas will be the source of truth if present)
-        // When regrasCongeladas exist, pricing comes from there, not package
         if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra && !regrasCongeladas) {
-          console.log('🔗 Setting temporary fixedPrice from package (will be overridden by regrasCongeladas if available):', packageFromGestao.valorFotoExtra);
           setFixedPrice(packageFromGestao.valorFotoExtra);
         }
       }
     }
 
-    // Explicit URL values take priority
     if (gestaoParams.fotos_incluidas_no_pacote) {
       setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
     }
@@ -636,7 +604,6 @@ export default function GalleryCreate() {
       setFixedPrice(sanitizeExtraPrice(gestaoParams.preco_da_foto_extra));
     }
 
-    // Step 3: Sale Settings — Gestão params have priority; mark refs so settings won't overwrite
     if (gestaoParams.modelo_de_cobranca) {
       userTouchedSaleModeRef.current = true;
       setSaleMode(gestaoParams.modelo_de_cobranca);
@@ -646,24 +613,68 @@ export default function GalleryCreate() {
       setPricingModel(gestaoParams.modelo_de_preco);
     }
 
-    // Step 4: Find and select client by ID
-    if (gestaoParams.cliente_id) {
-      const clientFromGestao = clients.find((c) => c.id === gestaoParams.cliente_id);
-      if (clientFromGestao) {
-        console.log('🔗 Found client:', clientFromGestao.name);
-        setSelectedClient(clientFromGestao);
-        setUseExistingPassword(!!clientFromGestao.galleryPassword);
-      } else {
-        // Client ID not found - user will need to select manually from dropdown
-        console.log('🔗 Client ID not found in database:', gestaoParams.cliente_id);
+    // ─── Stage B: cliente (resolução assíncrona com fallback robusto) ───
+    const resolveClient = async () => {
+      if (!gestaoParams.cliente_id && !gestaoParams.cliente_nome) return;
+
+      // 1) tenta cache em memória (caminho rápido — desktop normal)
+      if (gestaoParams.cliente_id) {
+        const fromCache = clients.find((c) => c.id === gestaoParams.cliente_id);
+        if (fromCache) {
+          console.log('🔗 Client found in cache:', fromCache.name);
+          setSelectedClient(fromCache);
+          setUseExistingPassword(!!fromCache.galleryPassword);
+          return;
+        }
+
+        // 2) fallback: busca direta no banco por id+user_id (PWA mobile, race, paginação)
+        console.warn('🔗 Cliente não está no cache, tentando busca direta no banco:', gestaoParams.cliente_id);
+        const fromDb = await fetchClientById(gestaoParams.cliente_id);
+        if (fromDb) {
+          console.log('🔗 Cliente resolvido via DB:', fromDb.name);
+          addClientToCache(fromDb);
+          setSelectedClient(fromDb);
+          setUseExistingPassword(!!fromDb.galleryPassword);
+          return;
+        }
+        console.warn('🔗 Cliente_id não encontrado no banco:', gestaoParams.cliente_id);
       }
+
+      // 3) último recurso: criar cliente a partir do nome/email/telefone do Studio
+      if (gestaoParams.cliente_nome) {
+        try {
+          console.log('🔗 Criando cliente automaticamente a partir dos dados do Studio:', gestaoParams.cliente_nome);
+          const created = await createClient({
+            name: gestaoParams.cliente_nome,
+            email: gestaoParams.cliente_email || '',
+            phone: gestaoParams.cliente_telefone,
+          });
+          setSelectedClient(created);
+          setUseExistingPassword(!!created.galleryPassword);
+          toast.success('Cliente vinculado automaticamente do Studio');
+        } catch (e: any) {
+          console.error('🔗 Falha ao auto-criar cliente:', e?.message || e);
+          toast.warning('Não foi possível vincular o cliente automaticamente. Selecione manualmente.');
+        }
+      } else {
+        toast.warning('Cliente do Studio não encontrado. Selecione manualmente.');
+      }
+    };
+
+    // Não bloqueia o markAsProcessed — Stage A já rodou.
+    // Aguarda clients terminarem de carregar antes de resolver para evitar falso negativo no cache.
+    if (gestaoParams.cliente_id || gestaoParams.cliente_nome) {
+      if (isLoadingClients) {
+        console.log('🔗 Aguardando clients terminarem o load para resolver cliente...');
+        return; // re-roda quando isLoadingClients mudar
+      }
+      resolveClient();
     }
 
-    // Mark as processed and clear URL params to prevent re-application
     console.log('🔗 Marking params as processed and clearing URL');
     markAsProcessed();
     clearParams();
-  }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams]);
+  }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams, fetchClientById, addClientToCache, createClient, regrasCongeladas]);
   // Initialize payment method default — preference order:
   // 1. User explicitly chose (userTouched ref) — never overwrite
   // 2. Photographer's `defaultPaymentMethod` configured in Settings
