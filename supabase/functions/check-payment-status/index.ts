@@ -614,8 +614,9 @@ Deno.serve(async (req: Request) => {
         supabase,
         cobranca.user_id,
         cobranca.ip_order_nsu,
-        transactionNsu,
-        slug
+        transactionNsu || cobranca.ip_transaction_nsu || undefined,
+        slug,
+        cobranca.ip_checkout_url,
       );
       
       if (ipResult.status === 'paid') {
