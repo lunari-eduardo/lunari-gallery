@@ -1,55 +1,40 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Lock, CheckCircle } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-
-const updatePasswordSchema = z.object({
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: 'As senhas não coincidem',
-  path: ['confirmPassword'],
-});
-
-type UpdatePasswordFormValues = z.infer<typeof updatePasswordSchema>;
+import { AuthInput } from './AuthInput';
+import { AuthButton } from './AuthButton';
 
 export function UpdatePasswordForm() {
   const navigate = useNavigate();
   const { updatePassword } = useAuthContext();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const form = useForm<UpdatePasswordFormValues>({
-    resolver: zodResolver(updatePasswordSchema),
-    defaultValues: {
-      password: '',
-      confirmPassword: '',
-    },
-  });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast.error('Senha deve ter no mínimo 6 caracteres');
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
 
-  const onSubmit = async (values: UpdatePasswordFormValues) => {
     setIsLoading(true);
-    const { error } = await updatePassword(values.password);
-    
+    const { error } = await updatePassword(password);
+
     if (error) {
       toast.error('Erro ao atualizar senha. Tente novamente.');
     } else {
       setSuccess(true);
-      
-      // Remove reset param from URL
       const url = new URL(window.location.href);
       url.searchParams.delete('reset');
       window.history.replaceState({}, '', url.pathname);
-      
-      // Redirect after 2 seconds
       setTimeout(() => {
         navigate('/', { replace: true });
       }, 2000);
@@ -59,88 +44,44 @@ export function UpdatePasswordForm() {
 
   if (success) {
     return (
-      <div className="text-center space-y-4 py-4">
-        <CheckCircle className="h-12 w-12 text-primary mx-auto" />
-        <div className="space-y-2">
-          <h3 className="text-lg font-medium">Senha atualizada!</h3>
-          <p className="text-sm text-muted-foreground">
-            Você será redirecionado em instantes...
-          </p>
-        </div>
+      <div className="text-center py-6 space-y-4">
+        <CheckCircle className="h-16 w-16 text-[#C97A4A] mx-auto" />
+        <h3 className="text-xl font-medium text-white">Senha atualizada!</h3>
+        <p className="text-white/60 text-sm">Você será redirecionado em instantes...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <h3 className="text-lg font-medium">Nova senha</h3>
-        <p className="text-sm text-muted-foreground">
-          Digite sua nova senha abaixo.
-        </p>
+      <div className="text-center pb-2">
+        <h3 className="text-lg font-medium text-white">Nova senha</h3>
+        <p className="text-white/60 text-sm mt-1">Digite sua nova senha abaixo.</p>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nova Senha</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      autoComplete="new-password"
-                      {...field}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </Button>
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="confirmPassword"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Confirmar Nova Senha</FormLabel>
-                <FormControl>
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Salvar nova senha
-          </Button>
-        </form>
-      </Form>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <AuthInput
+          icon={Lock}
+          type="password"
+          placeholder="Nova senha (mínimo 6 caracteres)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isLoading}
+          autoComplete="new-password"
+        />
+        <AuthInput
+          icon={Lock}
+          type="password"
+          placeholder="Confirmar nova senha"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          disabled={isLoading}
+          autoComplete="new-password"
+        />
+        <AuthButton type="submit" loading={isLoading} className="mt-2">
+          Salvar nova senha
+        </AuthButton>
+      </form>
     </div>
   );
 }

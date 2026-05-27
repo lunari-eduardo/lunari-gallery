@@ -1,66 +1,56 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Loader2, Eye, EyeOff, CheckCircle, Gift } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useSearchParams } from 'react-router-dom';
+import { Mail, Lock, User, CheckCircle, Gift } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { useSearchParams } from 'react-router-dom';
+import { AuthInput } from './AuthInput';
+import { AuthButton } from './AuthButton';
 import { Badge } from '@/components/ui/badge';
 import { generateDeviceFingerprint } from '@/lib/deviceFingerprint';
-
-const signupSchema = z.object({
-  nome: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: 'As senhas não coincidem',
-  path: ['confirmPassword'],
-});
-
-type SignupFormValues = z.infer<typeof signupSchema>;
 
 export function SignupForm() {
   const { signUpWithEmail } = useAuthContext();
   const [searchParams] = useSearchParams();
   const referralCode = searchParams.get('ref') || '';
+  const [nome, setNome] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
-  const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
-    defaultValues: {
-      nome: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    },
-  });
+  const validateForm = (): string | null => {
+    if (nome.trim().length < 2) return 'Nome deve ter pelo menos 2 caracteres';
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Email inválido';
+    if (password.length < 6) return 'Senha deve ter pelo menos 6 caracteres';
+    if (password !== confirmPassword) return 'As senhas não coincidem';
+    return null;
+  };
 
-  const onSubmit = async (values: SignupFormValues) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const err = validateForm();
+    if (err) {
+      toast.error(err);
+      return;
+    }
     setIsLoading(true);
-    
-    // Generate device fingerprint before signup
+
     let fingerprint: string | undefined;
     try {
       fingerprint = await generateDeviceFingerprint();
     } catch (err) {
       console.warn('⚠️ Could not generate fingerprint:', err);
     }
-    
+
     const { error, needsEmailConfirmation } = await signUpWithEmail(
-      values.email,
-      values.password,
-      values.nome,
+      email.trim(),
+      password,
+      nome.trim(),
       referralCode || undefined,
-      fingerprint
+      fingerprint,
     );
-    
+
     if (error) {
       if (error.message?.includes('already registered')) {
         toast.error('Este email já está cadastrado');
@@ -71,142 +61,74 @@ export function SignupForm() {
       }
     } else if (needsEmailConfirmation) {
       setEmailSent(true);
-    } else {
     }
     setIsLoading(false);
   };
 
   if (emailSent) {
     return (
-      <div className="text-center space-y-4 py-4">
-        <CheckCircle className="h-12 w-12 text-primary mx-auto" />
-        <div className="space-y-2">
-          <h3 className="text-lg font-medium">Verifique seu email</h3>
-          <p className="text-sm text-muted-foreground">
-            Enviamos um link de confirmação para{' '}
-            <span className="font-medium text-foreground">{form.getValues('email')}</span>
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Clique no link para ativar sua conta.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => setEmailSent(false)}
-          className="mt-4"
-        >
-          Voltar
-        </Button>
+      <div className="text-center py-6 space-y-4">
+        <CheckCircle className="h-16 w-16 text-[#C97A4A] mx-auto" />
+        <h3 className="text-xl font-medium text-white">Verifique seu email</h3>
+        <p className="text-white/60 text-sm">
+          Enviamos um link de confirmação para
+          <br />
+          <span className="text-white font-medium">{email}</span>
+        </p>
       </div>
     );
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {referralCode && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <Gift className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-sm text-primary font-medium">
-              Indicação: <Badge variant="secondary" className="ml-1">{referralCode}</Badge>
-            </span>
-          </div>
-        )}
-        <FormField
-          control={form.control}
-          name="nome"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nome</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Seu nome"
-                  autoComplete="name"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {referralCode && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-[#C97A4A]/10 border border-[#C97A4A]/20">
+          <Gift className="h-4 w-4 text-[#C97A4A] shrink-0" />
+          <span className="text-sm text-[#C97A4A] font-medium">
+            Indicação: <Badge variant="secondary" className="ml-1">{referralCode}</Badge>
+          </span>
+        </div>
+      )}
+      <AuthInput
+        icon={User}
+        type="text"
+        placeholder="Nome completo"
+        value={nome}
+        onChange={(e) => setNome(e.target.value)}
+        disabled={isLoading}
+        autoComplete="name"
+      />
+      <AuthInput
+        icon={Mail}
+        type="email"
+        placeholder="E-mail"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={isLoading}
+        autoComplete="email"
+      />
+      <AuthInput
+        icon={Lock}
+        type="password"
+        placeholder="Senha (mínimo 6 caracteres)"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        disabled={isLoading}
+        autoComplete="new-password"
+      />
+      <AuthInput
+        icon={Lock}
+        type="password"
+        placeholder="Confirmar senha"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        disabled={isLoading}
+        autoComplete="new-password"
+      />
 
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input
-                  type="email"
-                  placeholder="seu@email.com"
-                  autoComplete="email"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Senha</FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    {...field}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </Button>
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="confirmPassword"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Confirmar Senha</FormLabel>
-              <FormControl>
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          Criar Conta
-        </Button>
-      </form>
-    </Form>
+      <AuthButton type="submit" loading={isLoading} className="mt-2">
+        Criar conta
+      </AuthButton>
+    </form>
   );
 }
