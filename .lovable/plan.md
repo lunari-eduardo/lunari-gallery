@@ -1,74 +1,64 @@
-# Plano: Corrigir cliente vazio ao criar galeria via PWA mobile
+## Diagnóstico definitivo
 
-## Diagnóstico
+No teste mobile (PWA tablet/smartphone e navegador mobile), **pacote e categoria preenchem corretamente, mas o cliente fica vazio**. Investigando o fluxo:
 
-Fluxo atual (Studio → Gallery):
-1. Studio (`WorkflowCardCollapsed.tsx`) chama `window.open(buildGalleryNewUrl({...}), '_blank')` com `cliente_id`, `cliente_nome`, `cliente_email`, `cliente_telefone`, `pacote_nome`, `pacote_categoria`, etc.
-2. Gallery (`useGestaoParams.ts`) lê os params e congela em `initialParamsRef`.
-3. `GalleryCreate.tsx` (linha 566–664) tem um `useEffect` que:
-   - **Aguarda** `!isLoadingClients` E `clients.length > 0` antes de processar **qualquer** campo se houver `cliente_id`.
-   - Preenche `sessionName`, `packageName`, `includedPhotos`, `saleMode`, etc.
-   - Faz `clients.find(c => c.id === gestaoParams.cliente_id)` — se não achar, **silenciosamente** deixa cliente vazio (apenas `console.log`).
+- **Pacote / categoria / preço** vêm de `regrasCongeladas`, que é buscado **no banco** via `session_id` na função `fetchSessionData` (`GalleryCreate.tsx` linhas 466–514). Por isso funciona em qualquer dispositivo — não depende da URL.
+- **Cliente**, hoje, depende exclusivamente dos query params `cliente_id` / `cliente_nome` / `cliente_email` / `cliente_telefone` que o Studio adiciona à URL com `window.open(..., '_blank')`.
 
-### Causas prováveis no PWA mobile (em ordem de probabilidade)
+Em mobile, o `window.open` do Studio (especialmente saindo de um PWA instalado) frequentemente:
+1. abre em outro app/contexto (Safari/Chrome fora da PWA do Gallery),
+2. perde/trunca parte da query string em URLs longas,
+3. ou cai no fluxo `/auth?redirect=...` onde a URL é re-encodada — e qualquer falha silenciosa de decode descarta os params do cliente.
 
-1. **Race / busca falha de cliente:** `useGalleryClients` (`src/hooks/useGalleryClients.ts`) só busca `clientes WHERE user_id = auth.uid()`. No PWA mobile, se a sessão Supabase ainda não tem `user.id` plenamente hidratada no momento do primeiro fetch (RLS retorna vazio) ou se ocorre erro silencioso de rede, `clients` fica `[]` e o `find` retorna `undefined`. Os outros campos (pacote/categoria) **são strings literais dos params** — preenchem sem depender de `clients`. Só o cliente depende do match in‑memory → cenário compatível com o sintoma.
-2. **Cliente não está na lista do hook:** se o `cliente_id` veio de uma sessão criada no Studio para um cliente que, por algum motivo (migração antiga, soft-delete, paginação >1000 da query), não aparece em `clients`, o `find` falha. Hoje não há fallback de busca direta por ID.
-3. **Redirect de auth perde query params:** `ProtectedRoute.tsx` faz `<Navigate to="/auth" replace />` sem preservar a URL original. No mobile, se a sessão expirou, o usuário entra no `/auth`, faz login e cai numa rota neutra → params perdidos. (Não é o caso atual reportado, mas é uma fragilidade no mesmo fluxo.)
-4. **Silêncio do erro:** o `useEffect` não diferencia "cliente não achado" de "ainda carregando" para o usuário. Não há toast, não há retry, não há fallback para criar/buscar pelo `cliente_nome` recebido.
+O `session_id` sobrevive porque está no início; os `cliente_*` ficam mais ao final e são os primeiros a se perderem.
 
-**Conclusão:** o bug imediato é a falta de fallback quando `clients.find(...)` falha. Studio está enviando os dados corretamente (verificado em `buildGalleryNewUrl` e `WorkflowCardCollapsed.tsx`). **Não há alteração necessária no projeto Studio.**
+Confirmação no banco: a tabela `clientes_sessoes` já contém a coluna **`cliente_id`** (chave para `clientes`). Ou seja, **o cliente da sessão é resolvível 100% server-side a partir do `session_id`**, sem depender da URL.
 
-## Correções (Gallery)
+## Plano de correção
 
-### 1. Fallback robusto para resolver o cliente (`GalleryCreate.tsx` + `useGalleryClients.ts`)
+Mudar a estratégia de resolução de cliente para "session-first, URL como fallback":
 
-- Quando `gestaoParams.cliente_id` está presente e `clients.find(...)` retorna `undefined`:
-  - **Buscar o cliente direto no banco** por `id` + `user_id` (uma query pontual, fora da lista cacheada).
-  - Se encontrado: injetar no `clients` local (via novo método `addClientToCache`) e selecionar.
-  - Se não encontrado mas há `cliente_nome` + (`email`/`telefone`): oferecer **auto‑criação silenciosa** (mesmo caminho de `createClient`) usando os dados vindos do Studio, e selecionar o novo cliente. Mostrar toast: "Cliente vinculado automaticamente do Studio".
-  - Se nem nome veio: toast amigável "Selecione o cliente manualmente" e não bloquear o resto.
+### 1. Estender `fetchSessionData` em `GalleryCreate.tsx`
+Adicionar `cliente_id` ao `select` da query em `clientes_sessoes`. Guardar em um novo estado `sessionClienteId`.
 
-### 2. Não bloquear processamento dos demais campos pelo gate de clientes
+### 2. Nova fonte primária de cliente: o `session_id`
+Reescrever o `resolveClient` da Stage B para tentar nesta ordem:
 
-Hoje, se `clients.length === 0` e há `cliente_id`, o `useEffect` retorna inteiro — pacote/sessão/preço **também ficam pendentes**. Refatorar para:
-- Processar pacote/categoria/sessão/preço imediatamente (não dependem de `clients`).
-- Tratar a resolução do cliente como uma sub‑rotina assíncrona independente, com timeout (~3 s) antes de cair no fallback de busca direta no DB.
+1. **`sessionClienteId`** (server-side, do `clientes_sessoes`) → cache → `fetchClientById`.
+2. **`gestaoParams.cliente_id`** (URL) → cache → `fetchClientById`.
+3. **Auto-criar** a partir de `cliente_nome` + `cliente_email`/`telefone` da URL (mantém comportamento atual).
+4. Se ainda assim falhar, abrir automaticamente o `ClientSelect` e mostrar toast claro: "Selecione o cliente da sessão para continuar".
 
-### 3. Hardening do `useGalleryClients`
+### 3. Aguardar `regrasLoaded` antes de marcar como processado
+Hoje `markAsProcessed()` roda imediatamente após disparar `resolveClient()` (sem await). Vamos:
+- aguardar `regrasLoaded === true` (para ter `sessionClienteId`),
+- **aguardar** o `resolveClient()` (await) antes de `markAsProcessed` + `clearParams`.
+- Em caso de falha não-recuperável, NÃO marcar como processado se ainda houver tentativas pendentes (ex: clients ainda carregando após retry).
 
-- Logar `error.message` em caso de falha do `select` (hoje só `console.error` sem propagar).
-- Expor um método `refetch()` (já existe) e novo `fetchClientById(id)` para busca pontual sem invalidar a lista.
-- Cuidado para a query não estourar 1000 linhas: adicionar `.limit(2000)` explícito e, se vier ≥ 2000, fazer paginação ou usar busca direta por ID como já planejado.
+### 4. Blindagens adicionais
 
-### 4. Preservar query params no fluxo de login
+- **Não bloquear pelo plano** para resolver cliente: a Stage B não precisa de `hasGestaoIntegration` (a integração governa o que mostrar, não a hidratação). Mover a checagem só para Stage A (campos de pacote que dependem do Studio).
+- **Logs estruturados** com prefixo `[AssistedMode]` para cada etapa (session resolvido / cache hit / DB hit / auto-create / fallback). Facilita diagnóstico remoto via console do dispositivo.
+- **Toast de erro acionável**: quando nenhuma fonte resolver, mostrar `toast.error('Não foi possível identificar o cliente da sessão. Selecione manualmente.')` e abrir o popover de seleção.
+- **Telemetria leve**: contador em `console.warn` quando a URL chega sem `cliente_id` mas o session tem — sinal de degradação no `window.open` do Studio.
 
-`ProtectedRoute.tsx`: trocar `<Navigate to="/auth" replace />` por `<Navigate to={`/auth?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />` e, no `Auth.tsx`, após login bem‑sucedido, fazer `navigate(decodeURIComponent(redirect))` em vez de cair na Home. Isso blinda o caso "usuário deslogado clica no link do Studio".
+### 5. Nada muda no Studio nem em edge functions
 
-### 5. Telemetria leve para diagnóstico futuro
+Conforme regra do projeto, **nenhuma alteração no projeto Studio nem em edge functions de pagamento**. A correção é 100% no Gallery, lendo dados que já existem no banco compartilhado.
 
-- No `useEffect` do modo assistido, adicionar `console.warn` estruturado quando:
-  - `cliente_id` veio mas não achou na lista (já existe — manter).
-  - Fallback de DB também falhou.
-  - Auto‑criação foi acionada.
-- Esses logs ficam visíveis em sessões PWA via `console` para investigação rápida.
+## Arquivos afetados
 
-## Arquivos a alterar
+- `src/pages/GalleryCreate.tsx` — extender query, novo estado `sessionClienteId`, reescrever Stage B, reordenar gate de `isAssistedMode`.
+- (Opcional) `src/hooks/useGestaoParams.ts` — sem mudança estrutural; apenas adicionar comentário sobre nova fonte primária.
 
-- `src/pages/GalleryCreate.tsx` — split do `useEffect`, fallback de cliente, auto‑criação opcional.
-- `src/hooks/useGalleryClients.ts` — novos `fetchClientById`, `addClientToCache`, `.limit(2000)`, logs melhores.
-- `src/components/ProtectedRoute.tsx` — preservar `pathname + search` no redirect.
-- `src/pages/Auth.tsx` — respeitar `?redirect=` após login.
+## Por que isso resolve definitivamente
 
-## Fora do escopo
+| Cenário | Antes | Depois |
+|---|---|---|
+| Desktop PWA/Browser (URL completa) | ✅ via URL | ✅ via session (mais rápido, sem DB extra se em cache) |
+| Mobile PWA, URL trunca cliente_* | ❌ vazio | ✅ resolvido via `clientes_sessoes.cliente_id` |
+| Mobile Browser, redirect via /auth | ❌ params perdidos | ✅ session_id basta |
+| `cliente_id` órfão (cliente apagado) | toast genérico | toast acionável + popover aberto |
+| `cliente_nome` ausente | falha silenciosa | fallback claro com seleção manual |
 
-- Nenhuma mudança no Studio nem em edge functions de pagamento (InfinitePay, Asaas, Mercado Pago). Webhooks e cobranças permanecem intocados.
-- Nenhuma mudança em RLS ou no banco.
-
-## QA
-
-1. Desktop logado, link do Studio com `cliente_id` válido → cliente já cacheado seleciona instantaneamente (regressão zero).
-2. PWA mobile logado, link com `cliente_id` válido mas `clients` vazio inicialmente → fallback de DB busca e seleciona; demais campos não esperam pelo cliente.
-3. Link com `cliente_id` inexistente mas `cliente_nome` + `cliente_email` → cria cliente, seleciona, toast informativo.
-4. Link com só `cliente_nome` → form preenche pacote, deixa cliente vazio, toast pede seleção manual.
-5. PWA mobile **deslogado** clica no link → `/auth?redirect=...` → após login cai em `/gallery/new` com todos os params intactos.
+Como a resolução agora é server-side, o sistema fica imune a qualquer regressão futura no encoding de URL, tamanho de querystring, ou comportamento de `window.open` em PWAs.
