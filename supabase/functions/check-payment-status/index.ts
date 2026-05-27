@@ -267,16 +267,48 @@ async function upsertAsaasParcela(
 // ============================================================
 // VERIFICAÇÃO VIA ENDPOINT PÚBLICO INFINITEPAY
 // ============================================================
+// ============================================================
+// InfinitePay endpoints — centralizados para troca rápida
+// Pode ser sobrescrito via secret INFINITEPAY_API_BASE
+// ============================================================
+const INFINITEPAY_API_BASE =
+  Deno.env.get('INFINITEPAY_API_BASE') || 'https://api.checkout.infinitepay.io';
+const INFINITEPAY_PAYMENT_CHECK_URL = `${INFINITEPAY_API_BASE}/payment_check`;
+console.log(`[INFINITEPAY_ENDPOINT_VERSION] v2-checkout-api base=${INFINITEPAY_API_BASE}`);
+
+/**
+ * Extrai o slug do checkout URL da InfinitePay.
+ * Ex: https://checkout.infinitepay.io/handle?lenc=... → "handle?lenc=..." NO.
+ * O slug real é o último segmento do path: /coralin → "coralin"
+ * mas para /payment_check a InfinitePay aceita o handle como path.
+ * Tentamos extrair o slug do lenc / path para reforçar o lookup.
+ */
+function extractInvoiceSlug(checkoutUrl?: string | null): string | undefined {
+  if (!checkoutUrl) return undefined;
+  try {
+    const u = new URL(checkoutUrl);
+    // path: /<handle> — não é slug de invoice
+    // o "lenc" no query é o token interno; alguns ambientes aceitam como slug
+    const lenc = u.searchParams.get('lenc');
+    if (lenc) return lenc;
+    const parts = u.pathname.split('/').filter(Boolean);
+    return parts[parts.length - 1];
+  } catch {
+    return undefined;
+  }
+}
+
 async function checkInfinitePayStatusPublic(
   supabase: any,
   userId: string,
   orderNsu: string,
   transactionNsu?: string,
-  slug?: string
-): Promise<{ status: 'paid' | 'pending' | 'error'; receiptUrl?: string; paidAmount?: number }> {
+  slug?: string,
+  checkoutUrl?: string | null,
+): Promise<{ status: 'paid' | 'pending' | 'error'; receiptUrl?: string; paidAmount?: number; rawBody?: string }> {
   try {
     console.log('🔍 Buscando handle InfinitePay para user_id:', userId);
-    
+
     const { data: integracao, error: integracaoError } = await supabase
       .from('usuarios_integracoes')
       .select('dados_extras')
@@ -284,42 +316,57 @@ async function checkInfinitePayStatusPublic(
       .eq('provedor', 'infinitepay')
       .eq('status', 'ativo')
       .maybeSingle();
-    
+
     if (integracaoError) {
       console.error('❌ Erro ao buscar integração:', integracaoError);
       return { status: 'error' };
     }
-    
+
     const handle = integracao?.dados_extras?.handle;
     if (!handle) {
       console.log('⚠️ Handle InfinitePay não encontrado');
       return { status: 'error' };
     }
-    
-    const response = await fetch('https://api.checkout.infinitepay.io/payment_check', {
+
+    // 🛡️ Reforço: extrair slug do checkout_url quando não veio no payload
+    const effectiveSlug = slug || extractInvoiceSlug(checkoutUrl);
+
+    const payload: Record<string, unknown> = {
+      handle,
+      order_nsu: orderNsu,
+    };
+    if (transactionNsu) payload.transaction_nsu = transactionNsu;
+    if (effectiveSlug) payload.slug = effectiveSlug;
+
+    console.log('📤 Polling /payment_check payload:', JSON.stringify({
+      handle, order_nsu: orderNsu, has_tx_nsu: !!transactionNsu, has_slug: !!effectiveSlug, slug_source: slug ? 'param' : (effectiveSlug ? 'extracted' : 'none'),
+    }));
+
+    const response = await fetch(INFINITEPAY_PAYMENT_CHECK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        handle,
-        order_nsu: orderNsu,
-        transaction_nsu: transactionNsu,
-        slug,
-      }),
+      body: JSON.stringify(payload),
     });
-    
+
+    const rawBody = await response.text();
+
     if (!response.ok) {
-      console.log('⚠️ InfinitePay API retornou erro:', response.status);
-      return { status: 'error' };
+      console.log('⚠️ InfinitePay API retornou erro:', response.status, rawBody.substring(0, 200));
+      return { status: 'error', rawBody };
     }
-    
-    const data = await response.json();
+
+    let data: any = {};
+    try { data = JSON.parse(rawBody); } catch {
+      console.error('❌ payment_check retorno não-JSON:', rawBody.substring(0, 200));
+      return { status: 'error', rawBody };
+    }
     console.log('📊 Resposta InfinitePay:', JSON.stringify(data));
-    
+
     if (data.success && data.paid) {
-      return { status: 'paid', receiptUrl: data.receipt_url, paidAmount: data.paid_amount };
+      return { status: 'paid', receiptUrl: data.receipt_url, paidAmount: data.paid_amount, rawBody };
     }
-    
-    return { status: 'pending' };
+
+    return { status: 'pending', rawBody };
   } catch (error) {
     console.error('❌ Erro ao consultar InfinitePay API:', error);
     return { status: 'error' };
