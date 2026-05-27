@@ -1,52 +1,105 @@
-# Atualização dos Endpoints InfinitePay
+## Diagnóstico aprofundado
 
-A InfinitePay desativará as URLs antigas em **01/06/2026**. Precisamos trocar os endpoints antes dessa data, mantendo payloads, webhooks e todo o restante do fluxo intactos.
+Investigação completa em `cobrancas`, `webhook_logs` e logs das Edge Functions.
 
-## Diagnóstico — onde as URLs estão hardcoded
+### O que está funcionando ✅
 
-Após varredura completa do projeto (`rg "api\.infinitepay\.io|checkout\.infinitepay\.io"`), as URLs antigas aparecem em **apenas 2 lugares**, ambos em Edge Functions:
+As novas URLs (`https://api.checkout.infinitepay.io/links` e `/payment_check`) já estão ativas neste projeto Gallery e funcionaram em **3 cobranças confirmadas após o deploy**:
 
-1. `supabase/functions/infinitepay-create-link/index.ts` (linha 208)
-   - `POST https://api.infinitepay.io/invoices/public/checkout/links` → criar link de cobrança
-2. `supabase/functions/check-payment-status/index.ts` (linha 299)
-   - `POST https://api.infinitepay.io/invoices/public/checkout/payment_check` → verificar status de pagamento
+| Cobrança | Criada | Webhook | Status |
+|---|---|---|---|
+| `gallery-1779898745146-ll6gzq` | 16:19 | processed em 16:21 | pago ✅ |
+| `gallery-1779908627534-1xxzir` | 19:03 | processed em 19:04 | pago ✅ |
+| `gallery-1779912044093-admv67` | 20:00 | processed em 20:05 | pago ✅ |
+| `gallery-1779912044885-p4j33q` | 20:00 | processed em 20:05 | pago ✅ |
 
-Nenhuma referência hardcoded no frontend, em variáveis de ambiente (`.env`), no Worker do Cloudflare, na função `infinitepay-webhook` (que apenas recebe webhooks da InfinitePay, não chama a API), nem em outros services.
+Conclusão: `infinitepay-create-link` + `infinitepay-webhook` deste projeto estão 100% saudáveis com o novo endpoint.
 
-## O que vai mudar
+### O que está travado ❌
 
-| Função | URL antiga | URL nova |
-|---|---|---|
-| `infinitepay-create-link` | `https://api.infinitepay.io/invoices/public/checkout/links` | `https://api.checkout.infinitepay.io/links` |
-| `check-payment-status` | `https://api.infinitepay.io/invoices/public/checkout/payment_check` | `https://api.checkout.infinitepay.io/payment_check` |
+Duas cobranças pendentes criadas às **17:46:11 e 17:46:15** com padrão muito diferente:
 
-## O que NÃO muda (blindagem)
+```
+ip_order_nsu = id (UUID) — ex.: 9b94a534-bdd7-435b-8be3-ea1072ddaf60
+descricao    = "Pagamento via InfinitePay"
+galeria_id   = NULL
+session_id   = "agenda-..."   ← prefixo do projeto Gestão
+qtd_fotos    = 0
+ip_checkout_url já populado (link real na InfinitePay)
+```
 
-- Payloads de request (handle, order_nsu, items, customer, redirect_url, webhook_url)
-- Webhook URL configurado nos links (`/functions/v1/infinitepay-webhook`)
-- Função `infinitepay-webhook` (recebe callbacks da InfinitePay — endpoint deles é mesmo)
-- Lógica de retry/timeout (`fetchWithRetry`), auto-healing por NSU, polling em `GalleryDetail.tsx` e `ClientGallery.tsx`
-- Tabela `cobrancas`, IDs já gerados, galerias/sessões existentes — apenas o host muda
-- Variáveis de ambiente e secrets
+Características que **comprovam** que essas cobranças **não foram criadas pela função deste projeto** (`infinitepay-create-link` gera `order_nsu = "gallery-{ts}-{rand}"`, nunca um UUID):
 
-## Plano de execução
+1. `ip_order_nsu = UUID` é o padrão usado pelo projeto **Gestão / lunari_gallery** (que compartilha o mesmo banco).
+2. `session_id` com prefixo `agenda-` é gerado no Gestão (fluxo de sessões/agendamento), não no Gallery.
+3. `webhook_logs` **não tem nenhum registro** para esses dois `order_nsu`, ou seja, a InfinitePay **nunca enviou webhook** para nosso endpoint.
+4. O polling em `check-payment-status` recebe `{"success":false}` da nova URL `/payment_check` porque está enviando `handle + order_nsu(UUID) + transaction_nsu=undefined + slug=undefined` e a InfinitePay não localiza a ordem.
 
-1. **Editar `supabase/functions/infinitepay-create-link/index.ts`**
-   - Trocar a URL na chamada `fetchWithRetry(...)` para `https://api.checkout.infinitepay.io/links`
-2. **Editar `supabase/functions/check-payment-status/index.ts`**
-   - Trocar a URL na chamada `fetch(...)` para `https://api.checkout.infinitepay.io/payment_check`
-3. **Deploy automático** das duas Edge Functions (Lovable deploya automaticamente)
-4. **Validação pós-deploy**
-   - Conferir logs de `infinitepay-create-link` na primeira chamada (status 200 e `checkoutUrl` retornado)
-   - Conferir logs de `check-payment-status` para uma cobrança pendente
-   - Testar criação de cobrança real em galeria de teste e confirmar pagamento via webhook
-   - Compatibilidade com cobranças antigas: o `order_nsu` continua o mesmo identificador, o novo endpoint reconhece todos os links já gerados (confirmado no comunicado da InfinitePay)
+### Causa raiz real
 
-## Blindagem futura (opcional, recomendação)
+**O projeto Gestão (`lunari_gallery`) tem sua própria função `infinitepay-create-link` que ainda está apontando para a URL antiga (`api.infinitepay.io/invoices/public/checkout/...`) ou tem `webhook_url` desatualizada.**
 
-Para evitar nova caça-ao-hardcode no futuro, sugiro centralizar as URLs em constantes no topo de cada função (ex.: `const INFINITEPAY_API_BASE = 'https://api.checkout.infinitepay.io'`). Faço isso junto, mantendo a mudança mínima e auditável.
+Como a URL antiga será desativada em 01/06/2026, qualquer cobrança criada por aquele projeto após o desligamento vai falhar. Hoje, mesmo antes do desligamento, o polling pelo nosso `check-payment-status` falha porque o novo `/payment_check` não retorna sucesso para cobranças nascidas no fluxo antigo do Gestão (ou a InfinitePay já mudou a chave de lookup para `slug`).
 
-## Riscos
+### Por que o webhook nunca chegou nessas 2
 
-- **Nenhum risco para galerias/sessões existentes** — apenas o host muda, IDs e fluxo de webhook permanecem
-- Se o novo endpoint apresentar comportamento diferente (não esperado pelo comunicado), o rollback é trivial: reverter as duas linhas
+Três hipóteses (não temos como confirmar daqui sem ver logs do projeto Gestão):
+
+1. **Pagamento não foi finalizado pelo cliente** (abandono no checkout).
+2. **Webhook URL no payload da função do Gestão aponta para outro lugar** (não para `tlnjspsywycbudhewsfv`).
+3. **Validação HMAC no Gestão** rejeitando a entrada (geraria `webhook_logs.status='signature_invalid'` se chegasse — não há registro, então não chegou).
+
+---
+
+## Plano de correção (este projeto Gallery)
+
+### 1) Blindar o polling `check-payment-status` (alta prioridade)
+
+A função hoje envia apenas `handle + order_nsu` para `/payment_check`. A documentação prática da InfinitePay mostra que `slug` (extraído do `ip_checkout_url`) é o identificador mais estável. Vamos:
+
+a) Extrair o `slug` do `ip_checkout_url` (parte após o último `/` antes do `?`) quando disponível, e sempre enviá-lo no payload de `/payment_check`.
+
+b) Logar a resposta completa da InfinitePay (status HTTP + body) para ter telemetria real do motivo de `success:false`.
+
+c) Quando `success:false` por 3 polls consecutivos numa mesma cobrança, gravar `error_message` em `cobrancas` para o painel exibir "verificação automática indisponível — confirme manualmente".
+
+### 2) Centralizar URLs em constantes
+
+Criar no topo de `infinitepay-create-link/index.ts` e `check-payment-status/index.ts`:
+
+```ts
+const INFINITEPAY_API_BASE = Deno.env.get('INFINITEPAY_API_BASE') || 'https://api.checkout.infinitepay.io';
+const INFINITEPAY_LINKS_URL = `${INFINITEPAY_API_BASE}/links`;
+const INFINITEPAY_PAYMENT_CHECK_URL = `${INFINITEPAY_API_BASE}/payment_check`;
+```
+
+Assim qualquer mudança futura é uma linha só, ou um secret, sem editar código.
+
+### 3) Verificação automática pós-deploy (smoke test)
+
+Adicionar no início de cada função um log único `[INFINITEPAY_ENDPOINT_VERSION] v2-checkout-api` que aparece no boot. Isso garante que conseguimos provar nos logs qual versão está rodando em produção a qualquer momento.
+
+### 4) Limpeza dos 2 registros órfãos
+
+Marcar manualmente as 2 cobranças `9b94a534…` e `16d86621…` como `cancelada` (ou `expirada`) via migração, com `error_message = 'origem: projeto Gestão — fluxo antigo'`. Não impacta o cliente final porque `galeria_id` é NULL (não há galeria associada).
+
+### 5) Relato cruzado para o projeto Gestão (`lunari_gallery`)
+
+**Conforme regra do projeto: relatar imediatamente.** O projeto Gestão precisa, antes de 01/06/2026, aplicar exatamente as mesmas mudanças:
+
+- Trocar `https://api.infinitepay.io/invoices/public/checkout/links` → `https://api.checkout.infinitepay.io/links` em `infinitepay-create-link`.
+- Trocar `https://api.infinitepay.io/invoices/public/checkout/payment_check` → `https://api.checkout.infinitepay.io/payment_check` em qualquer função de verificação.
+- Confirmar que `webhook_url` no payload aponta para `https://tlnjspsywycbudhewsfv.supabase.co/functions/v1/infinitepay-webhook` (única função que finaliza cobranças no banco compartilhado).
+- Garantir o mesmo `INFINITEPAY_WEBHOOK_SECRET` em ambos os projetos para validação HMAC.
+
+Sem essa atualização, **todas as cobranças criadas pelo Gestão após 01/06/2026 vão quebrar**.
+
+---
+
+## Resumo executivo para o usuário
+
+- As alterações de URL **não causaram** o travamento das 2 cobranças — elas vieram do projeto Gestão e nunca receberam webhook (provável abandono de pagamento ou webhook_url divergente).
+- O fluxo deste projeto Gallery está saudável (4 cobranças finalizadas após o deploy).
+- Vamos blindar o polling com `slug`, centralizar URLs, melhorar telemetria, limpar registros órfãos e exigir atualização no Gestão antes de 01/06/2026.
+
+Aprova esse plano para eu aplicar?
