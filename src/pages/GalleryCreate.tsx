@@ -247,6 +247,8 @@ export default function GalleryCreate() {
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
   const [isLoadingRegras, setIsLoadingRegras] = useState(false);
   const [regrasLoaded, setRegrasLoaded] = useState(false);
+  // cliente_id resolvido server-side via clientes_sessoes (fonte primária — independe da URL)
+  const [sessionClienteId, setSessionClienteId] = useState<string | null>(null);
 
   // Override pricing: removido. A sessão (Lunari Studio) é a fonte única
   // do valor da foto extra. Para alterar, edite no editor da galeria após
