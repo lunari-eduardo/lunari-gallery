@@ -247,6 +247,8 @@ export default function GalleryCreate() {
   const [regrasCongeladas, setRegrasCongeladas] = useState<RegrasCongeladas | null>(null);
   const [isLoadingRegras, setIsLoadingRegras] = useState(false);
   const [regrasLoaded, setRegrasLoaded] = useState(false);
+  // cliente_id resolvido server-side via clientes_sessoes (fonte primária — independe da URL)
+  const [sessionClienteId, setSessionClienteId] = useState<string | null>(null);
 
   // Override pricing: removido. A sessão (Lunari Studio) é a fonte única
   // do valor da foto extra. Para alterar, edite no editor da galeria após
@@ -481,11 +483,15 @@ export default function GalleryCreate() {
         const {
           data,
           error
-        } = await supabase.from('clientes_sessoes').select('id, session_id, regras_congeladas, valor_foto_extra').eq('session_id', sessionId).single();
+        } = await supabase.from('clientes_sessoes').select('id, session_id, cliente_id, regras_congeladas, valor_foto_extra').eq('session_id', sessionId).single();
         if (error) {
           console.warn('Session not found or error:', error.message);
         } else {
           console.log('🔗 Session data found:', data);
+          if (data?.cliente_id) {
+            console.log('[AssistedMode] sessionClienteId resolvido via clientes_sessoes:', data.cliente_id);
+            setSessionClienteId(data.cliente_id);
+          }
           if (data?.regras_congeladas) {
             const regras = data.regras_congeladas as unknown as RegrasCongeladas;
             console.log('🔗 regrasCongeladas loaded:', {
@@ -563,87 +569,97 @@ export default function GalleryCreate() {
     }
   }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra, packageName, sessionName]);
 
-  // Assisted mode: Pre-fill fields from Gestão params (only for PRO + Gallery users)
-  // Two-stage:
-  //   Stage A — non-client fields run as soon as packages are ready (no client dependency)
-  //   Stage B — client resolution: cache → DB fallback → auto-create from cliente_nome
+  // Modo Assistido (Studio → Gallery)
+  //   Stage A — pacote/sessão/preço/sale (depende dos params da URL + plano).
+  //   Stage B — cliente: SESSION-FIRST. Resolve via clientes_sessoes.cliente_id (server-side)
+  //             e cai para os params da URL apenas como fallback. Não depende de hasGestaoIntegration:
+  //             a integração governa o que mostrar, não a hidratação dos dados.
   useEffect(() => {
-    if (!isAssistedMode || !gestaoParams || paramsProcessed) return;
+    if (!hasGestaoSession || !gestaoParams || paramsProcessed) return;
 
-    // Wait for packages to load if we have a pacote_nome (to lookup fotos_incluidas)
+    // Aguarda packages se houver pacote_nome (para lookup de fotos_incluidas)
     if (gestaoParams.pacote_nome && isLoadingPackages) {
-      console.log('🔗 Waiting for packages to load...');
+      console.log('[AssistedMode] aguardando packages...');
       return;
     }
-    console.log('🔗 Assisted Mode - Processing params:', gestaoParams);
-    console.log('🔗 Packages available:', gestaoPackages.length);
-
-    // ─── Stage A: pacote/sessão/preço/sale settings (independem de clients) ───
-    if (gestaoParams.pacote_categoria) {
-      setSessionName(gestaoParams.pacote_categoria);
+    // Aguarda regras congeladas (que trazem o sessionClienteId server-side)
+    if (!regrasLoaded) {
+      console.log('[AssistedMode] aguardando regras/sessão...');
+      return;
     }
 
-    if (gestaoParams.pacote_nome) {
-      setPackageName(gestaoParams.pacote_nome);
-      const packageFromGestao = gestaoPackages.find((pkg) => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
-      if (packageFromGestao) {
-        console.log('🔗 Found package:', packageFromGestao);
-        if (!gestaoParams.fotos_incluidas_no_pacote && packageFromGestao.fotosIncluidas) {
-          setIncludedPhotos(packageFromGestao.fotosIncluidas);
+    console.log('[AssistedMode] processing', { gestaoParams, sessionClienteId, hasGestaoIntegration });
+
+    // ─── Stage A: pacote/sessão/preço/sale (somente com integração ativa) ───
+    if (isAssistedMode) {
+      if (gestaoParams.pacote_categoria) {
+        setSessionName(gestaoParams.pacote_categoria);
+      }
+
+      if (gestaoParams.pacote_nome) {
+        setPackageName(gestaoParams.pacote_nome);
+        const packageFromGestao = gestaoPackages.find((pkg) => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
+        if (packageFromGestao) {
+          if (!gestaoParams.fotos_incluidas_no_pacote && packageFromGestao.fotosIncluidas) {
+            setIncludedPhotos(packageFromGestao.fotosIncluidas);
+          }
+          if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra && !regrasCongeladas) {
+            setFixedPrice(packageFromGestao.valorFotoExtra);
+          }
         }
-        if (!gestaoParams.preco_da_foto_extra && packageFromGestao.valorFotoExtra && !regrasCongeladas) {
-          setFixedPrice(packageFromGestao.valorFotoExtra);
-        }
+      }
+
+      if (gestaoParams.fotos_incluidas_no_pacote) {
+        setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
+      }
+      if (gestaoParams.preco_da_foto_extra) {
+        setFixedPrice(sanitizeExtraPrice(gestaoParams.preco_da_foto_extra));
+      }
+      if (gestaoParams.modelo_de_cobranca) {
+        userTouchedSaleModeRef.current = true;
+        setSaleMode(gestaoParams.modelo_de_cobranca);
+      }
+      if (gestaoParams.modelo_de_preco) {
+        userTouchedPricingModelRef.current = true;
+        setPricingModel(gestaoParams.modelo_de_preco);
       }
     }
 
-    if (gestaoParams.fotos_incluidas_no_pacote) {
-      setIncludedPhotos(gestaoParams.fotos_incluidas_no_pacote);
-    }
-    if (gestaoParams.preco_da_foto_extra) {
-      setFixedPrice(sanitizeExtraPrice(gestaoParams.preco_da_foto_extra));
-    }
+    // ─── Stage B: cliente (SESSION-FIRST, URL como fallback) ───
+    const resolveClient = async (): Promise<boolean> => {
+      // Prioridade de IDs: 1º o resolvido server-side, 2º o que veio na URL
+      const candidateIds = [sessionClienteId, gestaoParams.cliente_id].filter(Boolean) as string[];
 
-    if (gestaoParams.modelo_de_cobranca) {
-      userTouchedSaleModeRef.current = true;
-      setSaleMode(gestaoParams.modelo_de_cobranca);
-    }
-    if (gestaoParams.modelo_de_preco) {
-      userTouchedPricingModelRef.current = true;
-      setPricingModel(gestaoParams.modelo_de_preco);
-    }
+      // Telemetria: URL trouxe cliente_id? Se não, e session resolveu, registramos sinal de degradação
+      if (!gestaoParams.cliente_id && sessionClienteId) {
+        console.warn('[AssistedMode] URL chegou SEM cliente_id mas session tem — provável truncamento de URL em mobile/PWA');
+      }
 
-    // ─── Stage B: cliente (resolução assíncrona com fallback robusto) ───
-    const resolveClient = async () => {
-      if (!gestaoParams.cliente_id && !gestaoParams.cliente_nome) return;
-
-      // 1) tenta cache em memória (caminho rápido — desktop normal)
-      if (gestaoParams.cliente_id) {
-        const fromCache = clients.find((c) => c.id === gestaoParams.cliente_id);
+      for (const id of candidateIds) {
+        // 1) cache em memória
+        const fromCache = clients.find((c) => c.id === id);
         if (fromCache) {
-          console.log('🔗 Client found in cache:', fromCache.name);
+          console.log('[AssistedMode] cache HIT:', fromCache.name);
           setSelectedClient(fromCache);
           setUseExistingPassword(!!fromCache.galleryPassword);
-          return;
+          return true;
         }
-
-        // 2) fallback: busca direta no banco por id+user_id (PWA mobile, race, paginação)
-        console.warn('🔗 Cliente não está no cache, tentando busca direta no banco:', gestaoParams.cliente_id);
-        const fromDb = await fetchClientById(gestaoParams.cliente_id);
+        // 2) busca direta no banco (resistente a race/paginação/PWA mobile)
+        console.log('[AssistedMode] cache MISS — DB lookup:', id);
+        const fromDb = await fetchClientById(id);
         if (fromDb) {
-          console.log('🔗 Cliente resolvido via DB:', fromDb.name);
+          console.log('[AssistedMode] DB HIT:', fromDb.name);
           addClientToCache(fromDb);
           setSelectedClient(fromDb);
           setUseExistingPassword(!!fromDb.galleryPassword);
-          return;
+          return true;
         }
-        console.warn('🔗 Cliente_id não encontrado no banco:', gestaoParams.cliente_id);
       }
 
-      // 3) último recurso: criar cliente a partir do nome/email/telefone do Studio
+      // 3) auto-criar a partir dos dados do Studio (URL)
       if (gestaoParams.cliente_nome) {
         try {
-          console.log('🔗 Criando cliente automaticamente a partir dos dados do Studio:', gestaoParams.cliente_nome);
+          console.log('[AssistedMode] auto-create do Studio:', gestaoParams.cliente_nome);
           const created = await createClient({
             name: gestaoParams.cliente_nome,
             email: gestaoParams.cliente_email || '',
@@ -652,29 +668,36 @@ export default function GalleryCreate() {
           setSelectedClient(created);
           setUseExistingPassword(!!created.galleryPassword);
           toast.success('Cliente vinculado automaticamente do Studio');
+          return true;
         } catch (e: any) {
-          console.error('🔗 Falha ao auto-criar cliente:', e?.message || e);
-          toast.warning('Não foi possível vincular o cliente automaticamente. Selecione manualmente.');
+          console.error('[AssistedMode] falha ao auto-criar cliente:', e?.message || e);
         }
-      } else {
-        toast.warning('Cliente do Studio não encontrado. Selecione manualmente.');
       }
+
+      console.error('[AssistedMode] não foi possível resolver cliente da sessão', { candidateIds, sessionClienteId });
+      toast.error('Não foi possível identificar o cliente da sessão. Selecione manualmente abaixo.');
+      return false;
     };
 
-    // Não bloqueia o markAsProcessed — Stage A já rodou.
-    // Aguarda clients terminarem de carregar antes de resolver para evitar falso negativo no cache.
-    if (gestaoParams.cliente_id || gestaoParams.cliente_nome) {
+    const shouldResolveClient = !!sessionClienteId || !!gestaoParams.cliente_id || !!gestaoParams.cliente_nome;
+
+    const finish = () => {
+      console.log('[AssistedMode] marcando params como processados');
+      markAsProcessed();
+      clearParams();
+    };
+
+    if (shouldResolveClient) {
       if (isLoadingClients) {
-        console.log('🔗 Aguardando clients terminarem o load para resolver cliente...');
+        console.log('[AssistedMode] aguardando clients...');
         return; // re-roda quando isLoadingClients mudar
       }
-      resolveClient();
+      // Awaited para não marcar processado antes de a resolução terminar
+      resolveClient().finally(finish);
+    } else {
+      finish();
     }
-
-    console.log('🔗 Marking params as processed and clearing URL');
-    markAsProcessed();
-    clearParams();
-  }, [isAssistedMode, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams, fetchClientById, addClientToCache, createClient, regrasCongeladas]);
+  }, [hasGestaoSession, isAssistedMode, hasGestaoIntegration, gestaoParams, clients, gestaoPackages, isLoadingClients, isLoadingPackages, paramsProcessed, markAsProcessed, clearParams, fetchClientById, addClientToCache, createClient, regrasCongeladas, regrasLoaded, sessionClienteId]);
   // Initialize payment method default — preference order:
   // 1. User explicitly chose (userTouched ref) — never overwrite
   // 2. Photographer's `defaultPaymentMethod` configured in Settings
