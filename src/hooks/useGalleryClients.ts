@@ -154,6 +154,37 @@ export function useGalleryClients(): UseGalleryClientsReturn {
     return clients.find(client => client.id === id);
   }, [clients]);
 
+  // Fetch a single client directly from DB (bypass cache) — used as fallback
+  // when assisted mode receives a cliente_id that didn't land in the cached list
+  // (race, paginação ou cliente recém-criado).
+  const fetchClientById = useCallback(async (id: string): Promise<Client | null> => {
+    if (!user || !id) return null;
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id, nome, email, telefone, whatsapp, gallery_password, gallery_status, total_galerias, created_at, updated_at')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (error) {
+        console.error('[useGalleryClients] fetchClientById error:', error.message);
+        return null;
+      }
+      return data ? mapRowToClient(data) : null;
+    } catch (e: any) {
+      console.error('[useGalleryClients] fetchClientById exception:', e?.message || e);
+      return null;
+    }
+  }, [user, mapRowToClient]);
+
+  // Inject client into cached list (idempotent)
+  const addClientToCache = useCallback((client: Client) => {
+    setClients(prev => {
+      if (prev.some(c => c.id === client.id)) return prev;
+      return [...prev, client].sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }, []);
+
   return {
     clients,
     isLoading,
@@ -162,6 +193,8 @@ export function useGalleryClients(): UseGalleryClientsReturn {
     deleteClient,
     searchClients,
     getClientById,
+    fetchClientById,
+    addClientToCache,
     refetch: fetchClients,
   };
 }
