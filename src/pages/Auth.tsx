@@ -60,13 +60,27 @@ export default function Auth() {
     if (showUpdatePassword && user) return;
 
     if (!loading && !accessLoading && user) {
+      // Restaura destino original (ex: vindo de /gallery/new?session_id=...) após login
+      const redirectParam = searchParams.get('redirect');
+      if (redirectParam) {
+        try {
+          const target = decodeURIComponent(redirectParam);
+          // segurança: só aceita paths internos (mesmo origin)
+          if (target.startsWith('/') && !target.startsWith('//')) {
+            navigate(target, { replace: true });
+            return;
+          }
+        } catch (e) {
+          console.warn('[Auth] redirect param inválido:', e);
+        }
+      }
       if (hasGalleryAccess) {
         navigate('/', { replace: true });
       } else {
         navigate('/access-denied', { replace: true });
       }
     }
-  }, [user, loading, accessLoading, hasGalleryAccess, navigate, isProcessingCallback, showUpdatePassword]);
+  }, [user, loading, accessLoading, hasGalleryAccess, navigate, isProcessingCallback, showUpdatePassword, searchParams]);
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -9,6 +9,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuthContext();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,11 +19,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Apenas verificar se está logado - acesso ao Gallery é livre
+  // Preserva pathname + search (ex: /gallery/new?session_id=...&cliente_id=...)
+  // para restaurar após login. Crítico para fluxo Studio → Gallery em PWA mobile.
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    const redirectTarget = `${location.pathname}${location.search}${location.hash}`;
+    const redirect = redirectTarget && redirectTarget !== '/'
+      ? `?redirect=${encodeURIComponent(redirectTarget)}`
+      : '';
+    return <Navigate to={`/auth${redirect}`} replace />;
   }
 
-  // Usuário logado = acesso garantido
   return <>{children}</>;
 }
