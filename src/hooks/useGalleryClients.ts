@@ -54,12 +54,16 @@ export function useGalleryClients(): UseGalleryClientsReturn {
         .from('clientes')
         .select('id, nome, email, telefone, whatsapp, gallery_password, gallery_status, total_galerias, created_at, updated_at')
         .eq('user_id', user.id)
-        .order('nome', { ascending: true });
+        .order('nome', { ascending: true })
+        .limit(2000);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[useGalleryClients] Supabase error:', error.message, error);
+        throw error;
+      }
       setClients((data || []).map(mapRowToClient));
-    } catch (error) {
-      console.error('Error fetching clients:', error);
+    } catch (error: any) {
+      console.error('[useGalleryClients] Error fetching clients:', error?.message || error);
       setClients([]);
     } finally {
       setIsLoading(false);
