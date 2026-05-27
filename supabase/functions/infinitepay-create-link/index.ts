@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
     let infinitePayResponse: Response;
     try {
       infinitePayResponse = await fetchWithRetry(
-        'https://api.infinitepay.io/invoices/public/checkout/links',
+        'https://api.checkout.infinitepay.io/links',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
