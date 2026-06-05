@@ -3198,6 +3198,48 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_integrations: {
+        Row: {
+          api_key: string
+          created_at: string
+          environment: string
+          id: string
+          last_test_at: string | null
+          last_test_message: string | null
+          last_test_status: string | null
+          provider: string
+          scope: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          environment?: string
+          id?: string
+          last_test_at?: string | null
+          last_test_message?: string | null
+          last_test_status?: string | null
+          provider: string
+          scope: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          last_test_at?: string | null
+          last_test_message?: string | null
+          last_test_status?: string | null
+          provider?: string
+          scope?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       pricing_calculadora_estados: {
         Row: {
           created_at: string | null
