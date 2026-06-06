@@ -277,7 +277,6 @@ export function PaymentPendingScreen({
                   setStatus('polling');
                   setPollCount(0);
                   checkPayment();
-                  intervalRef.current = setInterval(checkPayment, FALLBACK_POLL_INTERVAL);
                 }}
                 className="w-full"
                 variant="terracotta"
