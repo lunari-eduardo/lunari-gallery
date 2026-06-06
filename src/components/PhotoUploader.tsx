@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Upload, X, AlertCircle, CheckCircle2, Loader2, RefreshCw, Coins, AlertTriangle, StopCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isValidImageType, formatFileSize, type WatermarkConfig } from '@/lib/imageCompression';
 import { isValidTransferMedia, isVideoFile, isWithinSizeLimit, MAX_VIDEO_SIZE, MAX_IMAGE_SIZE } from '@/lib/mediaValidation';
@@ -114,9 +115,9 @@ export function PhotoUploader({
           if (retryableItems.length > 0 && retryRoundRef.current < maxAutoRetryRounds) {
             retryRoundRef.current++;
             const round = retryRoundRef.current;
-            const delay = round * 5000;
+            const delay = round * 3000;
             setTimeout(() => {
-              if (!pipelineRef.current) return;
+              if (!pipelineRef.current || pipelineRef.current.isDestroyed) return;
               retryableItems.forEach(item => pipelineRef.current?.retry(item.id));
             }, delay);
             return; // Don't finalize yet
@@ -126,18 +127,9 @@ export function PhotoUploader({
           onUploadingChange?.(false);
           retryRoundRef.current = 0;
 
-          // Notify queue state
-          onQueueStateChange?.({
-            isUploading: false,
-            errorCount: errItems.length,
-            totalCount: currentItems.length,
-            doneCount: currentItems.filter(i => i.status === 'done').length,
-          });
-
           if (results.length > 0) {
             if (errItems.length > 0) {
               toast.warning(`${results.length} foto(s) enviada(s), ${errItems.length} com erro.`);
-            } else {
             }
             onUploadComplete?.(results as UploadedPhoto[]);
           } else if (errItems.length > 0) {
@@ -146,13 +138,18 @@ export function PhotoUploader({
 
           completedResults.current = [];
 
-          // Clear done items after delay and destroy pipeline for fresh state
+          // Clear done items after delay - don't destroy pipeline if we have errors!
+          // We only destroy if completely finished with no errors.
           setTimeout(() => {
-            setItems(prev => prev.filter(i => i.status !== 'done'));
-            if (pipelineRef.current && !pipelineRef.current.isActive) {
-              pipelineRef.current.destroy();
-              pipelineRef.current = null;
-            }
+            setItems(prev => {
+              const newItems = prev.filter(i => i.status !== 'done');
+              // If no items left, we can safely destroy pipeline for next batch
+              if (newItems.length === 0 && pipelineRef.current && !pipelineRef.current.isActive) {
+                pipelineRef.current.destroy();
+                pipelineRef.current = null;
+              }
+              return newItems;
+            });
           }, 2000);
         },
       });
