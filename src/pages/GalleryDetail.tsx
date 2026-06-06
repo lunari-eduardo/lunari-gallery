@@ -684,7 +684,7 @@ export default function GalleryDetail() {
               ? transformedPhotos.filter(p => p.folderId === activeDetailFolderId)
               : transformedPhotos;
             return filteredPhotos.length > 0 ? (
-            <MasonryGrid>
+            <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? settings?.defaultPhotoSpacing ?? 6}>
               {filteredPhotos.map((photo, index) => (
                 <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                   <PhotoCard

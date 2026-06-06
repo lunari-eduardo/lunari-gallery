@@ -37,6 +37,7 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
   emailOnGallerySent: true,
   emailOnGalleryReactivated: true,
   emailOnPaymentConfirmed: true,
+  defaultPhotoSpacing: 6,
 };
 
 const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
@@ -120,6 +121,7 @@ function rowsToSettings(
     emailOnGallerySent: settingsRow.email_on_gallery_sent ?? true,
     emailOnGalleryReactivated: settingsRow.email_on_gallery_reactivated ?? true,
     emailOnPaymentConfirmed: settingsRow.email_on_payment_confirmed ?? true,
+    defaultPhotoSpacing: settingsRow.default_photo_spacing ?? 6,
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -224,6 +226,7 @@ export function useGallerySettings() {
           email_on_gallery_sent: true,
           email_on_gallery_reactivated: true,
           email_on_payment_confirmed: true,
+          default_photo_spacing: defaultSettings.defaultPhotoSpacing,
         });
 
       if (settingsError) throw settingsError;
@@ -342,6 +345,9 @@ export function useGallerySettings() {
       }
       if (data.emailOnPaymentConfirmed !== undefined) {
         updateData.email_on_payment_confirmed = data.emailOnPaymentConfirmed;
+      }
+      if (data.defaultPhotoSpacing !== undefined) {
+        updateData.default_photo_spacing = data.defaultPhotoSpacing;
       }
 
       // Nothing to update

@@ -133,7 +133,7 @@ export default function GalleryPreview() {
       {/* Main Content */}
       <main className="flex-1 py-2 pb-20">
         {transformedPhotos.length > 0 ? (
-          <MasonryGrid>
+          <MasonryGrid gap={gallery?.configuracoes?.photoSpacing ?? 6}>
             {transformedPhotos.map((photo) => (
               <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                 <PhotoCard

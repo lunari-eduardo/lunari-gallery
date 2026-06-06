@@ -80,6 +80,7 @@ export interface GallerySettings {
   allowExtraPhotos: boolean;
   sessionFont?: string;
   titleCaseMode?: TitleCaseMode;
+  photoSpacing?: number;
 }
 
 export interface GalleryPhoto {
@@ -185,6 +186,7 @@ export interface GlobalSettings {
   defaultAllowDownload?: boolean;
   defaultAllowExtraPhotos?: boolean;
   defaultWatermarkDisplay?: WatermarkDisplay;
+  defaultPhotoSpacing?: number;
 }
 
 export interface ExportData {

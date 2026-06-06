@@ -52,6 +52,7 @@ import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
 import { PackageSelect } from '@/components/PackageSelect';
 import { FontSelect } from '@/components/FontSelect';
+import { Slider } from '@/components/ui/slider';
 import { TitleCaseMode } from '@/types/gallery';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
@@ -134,6 +135,7 @@ export default function GalleryEdit() {
   // Font state
   const [sessionFont, setSessionFont] = useState('playfair');
   const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
+  const [photoSpacing, setPhotoSpacing] = useState(6);
   
   // UI state
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -180,6 +182,11 @@ export default function GalleryEdit() {
       }
       if (cfg.titleCaseMode) {
         setTitleCaseMode(cfg.titleCaseMode as TitleCaseMode);
+      }
+      if (cfg.photoSpacing !== undefined) {
+        setPhotoSpacing(cfg.photoSpacing);
+      } else if (settings?.defaultPhotoSpacing !== undefined) {
+        setPhotoSpacing(settings.defaultPhotoSpacing);
       }
 
       // Initialize local photo count
@@ -348,6 +355,7 @@ export default function GalleryEdit() {
         themeId: selectedThemeId,
         sessionFont,
         titleCaseMode,
+        photoSpacing,
       };
 
       await updateGallery({
@@ -497,7 +505,27 @@ export default function GalleryEdit() {
                 Dados básicos e configurações de preço
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Photo Spacing Control */}
+              <div className="space-y-4 pb-4 border-b">
+                <div>
+                  <Label className="text-base font-medium">Espaçamento entre fotos (Grid)</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Ajuste a borda entre as fotos nesta galeria específica
+                  </p>
+                </div>
+                <div className="flex items-center gap-6 max-w-sm pt-2">
+                  <Slider
+                    value={[photoSpacing]}
+                    onValueChange={(vals) => setPhotoSpacing(vals[0])}
+                    min={0}
+                    max={40}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+                </div>
+              </div>
               {isBillingLocked && (
                 <div className="glass rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3">
                   <Lock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />

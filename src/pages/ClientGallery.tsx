@@ -1562,7 +1562,7 @@ export default function ClientGallery() {
               <h3 className="font-medium text-sm text-muted-foreground">
                 Suas fotos selecionadas ({confirmedSelectedPhotos.length})
               </h3>
-              <MasonryGrid>
+              <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? galleryResponse?.settings?.photoSpacing ?? 6}>
                 {confirmedSelectedPhotos.map((photo, index) => (
                   <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                     <div className="relative group cursor-pointer" onClick={() => setLightboxIndex(index)}>
@@ -2001,7 +2001,7 @@ export default function ClientGallery() {
 
       {/* Main Content - Full width gallery */}
       <main className="flex-1 py-2 pb-28">
-        <MasonryGrid>
+        <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? galleryResponse?.settings?.photoSpacing ?? 6}>
           {displayPhotos.map((photo) => {
             const originalIndex = localPhotos.findIndex(p => p.id === photo.id);
             return (

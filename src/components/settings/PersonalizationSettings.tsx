@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { defaultWelcomeMessage } from '@/data/mockData';
+import { Slider } from '@/components/ui/slider';
 
 
 export function PersonalizationSettings() {
@@ -126,6 +127,27 @@ export function PersonalizationSettings() {
                 // but we can add it to lastSessionFont or simply allow it to be local
               }}
             />
+          </div>
+        </div>
+
+        {/* Default Grid Spacing */}
+        <div className="lunari-card p-6 space-y-4">
+          <div>
+            <Label className="text-base font-medium">Espaçamento entre fotos (Grid)</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              Distância em pixels entre as fotos na galeria do cliente
+            </p>
+          </div>
+          <div className="flex items-center gap-6 max-w-md pt-2">
+            <Slider
+              value={[settings.defaultPhotoSpacing ?? 6]}
+              onValueChange={(vals) => updateSettings({ defaultPhotoSpacing: vals[0] })}
+              min={0}
+              max={40}
+              step={1}
+              className="flex-1"
+            />
+            <span className="text-sm font-mono w-10 text-right">{settings.defaultPhotoSpacing ?? 6}px</span>
           </div>
         </div>
 

@@ -2612,6 +2612,7 @@ export type Database = {
           default_gallery_permission: string | null
           default_image_resize: number
           default_payment_method: string | null
+          default_photo_spacing: number | null
           default_pricing_model: string | null
           default_sale_mode: string
           default_watermark: Json | null
@@ -2642,6 +2643,7 @@ export type Database = {
           default_gallery_permission?: string | null
           default_image_resize?: number
           default_payment_method?: string | null
+          default_photo_spacing?: number | null
           default_pricing_model?: string | null
           default_sale_mode?: string
           default_watermark?: Json | null
@@ -2672,6 +2674,7 @@ export type Database = {
           default_gallery_permission?: string | null
           default_image_resize?: number
           default_payment_method?: string | null
+          default_photo_spacing?: number | null
           default_pricing_model?: string | null
           default_sale_mode?: string
           default_watermark?: Json | null

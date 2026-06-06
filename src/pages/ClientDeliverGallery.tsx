@@ -21,6 +21,7 @@ interface DeliverGalleryData {
       sessionFont?: string;
       titleCaseMode?: TitleCaseMode;
       coverPhotoId?: string;
+      photoSpacing?: number;
     };
   };
   photos: Array<{
@@ -243,7 +244,7 @@ export default function ClientDeliverGallery({ data }: Props) {
           </div>
         )}
 
-        <DeliverPhotoGrid photos={photos} onPhotoClick={(i) => setLightboxIndex(i)} onDownload={handleDownloadSingle} bgColor={bgColor} />
+        <DeliverPhotoGrid photos={photos} onPhotoClick={(i) => setLightboxIndex(i)} onDownload={handleDownloadSingle} bgColor={bgColor} gap={gallery.settings?.photoSpacing} />
       </div>
 
       {lightboxIndex !== null && (

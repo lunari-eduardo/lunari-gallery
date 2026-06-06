@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 interface MasonryGridProps {
   children: ReactNode;
   className?: string;
+  gap?: number;
 }
 
 function getColumnCount(width: number): number {
@@ -12,7 +13,7 @@ function getColumnCount(width: number): number {
   return 2;
 }
 
-export function MasonryGrid({ children, className }: MasonryGridProps) {
+export function MasonryGrid({ children, className, gap = 6 }: MasonryGridProps) {
   const [numCols, setNumCols] = useState(() => getColumnCount(typeof window !== 'undefined' ? window.innerWidth : 1280));
 
   useEffect(() => {
@@ -46,9 +47,16 @@ export function MasonryGrid({ children, className }: MasonryGridProps) {
 
   return (
     <div className="masonry-container">
-      <div className={cn('flex gap-[6px]', className)}>
+      <div 
+        className={cn('flex', className)} 
+        style={{ gap: `${gap}px` }}
+      >
         {columns.map((col, i) => (
-          <div key={i} className="flex-1 flex flex-col gap-[6px]">
+          <div 
+            key={i} 
+            className="flex-1 flex flex-col" 
+            style={{ gap: `${gap}px` }}
+          >
             {col}
           </div>
         ))}
