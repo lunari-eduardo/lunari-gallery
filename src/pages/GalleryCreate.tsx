@@ -365,6 +365,7 @@ export default function GalleryCreate() {
   const userTouchedAllowExtraPhotosRef = useRef(false);
   const userTouchedWatermarkDisplayRef = useRef(false);
   const userTouchedClientModeRef = useRef(false);
+  const userTouchedTypographyRef = useRef(false);
 
   // Initialize from settings
   useEffect(() => {
@@ -393,7 +394,7 @@ export default function GalleryCreate() {
         }
       }
       // Initialize font from last used
-      if (settings.lastSessionFont) {
+      if (settings.lastSessionFont && !userTouchedTypographyRef.current) {
         setSessionFont(settings.lastSessionFont);
       }
       // Initialize welcome message from global settings
@@ -1459,7 +1460,19 @@ export default function GalleryCreate() {
             
             <div className="space-y-2">
               <Label>Fonte do Título</Label>
-              <FontSelect value={sessionFont} onChange={setSessionFont} previewText={sessionName || 'Ensaio Gestante'} titleCaseMode={titleCaseMode} onTitleCaseModeChange={setTitleCaseMode} />
+              <FontSelect 
+                value={sessionFont} 
+                onChange={(font) => {
+                  userTouchedTypographyRef.current = true;
+                  setSessionFont(font);
+                }} 
+                previewText={sessionName || 'Ensaio Gestante'} 
+                titleCaseMode={titleCaseMode} 
+                onTitleCaseModeChange={(mode) => {
+                  userTouchedTypographyRef.current = true;
+                  setTitleCaseMode(mode);
+                }} 
+              />
             </div>
 
             <ClientModal open={isClientModalOpen} onOpenChange={setIsClientModalOpen} onSave={handleSaveClient} />
