@@ -160,6 +160,22 @@ export function PhotoUploader({
     return pipelineRef.current;
   }, [galleryId, folderId, maxLongEdge, watermarkConfig, allowDownload, skipCredits, onUploadComplete, onUploadingChange, onQueueStateChange, refetchCredits]);
 
+  // Continuous state synchronization to keep parent informed of errors and progress
+  useEffect(() => {
+    const errItems = items.filter(i => i.status === 'error');
+    const doneItems = items.filter(i => i.status === 'done');
+    const inProgress = items.some(i =>
+      ['compressing', 'uploading-original', 'uploading-preview'].includes(i.status)
+    );
+
+    onQueueStateChange?.({
+      isUploading: inProgress,
+      errorCount: errItems.length,
+      totalCount: items.length,
+      doneCount: doneItems.length,
+    });
+  }, [items, onQueueStateChange]);
+
   // Cleanup on unmount or when folderId changes
   useEffect(() => {
     return () => {
@@ -167,14 +183,6 @@ export function PhotoUploader({
       pipelineRef.current = null;
     };
   }, []);
-
-  // Reset pipeline when folderId changes
-  useEffect(() => {
-    if (pipelineRef.current && !pipelineRef.current.isActive) {
-      pipelineRef.current.destroy();
-      pipelineRef.current = null;
-    }
-  }, [folderId]);
 
   const storageRemaining = (storageLimit != null && storageUsed != null) ? Math.max(0, storageLimit - storageUsed) : Infinity;
   const storageUsedPercent = (storageLimit != null && storageLimit > 0 && storageUsed != null) ? Math.round((storageUsed / storageLimit) * 100) : 0;
@@ -276,6 +284,29 @@ export function PhotoUploader({
     setIsUploading(false);
     onUploadingChange?.(false);
   }, [onUploadingChange]);
+
+  const retryAllErrors = useCallback(() => {
+    const errorItems = items.filter(i => i.status === 'error');
+    errorItems.forEach(item => pipelineRef.current?.retry(item.id));
+    if (errorItems.length > 0 && !isUploading) {
+      setIsUploading(true);
+      onUploadingChange?.(true);
+    }
+  }, [items, isUploading, onUploadingChange]);
+
+  const removeAllErrors = useCallback(() => {
+    const errorItems = items.filter(i => i.status === 'error');
+    errorItems.forEach(item => {
+      pipelineRef.current?.revokePreview(item.id);
+    });
+    setItems(prev => prev.filter(i => i.status !== 'error'));
+  }, [items]);
+
+  const ignoreAllErrors = useCallback(() => {
+    // Treat errors as "removed" from the queue perspective so user can continue
+    removeAllErrors();
+    toast.info('Erros removidos. Você pode continuar com as fotos enviadas com sucesso.');
+  }, [removeAllErrors]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -403,32 +434,86 @@ export function PhotoUploader({
 
       {/* Upload List */}
       {items.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-4">
+          {/* Error Summary Panel */}
+          {errorCount > 0 && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="bg-destructive/20 p-2 rounded-full">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="font-semibold text-destructive">
+                    {errorCount} {errorCount === 1 ? 'arquivo falhou' : 'arquivos falharam'}
+                  </p>
+                  <p className="text-xs text-destructive/80">
+                    Ocorreu um erro durante o processamento ou envio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={retryAllErrors}
+                  disabled={isUploading && inProgressCount > 0}
+                  className="h-8"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isUploading && inProgressCount > 0 && "animate-spin")} />
+                  Reenviar todos
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={removeAllErrors}
+                  className="h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
+                >
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  Remover erros
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={ignoreAllErrors}
+                  className="h-8 text-muted-foreground"
+                >
+                  Ignorar falhas e continuar
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Progress Summary */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
-              <p className="text-sm text-muted-foreground">
-                {completedCount} de {items.length} enviadas
-                {errorCount > 0 && <span className="text-destructive"> • {errorCount} erro(s)</span>}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">
+                  {completedCount} de {items.length} enviadas
+                </p>
+                {overallProgress > 0 && overallProgress < 100 && (
+                  <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-4">
+                    {overallProgress}%
+                  </Badge>
+                )}
+              </div>
               {isUploading && inProgressCount > 0 && (
-                <span className="flex items-center gap-1.5 text-xs text-primary">
+                <span className="flex items-center gap-1.5 text-xs text-primary font-medium">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  {inProgressCount} em andamento
+                  {inProgressCount} em processamento
                 </span>
               )}
             </div>
             {isUploading && (
-              <Button variant="ghost" size="sm" onClick={cancelAll} className="text-destructive hover:text-destructive">
-                <StopCircle className="h-3 w-3 mr-1" />
+              <Button variant="ghost" size="sm" onClick={cancelAll} className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10">
+                <StopCircle className="h-3.5 w-3.5 mr-1.5" />
                 Cancelar tudo
               </Button>
             )}
           </div>
 
           {/* Overall progress bar */}
-          {isUploading && items.length > 1 && (
-            <Progress value={overallProgress} className="h-1.5" />
+          {isUploading && items.length > 0 && (
+            <Progress value={overallProgress} className="h-1.5 transition-all" />
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
