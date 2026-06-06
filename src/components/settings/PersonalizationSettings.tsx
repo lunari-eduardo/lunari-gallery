@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGallerySettings } from '@/hooks/useGallerySettings';
+import { FontSelect } from '@/components/FontSelect';
+import { TitleCaseMode } from '@/types/gallery';
 import { LogoUploader } from './LogoUploader';
 import { ThemeConfig } from './ThemeConfig';
 import { WatermarkSettings } from './WatermarkSettings';
@@ -26,13 +28,28 @@ export function PersonalizationSettings() {
 
   const [welcomeEnabled, setWelcomeEnabled] = useState(true);
   const [welcomeTemplate, setWelcomeTemplate] = useState('');
+  const [sessionFont, setSessionFont] = useState('playfair');
+  const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
+  const userTouchedTypographyRef = useRef(false);
 
   useEffect(() => {
     if (settings) {
       setWelcomeEnabled(settings.welcomeMessageEnabled ?? true);
       setWelcomeTemplate(settings.defaultWelcomeMessage || defaultWelcomeMessage);
+      
+      if (!userTouchedTypographyRef.current) {
+        if (settings.lastSessionFont) {
+          setSessionFont(settings.lastSessionFont);
+        }
+      }
     }
   }, [settings]);
+
+  const handleFontChange = (newFont: string) => {
+    userTouchedTypographyRef.current = true;
+    setSessionFont(newFont);
+    updateSettings({ lastSessionFont: newFont }, { successMessage: 'Fonte padrão atualizada.' });
+  };
 
   if (!settings) return null;
 
@@ -87,6 +104,31 @@ export function PersonalizationSettings() {
         <div className="lunari-card p-6">
           <WatermarkSettings />
         </div>
+
+        {/* Typography */}
+        <div className="lunari-card p-6 space-y-4">
+          <div>
+            <Label className="text-base font-medium text-foreground">Tipografia Padrão</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              Estilo de título aplicado automaticamente em novas galerias
+            </p>
+          </div>
+          <div className="max-w-md">
+            <FontSelect 
+              value={sessionFont} 
+              onChange={handleFontChange}
+              previewText="Exemplo de Título"
+              titleCaseMode={titleCaseMode}
+              onTitleCaseModeChange={(mode) => {
+                userTouchedTypographyRef.current = true;
+                setTitleCaseMode(mode);
+                // Note: We don't have a global titleCaseMode setting yet, 
+                // but we can add it to lastSessionFont or simply allow it to be local
+              }}
+            />
+          </div>
+        </div>
+
         {/* Default Behavior Toggles */}
         <div className="lunari-card p-6 space-y-4">
           <div>

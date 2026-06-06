@@ -963,8 +963,8 @@ export default function ClientGallery() {
     return (
       <PasswordScreen
         sessionName={galleryResponse?.sessionName}
-        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
-        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
+        sessionFont={getFontFamilyById(supabaseGallery?.configuracoes?.sessionFont || galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(supabaseGallery?.configuracoes?.titleCaseMode || galleryResponse?.settings?.titleCaseMode) as TitleCaseMode || 'normal'}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
         onSubmit={handlePasswordSubmit}
@@ -1033,8 +1033,8 @@ export default function ClientGallery() {
     return (
       <VisitorIdentificationScreen
         sessionName={galleryResponse?.sessionName}
-        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
-        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
+        sessionFont={getFontFamilyById(supabaseGallery?.configuracoes?.sessionFont || galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(supabaseGallery?.configuracoes?.titleCaseMode || galleryResponse?.settings?.titleCaseMode) as TitleCaseMode || 'normal'}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
         onSubmit={handleVisitorSubmit}
@@ -1056,8 +1056,8 @@ export default function ClientGallery() {
         photos={galleryResponse.photos || []}
         galleryId={galleryId || ''}
         sessionName={galleryResponse.sessionName}
-        sessionFont={getFontFamilyById(galleryResponse?.settings?.sessionFont)}
-        titleCaseMode={(galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal'}
+        sessionFont={getFontFamilyById(supabaseGallery?.configuracoes?.sessionFont || galleryResponse?.settings?.sessionFont)}
+        titleCaseMode={(supabaseGallery?.configuracoes?.titleCaseMode || galleryResponse?.settings?.titleCaseMode) as TitleCaseMode || 'normal'}
         studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
         studioName={galleryResponse.studioSettings?.studio_name}
         allowDownload={galleryResponse.allowDownload || false}
@@ -1069,8 +1069,8 @@ export default function ClientGallery() {
 
   // Expired gallery screen - always light background
   if (galleryResponse?.expired) {
-    const expiredFont = getFontFamilyById(galleryResponse?.settings?.sessionFont);
-    const expiredTitleCase = (galleryResponse?.settings?.titleCaseMode as TitleCaseMode) || 'normal';
+    const expiredFont = getFontFamilyById(supabaseGallery?.configuracoes?.sessionFont || galleryResponse?.settings?.sessionFont);
+    const expiredTitleCase = (supabaseGallery?.configuracoes?.titleCaseMode || galleryResponse?.settings?.titleCaseMode) as TitleCaseMode || 'normal';
     const expiredSessionName = galleryResponse?.sessionName || '';
     const expiredStudioLogo = galleryResponse?.studioSettings?.studio_logo_url;
     const expiredStudioName = galleryResponse?.studioSettings?.studio_name;

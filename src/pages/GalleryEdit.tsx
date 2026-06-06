@@ -51,6 +51,8 @@ import { ClientModal } from '@/components/ClientModal';
 import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
 import { PackageSelect } from '@/components/PackageSelect';
+import { FontSelect } from '@/components/FontSelect';
+import { TitleCaseMode } from '@/types/gallery';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -129,6 +131,10 @@ export default function GalleryEdit() {
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
   
+  // Font state
+  const [sessionFont, setSessionFont] = useState('playfair');
+  const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
+  
   // UI state
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -168,6 +174,12 @@ export default function GalleryEdit() {
       }
       if (cfg.themeId) {
         setSelectedThemeId(cfg.themeId);
+      }
+      if (cfg.sessionFont) {
+        setSessionFont(cfg.sessionFont);
+      }
+      if (cfg.titleCaseMode) {
+        setTitleCaseMode(cfg.titleCaseMode as TitleCaseMode);
       }
 
       // Initialize local photo count
@@ -334,6 +346,8 @@ export default function GalleryEdit() {
         ...existingConfig,
         clientMode,
         themeId: selectedThemeId,
+        sessionFont,
+        titleCaseMode,
       };
 
       await updateGallery({
@@ -495,6 +509,17 @@ export default function GalleryEdit() {
                   </div>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label>Fonte do Título</Label>
+                <FontSelect 
+                  value={sessionFont} 
+                  onChange={setSessionFont} 
+                  previewText={nomeSessao || 'Ensaio Gestante'} 
+                  titleCaseMode={titleCaseMode} 
+                  onTitleCaseModeChange={setTitleCaseMode} 
+                />
+              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="nomeSessao">Nome da Sessão</Label>
