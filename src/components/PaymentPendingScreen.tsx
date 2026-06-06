@@ -5,8 +5,13 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
-const FALLBACK_POLL_INTERVAL = 60_000; // 60s fallback if realtime fails
 const POLL_MAX_DURATION = 10 * 60 * 1000; // 10 minutes
+const GET_ADAPTIVE_POLL_INTERVAL = (elapsedMs: number) => {
+  if (elapsedMs < 15_000) return 2500;   // 2.5s nos primeiros 15s
+  if (elapsedMs < 60_000) return 5000;   // 5s no primeiro minuto
+  if (elapsedMs < 180_000) return 15000; // 15s até 3 min
+  return 30000;                         // 30s após
+};
 
 interface PaymentPendingScreenProps {
   cobrancaId?: string;
@@ -91,9 +96,27 @@ export function PaymentPendingScreen({
   useEffect(() => {
     startTimeRef.current = Date.now();
     let realtimeActive = false;
+    let pollTimeout: ReturnType<typeof setTimeout> | null = null;
     
+    const scheduleNextPoll = () => {
+      if (pollTimeout) clearTimeout(pollTimeout);
+      const elapsed = Date.now() - startTimeRef.current;
+      if (elapsed > POLL_MAX_DURATION) {
+        setStatus('timeout');
+        return;
+      }
+      
+      const nextInterval = GET_ADAPTIVE_POLL_INTERVAL(elapsed);
+      pollTimeout = setTimeout(async () => {
+        // Poll se realtime não estiver confirmadamente ativo OU como rede de segurança
+        await checkPayment();
+        scheduleNextPoll();
+      }, nextInterval);
+    };
+
     // Immediate check
     checkPayment();
+    scheduleNextPoll();
 
     // Set up Realtime subscription
     const channelName = cobrancaId 
@@ -114,7 +137,7 @@ export function PaymentPendingScreen({
           console.log('[PaymentPending] Realtime update:', payload.new);
           if ((payload.new as any).status === 'pago') {
             setStatus('confirmed');
-            if (intervalRef.current) clearInterval(intervalRef.current);
+            if (pollTimeout) clearTimeout(pollTimeout);
             setTimeout(() => onPaymentConfirmed(), 2000);
           }
         }
@@ -122,33 +145,22 @@ export function PaymentPendingScreen({
       .subscribe((status) => {
         console.log('[PaymentPending] Realtime status:', status);
         realtimeActive = status === 'SUBSCRIBED';
-        
-        // If realtime fails, start fallback polling
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          if (!intervalRef.current) {
-            intervalRef.current = setInterval(checkPayment, FALLBACK_POLL_INTERVAL);
-          }
-        }
       });
 
-    // Fallback polling (less frequent since realtime is primary)
-    intervalRef.current = setInterval(() => {
-      // Only poll if realtime isn't active or as a safety net
-      if (!realtimeActive) {
+    // Handle tab visibility (PWA/Mobile sleep)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[PaymentPending] Tab visible - forcing immediate check');
         checkPayment();
       }
-      // Safety: still do occasional polls even with realtime (every 60s)
-      if (Date.now() - startTimeRef.current > POLL_MAX_DURATION) {
-        setStatus('timeout');
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      }
-    }, FALLBACK_POLL_INTERVAL);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       supabase.removeChannel(channel);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (pollTimeout) clearTimeout(pollTimeout);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cobrancaId, sessionId]);
 
   const isDark = backgroundMode === 'dark';
@@ -265,7 +277,6 @@ export function PaymentPendingScreen({
                   setStatus('polling');
                   setPollCount(0);
                   checkPayment();
-                  intervalRef.current = setInterval(checkPayment, FALLBACK_POLL_INTERVAL);
                 }}
                 className="w-full"
                 variant="terracotta"
