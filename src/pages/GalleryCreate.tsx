@@ -1860,6 +1860,7 @@ export default function GalleryCreate() {
             onUploadComplete={handlePhotoUploadComplete}
             onUploadingChange={setIsUploadingPhotos}
             onQueueStateChange={(state: QueueState) => {
+              // Priority sync: ensure parent error state is zero if queue is empty or errors cleared
               setUploadErrorCount(state.errorCount);
               setIsUploadingPhotos(state.isUploading);
             }} /> :

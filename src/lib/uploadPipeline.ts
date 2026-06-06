@@ -203,19 +203,30 @@ export class UploadPipeline {
 
   /** Cancel a single item or all */
   cancel(id?: string) {
-    for (const item of this.queue) {
-      if (id && item.id !== id) continue;
-      if (item.status === 'done' || item.status === 'error') continue;
-      item._abortController.abort();
-      this.cleanupItem(item);
-      item.status = 'error';
-      item.error = 'Cancelado';
-      this.opts.onItemUpdate(item);
-    }
     if (!id) {
+      // Cancel everything: abort all active controllers
+      for (const item of this.queue) {
+        if (item.status !== 'done' && item.status !== 'error') {
+          item._abortController.abort();
+          this.cleanupItem(item);
+          item.status = 'error';
+          item.error = 'Cancelado';
+          this.opts.onItemUpdate(item);
+        }
+      }
       this.queue = [];
       this.activeCompressions = 0;
       this.activeUploads = 0;
+    } else {
+      // Cancel specific item
+      const item = this.queue.find(i => i.id === id);
+      if (item && item.status !== 'done' && item.status !== 'error') {
+        item._abortController.abort();
+        this.cleanupItem(item);
+        item.status = 'error';
+        item.error = 'Cancelado';
+        this.opts.onItemUpdate(item);
+      }
     }
   }
 
