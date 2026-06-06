@@ -1020,6 +1020,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "v_infinitepay_latency"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_transacoes_session_id"
             columns: ["session_id"]
             isOneToOne: false
@@ -1092,6 +1099,13 @@ export type Database = {
             columns: ["cobranca_id"]
             isOneToOne: false
             referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_parcelas_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "v_infinitepay_latency"
             referencedColumns: ["id"]
           },
         ]
@@ -1635,6 +1649,13 @@ export type Database = {
             referencedRelation: "cobrancas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "email_delivery_logs_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_infinitepay_latency"
+            referencedColumns: ["id"]
+          },
         ]
       }
       etapas_trabalho: {
@@ -1642,6 +1663,7 @@ export type Database = {
           cor: string
           created_at: string
           id: string
+          is_hidden_in_workflow: boolean
           is_system_status: boolean | null
           nome: string
           ordem: number
@@ -1652,6 +1674,7 @@ export type Database = {
           cor: string
           created_at?: string
           id?: string
+          is_hidden_in_workflow?: boolean
           is_system_status?: boolean | null
           nome: string
           ordem: number
@@ -1662,6 +1685,7 @@ export type Database = {
           cor?: string
           created_at?: string
           id?: string
+          is_hidden_in_workflow?: boolean
           is_system_status?: boolean | null
           nome?: string
           ordem?: number
@@ -4464,6 +4488,21 @@ export type Database = {
         }
         Relationships: []
       }
+      v_infinitepay_latency: {
+        Row: {
+          cobranca_created: string | null
+          data_pagamento: string | null
+          db_update_seconds: number | null
+          id: string | null
+          ip_order_nsu: string | null
+          status: string | null
+          webhook_proc_seconds: number | null
+          webhook_processed: string | null
+          webhook_received: string | null
+          webhook_status: string | null
+        }
+        Relationships: []
+      }
       vw_transacoes_orfas: {
         Row: {
           cliente_id: string | null
@@ -4490,6 +4529,13 @@ export type Database = {
             columns: ["cobranca_id"]
             isOneToOne: false
             referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "v_infinitepay_latency"
             referencedColumns: ["id"]
           },
         ]
