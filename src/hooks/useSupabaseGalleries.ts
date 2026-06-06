@@ -53,6 +53,7 @@ export interface GaleriaConfiguracoes {
   // Session title font and casing
   sessionFont?: string;
   titleCaseMode?: TitleCaseMode;
+  photoSpacing?: number;
   // Internal notes (Deliver)
   notasInternas?: string;
   // Cover photo for Deliver galleries
