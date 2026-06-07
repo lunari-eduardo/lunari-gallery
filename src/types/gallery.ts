@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
 
 export interface GalleryFolder {
