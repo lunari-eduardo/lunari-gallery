@@ -5,8 +5,10 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star, ImageIcon
+  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star, ImageIcon,
+  Layers, Smartphone, Tablet, Monitor, CheckCircle
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
@@ -30,6 +32,8 @@ import { buildWhatsAppUrl } from '@/lib/whatsappUrl';
 import { getPhotoUrl } from '@/lib/photoUrl';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { THEME_REGISTRY, DEFAULT_THEME_ID } from '@/components/gallery/themes/registry';
+
 import { isPast } from 'date-fns';
 
 function getDeliverStatusInfo(status: string, prazoSelecao: Date | null) {
@@ -75,6 +79,9 @@ export default function DeliverDetail() {
   const [shareMessage, setShareMessage] = useState('Suas fotos finais estão prontas para download.');
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
   const [photoSpacing, setPhotoSpacing] = useState(6);
+  const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
+  const [useCustomTheme, setUseCustomTheme] = useState(false);
+
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
 
@@ -90,6 +97,9 @@ export default function DeliverDetail() {
       setExpirationDate(gallery.prazoSelecao || undefined);
       setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
       setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
+      setActiveThemeId((gallery as any).theme_id || (gallery.configuracoes as any)?.themeId || DEFAULT_THEME_ID);
+      setUseCustomTheme((gallery as any).use_custom_theme ?? !!(gallery as any).theme_id);
+
     }
   }, [gallery]);
 
@@ -137,10 +147,12 @@ export default function DeliverDetail() {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
           photoSpacing: photoSpacing,
-          // Placeholder for theme
-          themeId: (gallery.configuracoes as any)?.themeId || 'default',
+          themeId: activeThemeId,
         },
+        theme_id: useCustomTheme ? activeThemeId : null,
+        use_custom_theme: useCustomTheme,
         prazoSelecao: expirationDate,
+
       }});
       navigate('/galleries/deliver');
     } catch (error) {
@@ -295,7 +307,9 @@ export default function DeliverDetail() {
         <TabsList className="w-full justify-start">
           <TabsTrigger value="share">Compartilhamento</TabsTrigger>
           <TabsTrigger value="photos">Fotos</TabsTrigger>
+          <TabsTrigger value="design">Design & Temas</TabsTrigger>
           <TabsTrigger value="details">Detalhes</TabsTrigger>
+
         </TabsList>
 
         {/* === COMPARTILHAMENTO === */}
@@ -345,6 +359,145 @@ export default function DeliverDetail() {
             </>
           )}
         </TabsContent>
+
+        {/* === DESIGN & TEMAS === */}
+        <TabsContent value="design" className="space-y-8 mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-1 space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-1">Tema da Galeria</h3>
+                <p className="text-sm text-muted-foreground mb-4">Escolha como suas fotos serão apresentadas.</p>
+                
+                <div className="space-y-4">
+                  <div 
+                    className={cn(
+                      "p-4 border rounded-lg cursor-pointer transition-all",
+                      !useCustomTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"
+                    )}
+                    onClick={() => setUseCustomTheme(false)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center", !useCustomTheme ? "border-primary" : "border-muted-foreground")}>
+                        {!useCustomTheme && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Herdar tema padrão</p>
+                        <p className="text-xs text-muted-foreground">Usa o tema definido nas configurações da sua conta.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div 
+                    className={cn(
+                      "p-4 border rounded-lg cursor-pointer transition-all",
+                      useCustomTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"
+                    )}
+                    onClick={() => setUseCustomTheme(true)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center", useCustomTheme ? "border-primary" : "border-muted-foreground")}>
+                        {useCustomTheme && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Personalizar esta galeria</p>
+                        <p className="text-xs text-muted-foreground">Escolha um tema específico apenas para este trabalho.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {useCustomTheme && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <Label>Selecione um Tema</Label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {Object.values(THEME_REGISTRY).map((t) => (
+                      <div 
+                        key={t.id}
+                        onClick={() => setActiveThemeId(t.id)}
+                        className={cn(
+                          "flex items-center justify-between p-3 border rounded-md cursor-pointer transition-all",
+                          activeThemeId === t.id ? "border-primary bg-primary/5" : "hover:border-primary/50"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-2 h-2 rounded-full", activeThemeId === t.id ? "bg-primary" : "bg-muted-foreground/30")} />
+                          <div>
+                            <p className="text-sm font-medium">{t.name}</p>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1">{t.description}</p>
+                          </div>
+                        </div>
+                        {activeThemeId === t.id && <CheckCircle className="h-4 w-4 text-primary" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t">
+                <Button onClick={handleSave} className="w-full gap-2" disabled={saving}>
+                  <Save className="h-4 w-4" />
+                  Salvar alterações de design
+                </Button>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium">Preview do Tema: {THEME_REGISTRY[activeThemeId]?.name}</h4>
+                <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
+                  <Button variant="ghost" size="icon" className="h-8 w-8"><Smartphone className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8"><Tablet className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 bg-background shadow-sm"><Monitor className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              
+              <div className="aspect-video bg-muted rounded-xl border-4 border-muted overflow-hidden relative group">
+                {/* Mockup do Tema */}
+                <div className="absolute inset-0 bg-background overflow-hidden flex flex-col">
+                   <div className="h-12 border-b flex items-center px-4 justify-between bg-white/80 backdrop-blur-sm z-10">
+                      <div className="w-24 h-4 bg-muted rounded-full" />
+                      <div className="flex gap-2">
+                        <div className="w-8 h-4 bg-muted rounded-full" />
+                        <div className="w-8 h-4 bg-muted rounded-full" />
+                      </div>
+                   </div>
+                   <div className="flex-1 p-6 overflow-hidden">
+                      <div className="w-1/2 h-8 bg-muted rounded mb-6" />
+                      <div 
+                        className="grid gap-2 h-full"
+                        style={{ 
+                          gridTemplateColumns: `repeat(${THEME_REGISTRY[activeThemeId]?.layout.columns.desktop || 4}, 1fr)`,
+                          gap: `${THEME_REGISTRY[activeThemeId]?.layout.gap || 8}px`
+                        }}
+                      >
+                        {[...Array(8)].map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={cn(
+                              "bg-muted rounded-sm",
+                              i === 0 && THEME_REGISTRY[activeThemeId]?.layout.engine === 'editorial-grid' ? "col-span-2 row-span-2" : ""
+                            )} 
+                            style={{ aspectRatio: i === 0 && THEME_REGISTRY[activeThemeId]?.layout.engine === 'editorial-grid' ? 'auto' : '1/1' }}
+                          />
+                        ))}
+                      </div>
+                   </div>
+                </div>
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                   <Button variant="secondary" className="gap-2" onClick={() => window.open(`/g/${gallery.publicToken}`, '_blank')}>
+                     <Eye className="h-4 w-4" />
+                     Ver prévia completa
+                   </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center italic">
+                A prévia acima é uma representação técnica. Clique em "Ver como cliente" para testar a experiência real.
+              </p>
+            </div>
+          </div>
+        </TabsContent>
+
 
         {/* === FOTOS === */}
         <TabsContent value="photos" className="space-y-4 mt-6">
