@@ -437,6 +437,7 @@ export default function ClientGallery() {
         allowExtraPhotos: true,
         sessionFont: config?.sessionFont as string | undefined,
         titleCaseMode: (config?.titleCaseMode as TitleCaseMode) || 'normal',
+        photoSpacing: (isEdgeFunctionFormat ? supabaseGallery.settings?.photoSpacing : supabaseGallery.configuracoes?.photoSpacing) ?? (galleryResponse?.settings?.photoSpacing ?? 6),
       },
       photos: [],
       actions: [],
