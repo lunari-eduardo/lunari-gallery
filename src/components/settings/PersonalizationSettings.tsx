@@ -31,12 +31,14 @@ export function PersonalizationSettings() {
   const [welcomeTemplate, setWelcomeTemplate] = useState('');
   const [sessionFont, setSessionFont] = useState('playfair');
   const [titleCaseMode, setTitleCaseMode] = useState<TitleCaseMode>('normal');
+  const [localPhotoSpacing, setLocalPhotoSpacing] = useState<number>(6);
   const userTouchedTypographyRef = useRef(false);
 
   useEffect(() => {
     if (settings) {
       setWelcomeEnabled(settings.welcomeMessageEnabled ?? true);
       setWelcomeTemplate(settings.defaultWelcomeMessage || defaultWelcomeMessage);
+      setLocalPhotoSpacing(settings.defaultPhotoSpacing ?? 6);
       
       if (!userTouchedTypographyRef.current) {
         if (settings.lastSessionFont) {
@@ -140,14 +142,15 @@ export function PersonalizationSettings() {
           </div>
           <div className="flex items-center gap-6 max-w-md pt-2">
             <Slider
-              value={[settings.defaultPhotoSpacing ?? 6]}
-              onValueChange={(vals) => updateSettings({ defaultPhotoSpacing: vals[0] })}
+              value={[localPhotoSpacing]}
+              onValueChange={(vals) => setLocalPhotoSpacing(vals[0])}
+              onValueCommit={(vals) => updateSettings({ defaultPhotoSpacing: vals[0] })}
               min={0}
               max={40}
               step={1}
               className="flex-1"
             />
-            <span className="text-sm font-mono w-10 text-right">{settings.defaultPhotoSpacing ?? 6}px</span>
+            <span className="text-sm font-mono w-10 text-right">{localPhotoSpacing}px</span>
           </div>
         </div>
 

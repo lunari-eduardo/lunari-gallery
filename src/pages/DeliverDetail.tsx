@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +74,7 @@ export default function DeliverDetail() {
   const [expirationDate, setExpirationDate] = useState<Date | undefined>();
   const [shareMessage, setShareMessage] = useState('Suas fotos finais estão prontas para download.');
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
+  const [photoSpacing, setPhotoSpacing] = useState(6);
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
 
@@ -87,6 +89,7 @@ export default function DeliverDetail() {
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
       setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
+      setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
     }
   }, [gallery]);
 
@@ -133,6 +136,7 @@ export default function DeliverDetail() {
         configuracoes: {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
+          photoSpacing: photoSpacing,
         },
         prazoSelecao: expirationDate,
       }});
@@ -555,7 +559,28 @@ export default function DeliverDetail() {
               <div>
                 <span className="text-sm font-medium">Download</span>
                 <p className="text-xs text-muted-foreground">Download sempre ativo para entregas</p>
+            <Separator />
+
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Espaçamento entre fotos (Grid)</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ajuste a borda entre as fotos nesta galeria
+                </p>
               </div>
+              <div className="flex items-center gap-6 pt-2">
+                <Slider
+                  value={[photoSpacing]}
+                  onValueChange={(vals) => setPhotoSpacing(vals[0])}
+                  min={0}
+                  max={40}
+                  step={1}
+                  className="flex-1"
+                />
+                <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+              </div>
+            </div>
+          </div>
               <Download className="h-4 w-4 text-primary" />
             </div>
           </div>
