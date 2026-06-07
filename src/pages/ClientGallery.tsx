@@ -387,7 +387,6 @@ export default function ClientGallery() {
       sessionName: (isEdgeFunctionFormat ? supabaseGallery.sessionName : supabaseGallery.nome_sessao) || 'Sessão de Fotos',
       packageName: (isEdgeFunctionFormat ? supabaseGallery.packageName : supabaseGallery.nome_pacote) || 'Pacote',
       includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) ?? 0,
-      photoSpacing: (isEdgeFunctionFormat ? supabaseGallery.settings?.photoSpacing : supabaseGallery.configuracoes?.photoSpacing) ?? (galleryResponse?.settings?.photoSpacing ?? 6),
       extraPhotoPrice: (() => {
         // Sessão (regras_congeladas.pacote.valorFotoExtra) é a fonte única.
         const regras: any = isEdgeFunctionFormat
