@@ -267,7 +267,13 @@ function ClientDeliverGalleryContent({
   return (
     <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
       {!hasFolders && (
-        <DeliverHero coverPhoto={coverPhoto} sessionName={gallery.sessionName} studioName={studioSettings?.studio_name} sessionFont={sessionFont} titleCaseMode={gallery.settings?.titleCaseMode} isDark={isDark} primaryColor={primaryColor} onEnter={() => {}} />
+        <DeliverHero coverPhoto={coverPhoto} sessionName={gallery.sessionName} studioName={studioSettings?.studio_name} sessionFont={sessionFont} titleCaseMode={gallery.settings?.titleCaseMode} isDark={isDark} primaryColor={primaryColor} onEnter={() => {
+          const gallerySection = document.getElementById('deliver-gallery');
+          if (gallerySection) {
+            gallerySection.scrollIntoView({ behavior: 'smooth' });
+          }
+        }} />
+
       )}
 
       <div id="deliver-gallery">
@@ -275,9 +281,40 @@ function ClientDeliverGalleryContent({
 
         {hasFolders && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
-             {/* ... folder buttons ... */}
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => {}} 
+                className="px-3 py-1.5 rounded-lg text-sm transition-colors border" 
+                style={{ 
+                  backgroundColor: 'transparent', 
+                  color: textColor, 
+                  borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', 
+                  opacity: 0.7 
+                }}
+              >
+                ← Álbuns
+              </button>
+              {folders.map((f: any) => {
+                const count = allPhotos.filter((p: any) => p.folderId === f.id).length;
+                return (
+                  <button 
+                    key={f.id} 
+                    className="px-3 py-1.5 rounded-lg text-sm transition-colors border" 
+                    style={{ 
+                      backgroundColor: 'transparent', 
+                      color: textColor, 
+                      borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', 
+                      opacity: 0.7 
+                    }}
+                  >
+                    {f.nome} ({count})
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
+
 
         <DeliverPhotoGrid photos={photos} onPhotoClick={(i: number) => setLightboxIndex(i)} onDownload={handleDownloadSingle} bgColor={bgColor} />
       </div>
