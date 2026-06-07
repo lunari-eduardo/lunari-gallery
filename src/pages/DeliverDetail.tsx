@@ -81,6 +81,7 @@ export default function DeliverDetail() {
   const [photoSpacing, setPhotoSpacing] = useState(6);
   const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [useCustomTheme, setUseCustomTheme] = useState(false);
+  const [themeOverrides, setThemeOverrides] = useState<any>({});
 
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
@@ -99,6 +100,7 @@ export default function DeliverDetail() {
       setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
       setActiveThemeId((gallery as any).theme_id || (gallery.configuracoes as any)?.themeId || DEFAULT_THEME_ID);
       setUseCustomTheme((gallery as any).use_custom_theme ?? !!(gallery as any).theme_id);
+      setThemeOverrides((gallery as any).theme_overrides || (gallery.configuracoes as any)?.themeOverrides || {});
 
     }
   }, [gallery]);
@@ -146,11 +148,11 @@ export default function DeliverDetail() {
         configuracoes: {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
-          photoSpacing: photoSpacing,
-          themeId: activeThemeId,
+          coverPhotoId: coverPhotoId,
         },
         theme_id: useCustomTheme ? activeThemeId : null,
         use_custom_theme: useCustomTheme,
+        theme_overrides: themeOverrides,
         prazoSelecao: expirationDate,
 
       }});
@@ -363,15 +365,15 @@ export default function DeliverDetail() {
         {/* === DESIGN & TEMAS === */}
         <TabsContent value="design" className="space-y-8 mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-1">Tema da Galeria</h3>
-                <p className="text-sm text-muted-foreground mb-4">Escolha como suas fotos serão apresentadas.</p>
+            <div className="lg:col-span-1 space-y-8">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Herança de Tema</h3>
+                <p className="text-sm text-muted-foreground">Decida se esta galeria segue as regras da sua conta ou tem estilo próprio.</p>
                 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div 
                     className={cn(
-                      "p-4 border rounded-lg cursor-pointer transition-all",
+                      "p-4 border rounded-xl cursor-pointer transition-all",
                       !useCustomTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"
                     )}
                     onClick={() => setUseCustomTheme(false)}
@@ -389,7 +391,7 @@ export default function DeliverDetail() {
 
                   <div 
                     className={cn(
-                      "p-4 border rounded-lg cursor-pointer transition-all",
+                      "p-4 border rounded-xl cursor-pointer transition-all",
                       useCustomTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"
                     )}
                     onClick={() => setUseCustomTheme(true)}
@@ -400,7 +402,7 @@ export default function DeliverDetail() {
                       </div>
                       <div>
                         <p className="font-medium text-sm">Personalizar esta galeria</p>
-                        <p className="text-xs text-muted-foreground">Escolha um tema específico apenas para este trabalho.</p>
+                        <p className="text-xs text-muted-foreground">Escolha um tema e ajustes específicos apenas para este trabalho.</p>
                       </div>
                     </div>
                   </div>
@@ -408,38 +410,52 @@ export default function DeliverDetail() {
               </div>
 
               {useCustomTheme && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <Label>Selecione um Tema</Label>
-                  <div className="grid grid-cols-1 gap-3">
-                    {Object.values(THEME_REGISTRY).map((t) => (
-                      <div 
-                        key={t.id}
-                        onClick={() => setActiveThemeId(t.id)}
-                        className={cn(
-                          "flex items-center justify-between p-3 border rounded-md cursor-pointer transition-all",
-                          activeThemeId === t.id ? "border-primary bg-primary/5" : "hover:border-primary/50"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={cn("w-2 h-2 rounded-full", activeThemeId === t.id ? "bg-primary" : "bg-muted-foreground/30")} />
-                          <div>
-                            <p className="text-sm font-medium">{t.name}</p>
-                            <p className="text-[10px] text-muted-foreground line-clamp-1">{(t as any).description}</p>
-                          </div>
-
-
+                <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">Selecione o Preset</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.values(THEME_REGISTRY).map((t) => (
+                        <div 
+                          key={t.id}
+                          onClick={() => setActiveThemeId(t.id)}
+                          className={cn(
+                            "flex flex-col gap-2 p-3 border rounded-xl cursor-pointer transition-all text-center",
+                            activeThemeId === t.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/50"
+                          )}
+                        >
+                          <span className="text-sm font-medium">{t.name}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase">{t.layout.engine === 'editorial-grid' ? 'Editorial' : 'Classic'}</span>
                         </div>
-                        {activeThemeId === t.id && <CheckCircle className="h-4 w-4 text-primary" />}
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <Label className="text-base font-semibold">Ajustes Visuais</Label>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Espaçamento (Gap)</Label>
+                        <span className="text-xs font-mono">{themeOverrides?.layout?.gap ?? 8}px</span>
                       </div>
-                    ))}
+                      <Slider
+                        value={[themeOverrides?.layout?.gap ?? 8]}
+                        onValueChange={(vals) => setThemeOverrides({
+                          ...themeOverrides,
+                          layout: { ...(themeOverrides.layout || {}), gap: vals[0] }
+                        })}
+                        min={0}
+                        max={40}
+                        step={1}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
               <div className="pt-4 border-t">
-                <Button onClick={handleSave} className="w-full gap-2" disabled={saving}>
+                <Button onClick={handleSave} className="w-full gap-2 rounded-xl" disabled={saving}>
                   <Save className="h-4 w-4" />
-                  Salvar alterações de design
+                  Salvar Design
                 </Button>
               </div>
             </div>
@@ -454,8 +470,7 @@ export default function DeliverDetail() {
                 </div>
               </div>
               
-              <div className="aspect-video bg-muted rounded-xl border-4 border-muted overflow-hidden relative group">
-                {/* Mockup do Tema */}
+              <div className="aspect-video bg-muted rounded-2xl border-4 border-muted overflow-hidden relative group shadow-lg">
                 <div className="absolute inset-0 bg-background overflow-hidden flex flex-col">
                    <div className="h-12 border-b flex items-center px-4 justify-between bg-white/80 backdrop-blur-sm z-10">
                       <div className="w-24 h-4 bg-muted rounded-full" />
@@ -470,7 +485,7 @@ export default function DeliverDetail() {
                         className="grid gap-2 h-full"
                         style={{ 
                           gridTemplateColumns: `repeat(${THEME_REGISTRY[activeThemeId]?.layout.columns.desktop || 4}, 1fr)`,
-                          gap: `${THEME_REGISTRY[activeThemeId]?.layout.gap || 8}px`
+                          gap: `${themeOverrides?.layout?.gap ?? THEME_REGISTRY[activeThemeId]?.layout.gap ?? 8}px`
                         }}
                       >
                         {[...Array(8)].map((_, i) => (
@@ -487,15 +502,12 @@ export default function DeliverDetail() {
                    </div>
                 </div>
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                   <Button variant="secondary" className="gap-2" onClick={() => window.open(`/g/${gallery.publicToken}`, '_blank')}>
+                   <Button variant="secondary" className="gap-2 rounded-full" onClick={() => window.open(`/g/${gallery.publicToken}`, '_blank')}>
                      <Eye className="h-4 w-4" />
                      Ver prévia completa
                    </Button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground text-center italic">
-                A prévia acima é uma representação técnica. Clique em "Ver como cliente" para testar a experiência real.
-              </p>
             </div>
           </div>
         </TabsContent>
