@@ -121,7 +121,9 @@ function rowsToSettings(
     emailOnGallerySent: settingsRow.email_on_gallery_sent ?? true,
     emailOnGalleryReactivated: settingsRow.email_on_gallery_reactivated ?? true,
     emailOnPaymentConfirmed: settingsRow.email_on_payment_confirmed ?? true,
-    defaultPhotoSpacing: settingsRow.default_photo_spacing ?? 6,
+    defaultPhotoSpacing: settingsRow.default_photo_spacing ?? 8,
+    defaultThemeId: settingsRow.default_theme_id ?? 'lunari',
+
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -226,7 +228,9 @@ export function useGallerySettings() {
           email_on_gallery_sent: true,
           email_on_gallery_reactivated: true,
           email_on_payment_confirmed: true,
-          default_photo_spacing: defaultSettings.defaultPhotoSpacing,
+          default_photo_spacing: 8,
+          default_theme_id: 'lunari',
+
         });
 
       if (settingsError) throw settingsError;
@@ -349,6 +353,10 @@ export function useGallerySettings() {
       if (data.defaultPhotoSpacing !== undefined) {
         updateData.default_photo_spacing = data.defaultPhotoSpacing;
       }
+      if (data.defaultThemeId !== undefined) {
+        updateData.default_theme_id = data.defaultThemeId;
+      }
+
 
       // Nothing to update
       if (Object.keys(updateData).length === 0) return;
