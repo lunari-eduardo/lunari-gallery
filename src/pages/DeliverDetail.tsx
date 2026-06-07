@@ -559,7 +559,28 @@ export default function DeliverDetail() {
               <div>
                 <span className="text-sm font-medium">Download</span>
                 <p className="text-xs text-muted-foreground">Download sempre ativo para entregas</p>
+            <Separator />
+
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Espaçamento entre fotos (Grid)</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ajuste a borda entre as fotos nesta galeria
+                </p>
               </div>
+              <div className="flex items-center gap-6 pt-2">
+                <Slider
+                  value={[photoSpacing]}
+                  onValueChange={(vals) => setPhotoSpacing(vals[0])}
+                  min={0}
+                  max={40}
+                  step={1}
+                  className="flex-1"
+                />
+                <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+              </div>
+            </div>
+          </div>
               <Download className="h-4 w-4 text-primary" />
             </div>
           </div>
