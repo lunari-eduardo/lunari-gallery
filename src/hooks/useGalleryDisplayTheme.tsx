@@ -29,19 +29,41 @@ export function GalleryThemeProvider({
   
   const resolvedTheme = useMemo(() => {
     // 1. Resolve base theme from ID
-    const themeId = activeThemeId || 'lunari';
+    // Hierarchy: Gallery specific themeId > Profile defaultThemeId > Lunari
+    const themeId = activeThemeId || globalSettings?.defaultThemeId || 'lunari';
     let theme = JSON.parse(JSON.stringify(THEME_REGISTRY[themeId] || THEME_REGISTRY['lunari'] || DEFAULT_GALLERY_THEME));
 
-    
-    // 3. Apply global overrides (Studio defaults)
-    if (globalSettings?.defaultPhotoSpacing !== undefined) {
-      theme.layout.gap = Number(globalSettings.defaultPhotoSpacing);
+    // 2. Apply Global Overrides (Profile level)
+    if (globalSettings?.themeOverrides) {
+      const globalOverrides = globalSettings.themeOverrides as any;
+      if (globalOverrides.layout) {
+        theme.layout = { ...theme.layout, ...globalOverrides.layout };
+      }
+      // Add more sections as needed
     }
     
-    // 4. Apply gallery specific overrides (The "Single Source of Truth" fix)
-    // We prioritize gallerySettings.photoSpacing if it exists
+    // 3. Apply Gallery specific overrides (Instance level)
+    if (themeOverrides) {
+      const overrides = themeOverrides as any;
+      if (overrides.layout) {
+        theme.layout = { ...theme.layout, ...overrides.layout };
+      }
+      if (overrides.featured) {
+        theme.featured = { ...theme.featured, ...overrides.featured };
+      }
+      if (overrides.header) {
+        theme.header = { ...theme.header, ...overrides.header };
+      }
+      if (overrides.hero) {
+        theme.hero = { ...theme.hero, ...overrides.hero };
+      }
+    }
+
+    // 4. Backward Compatibility (Legacy fields)
     if (gallerySettings?.photoSpacing !== undefined) {
       theme.layout.gap = Number(gallerySettings.photoSpacing);
+    } else if (globalSettings?.defaultPhotoSpacing !== undefined && !themeOverrides) {
+      theme.layout.gap = Number(globalSettings.defaultPhotoSpacing);
     }
     
     if (gallerySettings?.sessionFont) {
@@ -50,18 +72,6 @@ export function GalleryThemeProvider({
     
     if (gallerySettings?.titleCaseMode) {
       theme.typography = { ...theme.typography, titleCaseMode: gallerySettings.titleCaseMode };
-    }
-
-    // 5. Apply technical overrides (Deep merge of themeOverrides if exists)
-    if (themeOverrides) {
-      theme = { 
-        ...theme, 
-        ...themeOverrides,
-        layout: { ...theme.layout, ...(themeOverrides.layout || {}) },
-        featured: { ...theme.featured, ...(themeOverrides.featured || {}) },
-        header: { ...theme.header, ...(themeOverrides.header || {}) },
-        hero: { ...theme.hero, ...(themeOverrides.hero || {}) },
-      };
     }
 
     return theme;
