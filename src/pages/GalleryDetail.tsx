@@ -529,6 +529,7 @@ export default function GalleryDetail() {
       allowComments: supabaseGallery.configuracoes?.allowComments ?? true,
       allowDownload: supabaseGallery.configuracoes?.allowDownload ?? false,
       allowExtraPhotos: true,
+      photoSpacing: supabaseGallery.configuracoes?.photoSpacing ?? settings?.defaultPhotoSpacing ?? 6,
     },
     photos: transformedPhotos,
     actions,
