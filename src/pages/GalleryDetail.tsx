@@ -529,6 +529,7 @@ export default function GalleryDetail() {
       allowComments: supabaseGallery.configuracoes?.allowComments ?? true,
       allowDownload: supabaseGallery.configuracoes?.allowDownload ?? false,
       allowExtraPhotos: true,
+      photoSpacing: supabaseGallery.configuracoes?.photoSpacing ?? settings?.defaultPhotoSpacing ?? 6,
     },
     photos: transformedPhotos,
     actions,
@@ -684,7 +685,7 @@ export default function GalleryDetail() {
               ? transformedPhotos.filter(p => p.folderId === activeDetailFolderId)
               : transformedPhotos;
             return filteredPhotos.length > 0 ? (
-            <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? settings?.defaultPhotoSpacing ?? 6}>
+            <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? settings?.defaultPhotoSpacing ?? galleryForSummary.settings.photoSpacing ?? 6}>
               {filteredPhotos.map((photo, index) => (
                 <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                   <PhotoCard
