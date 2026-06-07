@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +74,7 @@ export default function DeliverDetail() {
   const [expirationDate, setExpirationDate] = useState<Date | undefined>();
   const [shareMessage, setShareMessage] = useState('Suas fotos finais estão prontas para download.');
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
+  const [photoSpacing, setPhotoSpacing] = useState(6);
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
 
@@ -87,6 +89,7 @@ export default function DeliverDetail() {
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
       setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
+      setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
     }
   }, [gallery]);
 
@@ -133,6 +136,7 @@ export default function DeliverDetail() {
         configuracoes: {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
+          photoSpacing: photoSpacing,
         },
         prazoSelecao: expirationDate,
       }});

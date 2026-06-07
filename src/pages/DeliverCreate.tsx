@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { ClientSelect } from '@/components/ClientSelect';
 import { ClientModal, ClientFormData } from '@/components/ClientModal';
@@ -71,6 +72,7 @@ export default function DeliverCreate() {
   // Step 3: Message
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const [welcomeMessageEnabled, setWelcomeMessageEnabled] = useState(true);
+  const [photoSpacing, setPhotoSpacing] = useState(6);
 
   // Initialize defaults from settings
   useEffect(() => {
@@ -83,6 +85,9 @@ export default function DeliverCreate() {
         setClientMode('light');
       } else {
         setClientMode('dark');
+      }
+      if (settings.defaultPhotoSpacing !== undefined) {
+        setPhotoSpacing(settings.defaultPhotoSpacing);
       }
     }
   }, [settings]);
@@ -183,6 +188,7 @@ export default function DeliverCreate() {
             sessionFont,
             titleCaseMode,
             clientMode,
+            photoSpacing,
           },
       });
       setSupabaseGalleryId(result.id);
@@ -244,6 +250,7 @@ export default function DeliverCreate() {
             titleCaseMode,
             coverPhotoId: coverPhotoId || undefined,
             clientMode,
+            photoSpacing,
           },
         },
       });
@@ -435,6 +442,27 @@ export default function DeliverCreate() {
                 titleCaseMode={titleCaseMode}
                 onTitleCaseModeChange={setTitleCaseMode}
               />
+            </div>
+
+            {/* Photo Spacing */}
+            <div className="space-y-4 pt-4 border-t">
+              <div>
+                <Label className="text-base font-medium">Espaçamento entre fotos (Grid)</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Ajuste a borda entre as fotos nesta galeria
+                </p>
+              </div>
+              <div className="flex items-center gap-6 max-w-sm pt-2">
+                <Slider
+                  value={[photoSpacing]}
+                  onValueChange={(vals) => setPhotoSpacing(vals[0])}
+                  min={0}
+                  max={40}
+                  step={1}
+                  className="flex-1"
+                />
+                <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+              </div>
             </div>
 
             {/* Theme section - simple light/dark toggle */}
