@@ -3,7 +3,7 @@ import { DeliverHero } from '@/components/deliver/DeliverHero';
 import { DeliverFloatingBar } from '@/components/deliver/DeliverFloatingBar';
 import { DeliverPhotoGrid, DeliverPhoto } from '@/components/deliver/DeliverPhotoGrid';
 import { DeliverLightbox } from '@/components/deliver/DeliverLightbox';
-import { GalleryThemeProvider } from '@/hooks/useGalleryDisplayTheme';
+import { GalleryThemeProvider, useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 import { DeliverWelcomeModal } from '@/components/deliver/DeliverWelcomeModal';
 import { downloadDeliverPhoto, downloadAllDeliverPhotos } from '@/lib/deliverDownloadUtils';
 import { getFontFamilyById } from '@/components/FontSelect';
