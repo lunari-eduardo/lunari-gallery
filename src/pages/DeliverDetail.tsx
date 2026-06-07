@@ -5,7 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star
+  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star, ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
