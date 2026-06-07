@@ -99,8 +99,10 @@ export default function ClientDeliverGallery({ data }: Props) {
       previewPath: p.preview_path,
       folderId: p.pasta_id || null,
       mimeType: (p as any).mime_type || null,
+      peso_visual: (p as any).peso_visual || 0,
     }));
   }, [data.photos]);
+
 
   const photos = useMemo(() => {
     if (!hasFolders || activeFolderId === null) return allPhotos;

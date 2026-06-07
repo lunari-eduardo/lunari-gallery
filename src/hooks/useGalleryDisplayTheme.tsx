@@ -74,14 +74,16 @@ export function GalleryThemeProvider({
       '--gallery-cols-t': `${resolvedTheme.layout.columns.tablet}`,
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,
       '--gallery-hover-scale': `${resolvedTheme.motion?.hoverScale ?? 1.005}`,
-      '--gallery-row-unit': `${resolvedTheme.layout.rowUnit}px`,
+      '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 150}px`,
+      '--gallery-bg': resolvedTheme.surface?.background || 'transparent',
     };
     return vars;
   }, [resolvedTheme]);
 
+
   return (
     <GalleryThemeContext.Provider value={{ theme: resolvedTheme, cssVars }}>
-      <div style={cssVars as any} className="gallery-theme-root contents">
+      <div style={cssVars as any} className="gallery-theme-root contents min-h-screen" id="gallery-root">
         {children}
       </div>
     </GalleryThemeContext.Provider>
