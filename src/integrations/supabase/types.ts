@@ -2194,6 +2194,7 @@ export type Database = {
           original_filename: string
           original_path: string | null
           pasta_id: string | null
+          peso_visual: number | null
           preview_path: string | null
           preview_wm_path: string | null
           processing_status: string | null
@@ -2222,6 +2223,7 @@ export type Database = {
           original_filename: string
           original_path?: string | null
           pasta_id?: string | null
+          peso_visual?: number | null
           preview_path?: string | null
           preview_wm_path?: string | null
           processing_status?: string | null
@@ -2250,6 +2252,7 @@ export type Database = {
           original_filename?: string
           original_path?: string | null
           pasta_id?: string | null
+          peso_visual?: number | null
           preview_path?: string | null
           preview_wm_path?: string | null
           processing_status?: string | null
@@ -2702,6 +2705,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gallery_theme_presets: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          owner_id: string | null
+          scope: string
+          theme_json: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          owner_id?: string | null
+          scope?: string
+          theme_json: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          owner_id?: string | null
+          scope?: string
+          theme_json?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       gallery_themes: {
         Row: {
