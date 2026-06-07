@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ImageIcon, Star, Play } from 'lucide-react';
+import { X, ImageIcon, Star, Play, StarOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ interface GalleryPhoto {
   preview_path: string | null;
   thumb_path: string | null;
   mime_type: string | null;
+  peso_visual: number | null;
 }
 
 interface DeliverPhotoManagerProps {
@@ -37,7 +38,7 @@ export function DeliverPhotoManager({
   const fetchPhotos = useCallback(async () => {
     const { data, error } = await supabase
       .from('galeria_fotos')
-      .select('id, storage_key, original_filename, width, height, preview_path, thumb_path, mime_type')
+      .select('id, storage_key, original_filename, width, height, preview_path, thumb_path, mime_type, peso_visual')
       .eq('galeria_id', galleryId)
       .order('created_at');
 
@@ -95,6 +96,28 @@ export function DeliverPhotoManager({
     onCoverChange?.(newCoverId);
   };
 
+  const handleToggleHighlight = async (photoId: string, currentWeight: number | null) => {
+    const newWeight = currentWeight === 1 ? 0 : 1;
+    
+    // Optimistic update
+    setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, peso_visual: newWeight } : p));
+
+    try {
+      const { error } = await supabase
+        .from('galeria_fotos')
+        .update({ peso_visual: newWeight })
+        .eq('id', photoId);
+
+      if (error) throw error;
+      toast.success(newWeight === 1 ? 'Foto destacada' : 'Destaque removido');
+    } catch (error) {
+      console.error('Error toggling highlight:', error);
+      toast.error('Erro ao atualizar destaque');
+      // Rollback
+      setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, peso_visual: currentWeight } : p));
+    }
+  };
+
   if (isLoading && photos.length === 0) return null;
   if (photos.length === 0) return null;
 
@@ -104,17 +127,26 @@ export function DeliverPhotoManager({
         <p className="text-sm text-muted-foreground">
           {photos.length} foto{photos.length !== 1 ? 's' : ''} enviada{photos.length !== 1 ? 's' : ''}
         </p>
-        {coverPhotoId && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-            Capa selecionada
-          </p>
-        )}
+        <div className="flex items-center gap-3">
+          {coverPhotoId && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+              Capa
+            </p>
+          )}
+          {photos.some(p => p.peso_visual === 1) && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+              Destaques
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {photos.map((photo) => {
           const isCover = coverPhotoId === photo.id;
+          const isHighlighted = photo.peso_visual === 1;
           const isDeleting = deletingId === photo.id;
           const paths: PhotoPaths = {
             storageKey: photo.storage_key,
@@ -129,7 +161,8 @@ export function DeliverPhotoManager({
             <div
               key={photo.id}
               className={`group relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                isCover ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-transparent hover:border-border'
+                isCover ? 'border-amber-400 ring-2 ring-amber-400/30' : 
+                isHighlighted ? 'border-blue-400' : 'border-transparent hover:border-border'
               } ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <img
@@ -138,22 +171,20 @@ export function DeliverPhotoManager({
                 className="w-full h-full object-cover"
                 loading="lazy"
               />
-              {/* Video play indicator */}
+              
               {photo.mime_type?.startsWith('video/') && (
                 <div className="absolute top-1.5 right-1.5 p-1 bg-black/50 text-white rounded-full pointer-events-none">
                   <Play className="h-3 w-3 fill-white" />
                 </div>
               )}
 
-              {/* Cover badge */}
               {isCover && (
-                <div className="absolute top-1.5 left-1.5 bg-amber-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <div className="absolute top-1.5 left-1.5 bg-amber-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10">
                   <Star className="h-2.5 w-2.5 fill-current" />
                   CAPA
                 </div>
               )}
 
-              {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button
                   onClick={() => handleSetCover(photo.id)}
@@ -165,6 +196,18 @@ export function DeliverPhotoManager({
                   title={isCover ? 'Remover capa' : 'Definir como capa'}
                 >
                   <ImageIcon className="h-4 w-4" />
+                </button>
+
+                <button
+                  onClick={() => handleToggleHighlight(photo.id, photo.peso_visual)}
+                  className={`p-2 rounded-full transition-colors ${
+                    isHighlighted
+                      ? 'bg-blue-400 text-white hover:bg-blue-300'
+                      : 'bg-white/90 text-black hover:bg-white'
+                  }`}
+                  title={isHighlighted ? 'Remover destaque' : 'Destacar na grade'}
+                >
+                  {isHighlighted ? <StarOff className="h-4 w-4" /> : <Star className="h-4 w-4" />}
                 </button>
 
                 <button

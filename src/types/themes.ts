@@ -66,6 +66,7 @@ export const DEFAULT_GALLERY_THEME: GalleryTheme = {
     maxCount: 10,
     spanRules: {
       "1": { colSpan: 2, rowSpan: 2 }, // Destaque nível 1
+      "2": { colSpan: 2, rowSpan: 3 }, // Futuro: Destaque maior
     }
   },
   header: {

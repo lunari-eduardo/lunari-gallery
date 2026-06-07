@@ -27,19 +27,20 @@ export function GalleryThemeProvider({
   
   const resolvedTheme = useMemo(() => {
     // 1. Start with base default
-    let theme = { ...DEFAULT_GALLERY_THEME };
+    let theme = JSON.parse(JSON.stringify(DEFAULT_GALLERY_THEME));
     
-    // 2. Apply theme from preset if activeThemeId matches (placeholder for future presets)
+    // 2. Apply theme from preset (Placeholder for future presets)
     // if (activeThemeId === 'editorial') theme = { ...EDITORIAL_THEME };
     
-    // 3. Apply global overrides (e.g. default gap)
+    // 3. Apply global overrides (Studio defaults)
     if (globalSettings?.defaultPhotoSpacing !== undefined) {
-      theme.layout = { ...theme.layout, gap: globalSettings.defaultPhotoSpacing };
+      theme.layout.gap = Number(globalSettings.defaultPhotoSpacing);
     }
     
-    // 4. Apply gallery specific overrides
+    // 4. Apply gallery specific overrides (The "Single Source of Truth" fix)
+    // We prioritize gallerySettings.photoSpacing if it exists
     if (gallerySettings?.photoSpacing !== undefined) {
-      theme.layout = { ...theme.layout, gap: gallerySettings.photoSpacing };
+      theme.layout.gap = Number(gallerySettings.photoSpacing);
     }
     
     if (gallerySettings?.sessionFont) {
@@ -50,10 +51,16 @@ export function GalleryThemeProvider({
       theme.typography = { ...theme.typography, titleCaseMode: gallerySettings.titleCaseMode };
     }
 
-    // 5. Apply technical overrides (stored in gallery metadata)
+    // 5. Apply technical overrides (Deep merge of themeOverrides if exists)
     if (themeOverrides) {
-      // Simple merge for now
-      theme = { ...theme, ...themeOverrides };
+      theme = { 
+        ...theme, 
+        ...themeOverrides,
+        layout: { ...theme.layout, ...(themeOverrides.layout || {}) },
+        featured: { ...theme.featured, ...(themeOverrides.featured || {}) },
+        header: { ...theme.header, ...(themeOverrides.header || {}) },
+        hero: { ...theme.hero, ...(themeOverrides.hero || {}) },
+      };
     }
 
     return theme;
@@ -73,7 +80,7 @@ export function GalleryThemeProvider({
 
   return (
     <GalleryThemeContext.Provider value={{ theme: resolvedTheme, cssVars }}>
-      <div style={cssVars as any} className="gallery-theme-root">
+      <div style={cssVars as any} className="gallery-theme-root contents">
         {children}
       </div>
     </GalleryThemeContext.Provider>

@@ -253,7 +253,7 @@ export default function ClientDeliverGallery({ data }: Props) {
             </div>
           )}
 
-          <DeliverPhotoGrid photos={photos} onPhotoClick={(i) => setLightboxIndex(i)} onDownload={handleDownloadSingle} bgColor={bgColor} gap={gallery.settings?.photoSpacing} />
+          <DeliverPhotoGrid photos={photos} onPhotoClick={(i) => setLightboxIndex(i)} onDownload={handleDownloadSingle} bgColor={bgColor} />
         </div>
 
         {lightboxIndex !== null && (

@@ -8,9 +8,6 @@ interface EditorialGridProps {
 }
 
 export function EditorialGrid({ children, className }: EditorialGridProps) {
-  const { theme } = useGalleryDisplayTheme();
-  const { gap = 6 } = theme.layout;
-
   return (
     <div 
       className={cn(
@@ -18,7 +15,7 @@ export function EditorialGrid({ children, className }: EditorialGridProps) {
         "grid-flow-row-dense",
         className
       )}
-      style={{ gap: `${gap}px` }}
+      style={{ gap: 'var(--gallery-gap)' }}
     >
       {children}
     </div>
@@ -33,7 +30,7 @@ interface EditorialItemProps {
   photoHeight?: number;
 }
 
-export function EditorialItem({ children, className, weight = 0, photoWidth = 1, photoHeight = 1 }: EditorialItemProps) {
+export function EditorialItem({ children, className, weight = 0 }: EditorialItemProps) {
   const { theme } = useGalleryDisplayTheme();
   
   const spanStyles = useMemo(() => {
@@ -43,16 +40,30 @@ export function EditorialItem({ children, className, weight = 0, photoWidth = 1,
     if (!rule) return {};
 
     const styles: any = {};
-    if (rule.colSpan) styles.gridColumn = `span ${rule.colSpan}`;
-    if (rule.rowSpan) styles.gridRow = `span ${rule.rowSpan}`;
+    
+    // Na visualização mobile, restringimos spans para não quebrar o layout em 2 colunas
+    // Se colSpan > 1 em mobile, ele ocupa a largura total
+    if (rule.colSpan) {
+      styles['--col-span'] = `span ${rule.colSpan}`;
+      // Fallback para CSS inline se necessário, mas preferimos classes
+    }
+    
+    if (rule.rowSpan) {
+      styles['--row-span'] = `span ${rule.rowSpan}`;
+    }
     
     return styles;
   }, [weight, theme]);
 
   return (
     <div 
-      className={cn('relative overflow-hidden w-full h-full', className)}
-      style={spanStyles}
+      className={cn(
+        'relative overflow-hidden w-full h-full',
+        // Destaque nível 1 (weight=1) geralmente ocupa 2x2 no Editorial
+        weight === 1 && "col-span-2 row-span-2",
+        className
+      )}
+      style={spanStyles as any}
     >
       {children}
     </div>
