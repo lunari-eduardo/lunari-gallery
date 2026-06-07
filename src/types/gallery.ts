@@ -187,7 +187,9 @@ export interface GlobalSettings {
   defaultAllowExtraPhotos?: boolean;
   defaultWatermarkDisplay?: WatermarkDisplay;
   defaultPhotoSpacing?: number;
+  defaultThemeId?: string;
 }
+
 
 export interface ExportData {
   filename: string;

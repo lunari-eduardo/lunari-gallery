@@ -156,8 +156,9 @@ serve(async (req) => {
 
       // Build theme
       const galleryConfig = gallery.configuracoes as Record<string, unknown> | null;
-      const themeId = galleryConfig?.themeId as string | undefined;
+      const themeId = (gallery.theme_id as string) || (galleryConfig?.themeId as string);
       const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light';
+
       
       let themeData = null;
       if (themeId) {
@@ -206,8 +207,10 @@ serve(async (req) => {
               titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
               coverPhotoId: galleryConfig?.coverPhotoId || undefined,
               photoSpacing: galleryConfig?.photoSpacing || undefined,
-              themeId: galleryConfig?.themeId || undefined,
+              themeId: (gallery.theme_id as string) || (galleryConfig?.themeId as string) || undefined,
+              useCustomTheme: (gallery.use_custom_theme as boolean) ?? !!gallery.theme_id,
               themeOverrides: galleryConfig?.themeOverrides || undefined,
+
             },
           },
           photos: photos || [],

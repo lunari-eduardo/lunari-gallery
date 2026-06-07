@@ -136,7 +136,10 @@ export interface CreateGaleriaData {
   origin?: 'manual' | 'gestao'; // Track how gallery was created
   regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Lunari Studio
   tipo?: 'selecao' | 'entrega'; // Gallery type
+  theme_id?: string | null;
+  use_custom_theme?: boolean;
 }
+
 
 // Transform database row to Galeria
 function transformGaleria(row: any): Galeria {
@@ -421,6 +424,9 @@ export function useSupabaseGalleries() {
       if (data.prazoSelecaoDias !== undefined) updateData.prazo_selecao_dias = data.prazoSelecaoDias;
       if (data.prazoSelecao !== undefined) updateData.prazo_selecao = data.prazoSelecao.toISOString();
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
+      if (data.theme_id !== undefined) updateData.theme_id = data.theme_id;
+      if (data.use_custom_theme !== undefined) updateData.use_custom_theme = data.use_custom_theme;
+
 
       // ─── Valor da foto extra: sessão é a fonte única de verdade ────────
       // Quando há sessão vinculada (1 sessão = 1 galeria), o valor é gravado
