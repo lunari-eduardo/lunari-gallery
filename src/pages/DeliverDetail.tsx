@@ -427,6 +427,7 @@ export default function DeliverDetail() {
                             <p className="text-[10px] text-muted-foreground line-clamp-1">{(t as any).description}</p>
                           </div>
 
+
                         </div>
                         {activeThemeId === t.id && <CheckCircle className="h-4 w-4 text-primary" />}
                       </div>
