@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { GalleryTheme, ThemeOverrides, GalleryDensity } from './types';
 import { THEME_REGISTRY, DEFAULT_THEME_ID } from './registry';
+import { GalleryTheme as GlobalGalleryTheme } from '@/types/themes';
+
 
 interface ThemeContextType {
   theme: GalleryTheme;
@@ -28,32 +30,35 @@ export const GalleryThemeProvider: React.FC<ThemeProviderProps> = ({
 }) => {
   const theme = useMemo(() => {
     const id = themeId || DEFAULT_THEME_ID;
-    return THEME_REGISTRY[id] || THEME_REGISTRY[DEFAULT_THEME_ID];
+    const baseTheme = (THEME_REGISTRY[id] || THEME_REGISTRY[DEFAULT_THEME_ID]) as any;
+    return baseTheme;
   }, [themeId]);
 
   const resolvedConfig = useMemo(() => {
-    const density = overrides.density || theme.layout.defaultDensity;
+    const density = overrides.density || theme.layout?.density || 'comfortable';
     
     // Density-based gap calculation
-    const densityMultipliers = {
+    const densityMultipliers: Record<string, number> = {
       compact: 0.5,
       comfortable: 1,
       airy: 2
     };
-    const baseGap = overrides.gap !== undefined ? overrides.gap : theme.layout.baseGap;
-    const gap = baseGap * densityMultipliers[density];
+    const baseGap = overrides.gap !== undefined ? overrides.gap : (theme.layout?.gap ?? 8);
+    const multiplier = densityMultipliers[density as string] || 1;
+    const gap = baseGap * multiplier;
 
     return {
       gap,
-      density,
-      background: overrides.background || theme.surface.background,
+      density: density as GalleryDensity,
+      background: overrides.background || theme.surface?.background || '#ffffff',
       columns: {
-        mobile: overrides.columns?.mobile || theme.layout.columns.mobile,
-        tablet: overrides.columns?.tablet || theme.layout.columns.tablet,
-        desktop: overrides.columns?.desktop || theme.layout.columns.desktop,
+        mobile: overrides.columns?.mobile || theme.layout?.columns?.mobile || 2,
+        tablet: overrides.columns?.tablet || theme.layout?.columns?.tablet || 3,
+        desktop: overrides.columns?.desktop || theme.layout?.columns?.desktop || 4,
       }
     };
   }, [theme, overrides]);
+
 
   return (
     <ThemeContext.Provider value={{ theme, overrides, resolvedConfig }}>

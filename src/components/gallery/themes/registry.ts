@@ -58,3 +58,6 @@ export const THEME_REGISTRY: Record<string, GalleryTheme> = {
   editorial: EDITORIAL_THEME,
   fineart: FINE_ART_THEME,
 };
+
+export const DEFAULT_THEME_ID = 'lunari';
+

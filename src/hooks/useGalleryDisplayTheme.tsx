@@ -1,6 +1,8 @@
 import { createContext, useContext, ReactNode, useMemo } from 'react';
 import { GalleryTheme, DEFAULT_GALLERY_THEME } from '@/types/themes';
+import { THEME_REGISTRY } from '@/components/gallery/themes/registry';
 import { GallerySettings, GlobalSettings } from '@/types/gallery';
+
 
 interface GalleryThemeContextType {
   theme: GalleryTheme;
@@ -26,11 +28,10 @@ export function GalleryThemeProvider({
 }: GalleryThemeProviderProps) {
   
   const resolvedTheme = useMemo(() => {
-    // 1. Start with base default
-    let theme = JSON.parse(JSON.stringify(DEFAULT_GALLERY_THEME));
-    
-    // 2. Apply theme from preset (Placeholder for future presets)
-    // if (activeThemeId === 'editorial') theme = { ...EDITORIAL_THEME };
+    // 1. Resolve base theme from ID
+    const themeId = activeThemeId || 'lunari';
+    let theme = JSON.parse(JSON.stringify(THEME_REGISTRY[themeId] || THEME_REGISTRY['lunari'] || DEFAULT_GALLERY_THEME));
+
     
     // 3. Apply global overrides (Studio defaults)
     if (globalSettings?.defaultPhotoSpacing !== undefined) {
