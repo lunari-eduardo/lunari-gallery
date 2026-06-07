@@ -424,8 +424,9 @@ export default function DeliverDetail() {
                           <div className={cn("w-2 h-2 rounded-full", activeThemeId === t.id ? "bg-primary" : "bg-muted-foreground/30")} />
                           <div>
                             <p className="text-sm font-medium">{t.name}</p>
-                            <p className="text-[10px] text-muted-foreground line-clamp-1">{t.description}</p>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1">{(t as any).description}</p>
                           </div>
+
                         </div>
                         {activeThemeId === t.id && <CheckCircle className="h-4 w-4 text-primary" />}
                       </div>
