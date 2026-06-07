@@ -1,6 +1,6 @@
 import { Download, Play } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
-import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
+import { EditorialGrid, EditorialItem } from '@/components/deliver/EditorialGrid';
 
 export interface DeliverPhoto {
   id: string;
@@ -14,6 +14,7 @@ export interface DeliverPhoto {
   previewPath?: string | null;
   folderId?: string | null;
   mimeType?: string | null;
+  peso_visual?: number;
 }
 
 interface DeliverPhotoGridProps {
@@ -24,10 +25,10 @@ interface DeliverPhotoGridProps {
   gap?: number;
 }
 
-export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor, gap }: DeliverPhotoGridProps) {
+export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: DeliverPhotoGridProps) {
   return (
     <div className="min-h-screen px-3 sm:px-6 lg:px-8 py-8" style={bgColor ? { backgroundColor: bgColor } : undefined}>
-      <MasonryGrid className="max-w-7xl mx-auto" gap={gap}>
+      <EditorialGrid className="max-w-7xl mx-auto">
         {photos.map((photo, index) => {
           const paths: PhotoPaths = {
             storageKey: photo.storageKey,
@@ -39,8 +40,13 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor, ga
           const url = getPhotoUrl(paths, 'preview');
 
           return (
-            <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
-              <div className="group relative cursor-pointer overflow-hidden w-full">
+            <EditorialItem 
+              key={photo.id} 
+              weight={photo.peso_visual}
+              photoWidth={photo.width} 
+              photoHeight={photo.height}
+            >
+              <div className="group relative cursor-pointer overflow-hidden w-full h-full">
                 {photo.mimeType?.startsWith('video/') ? (
                   <>
                     <video
@@ -49,7 +55,7 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor, ga
                       autoPlay
                       loop
                       playsInline
-                      className="w-full h-auto block transition-transform duration-700 group-hover:scale-[1.01]"
+                      className="w-full h-full object-cover block transition-transform duration-700 group-hover:scale-[var(--gallery-hover-scale)]"
                       onClick={() => onPhotoClick(index)}
                     />
                     <div className="absolute top-3 left-3 p-1.5 backdrop-blur-sm bg-black/30 text-white rounded-full pointer-events-none">
@@ -61,7 +67,7 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor, ga
                     src={url}
                     alt={photo.originalFilename}
                     loading="lazy"
-                    className="w-full h-auto block transition-transform duration-700 group-hover:scale-[1.01]"
+                    className="w-full h-full object-cover block transition-transform duration-700 group-hover:scale-[var(--gallery-hover-scale)]"
                     onClick={() => onPhotoClick(index)}
                   />
                 )}
@@ -78,10 +84,10 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor, ga
                   <Download className="w-4 h-4" />
                 </button>
               </div>
-            </MasonryItem>
+            </EditorialItem>
           );
         })}
-      </MasonryGrid>
+      </EditorialGrid>
     </div>
   );
 }

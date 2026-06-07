@@ -5,7 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Send, Trash2, Image, Upload, Copy, Eye,
   Lock, Unlock, Calendar as CalendarIcon, Download,
-  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star
+  MessageSquare, Mail, ExternalLink, Loader2, Save, RotateCcw, Star, ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -137,6 +137,8 @@ export default function DeliverDetail() {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
           photoSpacing: photoSpacing,
+          // Placeholder for theme
+          themeId: (gallery.configuracoes as any)?.themeId || 'default',
         },
         prazoSelecao: expirationDate,
       }});
@@ -382,6 +384,7 @@ export default function DeliverDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {photos.map(photo => {
                 const isCover = coverPhotoId === photo.id;
+                const weight = (photo as any).peso_visual || 0;
                 return (
                   <div
                     key={photo.id}
@@ -404,8 +407,31 @@ export default function DeliverDetail() {
                         CAPA
                       </div>
                     )}
+                    
+                    {/* Badge DESTAQUE */}
+                    {weight > 0 && (
+                      <div className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10">
+                        <Star className="h-2.5 w-2.5 fill-current" />
+                        DESTAQUE
+                      </div>
+                    )}
 
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                      <Button
+                        variant={weight > 0 ? 'default' : 'secondary'}
+                        size="icon"
+                        className={cn('h-8 w-8', weight > 0 && 'bg-primary text-primary-foreground')}
+                        onClick={async () => {
+                          const newWeight = weight > 0 ? 0 : 1;
+                          const { supabase } = await import('@/integrations/supabase/client');
+                          await supabase.from('galeria_fotos').update({ peso_visual: newWeight }).eq('id', photo.id);
+                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, peso_visual: newWeight } as any : p));
+                          toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+                        }}
+                        title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
+                      >
+                        <Star className={cn('h-4 w-4', weight > 0 && 'fill-current')} />
+                      </Button>
                       <Button
                         variant={isCover ? 'default' : 'secondary'}
                         size="icon"
@@ -413,7 +439,7 @@ export default function DeliverDetail() {
                         onClick={() => handleSetCover(photo.id)}
                         title={isCover ? 'Remover capa' : 'Definir como capa'}
                       >
-                        <Star className={cn('h-4 w-4', isCover && 'fill-current')} />
+                        <ImageIcon className={cn('h-4 w-4', isCover && 'fill-current')} />
                       </Button>
                       <a
                         href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
@@ -554,33 +580,46 @@ export default function DeliverDetail() {
             </div>
 
             <Separator />
+            
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Apresentação</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Estilo visual e layout da galeria
+                </p>
+              </div>
+              
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider">Espaçamento entre fotos</Label>
+                  <div className="flex items-center gap-6">
+                    <Slider
+                      value={[photoSpacing]}
+                      onValueChange={(vals) => setPhotoSpacing(vals[0])}
+                      min={0}
+                      max={40}
+                      step={1}
+                      className="flex-1"
+                    />
+                    <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-muted/30 rounded-lg border border-dashed text-center">
+                  <p className="text-xs text-muted-foreground italic">
+                    Novos temas e layouts em breve
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
 
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm font-medium">Download</span>
                 <p className="text-xs text-muted-foreground">Download sempre ativo para entregas</p>
-            <Separator />
-
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Espaçamento entre fotos (Grid)</Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Ajuste a borda entre as fotos nesta galeria
-                </p>
               </div>
-              <div className="flex items-center gap-6 pt-2">
-                <Slider
-                  value={[photoSpacing]}
-                  onValueChange={(vals) => setPhotoSpacing(vals[0])}
-                  min={0}
-                  max={40}
-                  step={1}
-                  className="flex-1"
-                />
-                <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
-              </div>
-            </div>
-          </div>
               <Download className="h-4 w-4 text-primary" />
             </div>
           </div>

@@ -136,7 +136,7 @@ serve(async (req) => {
       // Fetch photos
       const { data: photos } = await supabase
         .from("galeria_fotos")
-        .select("id, storage_key, original_path, original_filename, filename, width, height, preview_path, thumb_path, pasta_id, mime_type")
+        .select("id, storage_key, original_path, original_filename, filename, width, height, preview_path, thumb_path, pasta_id, mime_type, peso_visual")
         .eq("galeria_id", gallery.id)
         .order("original_filename", { ascending: true });
 
@@ -205,6 +205,9 @@ serve(async (req) => {
               sessionFont: galleryConfig?.sessionFont || undefined,
               titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
               coverPhotoId: galleryConfig?.coverPhotoId || undefined,
+              photoSpacing: galleryConfig?.photoSpacing || undefined,
+              themeId: galleryConfig?.themeId || undefined,
+              themeOverrides: galleryConfig?.themeOverrides || undefined,
             },
           },
           photos: photos || [],
