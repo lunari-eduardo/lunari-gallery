@@ -342,6 +342,9 @@ export function useSupabaseGalleries() {
           gallery_password: data.galleryPassword || null,
           session_id: data.sessionId || null, // Session ID from Gestão
           origin: data.origin || 'manual', // Track creation origin
+          theme_id: data.theme_id || null,
+          use_custom_theme: data.use_custom_theme || false,
+          theme_overrides: data.theme_overrides || {},
           regras_congeladas: data.regrasCongeladas ? (data.regrasCongeladas as unknown as Json) : null, // Frozen pricing rules
           status: 'rascunho',
         }])
