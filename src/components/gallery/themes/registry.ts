@@ -4,6 +4,7 @@ export const LUNARI_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'lunari',
   name: 'Lunari',
+  version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-grid',
@@ -17,6 +18,7 @@ export const CLEAN_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'clean',
   name: 'Clean',
+  version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'masonry-classic',
@@ -30,6 +32,7 @@ export const EDITORIAL_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'editorial',
   name: 'Editorial',
+  version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-grid',
@@ -43,6 +46,7 @@ export const FINE_ART_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'fineart',
   name: 'Fine Art',
+  version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-grid',

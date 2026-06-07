@@ -29,33 +29,40 @@ export const GalleryThemeProvider: React.FC<ThemeProviderProps> = ({
   children 
 }) => {
   const theme = useMemo(() => {
+    // 1. Resolve base theme from ID
     const id = themeId || DEFAULT_THEME_ID;
-    const baseTheme = (THEME_REGISTRY[id] || THEME_REGISTRY[DEFAULT_THEME_ID]) as any;
-    return baseTheme;
+    const basePreset = (THEME_REGISTRY[id] || THEME_REGISTRY[DEFAULT_THEME_ID]) as any;
+    
+    // Deep clone to avoid mutating registry
+    return JSON.parse(JSON.stringify(basePreset));
   }, [themeId]);
 
   const resolvedConfig = useMemo(() => {
-    const density = overrides.density || theme.layout?.density || 'comfortable';
+    // 2. Resolve density (Override > Preset)
+    const density = (overrides as any).layout?.density || theme.layout?.density || 'comfortable';
     
-    // Density-based gap calculation
-    const densityMultipliers: Record<string, number> = {
-      compact: 0.5,
-      comfortable: 1,
-      airy: 2
+    // 3. Resolve gap (Override > Preset)
+    const gap = (overrides as any).layout?.gap !== undefined 
+      ? (overrides as any).layout.gap 
+      : (theme.layout?.gap ?? 8);
+
+    // 4. Density-based column logic (Simplified)
+    const columns = {
+      mobile: (overrides as any).layout?.columns?.mobile || theme.layout?.columns?.mobile || 2,
+      tablet: (overrides as any).layout?.columns?.tablet || theme.layout?.columns?.tablet || 3,
+      desktop: (overrides as any).layout?.columns?.desktop || theme.layout?.columns?.desktop || 4,
     };
-    const baseGap = overrides.gap !== undefined ? overrides.gap : (theme.layout?.gap ?? 8);
-    const multiplier = densityMultipliers[density as string] || 1;
-    const gap = baseGap * multiplier;
+
+    // If density is Airy, we might want to reduce columns if not explicitly overridden
+    if (density === 'airy' && !(overrides as any).layout?.columns) {
+      columns.desktop = Math.max(1, columns.desktop - 1);
+    }
 
     return {
       gap,
       density: density as GalleryDensity,
-      background: overrides.background || theme.surface?.background || '#ffffff',
-      columns: {
-        mobile: overrides.columns?.mobile || theme.layout?.columns?.mobile || 2,
-        tablet: overrides.columns?.tablet || theme.layout?.columns?.tablet || 3,
-        desktop: overrides.columns?.desktop || theme.layout?.columns?.desktop || 4,
-      }
+      background: (overrides as any).surface?.background || theme.surface?.background || '#ffffff',
+      columns
     };
   }, [theme, overrides]);
 

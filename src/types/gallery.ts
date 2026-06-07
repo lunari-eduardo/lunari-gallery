@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export type GalleryStatus = 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled';
 
 export interface GalleryFolder {
@@ -188,6 +190,7 @@ export interface GlobalSettings {
   defaultWatermarkDisplay?: WatermarkDisplay;
   defaultPhotoSpacing?: number;
   defaultThemeId?: string;
+  themeOverrides?: Json;
 }
 
 

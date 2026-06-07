@@ -28,6 +28,8 @@ export interface GalleryThemeHero {
   transitionToGrid: 'fade' | 'cut';
 }
 
+export type ThemeOverrides = Partial<GalleryTheme>;
+
 export interface GalleryTheme {
   id: string;
   name: string;
