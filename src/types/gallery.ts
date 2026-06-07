@@ -188,6 +188,7 @@ export interface GlobalSettings {
   defaultWatermarkDisplay?: WatermarkDisplay;
   defaultPhotoSpacing?: number;
   defaultThemeId?: string;
+  themeOverrides?: Json;
 }
 
 
