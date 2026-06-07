@@ -137,6 +137,8 @@ export default function DeliverDetail() {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
           photoSpacing: photoSpacing,
+          // Placeholder for theme
+          themeId: (gallery.configuracoes as any)?.themeId || 'default',
         },
         prazoSelecao: expirationDate,
       }});
@@ -554,33 +556,46 @@ export default function DeliverDetail() {
             </div>
 
             <Separator />
+            
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Apresentação</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Estilo visual e layout da galeria
+                </p>
+              </div>
+              
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider">Espaçamento entre fotos</Label>
+                  <div className="flex items-center gap-6">
+                    <Slider
+                      value={[photoSpacing]}
+                      onValueChange={(vals) => setPhotoSpacing(vals[0])}
+                      min={0}
+                      max={40}
+                      step={1}
+                      className="flex-1"
+                    />
+                    <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-muted/30 rounded-lg border border-dashed text-center">
+                  <p className="text-xs text-muted-foreground italic">
+                    Novos temas e layouts em breve
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
 
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm font-medium">Download</span>
                 <p className="text-xs text-muted-foreground">Download sempre ativo para entregas</p>
-            <Separator />
-
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Espaçamento entre fotos (Grid)</Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Ajuste a borda entre as fotos nesta galeria
-                </p>
               </div>
-              <div className="flex items-center gap-6 pt-2">
-                <Slider
-                  value={[photoSpacing]}
-                  onValueChange={(vals) => setPhotoSpacing(vals[0])}
-                  min={0}
-                  max={40}
-                  step={1}
-                  className="flex-1"
-                />
-                <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
-              </div>
-            </div>
-          </div>
               <Download className="h-4 w-4 text-primary" />
             </div>
           </div>
