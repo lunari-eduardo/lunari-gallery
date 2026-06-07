@@ -29,8 +29,9 @@ export function DeliverFloatingBar({
 
   useEffect(() => {
     const handleScroll = () => {
-      // Mostra quando scrollar mais de 400px ou conforme o hero sumir
-      setIsVisible(window.scrollY > 400);
+      // Usamos uma transição mais suave baseada na altura do viewport
+      const threshold = window.innerHeight * 0.6; 
+      setIsVisible(window.scrollY > threshold);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -48,10 +49,10 @@ export function DeliverFloatingBar({
     >
       <div 
         className={cn(
-          "flex items-center justify-between px-4 py-2.5 rounded-full backdrop-blur-xl border shadow-2xl",
+          "flex items-center justify-between px-4 py-2.5 rounded-full backdrop-blur-2xl border shadow-2xl transition-colors duration-300",
           isDark 
             ? "bg-black/40 border-white/10 text-white" 
-            : "bg-white/60 border-black/5 text-stone-900"
+            : "bg-white/70 border-black/10 text-stone-900"
         )}
       >
         <div className="flex items-center gap-3 min-w-0">
