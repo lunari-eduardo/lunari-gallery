@@ -138,6 +138,7 @@ export interface CreateGaleriaData {
   tipo?: 'selecao' | 'entrega'; // Gallery type
   theme_id?: string | null;
   use_custom_theme?: boolean;
+  theme_overrides?: Json;
 }
 
 
@@ -426,6 +427,7 @@ export function useSupabaseGalleries() {
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
       if (data.theme_id !== undefined) updateData.theme_id = data.theme_id;
       if (data.use_custom_theme !== undefined) updateData.use_custom_theme = data.use_custom_theme;
+      if (data.theme_overrides !== undefined) updateData.theme_overrides = data.theme_overrides;
 
 
       // ─── Valor da foto extra: sessão é a fonte única de verdade ────────
