@@ -95,11 +95,9 @@ export function PersonalizationSettings() {
         {/* Theme Config (simplified) */}
         <div className="lunari-card p-6">
           <ThemeConfig
-            themeType={settings.themeType}
-            customTheme={settings.customTheme}
-            onThemeTypeChange={(type) => setThemeType(type)}
-            onSaveCustomTheme={saveCustomTheme}
-            onDeleteCustomTheme={deleteCustomTheme}
+            defaultThemeId={settings.defaultThemeId || 'lunari'}
+            themeOverrides={settings.themeOverrides}
+            onUpdate={(data) => updateSettings(data, { successMessage: 'Aparência da galeria atualizada.' })}
           />
         </div>
 
