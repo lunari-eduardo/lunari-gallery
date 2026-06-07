@@ -222,7 +222,7 @@ export default function ClientDeliverGallery({ data }: Props) {
       </div>
     );
   }
-
+  return (
     <GalleryThemeProvider 
       gallerySettings={gallery.settings} 
       globalSettings={data.studioSettings as any}
@@ -246,6 +246,7 @@ export default function ClientDeliverGallery({ data }: Props) {
     </GalleryThemeProvider>
   );
 }
+
 
 function ClientDeliverGalleryContent({ 
   data, photos, allPhotos, coverPhoto, sessionFont, handleDownloadAll, 
