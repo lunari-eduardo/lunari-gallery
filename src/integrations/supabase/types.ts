@@ -2389,6 +2389,7 @@ export type Database = {
           cliente_telefone: string | null
           configuracoes: Json | null
           created_at: string
+          density: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em: string | null
           finalized_at: string | null
           fotos_incluidas: number
@@ -2411,10 +2412,13 @@ export type Database = {
           status: string
           status_pagamento: string | null
           status_selecao: string | null
+          theme_id: string | null
+          theme_overrides: Json | null
           tipo: string
           total_fotos: number | null
           total_fotos_extras_vendidas: number | null
           updated_at: string
+          use_custom_theme: boolean | null
           user_id: string
           valor_extras: number | null
           valor_foto_extra: number
@@ -2427,6 +2431,7 @@ export type Database = {
           cliente_telefone?: string | null
           configuracoes?: Json | null
           created_at?: string
+          density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
           finalized_at?: string | null
           fotos_incluidas?: number
@@ -2449,10 +2454,13 @@ export type Database = {
           status?: string
           status_pagamento?: string | null
           status_selecao?: string | null
+          theme_id?: string | null
+          theme_overrides?: Json | null
           tipo?: string
           total_fotos?: number | null
           total_fotos_extras_vendidas?: number | null
           updated_at?: string
+          use_custom_theme?: boolean | null
           user_id: string
           valor_extras?: number | null
           valor_foto_extra?: number
@@ -2465,6 +2473,7 @@ export type Database = {
           cliente_telefone?: string | null
           configuracoes?: Json | null
           created_at?: string
+          density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
           finalized_at?: string | null
           fotos_incluidas?: number
@@ -2487,10 +2496,13 @@ export type Database = {
           status?: string
           status_pagamento?: string | null
           status_selecao?: string | null
+          theme_id?: string | null
+          theme_overrides?: Json | null
           tipo?: string
           total_fotos?: number | null
           total_fotos_extras_vendidas?: number | null
           updated_at?: string
+          use_custom_theme?: boolean | null
           user_id?: string
           valor_extras?: number | null
           valor_foto_extra?: number
@@ -3598,6 +3610,7 @@ export type Database = {
           cidade_uf: string | null
           cpf_cnpj: string | null
           created_at: string
+          default_theme_id: string | null
           email: string | null
           empresa: string | null
           endereco_comercial: string | null
@@ -3614,6 +3627,7 @@ export type Database = {
           suspected_duplicate: boolean | null
           telefone: string | null
           telefones: string[] | null
+          theme_overrides: Json | null
           updated_at: string
           user_id: string
         }
@@ -3625,6 +3639,7 @@ export type Database = {
           cidade_uf?: string | null
           cpf_cnpj?: string | null
           created_at?: string
+          default_theme_id?: string | null
           email?: string | null
           empresa?: string | null
           endereco_comercial?: string | null
@@ -3641,6 +3656,7 @@ export type Database = {
           suspected_duplicate?: boolean | null
           telefone?: string | null
           telefones?: string[] | null
+          theme_overrides?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -3652,6 +3668,7 @@ export type Database = {
           cidade_uf?: string | null
           cpf_cnpj?: string | null
           created_at?: string
+          default_theme_id?: string | null
           email?: string | null
           empresa?: string | null
           endereco_comercial?: string | null
@@ -3668,6 +3685,7 @@ export type Database = {
           suspected_duplicate?: boolean | null
           telefone?: string | null
           telefones?: string[] | null
+          theme_overrides?: Json | null
           updated_at?: string
           user_id?: string
         }
@@ -4795,6 +4813,7 @@ export type Database = {
         | "payment_confirmed"
         | "gallery_reactivated"
       email_delivery_status: "enviado" | "erro" | "ignorado"
+      gallery_density: "compact" | "comfortable" | "airy"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4931,6 +4950,7 @@ export const Constants = {
         "gallery_reactivated",
       ],
       email_delivery_status: ["enviado", "erro", "ignorado"],
+      gallery_density: ["compact", "comfortable", "airy"],
     },
   },
 } as const
