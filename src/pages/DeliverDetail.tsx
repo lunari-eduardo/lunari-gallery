@@ -384,6 +384,7 @@ export default function DeliverDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {photos.map(photo => {
                 const isCover = coverPhotoId === photo.id;
+                const weight = (photo as any).peso_visual || 0;
                 return (
                   <div
                     key={photo.id}
@@ -406,8 +407,31 @@ export default function DeliverDetail() {
                         CAPA
                       </div>
                     )}
+                    
+                    {/* Badge DESTAQUE */}
+                    {weight > 0 && (
+                      <div className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10">
+                        <Star className="h-2.5 w-2.5 fill-current" />
+                        DESTAQUE
+                      </div>
+                    )}
 
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                      <Button
+                        variant={weight > 0 ? 'default' : 'secondary'}
+                        size="icon"
+                        className={cn('h-8 w-8', weight > 0 && 'bg-primary text-primary-foreground')}
+                        onClick={async () => {
+                          const newWeight = weight > 0 ? 0 : 1;
+                          const { supabase } = await import('@/integrations/supabase/client');
+                          await supabase.from('galeria_fotos').update({ peso_visual: newWeight }).eq('id', photo.id);
+                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, peso_visual: newWeight } as any : p));
+                          toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+                        }}
+                        title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
+                      >
+                        <Star className={cn('h-4 w-4', weight > 0 && 'fill-current')} />
+                      </Button>
                       <Button
                         variant={isCover ? 'default' : 'secondary'}
                         size="icon"
@@ -415,7 +439,7 @@ export default function DeliverDetail() {
                         onClick={() => handleSetCover(photo.id)}
                         title={isCover ? 'Remover capa' : 'Definir como capa'}
                       >
-                        <Star className={cn('h-4 w-4', isCover && 'fill-current')} />
+                        <ImageIcon className={cn('h-4 w-4', isCover && 'fill-current')} />
                       </Button>
                       <a
                         href={getPhotoUrl({ storageKey: photo.storageKey }, 'original')}
