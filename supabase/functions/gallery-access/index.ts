@@ -84,6 +84,7 @@ serve(async (req) => {
     }
 
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
+    const isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
 
     if (isAwaitingPayment) {
       // Find latest pending charge for this gallery
@@ -103,14 +104,25 @@ serve(async (req) => {
           checkoutUrl: cobranca.ip_checkout_url,
           cobrancaId: cobranca.id,
           valorTotal: cobranca.valor,
-          pixDados: (gallery.configuracoes as any)?.pixDados, // PIX Manual fallback
+          pixDados: (gallery.configuracoes as any)?.pixDados,
         };
+      }
+    }
+
+    // 3.2 If finalized, filter photos to only show selected ones
+    let filteredPhotos = photos || [];
+    if (isFinalized) {
+      if (visitorId && gallery.permissao === 'public') {
+        const { data: visitorSelections } = await supabase
+          .from('visitante_selecoes')
+          .select('foto_id')
+          .eq('visitante_id', visitorId)
+          .eq('is_selected', true);
         
-        // If it's Asaas, we might need more data for transparent checkout
-        if (cobranca.provedor === 'asaas') {
-          // You could fetch more settings here if needed, 
-          // but for now we'll assume the client has what it needs or will refetch
-        }
+        const selectedIds = new Set(visitorSelections?.map(s => s.foto_id) || []);
+        filteredPhotos = filteredPhotos.filter(p => selectedIds.has(p.id));
+      } else {
+        filteredPhotos = filteredPhotos.filter(p => p.is_selected);
       }
     }
 
@@ -172,7 +184,9 @@ serve(async (req) => {
             themeOverrides: (gallery.theme_overrides as any) || galleryConfig?.themeOverrides || undefined,
           },
         },
-        photos: photos || [],
+        photos: filteredPhotos,
+        finalized: isFinalized,
+        allowDownload: (gallery.configuracoes as any)?.allowDownload ?? false,
         folders: folders || [],
         studioSettings: settings || null,
         theme: themeData,
