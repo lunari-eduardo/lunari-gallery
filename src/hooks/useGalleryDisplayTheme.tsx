@@ -70,7 +70,6 @@ export function GalleryThemeProvider({
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,
       '--gallery-hover-scale': `${resolvedTheme.motion?.hoverScale ?? 1.005}`,
       '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 150}px`,
-      '--gallery-bg': resolvedTheme.surface?.background || 'transparent',
     };
     return vars;
   }, [resolvedTheme]);
