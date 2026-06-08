@@ -159,6 +159,35 @@ Deno.serve(async (req) => {
   try {
     console.log(`[${requestId}] R2 upload request started`);
 
+    // ── 0. Validate secrets at boot ──────────────────────────────────────────
+    const r2AccountId = Deno.env.get("R2_ACCOUNT_ID");
+    const r2AccessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
+    const r2SecretKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
+
+    if (!r2AccountId || !r2AccessKeyId || !r2SecretKey) {
+      console.error(`[${requestId}] R2 credentials missing`);
+      return new Response(JSON.stringify({ 
+        error: "Configuração de storage incompleta (Secrets ausentes no Supabase)",
+        code: "STORAGE_CONFIG_INCOMPLETE" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Access Key ID must be 32 chars hex for R2 S3 API
+    if (r2AccessKeyId.length !== 32) {
+      console.error(`[${requestId}] R2_ACCESS_KEY_ID invalid length: ${r2AccessKeyId.length}, expected 32`);
+      return new Response(JSON.stringify({ 
+        error: `R2_ACCESS_KEY_ID inválido (esperado 32 chars, recebido ${r2AccessKeyId.length}). Verifique os secrets do projeto.`,
+        code: "STORAGE_CONFIG_INVALID" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // ── 1. Auth ──────────────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -301,19 +330,9 @@ Deno.serve(async (req) => {
       console.log(`[${requestId}] skipCredits=true, skipping credit check`);
     }
 
-    // ── 6. R2 credentials ────────────────────────────────────────────────────
-    const r2AccountId = Deno.env.get("R2_ACCOUNT_ID");
-    const r2AccessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
-    const r2SecretKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
+    // ── 6. R2 credentials already validated at boot ──────────────────────────
     const r2BucketName = "lunari-previews";
 
-    if (!r2AccountId || !r2AccessKeyId || !r2SecretKey) {
-      console.error(`[${requestId}] R2 credentials not configured`);
-      return new Response(JSON.stringify({ error: "Configuração de storage incompleta" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     // ── 7. Upload to R2 (with server-side retry) ─────────────────────────────
     const timestamp = Date.now();
