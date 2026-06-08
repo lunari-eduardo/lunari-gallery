@@ -243,6 +243,7 @@ export default function ClientGallery() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     staleTime: 0, // Set to 0 to ensure fresh check on return from payment
     refetchOnWindowFocus: true,
+  });
 
   // Handle password requirement
   useEffect(() => {
