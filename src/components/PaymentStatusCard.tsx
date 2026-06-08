@@ -547,7 +547,7 @@ export function PaymentStatusCard({
             </div>
           )}
 
-          {receiptUrl && (
+          {isPaid && receiptUrl && (
             <div className="pt-2">
               <Button
                 variant="outline"
@@ -562,6 +562,7 @@ export function PaymentStatusCard({
               </Button>
             </div>
           )}
+
 
           {renderActions()}
         </div>
