@@ -67,6 +67,53 @@ serve(async (req) => {
       supabase.from('gallery_settings').select('*').eq('user_id', gallery.user_id).maybeSingle(),
     ])
 
+    // 3.1. CHECK FOR PENDING PAYMENT (Server-side Gating)
+    let pendingPaymentData = null;
+    
+    // Check selection status
+    let currentSelectionStatus = gallery.status_selecao;
+    let visitorSelectionStatus = null;
+
+    if (visitorId) {
+      const { data: visitor } = await supabase
+        .from('galeria_visitantes')
+        .select('status_selecao')
+        .eq('id', visitorId)
+        .maybeSingle();
+      visitorSelectionStatus = visitor?.status_selecao;
+    }
+
+    const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
+
+    if (isAwaitingPayment) {
+      // Find latest pending charge for this gallery
+      const { data: cobranca } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('galeria_id', gallery.id)
+        .in('status', ['pendente', 'aguardando_confirmacao'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cobranca) {
+        pendingPaymentData = {
+          pendingPayment: true,
+          paymentMethod: cobranca.provedor,
+          checkoutUrl: cobranca.ip_checkout_url,
+          cobrancaId: cobranca.id,
+          valorTotal: cobranca.valor,
+          pixDados: (gallery.configuracoes as any)?.pixDados, // PIX Manual fallback
+        };
+        
+        // If it's Asaas, we might need more data for transparent checkout
+        if (cobranca.provedor === 'asaas') {
+          // You could fetch more settings here if needed, 
+          // but for now we'll assume the client has what it needs or will refetch
+        }
+      }
+    }
+
     // 4. Resolve Theme (Centralized logic)
     const galleryConfig = gallery.configuracoes as any || {}
     const themeId = (gallery.theme_id as string) || (galleryConfig?.themeId as string)
@@ -109,7 +156,7 @@ serve(async (req) => {
           packageName: gallery.nome_pacote,
           includedPhotos: gallery.fotos_incluidas,
           extraPhotoPrice: Number(gallery.valor_foto_extra || 0),
-          selectionStatus: gallery.status_selecao,
+          selectionStatus: currentSelectionStatus,
           welcomeMessage: gallery.mensagem_boas_vindas,
           expirationDate: gallery.prazo_selecao,
           deadline: gallery.prazo_selecao, // Selection alias
@@ -130,6 +177,7 @@ serve(async (req) => {
         studioSettings: settings || null,
         theme: themeData,
         clientMode,
+        ...pendingPaymentData, // Inject pending payment data if exists
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
