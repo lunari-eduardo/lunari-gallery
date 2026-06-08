@@ -11,6 +11,7 @@ interface ThemePreviewCanvasProps {
   themeOverrides: any;
   viewport: 'mobile' | 'tablet' | 'desktop';
   skipHero?: boolean;
+  isBlueprint?: boolean;
 }
 
 export function ThemePreviewCanvas({
