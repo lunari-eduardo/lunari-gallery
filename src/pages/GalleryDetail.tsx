@@ -231,37 +231,25 @@ export default function GalleryDetail() {
   const { data: cobrancaData, refetch: refetchCobranca } = useQuery({
     queryKey: ['galeria-cobranca-pendente', id],
     queryFn: async () => {
-      const sessionId = supabaseGallery?.sessionId;
+      if (!id) return null;
       const PENDING_STATUSES = ['pendente', 'aguardando_confirmacao'];
 
-      // First try by galeria_id
-      if (id) {
-        const { data } = await supabase
-          .from('cobrancas')
-          .select('*')
-          .eq('galeria_id', id)
-          .in('status', PENDING_STATUSES)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data) return data;
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('galeria_id', id)
+        .in('status', PENDING_STATUSES)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching pending charge:', error);
+        return null;
       }
-
-      // Fallback to session_id
-      if (sessionId) {
-        const { data } = await supabase
-          .from('cobrancas')
-          .select('*')
-          .eq('session_id', sessionId)
-          .in('status', PENDING_STATUSES)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        return data;
-      }
-
-      return null;
+      return data;
     },
+
     enabled: !!supabaseGallery,
   });
 
