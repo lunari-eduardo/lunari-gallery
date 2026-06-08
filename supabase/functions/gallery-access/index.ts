@@ -98,14 +98,23 @@ serve(async (req) => {
     // 5. Response
     return new Response(
       JSON.stringify({
+        success: true,
         deliver: gallery.tipo === 'entrega',
+        galleryId: gallery.id, // For legacy compatibility
         gallery: {
           id: gallery.id,
           sessionName: gallery.nome_sessao,
           clientName: gallery.cliente_nome,
+          clientEmail: gallery.cliente_email,
+          packageName: gallery.nome_pacote,
+          includedPhotos: gallery.fotos_incluidas,
+          extraPhotoPrice: Number(gallery.valor_foto_extra || 0),
+          selectionStatus: gallery.status_selecao,
           welcomeMessage: gallery.mensagem_boas_vindas,
           expirationDate: gallery.prazo_selecao,
+          deadline: gallery.prazo_selecao, // Selection alias
           publicToken: gallery.public_token,
+          regrasCongeladas: gallery.regras_congeladas,
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',

@@ -294,7 +294,8 @@ export default function ClientGallery() {
   const supabaseGallery = useMemo(() => {
     if (!galleryResponse) return null;
     if (galleryResponse.isLegacy) return galleryResponse.gallery;
-    if (galleryResponse.success) return galleryResponse.gallery;
+    // Enhanced detection: if it looks like a gallery response, treat it as success
+    if (galleryResponse.success || galleryResponse.gallery || galleryResponse.sessionName) return galleryResponse.gallery;
     return null;
   }, [galleryResponse]);
 
