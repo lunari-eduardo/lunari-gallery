@@ -12,6 +12,13 @@ export interface GalleryThemeLayout {
   density?: 'comfortable' | 'compact' | 'airy';
 }
 
+export interface GalleryThemeSurface {
+  background: string;
+  headerStyle: 'glass' | 'solid' | 'transparent';
+  buttonStyle: 'outline' | 'solid' | 'ghost';
+  borderRadius: string;
+}
+
 export interface GalleryThemeFeatured {
   enabled: boolean;
   maxCount: number;
@@ -38,9 +45,11 @@ export interface GalleryTheme {
   featured: GalleryThemeFeatured;
   header: GalleryThemeHeader;
   hero: GalleryThemeHero;
+  surface: GalleryThemeSurface;
   typography?: {
     sessionFont?: string;
     titleCaseMode?: TitleCaseMode;
+    titleFont?: string;
   };
   motion?: {
     hoverScale: number;
@@ -62,6 +71,12 @@ export const DEFAULT_GALLERY_THEME: GalleryTheme = {
     gap: 6,
     rowUnit: 150,
     density: 'comfortable'
+  },
+  surface: {
+    background: '#FAF9F7',
+    headerStyle: 'glass',
+    buttonStyle: 'outline',
+    borderRadius: '0px'
   },
   featured: {
     enabled: true,
