@@ -38,6 +38,8 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
   emailOnGalleryReactivated: true,
   emailOnPaymentConfirmed: true,
   defaultPhotoSpacing: 6,
+  defaultThemeId: 'lunari',
+  themeOverrides: {},
 };
 
 const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
