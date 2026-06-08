@@ -791,7 +791,7 @@ Deno.serve(async (req) => {
     } else {
       // ── PRIVATE GALLERY: Original flow — update gallery directly ──
       const updateData: Record<string, unknown> = {
-        status: 'selecao_completa',
+        status: shouldFinalizeNow ? 'selecao_completa' : 'selecao_iniciada', // Keep as started if payment is pending
         status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
         finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
         fotos_selecionadas: selectedCount || 0,
