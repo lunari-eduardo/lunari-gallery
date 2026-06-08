@@ -205,38 +205,23 @@ export default function GalleryDetail() {
   const { data: cobrancasPagas = [], refetch: refetchCobrancas } = useQuery({
     queryKey: ['galeria-cobrancas-pagas', id],
     queryFn: async () => {
-      const results: any[] = [];
+      if (!id) return [];
       
-      // Fetch by galeria_id
-      if (id) {
-        const { data: byGaleria } = await supabase
-          .from('cobrancas')
-          .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
-          .eq('galeria_id', id)
-          .in('status', ['pago', 'pago_manual'])
-          .order('created_at', { ascending: false });
-        if (byGaleria) results.push(...byGaleria);
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
+        .eq('galeria_id', id)
+        .in('status', ['pago', 'pago_manual'])
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching paid charges:', error);
+        return [];
       }
       
-      // Also fetch by session_id if available
-      const sessionId = supabaseGallery?.sessionId;
-      if (sessionId) {
-        const { data: bySession } = await supabase
-          .from('cobrancas')
-          .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
-          .eq('session_id', sessionId)
-          .in('status', ['pago', 'pago_manual'])
-          .order('created_at', { ascending: false });
-        if (bySession) results.push(...bySession);
-      }
-      
-      // Deduplicate by id
-      const uniqueMap = new Map();
-      results.forEach(r => uniqueMap.set(r.id, r));
-      return Array.from(uniqueMap.values()).sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      return data || [];
     },
+
     enabled: !!supabaseGallery,
   });
 
