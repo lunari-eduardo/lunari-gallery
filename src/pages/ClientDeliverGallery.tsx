@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { DeliverHero } from '@/components/deliver/DeliverHero';
-import { DeliverFloatingBar } from '@/components/deliver/DeliverFloatingBar';
+import { DeliverHeader } from '@/components/deliver/DeliverHeader';
 import { DeliverPhotoGrid, DeliverPhoto } from '@/components/deliver/DeliverPhotoGrid';
 import { DeliverLightbox } from '@/components/deliver/DeliverLightbox';
 import { GalleryThemeProvider, useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
@@ -10,6 +10,7 @@ import { getFontFamilyById } from '@/components/FontSelect';
 import { TitleCaseMode } from '@/types/gallery';
 import { PhotoPaths, getPhotoUrl as getPhotoUrlLib } from '@/lib/photoUrl';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface DeliverGalleryData {
   gallery: {
@@ -257,9 +258,20 @@ function ClientDeliverGalleryContent({
   const folders = data.folders || [];
   const hasFolders = folders.length > 0;
   const { theme, cssVars } = useGalleryDisplayTheme();
+  const [headerVisible, setHeaderVisible] = useState(false);
   
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const viewportHeight = window.innerHeight;
+      setHeaderVisible(scrollY > viewportHeight * 0.85);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const isDark = data.clientMode === 'dark' || (!data.clientMode);
-  // Use theme background if defined
   const bgColor = cssVars['--gallery-bg'] !== 'transparent' ? cssVars['--gallery-bg'] : (isDark ? '#1C1917' : '#FAF9F7');
   const textColor = isDark ? '#F5F5F4' : '#2D2A26';
   const primaryColor = isDark ? '#FFFFFF' : '#1C1917';
@@ -277,7 +289,15 @@ function ClientDeliverGalleryContent({
       )}
 
       <div id="deliver-gallery">
-        <DeliverFloatingBar sessionName={gallery.sessionName} photoCount={photos.length} onDownloadAll={handleDownloadAll} isDownloading={isDownloading} isDark={isDark} primaryColor={primaryColor} />
+        <DeliverHeader 
+          sessionName={gallery.sessionName} 
+          photoCount={photos.length} 
+          onDownloadAll={handleDownloadAll} 
+          isDownloading={isDownloading} 
+          isDark={isDark} 
+          primaryColor={primaryColor}
+          isVisible={headerVisible}
+        />
 
         {hasFolders && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
