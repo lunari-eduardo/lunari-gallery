@@ -846,11 +846,12 @@ export default function GalleryDetail() {
                 <div className="mt-4">
                   <PaymentStatusCard
                     status={cobrancaData?.status || (calculatedExtraTotal > 0 ? 'pendente' : supabaseGallery.statusPagamento)}
-                    provedor={cobrancaData?.provedor || cobrancasPagas[0]?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
+                    provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
                     valor={calculatedExtraTotal}
                     valorPago={0}
-                    dataPagamento={cobrancasPagas[0]?.data_pagamento || cobrancaData?.data_pagamento}
-                    receiptUrl={cobrancasPagas[0]?.ip_receipt_url || cobrancaData?.ip_receipt_url}
+                    dataPagamento={cobrancaData?.data_pagamento}
+                    receiptUrl={cobrancaData?.status === 'pago' || cobrancaData?.status === 'pago_manual' ? cobrancaData?.ip_receipt_url : undefined}
+
                     checkoutUrl={cobrancaData?.ip_checkout_url}
                     sessionId={supabaseGallery.sessionId || undefined}
                     cobrancaId={cobrancaData?.id}
