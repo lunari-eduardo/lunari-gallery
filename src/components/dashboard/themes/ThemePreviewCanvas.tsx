@@ -91,6 +91,7 @@ export function ThemePreviewCanvas({
                 photos={DEMO_PHOTOS as any}
                 onPhotoClick={() => {}}
                 onDownload={() => {}}
+                isBlueprint={isBlueprint}
               />
             </div>
           </div>
