@@ -16,6 +16,7 @@ interface DeliverHeaderProps {
   isDark?: boolean;
   bgColor?: string;
   primaryColor?: string;
+  isVisible?: boolean;
 }
 
 export function DeliverHeader({
@@ -35,7 +36,10 @@ export function DeliverHeader({
 
   return (
     <header
-      className="sticky top-0 z-40 backdrop-blur-xl"
+      className={cn(
+        "sticky top-0 z-40 backdrop-blur-xl transition-all duration-500",
+        isVisible === false ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100"
+      )}
       style={{
         backgroundColor: headerBg,
         borderBottom: `1px solid ${borderColor}`,
