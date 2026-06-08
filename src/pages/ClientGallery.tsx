@@ -104,7 +104,8 @@ export default function ClientGallery() {
   const [showWelcome, setShowWelcome] = useState(() => {
     // Se retornando de pagamento, pular tela de boas-vindas
     const params = new URLSearchParams(window.location.search);
-    return params.get('payment') !== 'success';
+    const isPaymentReturn = params.get('payment') === 'success';
+    return !isPaymentReturn;
   });
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
@@ -240,8 +241,8 @@ export default function ClientGallery() {
       return false;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    staleTime: 5 * 60 * 1000, // 5 min — avoid unnecessary refetches on tab switch
-  });
+    staleTime: 0, // Set to 0 to ensure fresh check on return from payment
+    refetchOnWindowFocus: true,
 
   // Handle password requirement
   useEffect(() => {
