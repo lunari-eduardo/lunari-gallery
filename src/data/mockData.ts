@@ -15,6 +15,8 @@ export const mockGlobalSettings: GlobalSettings = {
   themeType: 'system',
   customTheme: undefined,
   activeThemeId: undefined,
+  defaultThemeId: 'lunari',
+  themeOverrides: {},
   defaultWatermark: {
     type: 'standard',
     opacity: 40,
@@ -59,6 +61,7 @@ export const mockGlobalSettings: GlobalSettings = {
   defaultAllowDownload: false,
   defaultAllowExtraPhotos: true,
   defaultWatermarkDisplay: 'all',
+  defaultPhotoSpacing: 6,
 };
 
 export const defaultWelcomeMessage = `Olá {cliente}! 💕

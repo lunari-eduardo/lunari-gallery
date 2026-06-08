@@ -2,6 +2,7 @@ import { createContext, useContext, ReactNode, useMemo } from 'react';
 import { GalleryTheme, DEFAULT_GALLERY_THEME } from '@/types/themes';
 import { THEME_REGISTRY } from '@/components/gallery/themes/registry';
 import { GallerySettings, GlobalSettings } from '@/types/gallery';
+import { getSafeTheme, mergeThemeOverrides } from '@/lib/themeUtils';
 
 
 interface GalleryThemeContextType {
@@ -28,38 +29,22 @@ export function GalleryThemeProvider({
 }: GalleryThemeProviderProps) {
   
   const resolvedTheme = useMemo(() => {
-    // 1. Resolve base theme from ID
-    // Hierarchy: Gallery specific themeId > Profile defaultThemeId > Lunari
+    // 1. Resolve base theme from ID with safe fallback
+    // Hierarchy: Gallery specific themeId > Global defaultThemeId > Lunari
     const themeId = activeThemeId || globalSettings?.defaultThemeId || 'lunari';
-    let theme = JSON.parse(JSON.stringify(THEME_REGISTRY[themeId] || THEME_REGISTRY['lunari'] || DEFAULT_GALLERY_THEME));
+    let theme = getSafeTheme(themeId);
 
-    // 2. Apply Global Overrides (Profile level)
+    // 2. Apply Global Overrides (Account level)
     if (globalSettings?.themeOverrides) {
-      const globalOverrides = globalSettings.themeOverrides as any;
-      if (globalOverrides.layout) {
-        theme.layout = { ...theme.layout, ...globalOverrides.layout };
-      }
-      // Add more sections as needed
+      theme = mergeThemeOverrides(theme, globalSettings.themeOverrides as any);
     }
     
-    // 3. Apply Gallery specific overrides (Instance level)
+    // 3. Apply Gallery specific overrides (Instance level - highest priority)
     if (themeOverrides) {
-      const overrides = themeOverrides as any;
-      if (overrides.layout) {
-        theme.layout = { ...theme.layout, ...overrides.layout };
-      }
-      if (overrides.featured) {
-        theme.featured = { ...theme.featured, ...overrides.featured };
-      }
-      if (overrides.header) {
-        theme.header = { ...theme.header, ...overrides.header };
-      }
-      if (overrides.hero) {
-        theme.hero = { ...theme.hero, ...overrides.hero };
-      }
+      theme = mergeThemeOverrides(theme, themeOverrides as any);
     }
 
-    // 4. Backward Compatibility (Legacy fields)
+    // 4. Backward Compatibility (Legacy fields from configuracoes)
     if (gallerySettings?.photoSpacing !== undefined) {
       theme.layout.gap = Number(gallerySettings.photoSpacing);
     } else if (globalSettings?.defaultPhotoSpacing !== undefined && !themeOverrides) {
@@ -85,7 +70,6 @@ export function GalleryThemeProvider({
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,
       '--gallery-hover-scale': `${resolvedTheme.motion?.hoverScale ?? 1.005}`,
       '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 150}px`,
-      '--gallery-bg': resolvedTheme.surface?.background || 'transparent',
     };
     return vars;
   }, [resolvedTheme]);

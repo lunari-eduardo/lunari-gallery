@@ -2630,6 +2630,7 @@ export type Database = {
           default_photo_spacing: number | null
           default_pricing_model: string | null
           default_sale_mode: string
+          default_theme_id: string | null
           default_watermark: Json | null
           default_watermark_display: string | null
           default_welcome_message: string | null
@@ -2641,6 +2642,7 @@ export type Database = {
           last_session_font: string | null
           studio_logo_url: string | null
           studio_name: string | null
+          theme_overrides: Json | null
           theme_type: string | null
           updated_at: string | null
           user_id: string
@@ -2661,6 +2663,7 @@ export type Database = {
           default_photo_spacing?: number | null
           default_pricing_model?: string | null
           default_sale_mode?: string
+          default_theme_id?: string | null
           default_watermark?: Json | null
           default_watermark_display?: string | null
           default_welcome_message?: string | null
@@ -2672,6 +2675,7 @@ export type Database = {
           last_session_font?: string | null
           studio_logo_url?: string | null
           studio_name?: string | null
+          theme_overrides?: Json | null
           theme_type?: string | null
           updated_at?: string | null
           user_id: string
@@ -2692,6 +2696,7 @@ export type Database = {
           default_photo_spacing?: number | null
           default_pricing_model?: string | null
           default_sale_mode?: string
+          default_theme_id?: string | null
           default_watermark?: Json | null
           default_watermark_display?: string | null
           default_welcome_message?: string | null
@@ -2703,6 +2708,7 @@ export type Database = {
           last_session_font?: string | null
           studio_logo_url?: string | null
           studio_name?: string | null
+          theme_overrides?: Json | null
           theme_type?: string | null
           updated_at?: string | null
           user_id?: string

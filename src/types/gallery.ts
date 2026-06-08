@@ -189,8 +189,8 @@ export interface GlobalSettings {
   defaultAllowExtraPhotos?: boolean;
   defaultWatermarkDisplay?: WatermarkDisplay;
   defaultPhotoSpacing?: number;
-  defaultThemeId?: string;
-  themeOverrides?: Json;
+  defaultThemeId: string; // Tema padrão global da conta (persiste em gallery_settings)
+  themeOverrides: Json; // Overrides globais de tema da conta (persiste em gallery_settings)
 }
 
 

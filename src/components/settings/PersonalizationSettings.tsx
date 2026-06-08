@@ -88,18 +88,19 @@ export function PersonalizationSettings() {
         </div>
       </div>
 
-      {/* Client Gallery Appearance */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-muted-foreground">Aparência da Galeria do Cliente</h3>
-        
-        {/* Theme Config (simplified) */}
-        <div className="lunari-card p-6">
-          <ThemeConfig
-            defaultThemeId={settings.defaultThemeId || 'lunari'}
-            themeOverrides={settings.themeOverrides}
-            onUpdate={(data) => updateSettings(data, { successMessage: 'Aparência da galeria atualizada.' })}
-          />
-        </div>
+       {/* Client Gallery Appearance */}
+       <div className="space-y-4">
+         <h3 className="text-lg font-medium text-muted-foreground">Aparência da Galeria do Cliente</h3>
+         <p className="text-sm text-muted-foreground">Essas configurações são aplicadas em todas as novas galerias. Galerias individuais podem sobrescrever essas preferências.</p>
+         
+         {/* Theme Config (simplified) */}
+         <div className="lunari-card p-6">
+           <ThemeConfig
+             defaultThemeId={settings.defaultThemeId || 'lunari'}
+             themeOverrides={settings.themeOverrides || {}}
+             onUpdate={(data) => updateSettings(data, { successMessage: 'Aparência da galeria atualizada.' })}
+           />
+         </div>
 
         {/* Watermark */}
         <div className="lunari-card p-6">
