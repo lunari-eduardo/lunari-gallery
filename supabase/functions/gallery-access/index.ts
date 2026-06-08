@@ -18,7 +18,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { publicToken, password } = await req.json()
+    const body = await req.json()
+    const publicToken = body.publicToken || body.token
+    const password = body.password
+    const visitorId = body.visitorId
+
 
     // 1. Fetch gallery
     const { data: gallery, error: galleryError } = await supabase
