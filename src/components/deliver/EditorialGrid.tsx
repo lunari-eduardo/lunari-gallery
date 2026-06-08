@@ -5,13 +5,23 @@ import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 interface EditorialGridProps {
   children: ReactNode;
   className?: string;
+  forcedViewport?: 'mobile' | 'tablet' | 'desktop';
 }
 
-export function EditorialGrid({ children, className }: EditorialGridProps) {
+export function EditorialGrid({ children, className, forcedViewport }: EditorialGridProps) {
+  const gridColsClass = useMemo(() => {
+    if (forcedViewport === 'mobile') return 'grid-cols-[repeat(var(--gallery-cols-m),1fr)]';
+    if (forcedViewport === 'tablet') return 'grid-cols-[repeat(var(--gallery-cols-t),1fr)]';
+    if (forcedViewport === 'desktop') return 'grid-cols-[repeat(var(--gallery-cols-d),1fr)]';
+    
+    return "grid-cols-[repeat(var(--gallery-cols-m),1fr)] sm:grid-cols-[repeat(var(--gallery-cols-t),1fr)] lg:grid-cols-[repeat(var(--gallery-cols-d),1fr)]";
+  }, [forcedViewport]);
+
   return (
     <div 
       className={cn(
-        "grid grid-cols-[repeat(var(--gallery-cols-m),1fr)] sm:grid-cols-[repeat(var(--gallery-cols-t),1fr)] lg:grid-cols-[repeat(var(--gallery-cols-d),1fr)]",
+        "grid",
+        gridColsClass,
         "grid-flow-row-dense",
         className
       )}

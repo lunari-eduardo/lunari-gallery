@@ -45,7 +45,7 @@ export function DeliverPhotoGrid({ photos, onPhotoClick, onDownload, bgColor }: 
               photoWidth={photo.width} 
               photoHeight={photo.height}
             >
-              <div className="group relative cursor-pointer overflow-hidden w-full h-full bg-black/5">
+              <div className="group relative cursor-pointer overflow-hidden w-full h-full bg-black/5 rounded-none">
                 {photo.mimeType?.startsWith('video/') ? (
                   <>
                     <video

@@ -64,6 +64,7 @@ export function GalleryThemeProvider({
 
   const cssVars = useMemo(() => {
     const vars: Record<string, string> = {
+      '--gallery-bg': resolvedTheme.surface.background || 'transparent',
       '--gallery-gap': `${resolvedTheme.layout.gap}px`,
       '--gallery-cols-m': `${resolvedTheme.layout.columns.mobile}`,
       '--gallery-cols-t': `${resolvedTheme.layout.columns.tablet}`,

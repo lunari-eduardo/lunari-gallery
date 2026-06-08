@@ -3,6 +3,7 @@ import { THEME_REGISTRY } from '@/components/gallery/themes/registry';
 import { cn } from '@/lib/utils';
 import { Check, Eye } from 'lucide-react';
 import { ThemePreviewModal } from './ThemePreviewModal';
+import { ThemePreviewCanvas } from './ThemePreviewCanvas';
 import { Button } from '@/components/ui/button';
 
 interface ThemeCatalogProps {
@@ -31,35 +32,32 @@ export function ThemeCatalog({
             <button
               onClick={() => onSelect(theme.id)}
               className={cn(
-                "w-full flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all",
+                "w-full flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all group/card overflow-hidden",
                 isSelected 
-                  ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary" 
-                  : "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
+                  ? "border-primary bg-primary/5 shadow-xl ring-1 ring-primary/20" 
+                  : "border-border bg-card hover:border-primary/50 hover:bg-accent/20"
               )}
             >
-              {/* Visual Representation of the Theme */}
+              {/* Thumbnail Real */}
               <div 
-                className="w-full aspect-[4/3] rounded-lg border border-border overflow-hidden bg-background flex flex-col p-1.5 gap-1 shadow-inner relative"
+                className="w-full aspect-[4/3] rounded-xl border border-border overflow-hidden bg-muted relative group-hover/card:shadow-lg transition-all"
               >
-                {/* Header Mini */}
-                <div className="h-1.5 w-full rounded-sm bg-muted/40" />
-                
-                {/* Grid Mini */}
-                <div className={cn(
-                  "flex-1 grid gap-1",
-                  theme.layout.engine === 'masonry-classic' ? "grid-cols-3" : "grid-cols-2"
-                )}>
-                  <div className="rounded-sm bg-muted/20" />
-                  <div className="rounded-sm bg-muted/20" />
-                  <div className="rounded-sm bg-muted/20" />
-                  <div className="rounded-sm bg-muted/20" />
+                <div className="absolute inset-0 scale-[0.4] origin-top-left w-[250%] h-[250%] pointer-events-none opacity-90 group-hover/card:opacity-100 transition-opacity">
+                   {/* Mini preview canvas em modo thumbnail */}
+                   <ThemePreviewCanvas 
+                     themeId={theme.id}
+                     themeOverrides={theme.id === selectedThemeId ? initialOverrides : {}}
+                     viewport="desktop"
+                     skipHero={true}
+                   />
                 </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
               </div>
 
               <div className="flex flex-col items-center">
-                <span className="font-medium text-sm">{theme.name}</span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                  {theme.layout.engine === 'editorial-grid' ? 'Editorial' : 'Classic'}
+                <span className="font-bold text-sm tracking-tight">{theme.name}</span>
+                <span className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-medium opacity-70">
+                  {theme.layout.engine === 'editorial-grid' ? 'Editorial' : 'Classic Masonry'}
                 </span>
               </div>
 

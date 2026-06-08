@@ -1,4 +1,5 @@
 import { Download, Image } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { applyTitleCase } from '@/lib/textTransform';
 import { TitleCaseMode } from '@/types/gallery';
@@ -16,13 +17,14 @@ interface DeliverHeaderProps {
   isDark?: boolean;
   bgColor?: string;
   primaryColor?: string;
+  isVisible?: boolean;
 }
 
 export function DeliverHeader({
   sessionName, photoCount,
   expirationDate, sessionFont, titleCaseMode = 'normal',
   onDownloadAll, isDownloading,
-  isDark = true, bgColor, primaryColor,
+  isDark = true, bgColor, primaryColor, isVisible
 }: DeliverHeaderProps) {
   const displayName = applyTitleCase(sessionName, titleCaseMode);
 
@@ -35,7 +37,10 @@ export function DeliverHeader({
 
   return (
     <header
-      className="sticky top-0 z-40 backdrop-blur-xl"
+      className={cn(
+        "sticky top-0 z-40 backdrop-blur-xl transition-all duration-500",
+        isVisible === false ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100"
+      )}
       style={{
         backgroundColor: headerBg,
         borderBottom: `1px solid ${borderColor}`,
@@ -83,3 +88,4 @@ export function DeliverHeader({
     </header>
   );
 }
+
