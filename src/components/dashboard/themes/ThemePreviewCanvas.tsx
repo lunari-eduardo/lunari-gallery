@@ -18,7 +18,8 @@ export function ThemePreviewCanvas({
   themeId,
   themeOverrides,
   viewport,
-  skipHero = false
+  skipHero = false,
+  isBlueprint = false
 }: ThemePreviewCanvasProps) {
   const [headerVisible, setHeaderVisible] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
