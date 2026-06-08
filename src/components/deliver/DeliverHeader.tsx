@@ -1,4 +1,5 @@
 import { Download, Image } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { applyTitleCase } from '@/lib/textTransform';
 import { TitleCaseMode } from '@/types/gallery';
