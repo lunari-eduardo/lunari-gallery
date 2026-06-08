@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GalleryTheme } from '@/types/themes';
 import { GalleryThemeProvider } from '@/hooks/useGalleryDisplayTheme';
 import { DeliverHero } from '@/components/deliver/DeliverHero';
-import { DeliverHeader } from '@/components/deliver/DeliverHeader';
+import { DeliverFloatingBar } from '@/components/deliver/DeliverFloatingBar';
 import { DeliverPhotoGrid } from '@/components/deliver/DeliverPhotoGrid';
 import { DEMO_PHOTOS } from './demoPhotos';
 import { cn } from '@/lib/utils';
@@ -77,7 +76,7 @@ export function ThemePreviewCanvas({
               />
             )}
 
-            <DeliverHeader 
+            <DeliverFloatingBar 
               sessionName="Minha Sessão Demo"
               photoCount={DEMO_PHOTOS.length}
               onDownloadAll={() => {}}

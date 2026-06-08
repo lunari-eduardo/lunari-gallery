@@ -12,6 +12,7 @@ interface DeliverFloatingBarProps {
   isDownloading?: boolean;
   isDark?: boolean;
   primaryColor?: string;
+  isVisible?: boolean;
 }
 
 export function DeliverFloatingBar({
@@ -21,9 +22,11 @@ export function DeliverFloatingBar({
   isDownloading,
   isDark = true,
   primaryColor,
+  isVisible: forcedIsVisible
 }: DeliverFloatingBarProps) {
   const { theme } = useGalleryDisplayTheme();
-  const [isVisible, setIsVisible] = useState(false);
+  const [internalIsVisible, setInternalIsVisible] = useState(false);
+  const isVisible = forcedIsVisible !== undefined ? forcedIsVisible : internalIsVisible;
   const titleCaseMode = theme.typography?.titleCaseMode || 'normal';
   const displayName = applyTitleCase(sessionName, titleCaseMode);
 
@@ -31,7 +34,7 @@ export function DeliverFloatingBar({
     const handleScroll = () => {
       // Usamos uma transição mais suave baseada na altura do viewport
       const threshold = window.innerHeight * 0.6; 
-      setIsVisible(window.scrollY > threshold);
+      setInternalIsVisible(window.scrollY > threshold);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
