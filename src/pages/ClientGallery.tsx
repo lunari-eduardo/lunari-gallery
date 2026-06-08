@@ -108,7 +108,11 @@ export default function ClientGallery() {
     return !isPaymentReturn;
   });
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [currentStep, setCurrentStep] = useState<SelectionStep>('gallery');
+  const [currentStep, setCurrentStep] = useState<SelectionStep>(() => {
+    // Se o backend já retornou que a galeria está finalizada no payload inicial (ou redirecionado), iniciar em 'confirmed'
+    return 'gallery';
+  });
+
   const [localPhotos, setLocalPhotos] = useState<GalleryPhoto[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
@@ -680,15 +684,25 @@ export default function ClientGallery() {
       });
       
       const isAlreadyConfirmed = supabaseGallery?.status_selecao === 'selecao_completa' || 
-                                 supabaseGallery?.finalized_at;
+                                 supabaseGallery?.finalized_at ||
+                                 galleryResponse?.finalized; // Check edge function explicit field
+                                 
       // Don't treat aguardando_pagamento as confirmed
-      const isAwaitingPayment = supabaseGallery?.status_selecao === 'aguardando_pagamento';
+      const isAwaitingPayment = supabaseGallery?.status_selecao === 'aguardando_pagamento' ||
+                                galleryResponse?.pendingPayment;
       
-      setIsConfirmed(!!isAlreadyConfirmed && !isAwaitingPayment);
-      if (isAlreadyConfirmed && !isAwaitingPayment) {
+      const shouldBeConfirmed = !!isAlreadyConfirmed && !isAwaitingPayment;
+      
+      if (shouldBeConfirmed && !isConfirmed) {
+        setIsConfirmed(true);
         setCurrentStep('confirmed');
         setShowWelcome(false);
+      } else if (isAwaitingPayment && currentStep !== 'payment') {
+        // If we found a pending payment in the initial load/refetch
+        setCurrentStep('payment');
+        setShowWelcome(false);
       }
+
     }
   }, [photos, supabaseGallery?.status_selecao, supabaseGallery?.finalized_at]);
 

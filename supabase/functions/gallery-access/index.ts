@@ -83,8 +83,45 @@ serve(async (req) => {
       visitorSelectionStatus = visitor?.status_selecao;
     }
 
+    // Selection status
+    let currentSelectionStatus = gallery.status_selecao;
+    let visitorSelectionStatus = null;
+
+    if (visitorId) {
+      const { data: visitor } = await supabase
+        .from('galeria_visitantes')
+        .select('status_selecao')
+        .eq('id', visitorId)
+        .maybeSingle();
+      visitorSelectionStatus = visitor?.status_selecao;
+    }
+
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
     const isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
+
+    // 🛡️ RECONCILE: If gallery is marked as awaiting payment but ALL charges are paid, auto-finalize
+    if (isAwaitingPayment) {
+      const { data: charges } = await supabase
+        .from('cobrancas')
+        .select('status')
+        .eq('galeria_id', gallery.id);
+      
+      const hasPending = charges?.some(c => ['pendente', 'aguardando_confirmacao'].includes(c.status));
+      const hasPaid = charges?.some(c => ['pago', 'pago_manual'].includes(c.status));
+
+      if (hasPaid && !hasPending) {
+         console.warn(`🛡️ AUTO-RECONCILE: Galeria ${gallery.id} estava presa em 'aguardando_pagamento' mas tem cobrança paga. Finalizando.`);
+         if (visitorId) {
+           await supabase.from('galeria_visitantes').update({ status_selecao: 'selecao_completa' }).eq('id', visitorId);
+         } else {
+           await supabase.from('galerias').update({ status_selecao: 'selecao_completa' }).eq('id', gallery.id);
+         }
+         // Refetch status for response
+         currentSelectionStatus = 'selecao_completa';
+         if (visitorId) visitorSelectionStatus = 'selecao_completa';
+      }
+    }
+
 
     if (isAwaitingPayment) {
       // Find latest pending charge for this gallery
