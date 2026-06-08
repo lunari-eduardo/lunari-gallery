@@ -24,7 +24,7 @@ export function DeliverHeader({
   sessionName, photoCount,
   expirationDate, sessionFont, titleCaseMode = 'normal',
   onDownloadAll, isDownloading,
-  isDark = true, bgColor, primaryColor,
+  isDark = true, bgColor, primaryColor, isVisible
 }: DeliverHeaderProps) {
   const displayName = applyTitleCase(sessionName, titleCaseMode);
 
