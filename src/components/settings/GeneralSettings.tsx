@@ -44,55 +44,6 @@ export function GeneralSettings({ settings, updateSettings }: GeneralSettingsPro
 
   return (
     <div className="space-y-6">
-      {/* Theme Selection */}
-      <div className="lunari-card p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <ImageIcon className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-medium">Tema Padrão da Conta</h2>
-            <p className="text-sm text-muted-foreground">
-              Escolha o tema que será aplicado em todas as novas galerias
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Object.values(THEME_REGISTRY).map((t) => (
-            <div 
-              key={t.id}
-              onClick={() => updateSettings({ defaultThemeId: t.id }, { successMessage: `Tema ${t.name} definido como padrão.` })}
-              className={cn(
-                "group relative border rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-md",
-                settings.defaultThemeId === t.id ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary/50"
-              )}
-            >
-              <div className="aspect-[4/3] bg-muted relative">
-                 {/* Visual indicator of the theme style */}
-                 <div className="absolute inset-0 p-4 flex flex-col gap-2">
-                    <div className="w-1/2 h-2 bg-muted-foreground/20 rounded" />
-                    <div className="flex-1 grid grid-cols-3 gap-1">
-                       {[...Array(6)].map((_, i) => (
-                         <div key={i} className={cn("bg-muted-foreground/10 rounded-sm", i === 0 && t.layout.engine === 'editorial-grid' ? "col-span-2 row-span-2" : "")} />
-                       ))}
-                    </div>
-                 </div>
-                 {settings.defaultThemeId === t.id && (
-                   <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
-                     <CheckCircle className="h-3 w-3" />
-                   </div>
-                 )}
-              </div>
-              <div className="p-3 bg-background">
-                <p className="text-sm font-semibold">{t.name}</p>
-                <p className="text-[10px] text-muted-foreground line-clamp-1">{(t as any).description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Studio Info */}
       <div className="lunari-card p-6 space-y-6">
         <div className="flex items-center gap-3">
