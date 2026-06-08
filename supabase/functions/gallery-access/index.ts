@@ -25,11 +25,21 @@ serve(async (req) => {
 
 
     // 1. Fetch gallery
+    console.log(`Fetching gallery with token: ${publicToken}`)
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
       .select('*')
       .eq('public_token', publicToken)
-      .single()
+      .maybeSingle()
+
+    if (galleryError) {
+      console.error('Database error:', galleryError)
+      return new Response(JSON.stringify({ error: 'Database error', details: galleryError }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
 
     if (galleryError || !gallery) {
       return new Response(JSON.stringify({ error: 'Gallery not found' }), {
