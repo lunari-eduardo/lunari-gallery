@@ -55,6 +55,9 @@ export function getPhotoUrl(
 
   if (!path) return '/placeholder.svg';
 
+  // If path is already an absolute URL, return it
+  if (path.startsWith('http')) return path;
+
   // Direct URL to R2 public bucket
   return `${R2_PUBLIC_URL}/${path}`;
 }
