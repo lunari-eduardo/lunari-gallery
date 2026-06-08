@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon, Plus, HardDrive, ArrowUpCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Image, MessageSquare, Check, Upload, Globe, Lock, Calendar, Sun, Moon, Plus, HardDrive, ArrowUpCircle, Trash2, Palette } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,8 @@ import { useTransferStorage } from '@/hooks/useTransferStorage';
 import { formatStorageSize } from '@/lib/transferPlans';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ThemeCatalog } from '@/components/dashboard/themes/ThemeCatalog';
+import { DEFAULT_THEME_ID } from '@/components/gallery/themes/registry';
 
 const steps = [
   { id: 1, name: 'Dados', icon: User },
@@ -73,6 +75,9 @@ export default function DeliverCreate() {
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const [welcomeMessageEnabled, setWelcomeMessageEnabled] = useState(true);
   const [photoSpacing, setPhotoSpacing] = useState(6);
+  const [useCustomTheme, setUseCustomTheme] = useState(false);
+  const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
+  const [themeOverrides, setThemeOverrides] = useState<any>({});
 
   // Initialize defaults from settings
   useEffect(() => {
@@ -445,53 +450,100 @@ export default function DeliverCreate() {
             </div>
 
             {/* Photo Spacing */}
-            <div className="space-y-4 pt-4 border-t">
-              <div>
-                <Label className="text-base font-medium">Espaçamento entre fotos (Grid)</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Ajuste a borda entre as fotos nesta galeria
-                </p>
-              </div>
-              <div className="flex items-center gap-6 max-w-sm pt-2">
-                <Slider
-                  value={[photoSpacing]}
-                  onValueChange={(vals) => setPhotoSpacing(vals[0])}
-                  min={0}
-                  max={40}
-                  step={1}
-                  className="flex-1"
-                />
-                <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
-              </div>
-            </div>
+            <div className="space-y-6 pt-4 border-t">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-primary" />
+                  <Label className="text-base font-medium">Tema da Galeria</Label>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 max-w-md">
+                  <div 
+                    className={cn(
+                      "p-3 border rounded-xl cursor-pointer transition-all text-center",
+                      !useCustomTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"
+                    )}
+                    onClick={() => setUseCustomTheme(false)}
+                  >
+                    <p className="font-medium text-sm">Herdar Padrão</p>
+                    <p className="text-[10px] text-muted-foreground">Configurações da conta</p>
+                  </div>
+                  <div 
+                    className={cn(
+                      "p-3 border rounded-xl cursor-pointer transition-all text-center",
+                      useCustomTheme ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"
+                    )}
+                    onClick={() => setUseCustomTheme(true)}
+                  >
+                    <p className="font-medium text-sm">Personalizar</p>
+                    <p className="text-[10px] text-muted-foreground">Estilo exclusivo</p>
+                  </div>
+                </div>
 
-            {/* Theme section - simple light/dark toggle */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                {clientMode === 'dark' ? <Moon className="h-4 w-4 text-primary" /> : <Sun className="h-4 w-4 text-primary" />}
-                <Label className="text-base font-medium">Aparência</Label>
+                {useCustomTheme && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <ThemeCatalog 
+                      selectedThemeId={activeThemeId} 
+                      onSelect={setActiveThemeId} 
+                      onThemeOverridesChange={setThemeOverrides}
+                      initialOverrides={themeOverrides}
+                    />
+                  </div>
+                )}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={clientMode === 'light' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setClientMode('light')}
-                  className="gap-1"
-                >
-                  <Sun className="h-3.5 w-3.5" />
-                  Claro
-                </Button>
-                <Button
-                  type="button"
-                  variant={clientMode === 'dark' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setClientMode('dark')}
-                  className="gap-1"
-                >
-                  <Moon className="h-3.5 w-3.5" />
-                  Escuro
-                </Button>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">Espaçamento (Grid)</Label>
+                  <span className="text-sm font-mono">{useCustomTheme ? (themeOverrides?.layout?.gap ?? 8) : photoSpacing}px</span>
+                </div>
+                <div className="max-w-sm">
+                  <Slider
+                    value={[useCustomTheme ? (themeOverrides?.layout?.gap ?? 8) : photoSpacing]}
+                    onValueChange={(vals) => {
+                      if (useCustomTheme) {
+                        setThemeOverrides({
+                          ...themeOverrides,
+                          layout: { ...(themeOverrides.layout || {}), gap: vals[0] }
+                        });
+                      } else {
+                        setPhotoSpacing(vals[0]);
+                      }
+                    }}
+                    min={0}
+                    max={40}
+                    step={1}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {clientMode === 'dark' ? <Moon className="h-4 w-4 text-primary" /> : <Sun className="h-4 w-4 text-primary" />}
+                  <Label className="text-base font-medium">Modo de Cor</Label>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={clientMode === 'light' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setClientMode('light')}
+                    className="gap-1 rounded-full"
+                  >
+                    <Sun className="h-3.5 w-3.5" />
+                    Claro
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={clientMode === 'dark' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setClientMode('dark')}
+                    className="gap-1 rounded-full"
+                  >
+                    <Moon className="h-3.5 w-3.5" />
+                    Escuro
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
