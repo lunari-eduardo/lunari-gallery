@@ -205,38 +205,23 @@ export default function GalleryDetail() {
   const { data: cobrancasPagas = [], refetch: refetchCobrancas } = useQuery({
     queryKey: ['galeria-cobrancas-pagas', id],
     queryFn: async () => {
-      const results: any[] = [];
+      if (!id) return [];
       
-      // Fetch by galeria_id
-      if (id) {
-        const { data: byGaleria } = await supabase
-          .from('cobrancas')
-          .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
-          .eq('galeria_id', id)
-          .in('status', ['pago', 'pago_manual'])
-          .order('created_at', { ascending: false });
-        if (byGaleria) results.push(...byGaleria);
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
+        .eq('galeria_id', id)
+        .in('status', ['pago', 'pago_manual'])
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching paid charges:', error);
+        return [];
       }
       
-      // Also fetch by session_id if available
-      const sessionId = supabaseGallery?.sessionId;
-      if (sessionId) {
-        const { data: bySession } = await supabase
-          .from('cobrancas')
-          .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
-          .eq('session_id', sessionId)
-          .in('status', ['pago', 'pago_manual'])
-          .order('created_at', { ascending: false });
-        if (bySession) results.push(...bySession);
-      }
-      
-      // Deduplicate by id
-      const uniqueMap = new Map();
-      results.forEach(r => uniqueMap.set(r.id, r));
-      return Array.from(uniqueMap.values()).sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      return data || [];
     },
+
     enabled: !!supabaseGallery,
   });
 
@@ -246,37 +231,25 @@ export default function GalleryDetail() {
   const { data: cobrancaData, refetch: refetchCobranca } = useQuery({
     queryKey: ['galeria-cobranca-pendente', id],
     queryFn: async () => {
-      const sessionId = supabaseGallery?.sessionId;
+      if (!id) return null;
       const PENDING_STATUSES = ['pendente', 'aguardando_confirmacao'];
 
-      // First try by galeria_id
-      if (id) {
-        const { data } = await supabase
-          .from('cobrancas')
-          .select('*')
-          .eq('galeria_id', id)
-          .in('status', PENDING_STATUSES)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data) return data;
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('*')
+        .eq('galeria_id', id)
+        .in('status', PENDING_STATUSES)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching pending charge:', error);
+        return null;
       }
-
-      // Fallback to session_id
-      if (sessionId) {
-        const { data } = await supabase
-          .from('cobrancas')
-          .select('*')
-          .eq('session_id', sessionId)
-          .in('status', PENDING_STATUSES)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        return data;
-      }
-
-      return null;
+      return data;
     },
+
     enabled: !!supabaseGallery,
   });
 
@@ -873,11 +846,12 @@ export default function GalleryDetail() {
                 <div className="mt-4">
                   <PaymentStatusCard
                     status={cobrancaData?.status || (calculatedExtraTotal > 0 ? 'pendente' : supabaseGallery.statusPagamento)}
-                    provedor={cobrancaData?.provedor || cobrancasPagas[0]?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
+                    provedor={cobrancaData?.provedor || (supabaseGallery.statusPagamento === 'aguardando_confirmacao' ? 'pix_manual' : undefined)}
                     valor={calculatedExtraTotal}
                     valorPago={0}
-                    dataPagamento={cobrancasPagas[0]?.data_pagamento || cobrancaData?.data_pagamento}
-                    receiptUrl={cobrancasPagas[0]?.ip_receipt_url || cobrancaData?.ip_receipt_url}
+                    dataPagamento={cobrancaData?.data_pagamento}
+                    receiptUrl={cobrancaData?.status === 'pago' || cobrancaData?.status === 'pago_manual' ? cobrancaData?.ip_receipt_url : undefined}
+
                     checkoutUrl={cobrancaData?.ip_checkout_url}
                     sessionId={supabaseGallery.sessionId || undefined}
                     cobrancaId={cobrancaData?.id}
