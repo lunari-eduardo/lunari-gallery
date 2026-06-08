@@ -11,13 +11,15 @@ interface ThemePreviewCanvasProps {
   themeOverrides: any;
   viewport: 'mobile' | 'tablet' | 'desktop';
   skipHero?: boolean;
+  isBlueprint?: boolean;
 }
 
 export function ThemePreviewCanvas({
   themeId,
   themeOverrides,
   viewport,
-  skipHero = false
+  skipHero = false,
+  isBlueprint = false
 }: ThemePreviewCanvasProps) {
   const [headerVisible, setHeaderVisible] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +91,7 @@ export function ThemePreviewCanvas({
                 photos={DEMO_PHOTOS as any}
                 onPhotoClick={() => {}}
                 onDownload={() => {}}
+                isBlueprint={isBlueprint}
               />
             </div>
           </div>

@@ -47,9 +47,10 @@ export function ThemeCatalog({
                    <ThemePreviewCanvas 
                      themeId={theme.id}
                      themeOverrides={theme.id === selectedThemeId ? initialOverrides : {}}
-                     viewport="desktop"
-                     skipHero={true}
-                   />
+                      viewport="desktop"
+                      skipHero={true}
+                      isBlueprint={true}
+                    />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
               </div>
