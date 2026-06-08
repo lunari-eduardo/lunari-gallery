@@ -371,6 +371,13 @@ export default function GalleryEdit() {
           valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
           prazoSelecao,
           configuracoes: mergedConfig,
+          theme_id: selectedThemeId || null,
+          use_custom_theme: !!selectedThemeId,
+          theme_overrides: {
+            layout: {
+              gap: photoSpacing
+            }
+          }
         }
       });
       navigate(`/gallery/${gallery.id}`);

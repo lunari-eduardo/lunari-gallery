@@ -149,6 +149,7 @@ export default function DeliverDetail() {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
           coverPhotoId: coverPhotoId,
+          photoSpacing: photoSpacing,
         },
         theme_id: useCustomTheme ? activeThemeId : null,
         use_custom_theme: useCustomTheme,
