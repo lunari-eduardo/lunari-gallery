@@ -120,10 +120,13 @@ async function processWebhookInBackground(
     console.log(`✅ [Background] Success for ${orderNsu}`);
     await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, cobranca.id);
 
-    await supabase.from('webhook_logs').update({
-      status: 'processed',
-      processed_at: new Date().toISOString(),
-    }).eq('id', initialLogId);
+    await logWebhookEvent({
+      provider: 'infinitepay',
+      externalId: orderNsu,
+      eventName: payload.status || 'payment_done',
+      payload: payload,
+      status: 'success'
+    });
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
