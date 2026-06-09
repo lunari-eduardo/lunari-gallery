@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
+import { processGalleryPayment as sharedProcessGalleryPayment } from '../_shared/payment-processor.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -173,145 +174,21 @@ async function applyDowngrade(adminClient: any, subscription: any) {
 }
 
 // ============================================================
-// PROCESS GALLERY PAYMENT via cobranca_parcelas + finalize RPC
-// Follows the shared contract: parcela → reconcile → finalize
+// PROCESS GALLERY PAYMENT via shared processor
 // ============================================================
 async function processGalleryPayment(adminClient: any, payment: any) {
-  console.log(`🔍 Processando pagamento de galeria: ${payment.id}, installment: ${payment.installment || 'N/A'}`);
-
-  // Find cobranca by installment ID or payment ID
-  let cobranca = null;
-
-  if (payment.installment) {
-    const { data } = await adminClient
-      .from("cobrancas")
-      .select("*")
-      .eq("asaas_installment_id", payment.installment)
-      .eq("provedor", "asaas")
-      .maybeSingle();
-    cobranca = data;
-    if (cobranca) console.log(`📋 Cobrança encontrada por installment_id: ${cobranca.id}`);
-  }
-
-  if (!cobranca) {
-    const { data } = await adminClient
-      .from("cobrancas")
-      .select("*")
-      .eq("mp_payment_id", payment.id)
-      .eq("provedor", "asaas")
-      .maybeSingle();
-    cobranca = data;
-    if (cobranca) console.log(`📋 Cobrança encontrada por mp_payment_id: ${cobranca.id}`);
-  }
-
-  if (!cobranca) {
-    console.warn(`⚠️ Nenhuma cobrança encontrada para payment ${payment.id}`);
-    return;
-  }
-
-  if (cobranca.status === 'pago') {
-    console.log(`⏭️ Cobrança ${cobranca.id} já está paga, verificando parcela...`);
-  }
-
-  // Extract payment details
-  const valorBruto = payment.value;
-  const netValue = payment.netValue ?? valorBruto;
-  const taxaGateway = Math.round((valorBruto - netValue) * 100) / 100;
-  const numeroParcela = payment.installmentNumber || 1;
-  const billingType = (payment.billingType || 'CREDIT_CARD').toLowerCase();
-
-  console.log(`📊 Parcela ${numeroParcela}: bruto=${valorBruto}, líquido=${netValue}, taxa=${taxaGateway}`);
-
-  // Upsert into cobranca_parcelas (source of truth)
-  const { error: parcelaError } = await adminClient
-    .from("cobranca_parcelas")
-    .upsert({
-      cobranca_id: cobranca.id,
-      numero_parcela: numeroParcela,
-      asaas_payment_id: payment.id,
-      valor_bruto: valorBruto,
-      valor_liquido: netValue,
-      taxa_gateway: taxaGateway >= 0 ? taxaGateway : 0,
-      taxa_antecipacao: 0,
-      status: 'confirmado',
-      billing_type: billingType === 'credit_card' ? 'card' : billingType,
-      data_pagamento: payment.paymentDate || new Date().toISOString().split('T')[0],
-      data_vencimento: payment.dueDate || null,
-    }, { onConflict: 'asaas_payment_id' });
-
-  if (parcelaError) {
-    console.error(`❌ Erro ao upsert parcela:`, parcelaError);
-    return;
-  }
-
-  console.log(`✅ Parcela ${numeroParcela} registrada para cobrança ${cobranca.id}`);
-
-  // Update cobrancas.valor_liquido (sum of confirmed parcelas)
-  const { data: parcelasSum } = await adminClient
-    .from("cobranca_parcelas")
-    .select("valor_liquido")
-    .eq("cobranca_id", cobranca.id)
-    .eq("status", "confirmado");
-
-  if (parcelasSum && parcelasSum.length > 0) {
-    const totalLiquido = parcelasSum.reduce((sum: number, p: any) => sum + (Number(p.valor_liquido) || 0), 0);
-    const roundedLiquido = Math.round(totalLiquido * 100) / 100;
-    await adminClient
-      .from("cobrancas")
-      .update({ valor_liquido: roundedLiquido })
-      .eq("id", cobranca.id);
-    console.log(`📊 cobrancas.valor_liquido atualizado: ${roundedLiquido}`);
-  }
-
-  // Check if all parcelas are confirmed → re-read cobranca status (trigger may have updated it)
-  const { data: refreshed } = await adminClient
-    .from("cobrancas")
-    .select("status, parcelas_pagas, total_parcelas")
-    .eq("id", cobranca.id)
-    .single();
-
-  if (refreshed && refreshed.status === 'pago') {
-    console.log(`✅ Cobrança ${cobranca.id} está paga — chamando finalize_gallery_payment`);
-
-    const { data: rpcResult, error: rpcError } = await adminClient.rpc('finalize_gallery_payment', {
-      p_cobranca_id: cobranca.id,
-      p_receipt_url: null,
-      p_paid_at: new Date().toISOString(),
-    });
-
-    if (rpcError) {
-      console.error('❌ RPC finalize_gallery_payment error:', rpcError);
-    } else {
-      console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
-      await notifyPaymentConfirmed(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, cobranca.id);
-    }
-  } else {
-    console.log(`⏳ Cobrança ${cobranca.id}: ${refreshed?.parcelas_pagas}/${refreshed?.total_parcelas} parcelas pagas, status=${refreshed?.status}`);
-  }
-
-  // Log action
-  if (cobranca.galeria_id) {
-    await adminClient.from("galeria_acoes").insert({
-      galeria_id: cobranca.galeria_id,
-      tipo: "pagamento_confirmado",
-      descricao: `Parcela ${numeroParcela} confirmada via Asaas (R$ ${valorBruto.toFixed(2)})`,
-      user_id: null,
-    });
-  }
-}
-
-
-async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventType: 'payment_confirmed', paymentId }),
-    });
-    if (!response.ok) console.warn('⚠️ payment email notification failed:', response.status, await response.text());
-  } catch (error) {
-    console.warn('⚠️ payment email notification exception:', error);
-  }
+  return await sharedProcessGalleryPayment(adminClient, {
+    provider: 'asaas',
+    externalId: payment.id,
+    installmentId: payment.installment,
+    installmentNumber: payment.installmentNumber || 1,
+    totalInstallments: 1, // Asaas doesn't give us total in payment payload easily, but shared logic handles upsert
+    value: payment.value,
+    netValue: payment.netValue ?? payment.value,
+    billingType: payment.billingType || 'CREDIT_CARD',
+    paymentDate: payment.paymentDate,
+    dueDate: payment.dueDate,
+  });
 }
 
 Deno.serve(async (req) => {

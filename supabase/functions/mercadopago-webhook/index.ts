@@ -1,24 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
+import { processGalleryPayment, processCreditPurchase } from '../_shared/payment-processor.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
 };
 
-
-async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventType: 'payment_confirmed', paymentId }),
-    });
-    if (!response.ok) console.warn('⚠️ payment email notification failed:', response.status, await response.text());
-  } catch (error) {
-    console.warn('⚠️ payment email notification exception:', error);
-  }
-}
+// E-mail notification now handled by shared processor
 
 interface WebhookPayload {
   id?: number;
@@ -95,11 +84,6 @@ Deno.serve(async (req) => {
       
       if (!xSignature || !xRequestId) {
         console.error('❌ Headers x-signature ou x-request-id ausentes');
-        await supabase.from('webhook_logs').insert({
-          source: 'mercadopago',
-          event_type: 'signature_invalid',
-          payload: { raw: rawBody, reason: 'Missing signature headers' },
-        });
         return new Response('Unauthorized', { status: 401, headers: corsHeaders });
       }
 
@@ -117,11 +101,9 @@ Deno.serve(async (req) => {
         return new Response('Unauthorized', { status: 401, headers: corsHeaders });
       }
 
-      // Build manifest
       const dataId = payload.data?.id || '';
       const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
-      // Compute HMAC-SHA256
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw', encoder.encode(mpWebhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
@@ -132,17 +114,11 @@ Deno.serve(async (req) => {
 
       if (computedHash !== v1) {
         console.error('❌ Assinatura HMAC inválida para Mercado Pago');
-        await supabase.from('webhook_logs').insert({
-          source: 'mercadopago',
-          event_type: 'signature_invalid',
-          payload: { raw: rawBody, manifest, computed: computedHash, received: v1 },
-        });
         return new Response('Unauthorized', { status: 401, headers: corsHeaders });
       }
       console.log('✅ Assinatura Mercado Pago válida');
     }
 
-    // Processar apenas eventos de pagamento
     if (payload.type !== 'payment') {
       console.log('Ignorando evento não-payment:', payload.type);
       return new Response('OK', { status: 200, headers: corsHeaders });
@@ -154,11 +130,8 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    // Try to get payment details - first check if it's from a connected account
-    // by looking for the cobranca or credit_purchase with this payment ID
-    let mpPayment: Record<string, unknown> | null = null;
+    let mpPayment: Record<string, any> | null = null;
 
-    // First, try with global token (for credit purchases)
     if (mpAccessToken) {
       const globalResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { 'Authorization': `Bearer ${mpAccessToken}` },
@@ -166,11 +139,9 @@ Deno.serve(async (req) => {
       
       if (globalResponse.ok) {
         mpPayment = await globalResponse.json();
-        console.log('Pagamento encontrado com token global');
       }
     }
 
-    // If not found with global token, try to find cobranca and use photographer's token
     if (!mpPayment) {
       const { data: cobranca } = await supabase
         .from('cobrancas')
@@ -194,7 +165,6 @@ Deno.serve(async (req) => {
 
           if (photographerResponse.ok) {
             mpPayment = await photographerResponse.json();
-            console.log('Pagamento encontrado com token do fotógrafo');
           }
         }
       }
@@ -205,20 +175,12 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    console.log('Pagamento MP:', {
-      id: mpPayment.id,
-      status: mpPayment.status,
-      external_reference: mpPayment.external_reference,
-    });
-
     const externalReference = mpPayment.external_reference as string;
     if (!externalReference) {
       console.log('Pagamento sem external_reference');
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    // Determine if this is a credit purchase or gallery charge
-    // Check credit_purchases first
     const { data: purchase } = await supabase
       .from('credit_purchases')
       .select('*')
@@ -226,88 +188,20 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (purchase) {
-      // This is a CREDIT PURCHASE (photographer buying credits from Lunari)
-      console.log('Processando como compra de créditos:', externalReference);
-      
-      if (purchase.status === 'approved') {
-        console.log('Compra já aprovada, ignorando webhook');
-        return new Response('OK', { status: 200, headers: corsHeaders });
-      }
-
-      const updateData: Record<string, unknown> = {
-        mp_payment_id: String(mpPayment.id),
-        mp_status: mpPayment.status,
-        metadata: {
-          ...((purchase.metadata as Record<string, unknown>) || {}),
-          webhook_update: {
-            status: mpPayment.status,
-            status_detail: mpPayment.status_detail,
-            updated_at: new Date().toISOString(),
-          }
-        }
-      };
-
-      if (mpPayment.status === 'approved') {
-        updateData.status = 'approved';
-        updateData.paid_at = mpPayment.date_approved || new Date().toISOString();
-
-        console.log('Pagamento aprovado, adicionando créditos:', {
-          user_id: purchase.user_id,
-          credits: purchase.credits_amount,
-        });
-
-        const { data: ledgerId, error: creditError } = await supabase.rpc('purchase_credits', {
-          _user_id: purchase.user_id,
-          _amount: purchase.credits_amount,
-          _purchase_id: purchase.id,
-          _description: `Compra de ${purchase.credits_amount.toLocaleString('pt-BR')} créditos via Mercado Pago`,
-        });
-
-        if (creditError) {
-          console.error('Erro ao adicionar créditos:', creditError);
-        } else {
-          updateData.ledger_id = ledgerId;
-          console.log('Créditos adicionados com sucesso, ledger_id:', ledgerId);
-        }
-
-        // Referral bonus: grant +1000 credits to both if applicable
-        try {
-          const { data: bonusGranted, error: bonusError } = await supabase.rpc('grant_referral_select_bonus', {
-            _referred_user_id: purchase.user_id,
-          });
-          if (bonusError) {
-            console.warn('Referral bonus check error (non-fatal):', bonusError.message);
-          } else if (bonusGranted) {
-            console.log('🎁 Referral Select bonus granted for user:', purchase.user_id);
-          }
-        } catch (e) {
-          console.warn('Referral bonus exception (non-fatal):', e);
-        }
-      } else if (mpPayment.status === 'rejected' || mpPayment.status === 'cancelled') {
-        updateData.status = mpPayment.status;
-      }
-
-      const { error: updateError } = await supabase
-        .from('credit_purchases')
-        .update(updateData)
-        .eq('id', externalReference);
-
-      if (updateError) {
-        console.error('Erro ao atualizar compra:', updateError);
+      const result = await processCreditPurchase(supabase, purchase, mpPayment);
+      if (!result.success) {
+        console.error('Erro ao processar compra de créditos:', result.error);
       } else {
-        console.log('Compra de créditos atualizada com sucesso');
+        console.log('Compra de créditos processada com sucesso');
       }
-
     } else {
-      // Check if it's a gallery charge (cobrancas)
       const { data: cobranca } = await supabase
         .from('cobrancas')
-        .select('*, galerias(id, user_id, fotos_selecionadas, fotos_incluidas)')
+        .select('*')
         .eq('id', externalReference)
         .maybeSingle();
 
       if (cobranca) {
-        // This is a GALLERY CHARGE (client paying photographer for extra photos)
         console.log('Processando como cobrança de galeria:', externalReference);
 
         if (cobranca.status === 'pago') {
@@ -316,53 +210,33 @@ Deno.serve(async (req) => {
         }
 
         if (mpPayment.status === 'approved') {
-          const now = new Date().toISOString();
-
-          // Save MP-specific fields before RPC
-          await supabase
-            .from('cobrancas')
-            .update({ mp_payment_id: String(mpPayment.id) })
-            .eq('id', externalReference);
-
-          // Call centralized RPC for atomic payment finalization
-          const { data: rpcResult, error: rpcError } = await supabase.rpc('finalize_gallery_payment', {
-            p_cobranca_id: externalReference,
-            p_receipt_url: null,
-            p_paid_at: now,
+          const result = await processGalleryPayment(supabase, {
+            provider: 'mercadopago',
+            externalId: String(mpPayment.id),
+            installmentNumber: 1,
+            totalInstallments: 1,
+            value: Number(mpPayment.transaction_amount),
+            netValue: Number(mpPayment.transaction_details?.net_received_amount ?? mpPayment.transaction_amount),
+            billingType: mpPayment.payment_method_id || 'credit_card',
+            paymentDate: mpPayment.date_approved || new Date().toISOString(),
           });
 
-          if (rpcError) {
-            console.error('❌ RPC finalize_gallery_payment error:', rpcError);
+          if (!result.success) {
+            console.error('Erro ao processar pagamento de galeria:', result.error);
           } else {
-            console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
-            await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, externalReference);
+            console.log('Pagamento de galeria processado com sucesso');
           }
-
-          // Log action
-          if (cobranca.galeria_id) {
-            await supabase.from('galeria_acoes').insert({
-              galeria_id: cobranca.galeria_id,
-              tipo: 'pagamento_confirmado',
-              descricao: `Pagamento de R$ ${cobranca.valor.toFixed(2)} confirmado via Mercado Pago`,
-              user_id: cobranca.user_id,
-            });
-          }
-
-          console.log('Cobrança de galeria processada com sucesso');
-
         } else if (mpPayment.status === 'rejected' || mpPayment.status === 'cancelled') {
           await supabase
             .from('cobrancas')
             .update({ status: mpPayment.status as string })
             .eq('id', externalReference);
         }
-
       } else {
         console.log('external_reference não encontrado em nenhuma tabela:', externalReference);
       }
     }
 
-    // Mark as success in audit log
     await logWebhookEvent({
       correlationId,
       provider: 'mercadopago',
