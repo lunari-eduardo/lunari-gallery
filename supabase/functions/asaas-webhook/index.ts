@@ -544,6 +544,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 2. Log Success and Return
+    await logWebhookEvent({
+      correlationId,
+      provider: 'asaas_subscription',
+      externalId: payment?.id || body.id || 'unknown',
+      eventName: event,
+      payload: body,
+      status: 'success'
+    });
+
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
