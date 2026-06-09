@@ -358,8 +358,9 @@ Deno.serve(async (req) => {
     // 4. Parse sale settings to determine if payment is required
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
     // (configuracoes already parsed above for chargeType)
-    const saleMode = configuracoes?.saleSettings?.mode;
-    const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod;
+    const saleMode = gallery.venda_modo || (gallery.configuracoes?.saleSettings?.mode);
+    const configuredPaymentMethod = gallery.venda_pagamento_provedor || (gallery.configuracoes?.saleSettings?.paymentMethod);
+
     // Server-side rule: if mode is sale_with_payment AND there's value to charge, payment is required
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
