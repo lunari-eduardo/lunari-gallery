@@ -55,7 +55,7 @@ const galleryStatusConfig: Record<GalleryStatus, { label: string; className: str
 const selectionStatusConfig: Record<SelectionStatus, { label: string; className: string; icon: React.ElementType }> = {
   in_progress: { label: 'Em andamento', className: 'status-in-progress', icon: Loader2 },
   confirmed: { label: 'Confirmada', className: 'status-completed', icon: CheckCircle },
-  blocked: { label: 'Bloqueada', className: 'status-expired', icon: XCircle },
+  blocked: { label: 'Aguardando Pagamento', className: 'status-expired', icon: Clock },
 };
 
 const defaultConfig = { label: 'Desconhecido', className: 'status-created', icon: HelpCircle };
