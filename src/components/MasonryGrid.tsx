@@ -5,22 +5,34 @@ interface MasonryGridProps {
   children: ReactNode;
   className?: string;
   gap?: number;
+  forcedCols?: number;
 }
 
-function getColumnCount(width: number): number {
-  if (width >= 1280) return 4;
-  if (width >= 640) return 3;
-  return 2;
-}
-
-export function MasonryGrid({ children, className, gap = 6 }: MasonryGridProps) {
-  const [numCols, setNumCols] = useState(() => getColumnCount(typeof window !== 'undefined' ? window.innerWidth : 1280));
+export function MasonryGrid({ children, className, gap = 6, forcedCols }: MasonryGridProps) {
+  const [containerWidth, setContainerWidth] = useState(1200);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onResize = () => setNumCols(getColumnCount(window.innerWidth));
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    if (!containerRef.current) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
   }, []);
+
+  const numCols = useMemo(() => {
+    if (forcedCols) return forcedCols;
+    if (containerWidth < 480) return 2;
+    if (containerWidth < 768) return 3;
+    if (containerWidth < 1024) return 4;
+    return 5;
+  }, [containerWidth, forcedCols]);
+
 
   const columns = useMemo(() => {
     const cols: ReactElement[][] = Array.from({ length: numCols }, () => []);
@@ -46,7 +58,7 @@ export function MasonryGrid({ children, className, gap = 6 }: MasonryGridProps) 
   }, [children, numCols]);
 
   return (
-    <div className="masonry-container">
+    <div className="masonry-container" ref={containerRef}>
       <div 
         className={cn('flex', className)} 
         style={{ gap: `${gap}px` }}
@@ -64,6 +76,7 @@ export function MasonryGrid({ children, className, gap = 6 }: MasonryGridProps) 
     </div>
   );
 }
+
 
 interface MasonryItemProps {
   children: ReactNode;
