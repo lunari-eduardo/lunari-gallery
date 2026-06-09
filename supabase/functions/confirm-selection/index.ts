@@ -1,10 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { logAuditEvent, getCorrelationId } from '../_shared/audit.ts';
+import { errorResponse, successResponse, corsHeaders } from '../_shared/responses.ts';
+import { resolveGalleryByToken } from '../_shared/database.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
 
 // Rate limiter — in-memory per isolate
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -81,35 +79,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    let tokenGallery: { id: string } | null = null;
-    const { data: primaryGallery, error: tokenError } = await supabase
-      .from('galerias')
-      .select('id')
-      .eq('public_token', galleryToken)
-      .single();
+    const { id: galleryId, error: tokenError } = await resolveGalleryByToken(supabase, galleryToken);
 
-    if (!tokenError && primaryGallery) {
-      tokenGallery = primaryGallery;
-    } else {
-      // Fallback: check token aliases for old/rotated tokens
-      const { data: alias } = await supabase
-        .from('gallery_token_aliases')
-        .select('gallery_id')
-        .eq('old_token', galleryToken)
-        .single();
-      if (alias?.gallery_id) {
-        tokenGallery = { id: alias.gallery_id };
-        console.log(`[confirm-selection] Resolved via token alias: ${galleryToken} -> ${alias.gallery_id}`);
-      }
+    if (tokenError || !galleryId) {
+      console.error('Gallery not found or token error:', tokenError);
+      return errorResponse('Galeria não encontrada', 404);
     }
 
-    if (!tokenGallery) {
-      return new Response(
-        JSON.stringify({ error: 'Galeria não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    const galleryId = tokenGallery.id;
 
     // ── SERVER-SIDE COUNT: Never trust frontend selectedCount ──
     // For public galleries with visitor: count from visitante_selecoes
