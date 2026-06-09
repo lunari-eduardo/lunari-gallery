@@ -362,6 +362,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Mark as success in audit log
+    await logWebhookEvent({
+      correlationId,
+      provider: 'mercadopago',
+      externalId: payload.data?.id || 'unknown',
+      eventName: payload.type || 'unknown',
+      payload: payload,
+      status: 'success'
+    });
+
     return new Response('OK', { status: 200, headers: corsHeaders });
 
   } catch (error) {
