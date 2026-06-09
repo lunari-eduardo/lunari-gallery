@@ -24,11 +24,11 @@
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
-import { logWebhookEvent, getCorrelationId } from '../_shared/audit.ts';
+import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-correlation-id',
 };
 
 async function notifyPaymentConfirmed(paymentId: string) {
@@ -61,15 +61,37 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { event, payment } = body;
 
-    // Log webhook event immediately
+    // 1. Audit Log and Idempotency Check
+    const provider = 'asaas';
+    const externalId = payment?.id;
+    const eventName = event;
+
     await logWebhookEvent({
       correlationId,
-      provider: 'asaas',
-      externalId: payment?.id,
-      eventName: event,
+      provider,
+      externalId,
+      eventName,
       payload: body,
-      status: 'pending'
+      status: 'received'
     });
+
+    const { isAlreadyProcessed, lockAcquired } = await acquireWebhookLock(provider, externalId, eventName);
+
+    if (isAlreadyProcessed) {
+      console.log(`ℹ️ Webhook ${provider}:${externalId}:${eventName} already processed successfully.`);
+      return new Response(
+        JSON.stringify({ received: true, message: 'Already processed' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!lockAcquired) {
+      console.warn(`🔒 Could not acquire lock for webhook ${provider}:${externalId}:${eventName}. Possible concurrent processing.`);
+      return new Response(
+        JSON.stringify({ received: true, message: 'Processing in progress' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // ============================================================
     // VALIDAÇÃO DE TOKEN ASAAS
@@ -83,8 +105,9 @@ Deno.serve(async (req) => {
         console.error('❌ Token Asaas inválido ou ausente');
         await logWebhookEvent({
           correlationId,
-          provider: 'asaas',
-          externalId: payment?.id,
+          provider,
+          externalId,
+          eventName,
           payload: body,
           status: 'error',
           errorLog: 'Invalid webhook token'
@@ -110,6 +133,15 @@ Deno.serve(async (req) => {
     const confirmEvents = ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_ANTICIPATED'];
     if (!confirmEvents.includes(event)) {
       console.log(`⏭️ Ignoring event: ${event}`);
+      await logWebhookEvent({
+        correlationId,
+        provider,
+        externalId,
+        eventName,
+        payload: body,
+        status: 'success',
+        errorLog: 'Event ignored'
+      });
       return new Response(
         JSON.stringify({ received: true, message: `Event ${event} ignored` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -298,6 +330,16 @@ async function processPayment(
   }
 
   console.log(`✅ Asaas webhook processed: cobrança ${cobrancaId} — event=${event}`);
+
+  // 7. Update Audit Log to Success
+  const correlationId = getCorrelationId(new Request('http://localhost', { headers: { 'x-correlation-id': '' } })); // Dummy request for ID or we should pass it
+  await logWebhookEvent({
+    provider: 'asaas',
+    externalId: payment.id as string,
+    eventName: event,
+    payload: payment,
+    status: 'success'
+  });
 
   return new Response(
     JSON.stringify({ received: true, processed: true }),

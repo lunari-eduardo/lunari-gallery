@@ -37,6 +37,9 @@ interface CreateLinkRequest {
   qtdFotos?: number;
   sessionId?: string;
   visitorId?: string;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: any;
+  correlationId?: string;
   
   // Campos comuns
   valor: number;
@@ -146,6 +149,9 @@ Deno.serve(async (req) => {
           status: 'pendente',
           provedor: 'mercadopago',
           visitor_id: body.visitorId || null,
+          snapshot_fotos_incluidas: body.snapshotFotosIncluidas || 0,
+          snapshot_regras_congeladas: body.snapshotRegrasCongeladas || null,
+          correlation_id: body.correlationId || null,
         })
         .select('id')
         .single();

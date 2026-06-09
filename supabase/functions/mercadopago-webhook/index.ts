@@ -1,8 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
 };
 
 
@@ -44,29 +45,38 @@ Deno.serve(async (req) => {
   // Usar service role para acessar todas as compras
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Log imediato do payload antes de qualquer processamento
+  const correlationId = getCorrelationId(req);
   let rawBody = '';
   try {
     rawBody = await req.text();
-    
-    // Logar webhook imediatamente
-    const logResult = await supabase.from('webhook_logs').insert({
-      source: 'mercadopago',
-      event_type: 'incoming',
-      payload: { raw: rawBody, headers: Object.fromEntries(req.headers.entries()) },
-    });
-    if (logResult.error) {
-      console.error('Erro ao logar webhook:', logResult.error);
-    }
-
-  } catch (e) {
-    console.error('Erro ao ler body:', e);
-    return new Response('OK', { status: 200, headers: corsHeaders });
-  }
-
-  try {
     const payload: WebhookPayload = JSON.parse(rawBody);
     
+    // 1. Audit Log and Idempotency Check
+    const provider = 'mercadopago';
+    const externalId = payload.data?.id || 'unknown';
+    const eventName = payload.type || 'unknown';
+
+    await logWebhookEvent({
+      correlationId,
+      provider,
+      externalId,
+      eventName,
+      payload: payload,
+      status: 'received'
+    });
+
+    const { isAlreadyProcessed, lockAcquired } = await acquireWebhookLock(provider, externalId, eventName);
+
+    if (isAlreadyProcessed) {
+      console.log(`ℹ️ Webhook ${provider}:${externalId}:${eventName} already processed successfully.`);
+      return new Response('OK', { status: 200, headers: corsHeaders });
+    }
+
+    if (!lockAcquired) {
+      console.warn(`🔒 Could not acquire lock for webhook ${provider}:${externalId}:${eventName}.`);
+      return new Response('Locked', { status: 409, headers: corsHeaders });
+    }
+
     console.log('Webhook Mercado Pago recebido:', {
       type: payload.type,
       action: payload.action,
@@ -351,6 +361,16 @@ Deno.serve(async (req) => {
         console.log('external_reference não encontrado em nenhuma tabela:', externalReference);
       }
     }
+
+    // Mark as success in audit log
+    await logWebhookEvent({
+      correlationId,
+      provider: 'mercadopago',
+      externalId: payload.data?.id || 'unknown',
+      eventName: payload.type || 'unknown',
+      payload: payload,
+      status: 'success'
+    });
 
     return new Response('OK', { status: 200, headers: corsHeaders });
 

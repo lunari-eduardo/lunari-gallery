@@ -1114,6 +1114,7 @@ export type Database = {
         Row: {
           asaas_installment_id: string | null
           cliente_id: string | null
+          correlation_id: string | null
           created_at: string | null
           dados_extras: Json | null
           data_pagamento: string | null
@@ -1138,6 +1139,8 @@ export type Database = {
           provedor: string | null
           qtd_fotos: number | null
           session_id: string | null
+          snapshot_fotos_incluidas: number | null
+          snapshot_regras_congeladas: Json | null
           status: string | null
           tipo_cobranca: string
           total_parcelas: number | null
@@ -1150,6 +1153,7 @@ export type Database = {
         Insert: {
           asaas_installment_id?: string | null
           cliente_id?: string | null
+          correlation_id?: string | null
           created_at?: string | null
           dados_extras?: Json | null
           data_pagamento?: string | null
@@ -1174,6 +1178,8 @@ export type Database = {
           provedor?: string | null
           qtd_fotos?: number | null
           session_id?: string | null
+          snapshot_fotos_incluidas?: number | null
+          snapshot_regras_congeladas?: Json | null
           status?: string | null
           tipo_cobranca: string
           total_parcelas?: number | null
@@ -1186,6 +1192,7 @@ export type Database = {
         Update: {
           asaas_installment_id?: string | null
           cliente_id?: string | null
+          correlation_id?: string | null
           created_at?: string | null
           dados_extras?: Json | null
           data_pagamento?: string | null
@@ -1210,6 +1217,8 @@ export type Database = {
           provedor?: string | null
           qtd_fotos?: number | null
           session_id?: string | null
+          snapshot_fotos_incluidas?: number | null
+          snapshot_regras_congeladas?: Json | null
           status?: string | null
           tipo_cobranca?: string
           total_parcelas?: number | null
@@ -4882,6 +4891,7 @@ export type Database = {
       }
       refund_photo_credit: { Args: { _user_id: string }; Returns: undefined }
       register_referral: { Args: { _referral_code: string }; Returns: boolean }
+      release_advisory_lock: { Args: { lock_key: string }; Returns: boolean }
       renew_subscription_credits: {
         Args: { _amount: number; _user_id: string }
         Returns: undefined
@@ -4901,6 +4911,10 @@ export type Database = {
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }
+      try_acquire_advisory_lock: {
+        Args: { lock_key: string }
+        Returns: boolean
+      }
       try_lock_gallery_selection: {
         Args: { p_gallery_id: string }
         Returns: Json

@@ -43,6 +43,9 @@ interface RequestBody {
   galeriaId?: string;
   qtdFotos?: number;
   visitorId?: string;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: any;
+  correlationId?: string;
 }
 
 // --- Retry + Timeout helpers ---
@@ -277,6 +280,9 @@ Deno.serve(async (req) => {
         galeria_id: galeriaId || null,
         qtd_fotos: qtdFotos || 0,
         visitor_id: visitorId || null,
+        snapshot_fotos_incluidas: body.snapshotFotosIncluidas || 0,
+        snapshot_regras_congeladas: body.snapshotRegrasCongeladas || null,
+        correlation_id: body.correlationId || null,
       })
       .select('id')
       .single();

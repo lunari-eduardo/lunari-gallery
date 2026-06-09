@@ -624,6 +624,9 @@ Deno.serve(async (req) => {
             taxaAntecipacaoCreditoAvista: asaasSettings.taxaAntecipacaoCreditoAvista,
             taxaAntecipacaoCreditoParcelado: asaasSettings.taxaAntecipacaoCreditoParcelado,
             incluirTaxaAntecipacao: asaasSettings.incluirTaxaAntecipacao ?? true,
+            snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
+            snapshotRegrasCongeladas: gallery.regras_congeladas,
+            correlationId,
           };
 
           console.log(`💳 Asaas transparent checkout prepared for gallery ${galleryId}, R$ ${valorTotal}`);
@@ -676,6 +679,9 @@ Deno.serve(async (req) => {
               galeriaId: galleryId,
               qtdFotos: extrasACobrar,
               visitorId: visitorId || undefined,
+              snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
+              snapshotRegrasCongeladas: gallery.regras_congeladas,
+              correlationId,
             }),
           });
 
