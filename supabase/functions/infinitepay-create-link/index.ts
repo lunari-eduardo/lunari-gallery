@@ -43,6 +43,9 @@ interface RequestBody {
   galeriaId?: string;
   qtdFotos?: number;
   visitorId?: string;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: any;
+  correlationId?: string;
 }
 
 // --- Retry + Timeout helpers ---
