@@ -342,6 +342,33 @@ Deno.serve(async (req) => {
     const event = body.event;
     const payment = body.payment;
     const subscription = body.subscription;
+    const correlationId = getCorrelationId(req);
+
+    // 1. Audit Log and Idempotency Check
+    const provider = 'asaas_subscription';
+    const externalId = payment?.id || body.id || 'unknown';
+    const eventName = event;
+
+    await logWebhookEvent({
+      correlationId,
+      provider,
+      externalId,
+      eventName,
+      payload: body,
+      status: 'received'
+    });
+
+    const { isAlreadyProcessed, lockAcquired } = await acquireWebhookLock(provider, externalId, eventName);
+
+    if (isAlreadyProcessed) {
+      console.log(`ℹ️ Webhook ${provider}:${externalId}:${eventName} already processed successfully.`);
+      return new Response('Already processed', { status: 200, headers: corsHeaders });
+    }
+
+    if (!lockAcquired) {
+      console.warn(`🔒 Could not acquire lock for webhook ${provider}:${externalId}:${eventName}.`);
+      return new Response('Locked', { status: 409, headers: corsHeaders });
+    }
 
     console.log("Asaas webhook received:", event, JSON.stringify(body).slice(0, 500));
 
@@ -350,7 +377,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Log webhook
+    // Log legacy webhook (keeping for compatibility)
     await adminClient.from("webhook_logs").insert({
       provider: "asaas",
       event_type: event,
