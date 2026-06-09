@@ -1,95 +1,89 @@
-import asset1 from '@/assets/demo-photos/LISE3837.jpg.asset.json';
-import asset2 from '@/assets/demo-photos/LISE3856.jpg.asset.json';
-import asset3 from '@/assets/demo-photos/LISE3868.jpg.asset.json';
-import asset4 from '@/assets/demo-photos/LISE3894.jpg.asset.json';
-import asset5 from '@/assets/demo-photos/LISE3909.jpg.asset.json';
-import asset6 from '@/assets/demo-photos/LISE3958.jpg.asset.json';
-import asset7 from '@/assets/demo-photos/LISE4075.jpg.asset.json';
-import asset8 from '@/assets/demo-photos/LISE3998.jpg.asset.json';
-import asset9 from '@/assets/demo-photos/LISE4102.jpg.asset.json';
+import { PhotoPaths } from '@/lib/photoUrl';
 
+// Usaremos imagens de alta qualidade via CDN para garantir o carregamento estável no preview
+// Preservamos proporções realistas (3:2 horizontal e 2:3 vertical)
 export const DEMO_PHOTOS = [
   {
     id: '1',
     storageKey: 'demo1',
-    originalFilename: 'LISE4075.jpg',
+    originalFilename: 'casamento-01.jpg',
     width: 1500,
     height: 1000,
-    previewPath: asset7.url,
-    thumbPath: asset7.url,
+    previewPath: 'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1500&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=600&auto=format&fit=crop',
     peso_visual: 1
   },
   {
     id: '2',
     storageKey: 'demo2',
-    originalFilename: 'LISE3837.jpg',
+    originalFilename: 'casamento-02.jpg',
     width: 1000,
     height: 1500,
-    previewPath: asset1.url,
-    thumbPath: asset1.url,
+    previewPath: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=1000&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=400&auto=format&fit=crop',
   },
   {
     id: '3',
     storageKey: 'demo3',
-    originalFilename: 'LISE3856.jpg',
+    originalFilename: 'casamento-03.jpg',
     width: 1000,
     height: 1500,
-    previewPath: asset2.url,
-    thumbPath: asset2.url,
+    previewPath: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?q=80&w=1000&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?q=80&w=400&auto=format&fit=crop',
   },
   {
     id: '4',
     storageKey: 'demo4',
-    originalFilename: 'LISE3868.jpg',
-    width: 1000,
-    height: 1500,
-    previewPath: asset3.url,
-    thumbPath: asset3.url,
+    originalFilename: 'casamento-04.jpg',
+    width: 1500,
+    height: 1000,
+    previewPath: 'https://images.unsplash.com/photo-1465495910483-0d6749ee9f4a?q=80&w=1500&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1465495910483-0d6749ee9f4a?q=80&w=600&auto=format&fit=crop',
     peso_visual: 1
   },
   {
     id: '5',
     storageKey: 'demo5',
-    originalFilename: 'LISE3894.jpg',
+    originalFilename: 'casamento-05.jpg',
     width: 1500,
     height: 1000,
-    previewPath: asset4.url,
-    thumbPath: asset4.url,
+    previewPath: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=1500&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=600&auto=format&fit=crop',
   },
   {
     id: '6',
     storageKey: 'demo6',
-    originalFilename: 'LISE3909.jpg',
+    originalFilename: 'casamento-06.jpg',
     width: 1000,
     height: 1500,
-    previewPath: asset5.url,
-    thumbPath: asset5.url,
+    previewPath: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=1000&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=400&auto=format&fit=crop',
   },
   {
     id: '7',
     storageKey: 'demo7',
-    originalFilename: 'LISE3958.jpg',
+    originalFilename: 'casamento-07.jpg',
     width: 1000,
     height: 1500,
-    previewPath: asset6.url,
-    thumbPath: asset6.url,
+    previewPath: 'https://images.unsplash.com/photo-1544078751-58fee2d8a03b?q=80&w=1000&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1544078751-58fee2d8a03b?q=80&w=400&auto=format&fit=crop',
   },
   {
     id: '8',
     storageKey: 'demo8',
-    originalFilename: 'LISE3998.jpg',
-    width: 1000,
-    height: 1500,
-    previewPath: asset8.url,
-    thumbPath: asset8.url,
+    originalFilename: 'casamento-08.jpg',
+    width: 1500,
+    height: 1000,
+    previewPath: 'https://images.unsplash.com/photo-1510076857177-7470076d4098?q=80&w=1500&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1510076857177-7470076d4098?q=80&w=600&auto=format&fit=crop',
   },
   {
     id: '9',
     storageKey: 'demo9',
-    originalFilename: 'LISE4102.jpg',
+    originalFilename: 'casamento-09.jpg',
     width: 1000,
     height: 1500,
-    previewPath: asset9.url,
-    thumbPath: asset9.url,
+    previewPath: 'https://images.unsplash.com/photo-1522673607200-16489de436c3?q=80&w=1000&auto=format&fit=crop',
+    thumbPath: 'https://images.unsplash.com/photo-1522673607200-16489de436c3?q=80&w=400&auto=format&fit=crop',
   }
 ];
