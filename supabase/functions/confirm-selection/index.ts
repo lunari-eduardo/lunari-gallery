@@ -217,23 +217,21 @@ Deno.serve(async (req) => {
     };
 
     // Gallery data returned from the lock RPC
-    const gallery = lockResult.gallery as {
-      id: string; status: string; status_selecao: string; finalized_at: string | null;
-      user_id: string; session_id: string | null; cliente_id: string | null;
-      fotos_incluidas: number; valor_foto_extra: number; nome_sessao: string | null;
-      configuracoes: Record<string, unknown> | null; public_token: string | null;
-      total_fotos_extras_vendidas: number | null; valor_total_vendido: number | null;
-      regras_congeladas: Record<string, unknown> | null;
+    const gallery = lockResult.gallery as Gallery & {
+      session_id: string | null;
+      nome_sessao: string | null;
+      venda_tipo_cobranca?: string;
     };
+
 
     // 3. Calculate progressive pricing using CREDIT SYSTEM
     // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
     let valorUnitario = 0;
     let valorTotal = 0;
     
-    // Parse sale settings to get chargeType
-    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string; chargeType?: string } } | null;
-    const chargeType = configuracoes?.saleSettings?.chargeType || 'only_extras';
+    // Use explicit column from contract, fallback to JSON
+    const chargeType = gallery.venda_tipo_cobranca || (gallery.configuracoes?.saleSettings?.chargeType) || 'only_extras';
+
     
     // Calculate extras needed based on chargeType:
     // - 'all_selected': charge for ALL selected photos (for public/paid galleries)
