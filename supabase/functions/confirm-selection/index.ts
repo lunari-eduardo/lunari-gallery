@@ -676,6 +676,9 @@ Deno.serve(async (req) => {
               galeriaId: galleryId,
               qtdFotos: extrasACobrar,
               visitorId: visitorId || undefined,
+              snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
+              snapshotRegrasCongeladas: gallery.regras_congeladas,
+              correlationId,
             }),
           });
 
