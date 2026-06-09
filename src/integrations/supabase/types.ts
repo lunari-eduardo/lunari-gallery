@@ -2432,6 +2432,9 @@ export type Database = {
           valor_extras: number | null
           valor_foto_extra: number
           valor_total_vendido: number | null
+          venda_modo: string | null
+          venda_pagamento_provedor: string | null
+          venda_tipo_cobranca: string | null
         }
         Insert: {
           cliente_email?: string | null
@@ -2474,6 +2477,9 @@ export type Database = {
           valor_extras?: number | null
           valor_foto_extra?: number
           valor_total_vendido?: number | null
+          venda_modo?: string | null
+          venda_pagamento_provedor?: string | null
+          venda_tipo_cobranca?: string | null
         }
         Update: {
           cliente_email?: string | null
@@ -2516,6 +2522,9 @@ export type Database = {
           valor_extras?: number | null
           valor_foto_extra?: number
           valor_total_vendido?: number | null
+          venda_modo?: string | null
+          venda_pagamento_provedor?: string | null
+          venda_tipo_cobranca?: string | null
         }
         Relationships: [
           {

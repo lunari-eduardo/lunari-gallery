@@ -1,10 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { logAuditEvent, getCorrelationId } from '../_shared/audit.ts';
+import { errorResponse, successResponse, corsHeaders } from '../_shared/responses.ts';
+import { resolveGalleryByToken } from '../_shared/database.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
 
 // Rate limiter — in-memory per isolate
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -32,147 +30,9 @@ interface RequestBody {
   visitorId?: string;  // Required for public galleries
 }
 
-// Pricing calculation interfaces (mirrored from pricingUtils.ts)
-interface FaixaPreco {
-  min: number;
-  max: number | null;
-  valor: number;
-}
+import { RegrasCongeladas, Gallery } from '../_shared/types.ts';
+import { calcularPrecoProgressivoComCredito } from '../_shared/pricing.ts';
 
-interface TabelaPrecos {
-  faixas: FaixaPreco[];
-}
-
-interface PrecificacaoFotoExtra {
-  modelo: 'fixo' | 'global' | 'categoria';
-  valorFixo?: number;
-  tabelaGlobal?: TabelaPrecos;
-  tabelaCategoria?: TabelaPrecos;
-}
-
-interface RegrasCongeladas {
-  modelo: string;
-  pacote?: {
-    valorFotoExtra?: number;
-  };
-  precificacaoFotoExtra?: PrecificacaoFotoExtra;
-}
-
-// Normalize value from cents to reals if needed
-function normalizarValor(valor: number): number {
-  if (valor > 1000) {
-    return valor / 100;
-  }
-  return valor;
-}
-
-// Calculate progressive pricing with CREDIT SYSTEM
-// Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
-// This ensures the client pays the same total regardless of number of selection cycles
-function calcularPrecoProgressivoComCredito(
-  extrasNovas: number,           // New extras selected in this cycle
-  extrasPagasTotal: number,       // Extras already paid from previous cycles (quantity)
-  valorJaPago: number,            // Total amount already paid for extras (R$)
-  regrasCongeladas: RegrasCongeladas | null | undefined,
-  valorFotoExtraFixo: number
-): { valorUnitario: number; valorACobrar: number; valorTotalIdeal: number; totalExtras: number } {
-  // Calculate total accumulated extras
-  const totalExtras = extrasPagasTotal + extrasNovas;
-  
-  // Normalize fallback value
-  const fallbackValue = normalizarValor(valorFotoExtraFixo);
-  
-  // No extras = no charge
-  if (extrasNovas <= 0 || totalExtras <= 0) {
-    return {
-      valorUnitario: 0,
-      valorACobrar: 0,
-      valorTotalIdeal: valorJaPago,
-      totalExtras: extrasPagasTotal,
-    };
-  }
-
-  // Get base package price
-  const valorPacoteRaw = regrasCongeladas?.pacote?.valorFotoExtra || valorFotoExtraFixo;
-  const precoBasePacote = normalizarValor(valorPacoteRaw);
-
-  // No frozen rules = use fixed price with credit system
-  if (!regrasCongeladas) {
-    const valorTotalIdeal = totalExtras * fallbackValue;
-    const valorACobrar = Math.max(0, valorTotalIdeal - valorJaPago);
-    return {
-      valorUnitario: fallbackValue,
-      valorACobrar,
-      valorTotalIdeal,
-      totalExtras,
-    };
-  }
-
-  const precificacao = regrasCongeladas.precificacaoFotoExtra;
-  const modelo = precificacao?.modelo || regrasCongeladas.modelo || 'fixo';
-  
-  let valorUnitario = precoBasePacote;
-
-  // Fixed model
-  if (modelo === 'fixo') {
-    valorUnitario = normalizarValor(
-      precificacao?.valorFixo ||
-        regrasCongeladas.pacote?.valorFotoExtra ||
-        valorFotoExtraFixo
-    );
-  }
-  // Progressive model (global or category)
-  else {
-    let tabela: TabelaPrecos | undefined;
-
-    if (modelo === 'categoria' && precificacao?.tabelaCategoria) {
-      tabela = precificacao.tabelaCategoria;
-    } else if (precificacao?.tabelaGlobal) {
-      tabela = precificacao.tabelaGlobal;
-    }
-
-    if (tabela && tabela.faixas && tabela.faixas.length > 0) {
-      // Find matching tier using TOTAL accumulated extras
-      const faixaAtual = tabela.faixas.find((faixa) => {
-        const dentroDaFaixa = totalExtras >= faixa.min;
-        const dentroDoMaximo = faixa.max === null || totalExtras <= faixa.max;
-        return dentroDaFaixa && dentroDoMaximo;
-      });
-
-      // If no tier found, try the highest tier (for quantities beyond all ranges)
-      if (faixaAtual) {
-        valorUnitario = normalizarValor(faixaAtual.valor);
-      } else {
-        // Use highest tier for quantities beyond defined ranges
-        const faixasOrdenadas = [...tabela.faixas].sort((a, b) => b.min - a.min);
-        if (faixasOrdenadas.length > 0) {
-          valorUnitario = normalizarValor(faixasOrdenadas[0].valor);
-        }
-      }
-    }
-  }
-
-  // Ensure we have a valid price
-  if (!valorUnitario || valorUnitario <= 0) {
-    valorUnitario = fallbackValue;
-  }
-
-  // CREDIT SYSTEM FORMULA:
-  // 1. Calculate what the total WOULD cost if bought all at once
-  const valorTotalIdeal = totalExtras * valorUnitario;
-  
-  // 2. Subtract what was already paid
-  const valorACobrar = Math.max(0, valorTotalIdeal - valorJaPago);
-
-  console.log(`📊 Credit-based pricing: totalExtras=${totalExtras}, valorUnitario=${valorUnitario}, valorTotalIdeal=${valorTotalIdeal}, valorJaPago=${valorJaPago}, valorACobrar=${valorACobrar}`);
-
-  return {
-    valorUnitario,
-    valorACobrar,
-    valorTotalIdeal,
-    totalExtras,
-  };
-}
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -193,11 +53,9 @@ Deno.serve(async (req) => {
     // Rate limit check
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     if (!checkRateLimit(clientIp)) {
-      return new Response(
-        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Muitas requisições. Tente novamente em instantes.', 429);
     }
+
 
     const body: RequestBody = await req.json();
     const { extraCount, requestPayment, galleryToken, visitorId } = body;
@@ -213,41 +71,17 @@ Deno.serve(async (req) => {
 
     // galleryToken is now REQUIRED — UUID access removed
     if (!galleryToken) {
-      return new Response(
-        JSON.stringify({ error: 'galleryToken é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('galleryToken é obrigatório', 400);
     }
 
-    let tokenGallery: { id: string } | null = null;
-    const { data: primaryGallery, error: tokenError } = await supabase
-      .from('galerias')
-      .select('id')
-      .eq('public_token', galleryToken)
-      .single();
 
-    if (!tokenError && primaryGallery) {
-      tokenGallery = primaryGallery;
-    } else {
-      // Fallback: check token aliases for old/rotated tokens
-      const { data: alias } = await supabase
-        .from('gallery_token_aliases')
-        .select('gallery_id')
-        .eq('old_token', galleryToken)
-        .single();
-      if (alias?.gallery_id) {
-        tokenGallery = { id: alias.gallery_id };
-        console.log(`[confirm-selection] Resolved via token alias: ${galleryToken} -> ${alias.gallery_id}`);
-      }
+    const { id: galleryId, error: tokenError } = await resolveGalleryByToken(supabase, galleryToken);
+
+    if (tokenError || !galleryId) {
+      console.error('Gallery not found or token error:', tokenError);
+      return errorResponse('Galeria não encontrada', 404);
     }
 
-    if (!tokenGallery) {
-      return new Response(
-        JSON.stringify({ error: 'Galeria não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    const galleryId = tokenGallery.id;
 
     // ── SERVER-SIDE COUNT: Never trust frontend selectedCount ──
     // For public galleries with visitor: count from visitante_selecoes
@@ -262,11 +96,9 @@ Deno.serve(async (req) => {
         .eq('is_selected', true);
       if (vCountError) {
         console.error('❌ Error counting visitor selections:', vCountError);
-        return new Response(
-          JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return errorResponse('Erro ao contar fotos selecionadas', 500);
       }
+
       selectedCount = visitorCount || 0;
     } else {
       const { count: serverSelectedCount, error: countError } = await supabase
@@ -276,11 +108,9 @@ Deno.serve(async (req) => {
         .eq('is_selected', true);
       if (countError) {
         console.error('❌ Error counting selected photos:', countError);
-        return new Response(
-          JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return errorResponse('Erro ao contar fotos selecionadas', 500);
       }
+
       selectedCount = serverSelectedCount || 0;
     }
     console.log(`🔒 Server-side selected count: ${selectedCount} (frontend sent: ${body.selectedCount}, visitorId: ${visitorId || 'none'})`);
@@ -291,10 +121,8 @@ Deno.serve(async (req) => {
         status_selecao: 'selecao_iniciada',
         updated_at: new Date().toISOString(),
       }).eq('id', galleryId);
-      return new Response(
-        JSON.stringify({ error: 'Nenhuma foto selecionada' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Nenhuma foto selecionada', 400);
+
     }
 
 
@@ -314,24 +142,16 @@ Deno.serve(async (req) => {
 
     if (lockError) {
       console.error('Lock RPC error:', JSON.stringify({ message: lockError.message, code: lockError.code, details: lockError.details, hint: lockError.hint }));
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao processar seleção', 
-          code: lockError.code || 'LOCK_ERROR',
-          details: lockError.message,
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Erro ao processar seleção', 500, lockError.code || 'LOCK_ERROR');
     }
+
 
     if (!lockResult?.locked) {
       const reason = lockResult?.reason || 'unknown';
       console.log(`🔒 Lock denied (visitor=${visitorId || 'none'}, gallery=${galleryId}): ${reason}`);
-      return new Response(
-        JSON.stringify({ error: 'A seleção já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('A seleção já está sendo processada ou foi confirmada', 409, 'ALREADY_PROCESSING');
     }
+
 
     // ── ROLLBACK HELPER: Reset status on any failure after lock ──
     const rollbackGalleryStatus = async () => {
@@ -355,23 +175,21 @@ Deno.serve(async (req) => {
     };
 
     // Gallery data returned from the lock RPC
-    const gallery = lockResult.gallery as {
-      id: string; status: string; status_selecao: string; finalized_at: string | null;
-      user_id: string; session_id: string | null; cliente_id: string | null;
-      fotos_incluidas: number; valor_foto_extra: number; nome_sessao: string | null;
-      configuracoes: Record<string, unknown> | null; public_token: string | null;
-      total_fotos_extras_vendidas: number | null; valor_total_vendido: number | null;
-      regras_congeladas: Record<string, unknown> | null;
+    const gallery = lockResult.gallery as Gallery & {
+      session_id: string | null;
+      nome_sessao: string | null;
+      venda_tipo_cobranca?: string;
     };
+
 
     // 3. Calculate progressive pricing using CREDIT SYSTEM
     // Formula: valor_a_cobrar = (total_extras × valor_faixa) - valor_já_pago
     let valorUnitario = 0;
     let valorTotal = 0;
     
-    // Parse sale settings to get chargeType
-    const configuracoes = gallery.configuracoes as { saleSettings?: { mode?: string; paymentMethod?: string; chargeType?: string } } | null;
-    const chargeType = configuracoes?.saleSettings?.chargeType || 'only_extras';
+    // Use explicit column from contract, fallback to JSON
+    const chargeType = gallery.venda_tipo_cobranca || (gallery.configuracoes?.saleSettings?.chargeType) || 'only_extras';
+
     
     // Calculate extras needed based on chargeType:
     // - 'all_selected': charge for ALL selected photos (for public/paid galleries)
@@ -498,8 +316,9 @@ Deno.serve(async (req) => {
     // 4. Parse sale settings to determine if payment is required
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
     // (configuracoes already parsed above for chargeType)
-    const saleMode = configuracoes?.saleSettings?.mode;
-    const configuredPaymentMethod = configuracoes?.saleSettings?.paymentMethod;
+    const saleMode = gallery.venda_modo || (gallery.configuracoes?.saleSettings?.mode);
+    const configuredPaymentMethod = gallery.venda_pagamento_provedor || (gallery.configuracoes?.saleSettings?.paymentMethod);
+
     // Server-side rule: if mode is sale_with_payment AND there's value to charge, payment is required
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
@@ -962,26 +781,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        selectedCount,
-        extraCount: extrasCount,
-        valorUnitario,
-        valorTotal,
-        message: 'Seleção confirmada com sucesso',
-        requiresPayment: !!paymentResponse,
-        checkoutUrl: paymentResponse?.checkoutUrl,
-        provedor: paymentResponse?.provedor,
-        cobrancaId: paymentResponse?.cobrancaId,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return successResponse({
+      success: true,
+      selectedCount,
+      extraCount: extrasCount,
+      valorUnitario,
+      valorTotal,
+      message: 'Seleção confirmada com sucesso',
+      requiresPayment: !!paymentResponse,
+      checkoutUrl: paymentResponse?.checkoutUrl,
+      provedor: paymentResponse?.provedor,
+      cobrancaId: paymentResponse?.cobrancaId,
+    });
   } catch (error) {
     console.error('Confirm selection error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Erro interno do servidor' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse('Erro interno do servidor', 500);
   }
+
 });
