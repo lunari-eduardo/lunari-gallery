@@ -96,11 +96,9 @@ Deno.serve(async (req) => {
         .eq('is_selected', true);
       if (vCountError) {
         console.error('❌ Error counting visitor selections:', vCountError);
-        return new Response(
-          JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return errorResponse('Erro ao contar fotos selecionadas', 500);
       }
+
       selectedCount = visitorCount || 0;
     } else {
       const { count: serverSelectedCount, error: countError } = await supabase
@@ -110,11 +108,9 @@ Deno.serve(async (req) => {
         .eq('is_selected', true);
       if (countError) {
         console.error('❌ Error counting selected photos:', countError);
-        return new Response(
-          JSON.stringify({ error: 'Erro ao contar fotos selecionadas' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return errorResponse('Erro ao contar fotos selecionadas', 500);
       }
+
       selectedCount = serverSelectedCount || 0;
     }
     console.log(`🔒 Server-side selected count: ${selectedCount} (frontend sent: ${body.selectedCount}, visitorId: ${visitorId || 'none'})`);
@@ -125,10 +121,8 @@ Deno.serve(async (req) => {
         status_selecao: 'selecao_iniciada',
         updated_at: new Date().toISOString(),
       }).eq('id', galleryId);
-      return new Response(
-        JSON.stringify({ error: 'Nenhuma foto selecionada' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Nenhuma foto selecionada', 400);
+
     }
 
 
@@ -148,15 +142,9 @@ Deno.serve(async (req) => {
 
     if (lockError) {
       console.error('Lock RPC error:', JSON.stringify({ message: lockError.message, code: lockError.code, details: lockError.details, hint: lockError.hint }));
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao processar seleção', 
-          code: lockError.code || 'LOCK_ERROR',
-          details: lockError.message,
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Erro ao processar seleção', 500, lockError.code || 'LOCK_ERROR');
     }
+
 
     if (!lockResult?.locked) {
       const reason = lockResult?.reason || 'unknown';
