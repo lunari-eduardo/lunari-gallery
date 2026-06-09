@@ -24,6 +24,7 @@
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
+import { logWebhookEvent, getCorrelationId } from '../_shared/audit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +51,26 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const correlationId = getCorrelationId(req);
+
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const body = await req.json();
+    const { event, payment } = body;
+
+    // Log webhook event immediately
+    await logWebhookEvent({
+      correlationId,
+      provider: 'asaas',
+      externalId: payment?.id,
+      eventName: event,
+      payload: body,
+      status: 'pending'
+    });
+
     // ============================================================
     // VALIDAÇÃO DE TOKEN ASAAS
     // ============================================================
@@ -61,6 +81,14 @@ Deno.serve(async (req) => {
       const receivedToken = req.headers.get('asaas-access-token');
       if (!receivedToken || receivedToken !== asaasWebhookToken) {
         console.error('❌ Token Asaas inválido ou ausente');
+        await logWebhookEvent({
+          correlationId,
+          provider: 'asaas',
+          externalId: payment?.id,
+          payload: body,
+          status: 'error',
+          errorLog: 'Invalid webhook token'
+        });
         return new Response(
           JSON.stringify({ error: 'Invalid webhook token' }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -68,13 +96,6 @@ Deno.serve(async (req) => {
       }
       console.log('✅ Token Asaas válido');
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const body = await req.json();
-    const { event, payment } = body;
 
     console.log(`🔔 Asaas gallery webhook: event=${event}, paymentId=${payment?.id}, status=${payment?.status}`);
 

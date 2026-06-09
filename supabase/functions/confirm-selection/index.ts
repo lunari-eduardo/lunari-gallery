@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
+import { logAuditEvent, getCorrelationId } from '../_shared/audit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -180,10 +181,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const correlationId = getCorrelationId(req);
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Definir correlation_id na sessão do Postgres para as triggers usarem
+    await supabase.rpc('set_config', { name: 'app.correlation_id', value: correlationId });
 
     // Rate limit check
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -196,6 +201,15 @@ Deno.serve(async (req) => {
 
     const body: RequestBody = await req.json();
     const { extraCount, requestPayment, galleryToken, visitorId } = body;
+
+    // Log início do processo
+    await logAuditEvent({
+      correlationId,
+      eventType: 'CONFIRM_SELECTION_START',
+      source: 'edge_function',
+      sourceName: 'confirm-selection',
+      payload: { galleryToken, visitorId, extraCount, requestPayment }
+    });
 
     // galleryToken is now REQUIRED — UUID access removed
     if (!galleryToken) {
