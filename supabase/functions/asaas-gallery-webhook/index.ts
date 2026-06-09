@@ -24,11 +24,11 @@
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
-import { logWebhookEvent, getCorrelationId } from '../_shared/audit.ts';
+import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-correlation-id',
 };
 
 async function notifyPaymentConfirmed(paymentId: string) {
