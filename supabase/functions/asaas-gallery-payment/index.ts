@@ -450,6 +450,9 @@ Deno.serve(async (req) => {
         repassarTaxasProcessamento: !settings.absorverTaxa,
         repassarTaxaAntecipacao: false,
       },
+      snapshot_fotos_incluidas: body.snapshotFotosIncluidas || 0,
+      snapshot_regras_congeladas: body.snapshotRegrasCongeladas || null,
+      correlation_id: body.correlationId || null,
     };
 
     if (finalBillingType === 'PIX' && pixData) {
