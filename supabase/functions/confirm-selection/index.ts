@@ -53,11 +53,9 @@ Deno.serve(async (req) => {
     // Rate limit check
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     if (!checkRateLimit(clientIp)) {
-      return new Response(
-        JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Muitas requisições. Tente novamente em instantes.', 429);
     }
+
 
     const body: RequestBody = await req.json();
     const { extraCount, requestPayment, galleryToken, visitorId } = body;
@@ -73,11 +71,9 @@ Deno.serve(async (req) => {
 
     // galleryToken is now REQUIRED — UUID access removed
     if (!galleryToken) {
-      return new Response(
-        JSON.stringify({ error: 'galleryToken é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('galleryToken é obrigatório', 400);
     }
+
 
     const { id: galleryId, error: tokenError } = await resolveGalleryByToken(supabase, galleryToken);
 
@@ -165,11 +161,9 @@ Deno.serve(async (req) => {
     if (!lockResult?.locked) {
       const reason = lockResult?.reason || 'unknown';
       console.log(`🔒 Lock denied (visitor=${visitorId || 'none'}, gallery=${galleryId}): ${reason}`);
-      return new Response(
-        JSON.stringify({ error: 'A seleção já está sendo processada ou foi confirmada', code: 'ALREADY_PROCESSING', reason }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('A seleção já está sendo processada ou foi confirmada', 409, 'ALREADY_PROCESSING');
     }
+
 
     // ── ROLLBACK HELPER: Reset status on any failure after lock ──
     const rollbackGalleryStatus = async () => {
