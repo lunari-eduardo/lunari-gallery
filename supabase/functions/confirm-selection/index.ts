@@ -799,26 +799,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        selectedCount,
-        extraCount: extrasCount,
-        valorUnitario,
-        valorTotal,
-        message: 'Seleção confirmada com sucesso',
-        requiresPayment: !!paymentResponse,
-        checkoutUrl: paymentResponse?.checkoutUrl,
-        provedor: paymentResponse?.provedor,
-        cobrancaId: paymentResponse?.cobrancaId,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return successResponse({
+      success: true,
+      selectedCount,
+      extraCount: extrasCount,
+      valorUnitario,
+      valorTotal,
+      message: 'Seleção confirmada com sucesso',
+      requiresPayment: !!paymentResponse,
+      checkoutUrl: paymentResponse?.checkoutUrl,
+      provedor: paymentResponse?.provedor,
+      cobrancaId: paymentResponse?.cobrancaId,
+    });
   } catch (error) {
     console.error('Confirm selection error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Erro interno do servidor' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse('Erro interno do servidor', 500);
   }
+
 });
