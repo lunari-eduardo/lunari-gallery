@@ -400,7 +400,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-3">
                 {paginatedSelectGalleries.map((gallery) => {
                   const galeria = supabaseGalleries.find(g => g.id === gallery.id);
-                  const canReactivate = ['selection_completed', 'expired', 'aguardando_pagamento'].includes(gallery.status) || (galeria?.status_selecao === 'aguardando_pagamento' || gallery.statusSelecao === 'aguardando_pagamento');
+                  const canReactivate = ['selection_completed', 'expired'].includes(gallery.status) || gallery.selectionStatus === 'blocked' || galeria?.status_selecao === 'aguardando_pagamento';
                   return (
                     <GalleryCard
                       key={gallery.id}
