@@ -37,6 +37,9 @@ interface CreateLinkRequest {
   qtdFotos?: number;
   sessionId?: string;
   visitorId?: string;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: any;
+  correlationId?: string;
   
   // Campos comuns
   valor: number;
