@@ -4882,6 +4882,7 @@ export type Database = {
       }
       refund_photo_credit: { Args: { _user_id: string }; Returns: undefined }
       register_referral: { Args: { _referral_code: string }; Returns: boolean }
+      release_advisory_lock: { Args: { lock_key: string }; Returns: boolean }
       renew_subscription_credits: {
         Args: { _amount: number; _user_id: string }
         Returns: undefined
@@ -4901,6 +4902,10 @@ export type Database = {
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }
+      try_acquire_advisory_lock: {
+        Args: { lock_key: string }
+        Returns: boolean
+      }
       try_lock_gallery_selection: {
         Args: { p_gallery_id: string }
         Returns: Json
