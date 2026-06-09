@@ -63,6 +63,9 @@ interface RequestBody {
   };
   remoteIp?: string;
   installmentCount?: number;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: any;
+  correlationId?: string;
 }
 
 Deno.serve(async (req) => {
