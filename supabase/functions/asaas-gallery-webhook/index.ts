@@ -331,6 +331,16 @@ async function processPayment(
 
   console.log(`✅ Asaas webhook processed: cobrança ${cobrancaId} — event=${event}`);
 
+  // 7. Update Audit Log to Success
+  const correlationId = getCorrelationId(new Request('http://localhost', { headers: { 'x-correlation-id': '' } })); // Dummy request for ID or we should pass it
+  await logWebhookEvent({
+    provider: 'asaas',
+    externalId: payment.id as string,
+    eventName: event,
+    payload: payment,
+    status: 'success'
+  });
+
   return new Response(
     JSON.stringify({ received: true, processed: true }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
