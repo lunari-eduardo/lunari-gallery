@@ -1047,6 +1047,7 @@ export type Database = {
           data_pagamento: string | null
           data_vencimento: string | null
           id: string
+          mp_payment_id: string | null
           numero_parcela: number
           status: string
           taxa_antecipacao: number | null
@@ -1066,6 +1067,7 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento?: string | null
           id?: string
+          mp_payment_id?: string | null
           numero_parcela: number
           status?: string
           taxa_antecipacao?: number | null
@@ -1085,6 +1087,7 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento?: string | null
           id?: string
+          mp_payment_id?: string | null
           numero_parcela?: number
           status?: string
           taxa_antecipacao?: number | null
