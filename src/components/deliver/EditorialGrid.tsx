@@ -1,4 +1,4 @@
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useMemo, useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 
