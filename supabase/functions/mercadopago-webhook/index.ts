@@ -7,9 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
 };
 
-
 // E-mail notification now handled by shared processor
-
 
 interface WebhookPayload {
   id?: number;
@@ -86,11 +84,6 @@ Deno.serve(async (req) => {
       
       if (!xSignature || !xRequestId) {
         console.error('❌ Headers x-signature ou x-request-id ausentes');
-        await supabase.from('webhook_logs').insert({
-          source: 'mercadopago',
-          event_type: 'signature_invalid',
-          payload: { raw: rawBody, reason: 'Missing signature headers' },
-        });
         return new Response('Unauthorized', { status: 401, headers: corsHeaders });
       }
 
@@ -108,11 +101,9 @@ Deno.serve(async (req) => {
         return new Response('Unauthorized', { status: 401, headers: corsHeaders });
       }
 
-      // Build manifest
       const dataId = payload.data?.id || '';
       const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
-      // Compute HMAC-SHA256
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw', encoder.encode(mpWebhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
@@ -123,17 +114,11 @@ Deno.serve(async (req) => {
 
       if (computedHash !== v1) {
         console.error('❌ Assinatura HMAC inválida para Mercado Pago');
-        await supabase.from('webhook_logs').insert({
-          source: 'mercadopago',
-          event_type: 'signature_invalid',
-          payload: { raw: rawBody, manifest, computed: computedHash, received: v1 },
-        });
         return new Response('Unauthorized', { status: 401, headers: corsHeaders });
       }
       console.log('✅ Assinatura Mercado Pago válida');
     }
 
-    // Processar apenas eventos de pagamento
     if (payload.type !== 'payment') {
       console.log('Ignorando evento não-payment:', payload.type);
       return new Response('OK', { status: 200, headers: corsHeaders });
@@ -145,11 +130,8 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    // Try to get payment details - first check if it's from a connected account
-    // by looking for the cobranca or credit_purchase with this payment ID
-    let mpPayment: Record<string, unknown> | null = null;
+    let mpPayment: Record<string, any> | null = null;
 
-    // First, try with global token (for credit purchases)
     if (mpAccessToken) {
       const globalResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { 'Authorization': `Bearer ${mpAccessToken}` },
@@ -157,11 +139,9 @@ Deno.serve(async (req) => {
       
       if (globalResponse.ok) {
         mpPayment = await globalResponse.json();
-        console.log('Pagamento encontrado com token global');
       }
     }
 
-    // If not found with global token, try to find cobranca and use photographer's token
     if (!mpPayment) {
       const { data: cobranca } = await supabase
         .from('cobrancas')
@@ -185,7 +165,6 @@ Deno.serve(async (req) => {
 
           if (photographerResponse.ok) {
             mpPayment = await photographerResponse.json();
-            console.log('Pagamento encontrado com token do fotógrafo');
           }
         }
       }
@@ -196,20 +175,12 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    console.log('Pagamento MP:', {
-      id: mpPayment.id,
-      status: mpPayment.status,
-      external_reference: mpPayment.external_reference,
-    });
-
     const externalReference = mpPayment.external_reference as string;
     if (!externalReference) {
       console.log('Pagamento sem external_reference');
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    // Determine if this is a credit purchase or gallery charge
-    // Check credit_purchases first
     const { data: purchase } = await supabase
       .from('credit_purchases')
       .select('*')
@@ -217,7 +188,6 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (purchase) {
-      // This is a CREDIT PURCHASE (photographer buying credits from Lunari)
       const result = await processCreditPurchase(supabase, purchase, mpPayment);
       if (!result.success) {
         console.error('Erro ao processar compra de créditos:', result.error);
@@ -225,7 +195,6 @@ Deno.serve(async (req) => {
         console.log('Compra de créditos processada com sucesso');
       }
     } else {
-      // Check if it's a gallery charge (cobrancas)
       const { data: cobranca } = await supabase
         .from('cobrancas')
         .select('*')
@@ -233,7 +202,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (cobranca) {
-        // This is a GALLERY CHARGE (client paying photographer for extra photos)
         console.log('Processando como cobrança de galeria:', externalReference);
 
         if (cobranca.status === 'pago') {
@@ -245,7 +213,7 @@ Deno.serve(async (req) => {
           const result = await processGalleryPayment(supabase, {
             provider: 'mercadopago',
             externalId: String(mpPayment.id),
-            installmentNumber: 1, // MP single payment for now in this context
+            installmentNumber: 1,
             totalInstallments: 1,
             value: Number(mpPayment.transaction_amount),
             netValue: Number(mpPayment.transaction_details?.net_received_amount ?? mpPayment.transaction_amount),
@@ -269,12 +237,6 @@ Deno.serve(async (req) => {
       }
     }
 
-      } else {
-        console.log('external_reference não encontrado em nenhuma tabela:', externalReference);
-      }
-    }
-
-    // Mark as success in audit log
     await logWebhookEvent({
       correlationId,
       provider: 'mercadopago',
