@@ -40,6 +40,7 @@ const statusTranslation: Record<string, GalleryStatus | SelectionStatus> = {
   'em_andamento': 'in_progress',
   'selecao_completa': 'confirmed',
   'bloqueado': 'blocked',
+  'aguardando_pagamento': 'blocked',
 };
 
 const galleryStatusConfig: Record<GalleryStatus, { label: string; className: string; icon: React.ElementType }> = {
