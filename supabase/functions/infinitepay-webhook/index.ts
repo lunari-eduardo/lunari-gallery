@@ -169,19 +169,34 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 2. Log Inicial e Parse
+    // 2. Audit Log and Idempotency Check
     payload = JSON.parse(rawBody);
     const orderNsu = payload?.order_nsu;
+    const provider = 'infinitepay';
+    const externalId = orderNsu || 'unknown';
+    const eventName = payload?.status || 'payment_done'; // InfinitePay simplified events
+    const correlationId = getCorrelationId(req);
 
-    const { data: initialLog } = await supabase.from('webhook_logs').insert({
-      provedor: 'infinitepay',
+    await logWebhookEvent({
+      correlationId,
+      provider,
+      externalId,
+      eventName,
       payload: payload,
-      headers: Object.fromEntries(req.headers.entries()),
-      status: 'received',
-      order_nsu: orderNsu || null,
-    }).select('id').single();
-    
-    initialLogId = initialLog?.id;
+      status: 'received'
+    });
+
+    const { isAlreadyProcessed, lockAcquired } = await acquireWebhookLock(provider, externalId, eventName);
+
+    if (isAlreadyProcessed) {
+      console.log(`ℹ️ Webhook ${provider}:${externalId}:${eventName} already processed successfully.`);
+      return new Response(JSON.stringify({ success: true, message: 'Already processed' }), { status: 200, headers: corsHeaders });
+    }
+
+    if (!lockAcquired) {
+      console.warn(`🔒 Could not acquire lock for webhook ${provider}:${externalId}:${eventName}.`);
+      return new Response(JSON.stringify({ error: 'Processing' }), { status: 409, headers: corsHeaders });
+    }
 
     if (!orderNsu) return new Response('Missing order_nsu', { status: 400, headers: corsHeaders });
 
