@@ -1,4 +1,4 @@
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useMemo, useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 
@@ -9,16 +9,41 @@ interface EditorialGridProps {
 }
 
 export function EditorialGrid({ children, className, forcedViewport }: EditorialGridProps) {
+  const [containerWidth, setContainerWidth] = useState(1200);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const gridColsClass = useMemo(() => {
-    if (forcedViewport === 'mobile') return 'grid-cols-[repeat(var(--gallery-cols-m),1fr)]';
-    if (forcedViewport === 'tablet') return 'grid-cols-[repeat(var(--gallery-cols-t),1fr)]';
-    if (forcedViewport === 'desktop') return 'grid-cols-[repeat(var(--gallery-cols-d),1fr)]';
+    // Se estivermos em um preview forçado (modal), usamos o containerWidth em vez de media queries
+    let viewport = forcedViewport;
+    if (!viewport) {
+      if (containerWidth < 480) viewport = 'mobile';
+      else if (containerWidth < 1024) viewport = 'tablet';
+      else viewport = 'desktop';
+    }
+
+    if (viewport === 'mobile') return 'grid-cols-[repeat(var(--gallery-cols-m),1fr)]';
+    if (viewport === 'tablet') return 'grid-cols-[repeat(var(--gallery-cols-t),1fr)]';
+    if (viewport === 'desktop') return 'grid-cols-[repeat(var(--gallery-cols-d),1fr)]';
     
     return "grid-cols-[repeat(var(--gallery-cols-m),1fr)] sm:grid-cols-[repeat(var(--gallery-cols-t),1fr)] lg:grid-cols-[repeat(var(--gallery-cols-d),1fr)]";
-  }, [forcedViewport]);
+  }, [forcedViewport, containerWidth]);
 
   return (
     <div 
+      ref={containerRef}
       className={cn(
         "grid",
         gridColsClass,
@@ -31,6 +56,7 @@ export function EditorialGrid({ children, className, forcedViewport }: Editorial
     </div>
   );
 }
+
 
 interface EditorialItemProps {
   children: ReactNode;

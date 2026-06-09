@@ -38,7 +38,7 @@ export function DeliverPhotoGrid({
   const { theme } = useGalleryDisplayTheme();
   const engine = theme.layout.engine || 'editorial-grid';
 
-  const renderContent = (photo: DeliverPhoto, index: number) => {
+  const renderContent = (photo: DeliverPhoto, index: number, layoutType: 'masonry' | 'editorial') => {
     const paths: PhotoPaths = {
       storageKey: photo.storageKey,
       thumbPath: photo.thumbPath,
@@ -46,47 +46,50 @@ export function DeliverPhotoGrid({
       width: photo.width,
       height: photo.height,
     };
-    const url = getPhotoUrl(paths, 'preview');
+    
+    // Fallback URL construct
+    const url = photo.previewPath || getPhotoUrl(paths, 'preview');
+    const aspectRatio = photo.width / photo.height;
 
     return (
       <div 
         className={cn(
           "group relative cursor-pointer overflow-hidden w-full bg-zinc-100 dark:bg-zinc-800 rounded-none",
-          isBlueprint ? "flex items-center justify-center aspect-[var(--aspect-ratio)]" : "h-full"
+          layoutType === 'editorial' ? "h-full" : "h-auto"
         )}
-        style={{ '--aspect-ratio': `${photo.width}/${photo.height}` } as any}
+        style={{ 
+          '--aspect-ratio': aspectRatio,
+          aspectRatio: layoutType === 'editorial' ? 'auto' : `${photo.width}/${photo.height}`
+        } as any}
       >
         {isBlueprint ? (
-          <div className="flex flex-col items-center gap-2 opacity-20">
+          <div className="flex flex-col items-center justify-center w-full h-full min-h-[150px] gap-2 opacity-20 border border-dashed border-zinc-400">
             <ImageIcon className="w-8 h-8" />
             <span className="text-[10px] uppercase tracking-wider font-medium">{photo.width}x{photo.height}</span>
           </div>
         ) : (
           <>
             {photo.mimeType?.startsWith('video/') ? (
-              <>
-                <video
-                  src={url}
-                  muted
-                  autoPlay
-                  loop
-                  playsInline
-                  className="w-full h-full object-cover block transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale)]"
-                  onClick={() => onPhotoClick(index)}
-                />
-                <div className="absolute top-3 left-3 p-1.5 backdrop-blur-md bg-black/20 text-white rounded-full pointer-events-none">
-                  <Play className="w-4 h-4 fill-white" />
-                </div>
-              </>
+              <video
+                src={url}
+                muted
+                autoPlay
+                loop
+                playsInline
+                className="w-full h-full object-cover block transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale,1.02)]"
+                onClick={() => onPhotoClick(index)}
+              />
             ) : (
               <img
                 src={url}
                 alt={photo.originalFilename}
                 loading="lazy"
-                className="w-full h-full object-cover block transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale)]"
+                className={cn(
+                  "w-full h-full block transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale,1.02)]",
+                  layoutType === 'editorial' ? "object-cover" : "object-contain"
+                )}
                 onClick={() => onPhotoClick(index)}
                 onError={(e) => {
-                  // Fallback para quando a imagem falha - mostra estilo blueprint
                   e.currentTarget.style.display = 'none';
                   const parent = e.currentTarget.parentElement;
                   if (parent) {
@@ -102,7 +105,6 @@ export function DeliverPhotoGrid({
               />
             )}
             
-            {/* Visual refinement: Subtle dark gradient at bottom on hover */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             
             <button
@@ -121,19 +123,24 @@ export function DeliverPhotoGrid({
     );
   };
 
+
   const containerBg = bgColor ? { backgroundColor: bgColor } : undefined;
 
   if (engine === 'masonry-classic') {
     return (
       <div className="min-h-[50vh] px-3 sm:px-6 lg:px-8 py-12" style={containerBg}>
-        <MasonryGrid gap={theme.layout.gap} className="max-w-7xl mx-auto">
+        <MasonryGrid 
+          gap={theme.layout.gap} 
+          className="max-w-7xl mx-auto"
+          forcedCols={theme.layout.columns.desktop} // Simplificando para teste
+        >
           {photos.map((photo, index) => (
             <MasonryItem 
               key={photo.id} 
               photoWidth={photo.width} 
               photoHeight={photo.height}
             >
-              {renderContent(photo, index)}
+              {renderContent(photo, index, 'masonry')}
             </MasonryItem>
           ))}
         </MasonryGrid>
@@ -151,10 +158,11 @@ export function DeliverPhotoGrid({
             photoWidth={photo.width} 
             photoHeight={photo.height}
           >
-            {renderContent(photo, index)}
+            {renderContent(photo, index, 'editorial')}
           </EditorialItem>
         ))}
       </EditorialGrid>
     </div>
   );
 }
+
