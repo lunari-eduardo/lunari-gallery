@@ -833,7 +833,7 @@ Deno.serve(async (req) => {
     const { error: logError } = await supabase.from('galeria_acoes').insert({
       galeria_id: galleryId,
       tipo: 'cliente_confirmou',
-      descricao: `Cliente confirmou seleção de ${selectedCount || 0} fotos${extrasCount ? ` (${extrasCount} extras - R$ ${valorTotal.toFixed(2)})` : ''}`,
+      descricao: `Cliente confirmou seleção de ${selectedCount || 0} fotos${extrasACobrar ? ` (${extrasACobrar} extras - R$ ${valorTotal.toFixed(2)})` : ''}`,
       user_id: null,
     });
 
