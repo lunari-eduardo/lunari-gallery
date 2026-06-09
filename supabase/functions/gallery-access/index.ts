@@ -83,18 +83,8 @@ serve(async (req) => {
       visitorSelectionStatus = visitor?.status_selecao;
     }
 
-    // Selection status
-    let currentSelectionStatus = gallery.status_selecao;
-    let visitorSelectionStatus = null;
+    // Selection status logic was previously duplicated here; keeping primary declarations above.
 
-    if (visitorId) {
-      const { data: visitor } = await supabase
-        .from('galeria_visitantes')
-        .select('status_selecao')
-        .eq('id', visitorId)
-        .maybeSingle();
-      visitorSelectionStatus = visitor?.status_selecao;
-    }
 
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
     const isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
