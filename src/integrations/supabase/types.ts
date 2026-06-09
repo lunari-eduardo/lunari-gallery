@@ -3878,6 +3878,66 @@ export type Database = {
           },
         ]
       }
+      system_audit_logs: {
+        Row: {
+          correlation_id: string
+          created_at: string | null
+          error_message: string | null
+          event_type: string
+          gallery_id: string | null
+          id: string
+          payload: Json | null
+          session_id: string | null
+          source: string
+          source_name: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          correlation_id: string
+          created_at?: string | null
+          error_message?: string | null
+          event_type: string
+          gallery_id?: string | null
+          id?: string
+          payload?: Json | null
+          session_id?: string | null
+          source: string
+          source_name?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          correlation_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string
+          gallery_id?: string | null
+          id?: string
+          payload?: Json | null
+          session_id?: string | null
+          source?: string
+          source_name?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_audit_logs_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galerias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_audit_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "clientes_sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_cache: {
         Row: {
           created_at: string
@@ -4447,6 +4507,45 @@ export type Database = {
           },
         ]
       }
+      webhook_events_audit: {
+        Row: {
+          correlation_id: string | null
+          created_at: string | null
+          error_log: string | null
+          event_name: string | null
+          external_id: string | null
+          id: string
+          payload: Json | null
+          processed_at: string | null
+          processed_status: string | null
+          provider: string
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string | null
+          error_log?: string | null
+          event_name?: string | null
+          external_id?: string | null
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          processed_status?: string | null
+          provider: string
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string | null
+          error_log?: string | null
+          event_name?: string | null
+          external_id?: string | null
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          processed_status?: string | null
+          provider?: string
+        }
+        Relationships: []
+      }
       webhook_logs: {
         Row: {
           created_at: string | null
@@ -4696,6 +4795,7 @@ export type Database = {
         Args: { p_galeria_id: string }
         Returns: Json
       }
+      get_current_correlation_id: { Args: never; Returns: string }
       get_formulario_resposta_publica: {
         Args: { p_token: string }
         Returns: Json
