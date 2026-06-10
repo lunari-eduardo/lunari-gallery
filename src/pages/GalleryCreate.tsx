@@ -795,6 +795,10 @@ export default function GalleryCreate() {
         origin: hasSessionId ? 'gestao' : 'manual',
         // Pass frozen rules from Gestão OR generated from discount packages
         regrasCongeladas: finalRegrasCongeladas,
+        // Sync legacy top-level sale fields
+        venda_modo: saleMode,
+        venda_pagamento_provedor: selectedPaymentMethod,
+        venda_tipo_cobranca: chargeType,
         // Include all configuration settings including font
         configuracoes: {
           watermark: {
@@ -947,6 +951,10 @@ export default function GalleryCreate() {
               mensagemBoasVindas: welcomeMessage,
               prazoSelecaoDias: customDays,
               valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
+              // Sync legacy top-level sale fields
+              venda_modo: saleMode,
+              venda_pagamento_provedor: selectedPaymentMethod,
+              venda_tipo_cobranca: chargeType,
               // Include regrasCongeladas for standalone progressive pricing
               ...(finalRegrasCongeladas && {
                 regrasCongeladas: finalRegrasCongeladas
@@ -1050,6 +1058,9 @@ export default function GalleryCreate() {
               sessionFont: sessionFont,
               titleCaseMode: titleCaseMode
             },
+            venda_modo: saleMode,
+            venda_pagamento_provedor: selectedPaymentMethod,
+            venda_tipo_cobranca: chargeType,
             ...(finalRegrasCongeladas && {
               regrasCongeladas: finalRegrasCongeladas
             })
@@ -1105,7 +1116,10 @@ export default function GalleryCreate() {
             clientMode: clientMode,
             sessionFont: sessionFont,
             titleCaseMode: titleCaseMode
-          }
+          },
+          venda_modo: saleMode,
+          venda_pagamento_provedor: selectedPaymentMethod,
+          venda_tipo_cobranca: chargeType,
         });
         if (result?.id) {
           navigate('/');
