@@ -192,10 +192,13 @@ export function SelectionSummary({
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Já pago</span>
-                  <span className="font-medium text-muted-foreground">-R$ {valorJaPago.toFixed(2)}</span>
+                  <span className="font-medium text-muted-foreground">
+                    {displayTotal === 0 ? '' : '-'}R$ {valorJaPago.toFixed(2)}
+                  </span>
                 </div>
               </>
             )}
+
             
             <div className="flex items-center justify-between">
               <span className="font-medium">Valor a pagar</span>
