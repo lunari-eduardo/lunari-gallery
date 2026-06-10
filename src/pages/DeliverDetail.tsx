@@ -33,6 +33,7 @@ import { getPhotoUrl } from '@/lib/photoUrl';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { THEME_REGISTRY, DEFAULT_THEME_ID } from '@/components/gallery/themes/registry';
+import { ThemePreviewCanvas } from '@/components/dashboard/themes/ThemePreviewCanvas';
 
 import { isPast } from 'date-fns';
 
