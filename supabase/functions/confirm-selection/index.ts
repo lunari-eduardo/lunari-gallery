@@ -590,8 +590,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. NOW it's safe to confirm selection - payment was created successfully (if required)
-    // CONDITIONAL FINALIZATION: Only finalize immediately if no payment is required
+    // 7. CRITICAL SAFETY CHECK: If payment was required, BLOCK gallery confirmation if checkout failed
+    if (shouldCreatePayment && (!paymentResponse || (!paymentResponse.checkoutUrl && !paymentResponse.provedor))) {
+      console.error('❌ CRITICAL: Payment was required but no response/link generated. Blocking gallery finalization.');
+      await rollbackGalleryStatus();
+      return new Response(
+        JSON.stringify({
+          error: 'Erro ao gerar link de pagamento. Por favor, tente novamente.',
+          code: 'PAYMENT_GENERATION_FAILED'
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 8. Confirm gallery selection (atomic status update)
+    // Se statusPagamento for 'pendente', a galeria não é finalizada ('selecao_completa')
+    // mas sim colocada em espera de pagamento ('aguardando_pagamento').
     const shouldFinalizeNow = !shouldCreatePayment;
 
     if (visitorId) {
