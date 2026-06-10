@@ -29,7 +29,7 @@ export const LUNARI_THEME: GalleryTheme = {
   },
   featured: {
     ...DEFAULT_GALLERY_THEME.featured,
-    enabled: false // No highlights in Lunari by default
+    enabled: false
   }
 };
 

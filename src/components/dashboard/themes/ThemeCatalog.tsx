@@ -58,7 +58,7 @@ export function ThemeCatalog({
               <div className="flex flex-col items-center">
                 <span className="font-bold text-sm tracking-tight">{theme.name}</span>
                 <span className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-medium opacity-70">
-                  {theme.layout.engine === 'editorial-grid' ? 'Editorial' : 'Classic Masonry'}
+                  {theme.id === 'editorial' ? 'Editorial' : theme.id === 'clean' ? 'Classic' : 'Contemporâneo'}
                 </span>
               </div>
 
