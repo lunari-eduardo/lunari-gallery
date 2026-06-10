@@ -1282,8 +1282,8 @@ export default function ClientGallery() {
     );
   }
 
-  // Error state - gallery not found or not available
-  if (galleryError || !gallery) {
+  // Error state - gallery not found or not available (BUT skip if password/visitor is required)
+  if ((galleryError || !gallery) && !requiresPassword && !requiresVisitor) {
     const errorMessage = galleryError?.message || '';
     const isNotAvailable = errorMessage === 'Galeria não disponível';
     const isPublishing = errorMessage === 'GALLERY_PUBLISHING';
