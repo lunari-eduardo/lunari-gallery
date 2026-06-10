@@ -66,9 +66,10 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
       // Logic for determining if it's featured: 
       // 1. Explicitly marked as weight 1 or 2
       // 2. Or part of the auto-featured logic (approx 30%)
-      const isExplicitlyFeatured = photo.peso_visual === 1 || photo.peso_visual === 2;
-      const isAutoFeatured = !photo.peso_visual && (parseInt(photo.id.slice(-2), 16) % 3 === 0);
-      const isFeatured = isExplicitlyFeatured || isAutoFeatured;
+      // Use index hash for pseudo-randomness
+      const isAutoFeatured = (parseInt(photo.id.slice(-2), 16) % 10) < 3; // ~30%
+      const isFeatured = isAutoFeatured;
+
 
       // Calculate initial width at targetRowHeight
       const aspectRatio = photo.width && photo.height ? photo.width / photo.height : 1.5;
@@ -159,7 +160,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
                 className="overflow-hidden bg-zinc-100"
               >
                 <img
-                  src={item.photo.previewPath || ''}
+                  src={item.photo.previewUrl || item.photo.thumbnailUrl}
                   alt={item.photo.filename}
                   className="w-full h-full object-cover"
                   loading="lazy"
