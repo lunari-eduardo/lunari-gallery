@@ -83,6 +83,7 @@ interface MasonryItemProps {
   className?: string;
   photoWidth?: number;
   photoHeight?: number;
+  span?: number;
 }
 
 export function MasonryItem({ children, className }: MasonryItemProps) {
