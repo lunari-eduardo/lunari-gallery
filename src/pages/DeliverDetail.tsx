@@ -82,6 +82,7 @@ export default function DeliverDetail() {
   const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [useCustomTheme, setUseCustomTheme] = useState(false);
   const [themeOverrides, setThemeOverrides] = useState<any>({});
+  const [previewViewport, setPreviewViewport] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
 
 
   const gallery = useMemo(() => getGallery(id || ''), [id, galleries]);
@@ -465,44 +466,44 @@ export default function DeliverDetail() {
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-medium">Preview do Tema: {THEME_REGISTRY[activeThemeId]?.name}</h4>
                 <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
-                  <Button variant="ghost" size="icon" className="h-8 w-8"><Smartphone className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8"><Tablet className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 bg-background shadow-sm"><Monitor className="h-4 w-4" /></Button>
+                  <Button 
+                    variant={previewViewport === 'mobile' ? 'secondary' : 'ghost'} 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={() => setPreviewViewport('mobile')}
+                  >
+                    <Smartphone className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant={previewViewport === 'tablet' ? 'secondary' : 'ghost'} 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={() => setPreviewViewport('tablet')}
+                  >
+                    <Tablet className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant={previewViewport === 'desktop' ? 'secondary' : 'ghost'} 
+                    size="icon" 
+                    className={cn("h-8 w-8", previewViewport === 'desktop' && "bg-background shadow-sm")}
+                    onClick={() => setPreviewViewport('desktop')}
+                  >
+                    <Monitor className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
               
-              <div className="aspect-video bg-muted rounded-2xl border-4 border-muted overflow-hidden relative group shadow-lg">
+              <div className="aspect-[16/10] bg-muted rounded-2xl border-4 border-muted overflow-hidden relative group shadow-lg">
                 <div className="absolute inset-0 bg-background overflow-hidden flex flex-col">
-                   <div className="h-12 border-b flex items-center px-4 justify-between bg-white/80 backdrop-blur-sm z-10">
-                      <div className="w-24 h-4 bg-muted rounded-full" />
-                      <div className="flex gap-2">
-                        <div className="w-8 h-4 bg-muted rounded-full" />
-                        <div className="w-8 h-4 bg-muted rounded-full" />
-                      </div>
-                   </div>
-                   <div className="flex-1 p-6 overflow-hidden">
-                      <div className="w-1/2 h-8 bg-muted rounded mb-6" />
-                      <div 
-                        className="grid gap-2 h-full"
-                        style={{ 
-                          gridTemplateColumns: `repeat(${THEME_REGISTRY[activeThemeId]?.layout.columns.desktop || 4}, 1fr)`,
-                          gap: `${themeOverrides?.layout?.gap ?? THEME_REGISTRY[activeThemeId]?.layout.gap ?? 8}px`
-                        }}
-                      >
-                        {[...Array(8)].map((_, i) => (
-                          <div 
-                            key={i} 
-                            className={cn(
-                              "bg-muted rounded-sm",
-                              i === 0 && THEME_REGISTRY[activeThemeId]?.layout.engine === 'editorial-grid' ? "col-span-2 row-span-2" : ""
-                            )} 
-                            style={{ aspectRatio: i === 0 && THEME_REGISTRY[activeThemeId]?.layout.engine === 'editorial-grid' ? 'auto' : '1/1' }}
-                          />
-                        ))}
-                      </div>
-                   </div>
+                   <ThemePreviewCanvas 
+                     themeId={activeThemeId}
+                     themeOverrides={themeOverrides}
+                     viewport={previewViewport}
+                     skipHero={true}
+                     isBlueprint={false}
+                   />
                 </div>
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
                    <Button variant="secondary" className="gap-2 rounded-full" onClick={() => window.open(`/g/${gallery.publicToken}`, '_blank')}>
                      <Eye className="h-4 w-4" />
                      Ver prévia completa

@@ -70,7 +70,8 @@ export function GalleryThemeProvider({
       '--gallery-cols-t': `${resolvedTheme.layout.columns.tablet}`,
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,
       '--gallery-hover-scale': `${resolvedTheme.motion?.hoverScale ?? 1.005}`,
-      '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 150}px`,
+      '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 220}px`,
+      '--gallery-row-mode': resolvedTheme.featured.enabled ? 'masonry' : 'flat',
     };
     return vars;
   }, [resolvedTheme]);

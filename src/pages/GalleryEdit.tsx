@@ -379,7 +379,9 @@ export default function GalleryEdit() {
           theme_id: selectedThemeId || null,
           use_custom_theme: !!selectedThemeId,
           theme_overrides: {
+            ...(gallery as any).theme_overrides || {},
             layout: {
+              ...((gallery as any).theme_overrides as any)?.layout || {},
               gap: photoSpacing
             }
           }

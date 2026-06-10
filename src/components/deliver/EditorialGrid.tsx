@@ -50,7 +50,10 @@ export function EditorialGrid({ children, className, forcedViewport }: Editorial
         "grid-flow-row-dense",
         className
       )}
-      style={{ gap: 'var(--gallery-gap)' }}
+      style={{ 
+        gap: 'var(--gallery-gap)',
+        gridAutoRows: 'var(--gallery-row-unit, 220px)'
+      }}
     >
       {children}
     </div>
@@ -66,30 +69,32 @@ interface EditorialItemProps {
   photoHeight?: number;
 }
 
-export function EditorialItem({ children, className, weight = 0 }: EditorialItemProps) {
+export function EditorialItem({ children, className, weight = 0, photoWidth = 800, photoHeight = 600 }: EditorialItemProps) {
   const { theme } = useGalleryDisplayTheme();
   
   const spanStyles = useMemo(() => {
-    if (!weight || !theme.featured.enabled) return {};
-    
-    const rule = theme.featured.spanRules[weight.toString()];
-    if (!rule) return {};
-
     const styles: any = {};
     
-    // Na visualização mobile, restringimos spans para não quebrar o layout em 2 colunas
-    // Se colSpan > 1 em mobile, ele ocupa a largura total
-    if (rule.colSpan) {
-      styles['--col-span'] = `span ${rule.colSpan}`;
-      // Fallback para CSS inline se necessário, mas preferimos classes
+    if (weight && theme.featured.enabled) {
+      const rule = theme.featured.spanRules[weight.toString()];
+      if (rule) {
+        if (rule.colSpan) styles['gridColumn'] = `span ${rule.colSpan}`;
+        if (rule.rowSpan) styles['gridRow'] = `span ${rule.rowSpan}`;
+        return styles;
+      }
     }
-    
-    if (rule.rowSpan) {
-      styles['--row-span'] = `span ${rule.rowSpan}`;
+
+    // Auto row-span calculation based on aspect ratio
+    if (theme.featured.enabled) {
+      const ratio = photoHeight / photoWidth;
+      // Default col is 1, so rowSpan = ratio * cellWidth / rowUnit
+      // Simplified: assume 1 col = ~300px width on desktop
+      const rowSpan = Math.max(1, Math.round(ratio * 1.5)); // Heuristic for editorial masonry
+      styles['gridRow'] = `span ${rowSpan}`;
     }
     
     return styles;
-  }, [weight, theme]);
+  }, [weight, theme, photoWidth, photoHeight]);
 
   return (
     <div 
