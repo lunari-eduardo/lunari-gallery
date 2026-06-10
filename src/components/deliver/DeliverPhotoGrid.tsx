@@ -2,6 +2,7 @@ import { Download, Play, Image as ImageIcon } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 import { JustifiedRowsGrid } from '@/components/gallery/JustifiedRowsGrid';
+import { EditorialGrid } from '@/components/gallery/EditorialGrid';
 import { cn } from '@/lib/utils';
 import { GalleryPhoto } from '@/types/gallery';
 
@@ -39,6 +40,9 @@ export function DeliverPhotoGrid({
 }: DeliverPhotoGridProps) {
   const { theme } = useGalleryDisplayTheme();
   
+  // Use editorial grid for editorial theme, justified rows for others
+  const isEditorialTheme = theme.id === 'editorial';
+  
   const config = {
     gap: theme.layout.gap ?? 6,
     targetRowHeight: typeof window !== 'undefined' && window.innerWidth < 640 ? 180 : (
@@ -67,7 +71,7 @@ export function DeliverPhotoGrid({
         key={photo.id}
         style={style}
         className={cn(
-          "group relative cursor-pointer overflow-hidden w-full bg-zinc-100/50 dark:bg-zinc-800/50 rounded-none",
+          "group relative cursor-pointer overflow-hidden w-full rounded-none",
           "transition-all duration-300"
         )}
       >
@@ -121,13 +125,22 @@ export function DeliverPhotoGrid({
 
   return (
     <div className="min-h-[50vh] px-3 sm:px-6 lg:px-8 py-12" style={containerBg}>
-      <JustifiedRowsGrid
-        photos={photos as any}
-        gap={config.gap}
-        targetRowHeight={config.targetRowHeight}
-        onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
-        renderItem={(photo, style) => renderContent(photo as any, style)}
-      />
+      {isEditorialTheme ? (
+        <EditorialGrid
+          photos={photos as any}
+          gap={config.gap}
+          onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
+          renderItem={(photo, style) => renderContent(photo as any, style)}
+        />
+      ) : (
+        <JustifiedRowsGrid
+          photos={photos as any}
+          gap={config.gap}
+          targetRowHeight={config.targetRowHeight}
+          onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
+          renderItem={(photo, style) => renderContent(photo as any, style)}
+        />
+      )}
     </div>
   );
 }
