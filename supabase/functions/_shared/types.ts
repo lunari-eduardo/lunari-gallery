@@ -26,8 +26,8 @@ export interface RegrasCongeladas {
 }
 
 export interface SaleSettings {
-  mode?: 'view_only' | 'selection' | 'sale';
-  paymentMethod?: 'asaas' | 'mercadopago' | 'infinitepay' | 'manual';
+  mode?: 'no_sale' | 'sale_with_payment' | 'sale_without_payment';
+  paymentMethod?: 'asaas' | 'mercadopago' | 'infinitepay' | 'pix_manual';
   chargeType?: 'only_extras' | 'all_selected';
 }
 
@@ -49,4 +49,8 @@ export interface Gallery {
   valor_total_vendido: number | null;
   session_id?: string | null;
   public_token?: string | null;
+  // Sale configuration columns (explicit sync with JSON)
+  venda_modo?: string | null;
+  venda_pagamento_provedor?: string | null;
+  venda_tipo_cobranca?: string | null;
 }
