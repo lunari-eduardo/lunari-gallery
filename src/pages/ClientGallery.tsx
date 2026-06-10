@@ -620,7 +620,9 @@ export default function ClientGallery() {
 
       // Checkout externo (InfinitePay/MercadoPago) - redirect immediately
       if (data.requiresPayment && data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+        console.log('💳 Redirecionando para checkout externo:', data.checkoutUrl);
+        // Usar location.assign para garantir navegação
+        window.location.assign(data.checkoutUrl);
         return;
       }
       
