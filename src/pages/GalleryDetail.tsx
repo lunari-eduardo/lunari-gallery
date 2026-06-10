@@ -486,7 +486,7 @@ export default function GalleryDetail() {
       fixedPrice: supabaseGallery.valorFotoExtra,
       discountPackages: [],
     },
-    status: getStatusDisplay(supabaseGallery.status),
+    status: effectiveStatus,
     selectionStatus: supabaseGallery.statusSelecao === 'selecao_completa' ? 'confirmed' : 'in_progress',
     settings: {
       welcomeMessage: supabaseGallery.mensagemBoasVindas || '',
