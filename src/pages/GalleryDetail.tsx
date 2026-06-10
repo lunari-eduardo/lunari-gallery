@@ -800,7 +800,7 @@ export default function GalleryDetail() {
               {selectedPhotos.length > 0 && (
                 <div className="mb-4 space-y-2">
                   <Button 
-                    variant="terracotta" 
+                    variant={effectiveStatus === 'selection_completed' ? "outline" : "terracotta"} 
                     className="w-full"
                     onClick={() => {
                       setCodesFilter('all');
@@ -808,7 +808,7 @@ export default function GalleryDetail() {
                     }}
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Códigos para separação das fotos
+                    {effectiveStatus === 'selection_completed' ? 'Ver códigos das fotos' : 'Códigos para separação das fotos'}
                   </Button>
                   
                   {favoritePhotos.length > 0 && (
@@ -826,6 +826,7 @@ export default function GalleryDetail() {
                   )}
                 </div>
               )}
+
 
               <SelectionSummary 
                 gallery={galleryForSummary} 
