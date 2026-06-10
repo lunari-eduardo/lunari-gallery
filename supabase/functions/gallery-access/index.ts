@@ -33,16 +33,24 @@ serve(async (req) => {
       .maybeSingle()
 
     if (galleryError) {
-      console.error('Database error:', galleryError)
-      return new Response(JSON.stringify({ error: 'Database error', details: galleryError }), {
+      console.error('Database error fetching gallery:', galleryError)
+      return new Response(JSON.stringify({ 
+        error: 'Database error', 
+        details: galleryError,
+        code: 'INTERNAL_ERROR'
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
 
-    if (galleryError || !gallery) {
-      return new Response(JSON.stringify({ error: 'Gallery not found' }), {
+    if (!gallery) {
+      console.warn(`Gallery not found for token: ${publicToken}`)
+      return new Response(JSON.stringify({ 
+        error: 'Gallery not found',
+        code: 'NOT_FOUND' 
+      }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -50,7 +58,10 @@ serve(async (req) => {
 
     // 2. Check password if private
     if (gallery.permissao === 'private' && gallery.gallery_password !== password) {
-      return new Response(JSON.stringify({ error: 'Invalid password' }), {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid password',
+        code: 'WRONG_PASSWORD'
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
