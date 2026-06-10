@@ -1,6 +1,6 @@
 import { Download, Play, Image as ImageIcon } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
-import { EditorialGrid, EditorialItem } from '@/components/deliver/EditorialGrid';
+
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 import { cn } from '@/lib/utils';
