@@ -1,6 +1,6 @@
 import React from 'react';
 import { GalleryPhoto } from '@/types/gallery';
-import { getPhotoUrl } from '@/utils/photoUrl';
+import { getPhotoUrl } from '@/lib/photoUrl';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 import { JustifiedRowsGrid } from './JustifiedRowsGrid';
 import { Play } from 'lucide-react';
