@@ -30,10 +30,15 @@ export const DeliverPhotoGrid: React.FC<DeliverPhotoGridProps> = ({
     const isVideo = photo.filename?.toLowerCase().endsWith('.mp4') || 
                    photo.filename?.toLowerCase().endsWith('.mov');
     
-    const url = getPhotoUrl({
-      storageKey: `gallery-${galleryId}/preview/${photo.filename}`,
-      previewPath: `gallery-${galleryId}/preview/${photo.filename}`
-    }, 'preview');
+    const isDemo = photo.id && photo.id.length < 5; // Simple check for DEMO_PHOTOS
+    
+    const url = isDemo 
+      ? (photo as any).previewPath 
+      : getPhotoUrl({
+          storageKey: `gallery-${galleryId}/preview/${photo.filename}`,
+          previewPath: `gallery-${galleryId}/preview/${photo.filename}`
+        }, 'preview');
+
 
 
     return (

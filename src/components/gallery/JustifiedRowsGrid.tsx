@@ -152,6 +152,9 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
               return renderItem(item.photo, style);
             }
 
+            // Fallback render (important for theme previews with demo photos)
+            const photoUrl = (item.photo as any).previewPath || item.photo.previewUrl || item.photo.thumbnailUrl;
+
             return (
               <div 
                 key={item.photo.id} 
@@ -160,7 +163,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
                 className="overflow-hidden bg-zinc-100"
               >
                 <img
-                  src={item.photo.previewUrl || item.photo.thumbnailUrl}
+                  src={photoUrl}
                   alt={item.photo.filename}
                   className="w-full h-full object-cover"
                   loading="lazy"
@@ -168,6 +171,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
               </div>
             );
           })}
+
         </div>
       ))}
     </div>

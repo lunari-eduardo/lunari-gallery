@@ -90,10 +90,10 @@ export function ThemePreviewCanvas({
               <DeliverPhotoGrid 
                 photos={DEMO_PHOTOS as any}
                 onPhotoClick={() => {}}
-                onDownload={() => {}}
-                isBlueprint={false} // Always show real photos in preview
+                galleryId="demo"
               />
             </div>
+
           </div>
         </GalleryThemeProvider>
       </div>
