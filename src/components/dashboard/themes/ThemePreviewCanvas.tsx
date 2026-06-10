@@ -91,7 +91,7 @@ export function ThemePreviewCanvas({
                 photos={DEMO_PHOTOS as any}
                 onPhotoClick={() => {}}
                 onDownload={() => {}}
-                isBlueprint={isBlueprint}
+                isBlueprint={false} // Always show real photos in preview
               />
             </div>
           </div>
