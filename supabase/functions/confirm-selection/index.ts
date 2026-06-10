@@ -316,14 +316,26 @@ Deno.serve(async (req) => {
 
     // 4. Parse sale settings to determine if payment is required
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
-    // (configuracoes already parsed above for chargeType)
-    const saleMode = gallery.venda_modo || saleSettingsJson.mode;
-    const configuredPaymentMethod = gallery.venda_pagamento_provedor || saleSettingsJson.paymentMethod;
+    // Normalization rule: JSON saleSettings.mode is AUTHORITATIVE.
+    // Column venda_modo is fallback ONLY for valid current values.
+    // Ignore legacy values like 'view_only', 'selection', 'sale'.
+    const saleSettingsMode = saleSettingsJson.mode;
+    const vendaModoColumn = gallery.venda_modo;
+    
+    // Valid current modes
+    const VALID_SALE_MODES = ['no_sale', 'sale_with_payment', 'sale_without_payment'];
+    const isValidVendaModo = vendaModoColumn && VALID_SALE_MODES.includes(vendaModoColumn);
+    
+    // Determine effective sale mode: JSON first, then valid column, then default
+    const saleMode = saleSettingsMode || (isValidVendaModo ? vendaModoColumn : 'sale_without_payment');
+    
+    // Determine payment method: JSON first, then column, then default integration
+    const configuredPaymentMethod = saleSettingsJson.paymentMethod || gallery.venda_pagamento_provedor;
 
     // Server-side rule: if mode is sale_with_payment AND there's value to charge, payment is required
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
-    console.log(`💰 Payment check: mode=${saleMode} (source: ${gallery.venda_modo ? 'column' : 'json'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
+    console.log(`💰 Payment check: mode=${saleMode} (source: ${saleSettingsMode ? 'json' : isValidVendaModo ? 'column' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
 
     // 5. CRITICAL: If payment is required, create it BEFORE confirming gallery
     let paymentResponse: { checkoutUrl?: string; provedor?: string; cobrancaId?: string } | null = null;
