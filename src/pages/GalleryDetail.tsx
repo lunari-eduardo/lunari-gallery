@@ -26,8 +26,11 @@ import {
   ChevronUp,
   CreditCard,
   RotateCcw,
+  RotateCw,
 } from 'lucide-react';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
+import { getEffectiveGalleryStatus } from '@/lib/galleryStatus';
+
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
@@ -444,20 +447,13 @@ export default function GalleryDetail() {
   };
 
   // Map status
-  const getStatusDisplay = (status: string): 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled' => {
-    const statusMap: Record<string, 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled'> = {
-      'rascunho': 'created',
-      'enviado': 'sent',
-      'em_selecao': 'selection_started',
-      'selecao_iniciada': 'selection_started',
-      'confirmada': 'selection_completed',
-      'selecao_completa': 'selection_completed',
-      'expirada': 'expired',
-      'expirado': 'expired',
-      'cancelada': 'cancelled',
-    };
-    return statusMap[status] || 'created';
-  };
+  const effectiveStatus = getEffectiveGalleryStatus(
+    supabaseGallery.status,
+    supabaseGallery.statusPagamento,
+    supabaseGallery.finalizedAt,
+    supabaseGallery.statusSelecao
+  );
+
 
   // Calculate progressive pricing for summary using credit system
   const regrasCongeladas = supabaseGallery.regrasCongeladas as RegrasCongeladas | null;
@@ -490,7 +486,7 @@ export default function GalleryDetail() {
       fixedPrice: supabaseGallery.valorFotoExtra,
       discountPackages: [],
     },
-    status: getStatusDisplay(supabaseGallery.status),
+    status: effectiveStatus,
     selectionStatus: supabaseGallery.statusSelecao === 'selecao_completa' ? 'confirmed' : 'in_progress',
     settings: {
       welcomeMessage: supabaseGallery.mensagemBoasVindas || '',
@@ -526,7 +522,7 @@ export default function GalleryDetail() {
               <h1 className="text-2xl md:text-3xl font-bold">
                 {supabaseGallery.nomeSessao || 'Galeria'}
               </h1>
-              <StatusBadge status={getStatusDisplay(supabaseGallery.status)} />
+              <StatusBadge status={effectiveStatus} />
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -804,7 +800,7 @@ export default function GalleryDetail() {
               {selectedPhotos.length > 0 && (
                 <div className="mb-4 space-y-2">
                   <Button 
-                    variant="terracotta" 
+                    variant={effectiveStatus === 'selection_completed' ? "outline" : "terracotta"} 
                     className="w-full"
                     onClick={() => {
                       setCodesFilter('all');
@@ -812,7 +808,7 @@ export default function GalleryDetail() {
                     }}
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Códigos para separação das fotos
+                    {effectiveStatus === 'selection_completed' ? 'Ver códigos das fotos' : 'Códigos para separação das fotos'}
                   </Button>
                   
                   {favoritePhotos.length > 0 && (
@@ -830,6 +826,7 @@ export default function GalleryDetail() {
                   )}
                 </div>
               )}
+
 
               <SelectionSummary 
                 gallery={galleryForSummary} 
