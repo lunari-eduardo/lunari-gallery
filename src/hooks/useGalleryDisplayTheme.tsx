@@ -1,6 +1,5 @@
 import { createContext, useContext, ReactNode, useMemo } from 'react';
-import { GalleryTheme, DEFAULT_GALLERY_THEME } from '@/types/themes';
-import { THEME_REGISTRY } from '@/components/gallery/themes/registry';
+import { GalleryTheme } from '@/types/themes';
 import { GallerySettings, GlobalSettings } from '@/types/gallery';
 import { getSafeTheme, mergeThemeOverrides } from '@/lib/themeUtils';
 
@@ -29,22 +28,17 @@ export function GalleryThemeProvider({
 }: GalleryThemeProviderProps) {
   
   const resolvedTheme = useMemo(() => {
-    // 1. Resolve base theme from ID with safe fallback
-    // Hierarchy: Gallery specific themeId > Global defaultThemeId > Lunari
     const themeId = activeThemeId || globalSettings?.defaultThemeId || 'lunari';
     let theme = getSafeTheme(themeId);
 
-    // 2. Apply Global Overrides (Account level)
     if (globalSettings?.themeOverrides) {
       theme = mergeThemeOverrides(theme, globalSettings.themeOverrides as any);
     }
     
-    // 3. Apply Gallery specific overrides (Instance level - highest priority)
     if (themeOverrides) {
       theme = mergeThemeOverrides(theme, themeOverrides as any);
     }
 
-    // 4. Backward Compatibility (Legacy fields from configuracoes)
     if (gallerySettings?.photoSpacing !== undefined) {
       theme.layout.gap = Number(gallerySettings.photoSpacing);
     } else if (globalSettings?.defaultPhotoSpacing !== undefined && !themeOverrides) {
@@ -66,13 +60,11 @@ export function GalleryThemeProvider({
     const vars: Record<string, string> = {
       '--gallery-bg': resolvedTheme.surface.background || 'transparent',
       '--gallery-gap': `${resolvedTheme.layout.gap}px`,
-      '--gallery-photo-border': `${resolvedTheme.id === 'lunari' ? 4 : resolvedTheme.id === 'clean' ? 6 : 1}px`,
       '--gallery-cols-m': `${resolvedTheme.layout.columns.mobile}`,
       '--gallery-cols-t': `${resolvedTheme.layout.columns.tablet}`,
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,
       '--gallery-hover-scale': `${resolvedTheme.motion?.hoverScale ?? 1.005}`,
       '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 220}px`,
-      '--gallery-row-mode': resolvedTheme.featured.enabled ? 'masonry' : 'flat',
     };
     return vars;
   }, [resolvedTheme]);
