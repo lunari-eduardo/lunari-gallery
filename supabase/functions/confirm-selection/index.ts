@@ -318,7 +318,6 @@ Deno.serve(async (req) => {
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
     // Normalization rule: JSON saleSettings.mode is AUTHORITATIVE.
     // Column venda_modo is fallback ONLY for valid current values.
-    // Ignore legacy values like 'view_only', 'selection', 'sale'.
     const saleSettingsMode = saleSettingsJson.mode;
     const vendaModoColumn = gallery.venda_modo;
     
@@ -336,6 +335,7 @@ Deno.serve(async (req) => {
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
     console.log(`💰 Payment check: mode=${saleMode} (source: ${saleSettingsMode ? 'json' : isValidVendaModo ? 'column' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
+
 
     // 5. CRITICAL: If payment is required, create it BEFORE confirming gallery
     let paymentResponse: { checkoutUrl?: string; provedor?: string; cobrancaId?: string } | null = null;
