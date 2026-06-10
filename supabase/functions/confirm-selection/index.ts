@@ -188,7 +188,8 @@ Deno.serve(async (req) => {
     let valorTotal = 0;
     
     // Use explicit column from contract, fallback to JSON
-    const chargeType = gallery.venda_tipo_cobranca || (gallery.configuracoes as any)?.saleSettings?.chargeType || 'only_extras';
+    const saleSettingsJson = (gallery.configuracoes as any)?.saleSettings || {};
+    const chargeType = gallery.venda_tipo_cobranca || saleSettingsJson.chargeType || 'only_extras';
 
     
     // Calculate extras needed based on chargeType:
@@ -316,13 +317,13 @@ Deno.serve(async (req) => {
     // 4. Parse sale settings to determine if payment is required
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
     // (configuracoes already parsed above for chargeType)
-    const saleMode = gallery.venda_modo || (gallery.configuracoes as any)?.saleSettings?.mode;
-    const configuredPaymentMethod = gallery.venda_pagamento_provedor || (gallery.configuracoes as any)?.saleSettings?.paymentMethod;
+    const saleMode = gallery.venda_modo || saleSettingsJson.mode;
+    const configuredPaymentMethod = gallery.venda_pagamento_provedor || saleSettingsJson.paymentMethod;
 
     // Server-side rule: if mode is sale_with_payment AND there's value to charge, payment is required
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
-    console.log(`💰 Payment check: mode=${saleMode}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment} (server-side, requestPayment from frontend IGNORED)`);
+    console.log(`💰 Payment check: mode=${saleMode} (source: ${gallery.venda_modo ? 'column' : 'json'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
 
     // 5. CRITICAL: If payment is required, create it BEFORE confirming gallery
     let paymentResponse: { checkoutUrl?: string; provedor?: string; cobrancaId?: string } | null = null;
