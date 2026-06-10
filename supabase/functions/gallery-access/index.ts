@@ -199,7 +199,25 @@ serve(async (req) => {
       themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null }
     }
 
-    // 5. Response
+    // 5. Normalize Sale Settings for Frontend
+    const saleSettingsJson = (gallery.configuracoes as any)?.saleSettings || {};
+    const VALID_SALE_MODES = ['no_sale', 'sale_with_payment', 'sale_without_payment'];
+    const isValidVendaModo = gallery.venda_modo && VALID_SALE_MODES.includes(gallery.venda_modo);
+    
+    const effectiveSaleMode = (saleSettingsJson.mode === 'sale_with_payment')
+      ? 'sale_with_payment'
+      : (saleSettingsJson.mode || (isValidVendaModo ? gallery.venda_modo : 'no_sale'));
+
+    const normalizedSaleSettings = {
+      mode: effectiveSaleMode,
+      paymentMethod: saleSettingsJson.paymentMethod || gallery.venda_pagamento_provedor,
+      chargeType: saleSettingsJson.chargeType || gallery.venda_tipo_cobranca || 'only_extras',
+      pricingModel: saleSettingsJson.pricingModel || 'fixed',
+      fixedPrice: saleSettingsJson.fixedPrice || Number(gallery.valor_foto_extra || 0),
+      discountPackages: saleSettingsJson.discountPackages || [],
+    };
+
+    // 6. Response
     return new Response(
       JSON.stringify({
         success: true,
@@ -219,6 +237,7 @@ serve(async (req) => {
           deadline: gallery.prazo_selecao, // Selection alias
           publicToken: gallery.public_token,
           regrasCongeladas: gallery.regras_congeladas,
+          saleSettings: normalizedSaleSettings,
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
@@ -243,6 +262,7 @@ serve(async (req) => {
         status: 200,
       }
     )
+
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

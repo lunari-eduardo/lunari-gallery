@@ -413,6 +413,12 @@ export default function ClientGallery() {
       updatedAt: new Date(),
       saleSettings: (() => {
         // Prioritize explicit saleSettings from Edge Function response
+        if ((supabaseGallery as any).saleSettings) {
+          return (supabaseGallery as any).saleSettings;
+        }
+        
+        const settings = config?.saleSettings as Record<string, unknown> | undefined;
+
         const explicitSettings = isEdgeFunctionFormat 
           ? (supabaseGallery.saleSettings as Record<string, unknown> | null)
           : null;

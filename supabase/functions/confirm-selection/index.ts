@@ -326,7 +326,11 @@ Deno.serve(async (req) => {
     const isValidVendaModo = vendaModoColumn && VALID_SALE_MODES.includes(vendaModoColumn);
     
     // Determine effective sale mode: JSON first, then valid column, then default
-    const saleMode = saleSettingsMode || (isValidVendaModo ? vendaModoColumn : 'sale_without_payment');
+    // 🛡️ REGRAS DE NEGÓCIO: Se o JSON diz sale_with_payment, FORÇAR este modo.
+    // Ignorar 'view_only' (valor legado inválido) e tratar como sem venda se nada for encontrado.
+    const saleMode = (saleSettingsMode === 'sale_with_payment')
+      ? 'sale_with_payment'
+      : (saleSettingsMode || (isValidVendaModo ? vendaModoColumn : 'no_sale'));
     
     // Determine payment method: JSON first, then column, then default integration
     const configuredPaymentMethod = saleSettingsJson.paymentMethod || gallery.venda_pagamento_provedor;
@@ -335,6 +339,7 @@ Deno.serve(async (req) => {
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
     console.log(`💰 Payment check: mode=${saleMode} (source: ${saleSettingsMode ? 'json' : isValidVendaModo ? 'column' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
+
 
 
     // 5. CRITICAL: If payment is required, create it BEFORE confirming gallery

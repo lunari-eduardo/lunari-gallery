@@ -27,6 +27,7 @@ export interface RegrasCongeladas {
 
 export interface SaleSettings {
   mode?: 'no_sale' | 'sale_with_payment' | 'sale_without_payment';
+
   paymentMethod?: 'asaas' | 'mercadopago' | 'infinitepay' | 'pix_manual';
   chargeType?: 'only_extras' | 'all_selected';
 }
