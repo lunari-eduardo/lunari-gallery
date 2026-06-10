@@ -235,7 +235,7 @@ export function FinalizedPreviewScreen({
         {transformedPhotos.length > 0 ? (
           <MasonryGrid>
             {transformedPhotos.map((photo, index) => (
-              <MasonryItem key={photo.id}>
+              <MasonryItem key={photo.id} photoWidth={photo.width} photoHeight={photo.height}>
                 <div 
                   className="cursor-pointer rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow group"
                   onClick={() => setLightboxIndex(index)}
