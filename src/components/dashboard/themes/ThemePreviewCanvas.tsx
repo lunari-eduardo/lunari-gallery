@@ -90,8 +90,10 @@ export function ThemePreviewCanvas({
               <DeliverPhotoGrid 
                 photos={DEMO_PHOTOS as any}
                 onPhotoClick={() => {}}
+                onDownload={() => {}}
                 galleryId="demo"
               />
+
             </div>
 
           </div>
