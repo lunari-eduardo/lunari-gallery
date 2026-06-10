@@ -3637,7 +3637,6 @@ export type Database = {
           cidade_uf: string | null
           cpf_cnpj: string | null
           created_at: string
-          default_theme_id: string | null
           email: string | null
           empresa: string | null
           endereco_comercial: string | null
@@ -3654,7 +3653,6 @@ export type Database = {
           suspected_duplicate: boolean | null
           telefone: string | null
           telefones: string[] | null
-          theme_overrides: Json | null
           updated_at: string
           user_id: string
         }
@@ -3666,7 +3664,6 @@ export type Database = {
           cidade_uf?: string | null
           cpf_cnpj?: string | null
           created_at?: string
-          default_theme_id?: string | null
           email?: string | null
           empresa?: string | null
           endereco_comercial?: string | null
@@ -3683,7 +3680,6 @@ export type Database = {
           suspected_duplicate?: boolean | null
           telefone?: string | null
           telefones?: string[] | null
-          theme_overrides?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -3695,7 +3691,6 @@ export type Database = {
           cidade_uf?: string | null
           cpf_cnpj?: string | null
           created_at?: string
-          default_theme_id?: string | null
           email?: string | null
           empresa?: string | null
           endereco_comercial?: string | null
@@ -3712,7 +3707,6 @@ export type Database = {
           suspected_duplicate?: boolean | null
           telefone?: string | null
           telefones?: string[] | null
-          theme_overrides?: Json | null
           updated_at?: string
           user_id?: string
         }
