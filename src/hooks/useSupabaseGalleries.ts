@@ -346,6 +346,9 @@ export function useSupabaseGalleries() {
           use_custom_theme: data.use_custom_theme || false,
           theme_overrides: data.theme_overrides || {},
           regras_congeladas: data.regrasCongeladas ? (data.regrasCongeladas as unknown as Json) : null, // Frozen pricing rules
+          venda_modo: data.venda_modo || null,
+          venda_pagamento_provedor: data.venda_pagamento_provedor || null,
+          venda_tipo_cobranca: data.venda_tipo_cobranca || null,
           status: 'rascunho',
         }])
         .select()
@@ -431,6 +434,9 @@ export function useSupabaseGalleries() {
       if (data.theme_id !== undefined) updateData.theme_id = data.theme_id;
       if (data.use_custom_theme !== undefined) updateData.use_custom_theme = data.use_custom_theme;
       if (data.theme_overrides !== undefined) updateData.theme_overrides = data.theme_overrides;
+      if (data.venda_modo !== undefined) updateData.venda_modo = data.venda_modo;
+      if (data.venda_pagamento_provedor !== undefined) updateData.venda_pagamento_provedor = data.venda_pagamento_provedor;
+      if (data.venda_tipo_cobranca !== undefined) updateData.venda_tipo_cobranca = data.venda_tipo_cobranca;
 
 
       // ─── Valor da foto extra: sessão é a fonte única de verdade ────────
