@@ -1120,9 +1120,6 @@ export default function GalleryCreate() {
           venda_modo: saleMode,
           venda_pagamento_provedor: selectedPaymentMethod,
           venda_tipo_cobranca: chargeType,
-          venda_modo: saleMode,
-          venda_pagamento_provedor: selectedPaymentMethod,
-          venda_tipo_cobranca: chargeType,
         });
         if (result?.id) {
           navigate('/');

@@ -737,6 +737,13 @@ Deno.serve(async (req) => {
     }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
 
     // 9. Return response based on payment type
+    // 🛡️ CRITICAL SAFETY CHECK: If payment was required but not created, BLOCK finalization
+    if (shouldCreatePayment && (!paymentResponse || (!paymentResponse.checkoutUrl && paymentResponse.provedor !== 'pix_manual' && paymentResponse.provedor !== 'asaas'))) {
+      console.error(`❌ CRITICAL: Payment was required (R$ ${valorTotal}) but no checkout link was generated. Provider: ${paymentResponse?.provedor || 'none'}`);
+      await rollbackGalleryStatus();
+      return errorResponse('Erro ao gerar link de pagamento. Por favor, tente novamente ou entre em contato com o suporte.', 500, 'PAYMENT_LINK_FAILED');
+    }
+
     if (paymentResponse?.provedor === 'pix_manual') {
       const integracao = await supabase
         .from('usuarios_integracoes')
