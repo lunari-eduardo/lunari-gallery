@@ -127,7 +127,7 @@ export function ThemePreviewModal({
                 className="cursor-pointer"
               />
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Define a distância entre as fotos. Temas editoriais brilham com gaps maiores (12-24px).
+                Define a distância entre as fotos. Temas editoriais brilham com gaps de 6-12px.
               </p>
             </div>
 
