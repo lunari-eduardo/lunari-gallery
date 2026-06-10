@@ -31,10 +31,10 @@ export const DeliverPhotoGrid: React.FC<DeliverPhotoGridProps> = ({
                    photo.filename?.toLowerCase().endsWith('.mov');
     
     const url = getPhotoUrl({
-      id: photo.id,
-      gallery_id: galleryId,
-      filename: photo.filename
+      storageKey: `gallery-${galleryId}/preview/${photo.filename}`,
+      previewPath: `gallery-${galleryId}/preview/${photo.filename}`
     }, 'preview');
+
 
     return (
       <div
