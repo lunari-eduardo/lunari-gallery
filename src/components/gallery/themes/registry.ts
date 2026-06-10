@@ -16,10 +16,10 @@ export const LUNARI_THEME: GalleryTheme = {
   version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'masonry-classic',
+    engine: 'editorial-grid',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
     gap: 8,
-    rowUnit: 150,
+    rowUnit: 280,
     density: 'comfortable'
   },
   surface: {
@@ -40,10 +40,10 @@ export const CLEAN_THEME: GalleryTheme = {
   version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'masonry-classic',
+    engine: 'editorial-grid',
     columns: { mobile: 1, tablet: 2, desktop: 3 },
     gap: 16,
-    rowUnit: 150,
+    rowUnit: 320,
     density: 'airy'
   },
   surface: {
@@ -64,10 +64,10 @@ export const EDITORIAL_THEME: GalleryTheme = {
   version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'masonry-classic',
+    engine: 'editorial-grid',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
     gap: 6,
-    rowUnit: 150,
+    rowUnit: 260,
     density: 'comfortable'
   },
   surface: {
@@ -87,6 +87,7 @@ export const EDITORIAL_THEME: GalleryTheme = {
     titleFont: 'Instrument Serif',
   }
 };
+
 
 export const THEME_REGISTRY: Record<string, GalleryTheme> = {
   lunari: LUNARI_THEME,
