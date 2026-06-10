@@ -444,20 +444,13 @@ export default function GalleryDetail() {
   };
 
   // Map status
-  const getStatusDisplay = (status: string): 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled' => {
-    const statusMap: Record<string, 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled'> = {
-      'rascunho': 'created',
-      'enviado': 'sent',
-      'em_selecao': 'selection_started',
-      'selecao_iniciada': 'selection_started',
-      'confirmada': 'selection_completed',
-      'selecao_completa': 'selection_completed',
-      'expirada': 'expired',
-      'expirado': 'expired',
-      'cancelada': 'cancelled',
-    };
-    return statusMap[status] || 'created';
-  };
+  const effectiveStatus = getEffectiveGalleryStatus(
+    supabaseGallery.status,
+    supabaseGallery.statusPagamento,
+    supabaseGallery.finalizedAt,
+    supabaseGallery.statusSelecao
+  );
+
 
   // Calculate progressive pricing for summary using credit system
   const regrasCongeladas = supabaseGallery.regrasCongeladas as RegrasCongeladas | null;
