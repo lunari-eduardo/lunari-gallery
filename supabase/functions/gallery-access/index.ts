@@ -23,11 +23,11 @@ serve(async (req) => {
     const password = body.password
     const visitorId = body.visitorId
 
-    // 1. Fetch gallery
+    // 1. Fetch gallery with photographer's global settings
     console.log(`Fetching gallery with token: ${publicToken}`)
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('*')
+      .select('*, gallery_settings:user_id(default_theme_id, theme_overrides)')
       .eq('public_token', publicToken)
       .maybeSingle()
 
@@ -54,7 +54,12 @@ serve(async (req) => {
       })
     }
 
-    // 2. Pre-fetch studio settings for password/visitor screens
+    // Resolve owner settings (account theme)
+    const accountTheme = Array.isArray(gallery.gallery_settings) 
+      ? gallery.gallery_settings[0] 
+      : gallery.gallery_settings;
+
+    // 2. Pre-fetch studio settings (detailed)
     const { data: settings } = await supabase
       .from('gallery_settings')
       .select('*')
@@ -87,8 +92,6 @@ serve(async (req) => {
 
     // 3.1. CHECK FOR PENDING PAYMENT (Server-side Gating)
     let pendingPaymentData = null;
-    
-    // Check selection status
     let currentSelectionStatus = gallery.status_selecao;
     let visitorSelectionStatus = null;
 
@@ -101,13 +104,9 @@ serve(async (req) => {
       visitorSelectionStatus = visitor?.status_selecao;
     }
 
-    // Selection status logic was previously duplicated here; keeping primary declarations above.
-
-
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
     const isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
 
-    // 🛡️ RECONCILE: If gallery is marked as awaiting payment but ALL charges are paid, auto-finalize
     if (isAwaitingPayment) {
       const { data: charges } = await supabase
         .from('cobrancas')
@@ -118,21 +117,17 @@ serve(async (req) => {
       const hasPaid = charges?.some(c => ['pago', 'pago_manual'].includes(c.status));
 
       if (hasPaid && !hasPending) {
-         console.warn(`🛡️ AUTO-RECONCILE: Galeria ${gallery.id} estava presa em 'aguardando_pagamento' mas tem cobrança paga. Finalizando.`);
          if (visitorId) {
            await supabase.from('galeria_visitantes').update({ status_selecao: 'selecao_completa' }).eq('id', visitorId);
+           visitorSelectionStatus = 'selecao_completa';
          } else {
            await supabase.from('galerias').update({ status_selecao: 'selecao_completa' }).eq('id', gallery.id);
+           currentSelectionStatus = 'selecao_completa';
          }
-         // Refetch status for response
-         currentSelectionStatus = 'selecao_completa';
-         if (visitorId) visitorSelectionStatus = 'selecao_completa';
       }
     }
 
-
-    if (isAwaitingPayment) {
-      // Find latest pending charge for this gallery
+    if (isAwaitingPayment && !pendingPaymentData) {
       const { data: cobranca } = await supabase
         .from('cobrancas')
         .select('*')
@@ -154,7 +149,7 @@ serve(async (req) => {
       }
     }
 
-    // 3.2 If finalized, filter photos to only show selected ones
+    // Filter photos if finalized
     let filteredPhotos = photos || [];
     if (isFinalized) {
       if (visitorId && gallery.permissao === 'public') {
@@ -173,8 +168,9 @@ serve(async (req) => {
 
     // 4. Resolve Theme (Centralized logic)
     const galleryConfig = gallery.configuracoes as any || {}
-    const themeId = (gallery.theme_id as string) || (galleryConfig?.themeId as string)
+    const themeId = (gallery.use_custom_theme ? gallery.theme_id : accountTheme?.default_theme_id) || galleryConfig?.themeId || 'lunari';
     const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light'
+    const themeOverrides = (gallery.use_custom_theme ? gallery.theme_overrides : accountTheme?.theme_overrides) || galleryConfig?.themeOverrides || {};
 
     let themeData = null
     if (themeId) {
@@ -199,30 +195,12 @@ serve(async (req) => {
       themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null }
     }
 
-    // 5. Normalize Sale Settings for Frontend
-    const saleSettingsJson = (gallery.configuracoes as any)?.saleSettings || {};
-    const VALID_SALE_MODES = ['no_sale', 'sale_with_payment', 'sale_without_payment'];
-    const isValidVendaModo = gallery.venda_modo && VALID_SALE_MODES.includes(gallery.venda_modo);
-    
-    const effectiveSaleMode = (saleSettingsJson.mode === 'sale_with_payment')
-      ? 'sale_with_payment'
-      : (saleSettingsJson.mode || (isValidVendaModo ? gallery.venda_modo : 'no_sale'));
-
-    const normalizedSaleSettings = {
-      mode: effectiveSaleMode,
-      paymentMethod: saleSettingsJson.paymentMethod || gallery.venda_pagamento_provedor,
-      chargeType: saleSettingsJson.chargeType || gallery.venda_tipo_cobranca || 'only_extras',
-      pricingModel: saleSettingsJson.pricingModel || 'fixed',
-      fixedPrice: saleSettingsJson.fixedPrice || Number(gallery.valor_foto_extra || 0),
-      discountPackages: saleSettingsJson.discountPackages || [],
-    };
-
     // 6. Response
     return new Response(
       JSON.stringify({
         success: true,
         deliver: gallery.tipo === 'entrega',
-        galleryId: gallery.id, // For legacy compatibility
+        galleryId: gallery.id,
         gallery: {
           id: gallery.id,
           sessionName: gallery.nome_sessao,
@@ -234,28 +212,25 @@ serve(async (req) => {
           selectionStatus: currentSelectionStatus,
           welcomeMessage: gallery.mensagem_boas_vindas,
           expirationDate: gallery.prazo_selecao,
-          deadline: gallery.prazo_selecao, // Selection alias
           publicToken: gallery.public_token,
-          regrasCongeladas: gallery.regras_congeladas,
-          saleSettings: normalizedSaleSettings,
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
             coverPhotoId: galleryConfig?.coverPhotoId || undefined,
             photoSpacing: galleryConfig?.photoSpacing || undefined,
-            themeId: themeId || undefined,
-            useCustomTheme: (gallery.use_custom_theme as boolean) ?? !!gallery.theme_id,
-            themeOverrides: (gallery.theme_overrides as any) || galleryConfig?.themeOverrides || undefined,
+            themeId: themeId,
+            useCustomTheme: gallery.use_custom_theme ?? false,
+            themeOverrides: themeOverrides,
           },
         },
         photos: filteredPhotos,
         finalized: isFinalized,
-        allowDownload: (gallery.configuracoes as any)?.allowDownload ?? false,
         folders: folders || [],
         studioSettings: settings || null,
         theme: themeData,
         clientMode,
-        ...pendingPaymentData, // Inject pending payment data if exists
+        accountTheme, // New field for account heritage info
+        ...pendingPaymentData,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
