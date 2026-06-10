@@ -79,8 +79,9 @@ export const EDITORIAL_THEME: GalleryTheme = {
     enabled: true,
     maxCount: 15,
     spanRules: {
-      "1": { colSpan: 1, rowSpan: 1 }, 
-      "2": { colSpan: 2, rowSpan: 2 }, 
+      "0": { colSpan: 1, rowSpan: 1 }, // Normal photo
+      "1": { colSpan: 2, rowSpan: 2 }, // Featured 2x2 (marked by fotógrafo)
+      "2": { colSpan: 2, rowSpan: 3 }, // Reserved for future large featured
     }
   },
   typography: {

@@ -63,12 +63,9 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     const FEATURED_MULTIPLIER = 1.8;
 
     photos.forEach((photo) => {
-      // Logic for determining if it's featured: 
-      // 1. Explicitly marked as weight 1 or 2
-      // 2. Or part of the auto-featured logic (approx 30%)
-      // Use index hash for pseudo-randomness
-      const isAutoFeatured = (parseInt(photo.id.slice(-2), 16) % 10) < 3; // ~30%
-      const isFeatured = isAutoFeatured;
+      // Read peso_visual from photo (set by fotógrafo in backend)
+      // peso_visual: 0 = normal, 1 = featured (2x in justified rows)
+      const isFeatured = (photo as any).peso_visual === 1;
 
 
       // Calculate initial width at targetRowHeight
@@ -160,7 +157,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
                 key={item.photo.id} 
                 style={style}
                 onClick={() => onPhotoClick?.(item.photo)}
-                className="overflow-hidden bg-zinc-100"
+                className="overflow-hidden"
               >
                 <img
                   src={photoUrl}
