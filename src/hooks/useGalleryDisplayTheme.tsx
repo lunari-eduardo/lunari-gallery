@@ -66,6 +66,7 @@ export function GalleryThemeProvider({
     const vars: Record<string, string> = {
       '--gallery-bg': resolvedTheme.surface.background || 'transparent',
       '--gallery-gap': `${resolvedTheme.layout.gap}px`,
+      '--gallery-photo-border': `${resolvedTheme.id === 'lunari' ? 4 : resolvedTheme.id === 'clean' ? 6 : 1}px`,
       '--gallery-cols-m': `${resolvedTheme.layout.columns.mobile}`,
       '--gallery-cols-t': `${resolvedTheme.layout.columns.tablet}`,
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,

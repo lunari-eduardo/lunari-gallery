@@ -1,6 +1,6 @@
 import { Download, Play, Image as ImageIcon } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
-import { EditorialGrid, EditorialItem } from '@/components/deliver/EditorialGrid';
+
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 import { cn } from '@/lib/utils';
@@ -47,19 +47,19 @@ export function DeliverPhotoGrid({
       height: photo.height,
     };
     
-    // Fallback URL construct
-    const url = photo.previewPath || getPhotoUrl(paths, 'preview');
+    // Correct URL construction using getPhotoUrl utility to ensure R2 public URL
+    const url = getPhotoUrl(paths, 'preview');
     const aspectRatio = photo.width / photo.height;
 
     return (
       <div 
         className={cn(
-          "group relative cursor-pointer overflow-hidden w-full bg-zinc-100 dark:bg-zinc-800 rounded-none",
-          layoutType === 'editorial' ? "h-full" : "h-auto"
+          "group relative cursor-pointer overflow-hidden w-full bg-zinc-100/50 dark:bg-zinc-800/50 rounded-none",
+          "transition-all duration-300"
         )}
         style={{ 
           '--aspect-ratio': aspectRatio,
-          aspectRatio: layoutType === 'editorial' ? 'auto' : `${photo.width}/${photo.height}`
+          padding: 'var(--gallery-photo-border, 0px)'
         } as any}
       >
         {isBlueprint ? (
@@ -84,24 +84,9 @@ export function DeliverPhotoGrid({
                 src={url}
                 alt={photo.originalFilename}
                 loading="lazy"
-                className={cn(
-                  "w-full h-full block transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale,1.02)]",
-                  layoutType === 'editorial' ? "object-cover" : "object-contain"
-                )}
+                decoding="async"
+                className="w-full h-full block object-cover transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale,1.02)]"
                 onClick={() => onPhotoClick(index)}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const parent = e.currentTarget.parentElement;
-                  if (parent) {
-                    parent.classList.add('flex', 'items-center', 'justify-center');
-                    parent.innerHTML = `
-                      <div class="flex flex-col items-center gap-2 opacity-40 p-4 text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                        <span class="text-[9px] font-mono break-all line-clamp-2">${photo.originalFilename}</span>
-                      </div>
-                    `;
-                  }
-                }}
               />
             )}
             
@@ -126,42 +111,38 @@ export function DeliverPhotoGrid({
 
   const containerBg = bgColor ? { backgroundColor: bgColor } : undefined;
 
-  if (engine === 'masonry-classic') {
-    return (
-      <div className="min-h-[50vh] px-3 sm:px-6 lg:px-8 py-12" style={containerBg}>
-        <MasonryGrid 
-          gap={theme.layout.gap} 
-          className="max-w-7xl mx-auto"
-          forcedCols={theme.layout.columns.desktop} // Simplificando para teste
-        >
-          {photos.map((photo, index) => (
+  // We use MasonryGrid for ALL themes now to ensure "never crop" rule
+  // while supporting different column counts and spacing.
+  return (
+    <div className="min-h-[50vh] px-3 sm:px-6 lg:px-8 py-12" style={containerBg}>
+      <MasonryGrid 
+        gap={theme.layout.gap} 
+        className="max-w-7xl mx-auto"
+        forcedCols={theme.layout.columns.desktop}
+      >
+        {photos.map((photo, index) => {
+          // Editorial featured logic
+          let span = 1;
+          if (theme.featured.enabled) {
+            if (photo.peso_visual === 1) span = 2;
+            // Auto-highlight approx 30% if no manual weights
+            else if (!photos.some(p => p.peso_visual === 1)) {
+              if (index % 4 === 0) span = 2;
+            }
+          }
+
+          return (
             <MasonryItem 
               key={photo.id} 
               photoWidth={photo.width} 
               photoHeight={photo.height}
+              span={span}
             >
               {renderContent(photo, index, 'masonry')}
             </MasonryItem>
-          ))}
-        </MasonryGrid>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-[50vh] px-3 sm:px-6 lg:px-8 py-12" style={containerBg}>
-      <EditorialGrid className="max-w-7xl mx-auto">
-        {photos.map((photo, index) => (
-          <EditorialItem 
-            key={photo.id} 
-            weight={photo.peso_visual}
-            photoWidth={photo.width} 
-            photoHeight={photo.height}
-          >
-            {renderContent(photo, index, 'editorial')}
-          </EditorialItem>
-        ))}
-      </EditorialGrid>
+          );
+        })}
+      </MasonryGrid>
     </div>
   );
 }

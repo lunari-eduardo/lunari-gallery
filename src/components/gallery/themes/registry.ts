@@ -16,9 +16,10 @@ export const LUNARI_THEME: GalleryTheme = {
   version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-grid',
+    engine: 'masonry-classic',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
-    gap: 4,
+    gap: 8,
+    rowUnit: 150,
     density: 'comfortable'
   },
   surface: {
@@ -28,8 +29,7 @@ export const LUNARI_THEME: GalleryTheme = {
   },
   featured: {
     ...DEFAULT_GALLERY_THEME.featured,
-    enabled: true,
-    maxCount: 10
+    enabled: false
   }
 };
 
@@ -41,9 +41,10 @@ export const CLEAN_THEME: GalleryTheme = {
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'masonry-classic',
-    columns: { mobile: 2, tablet: 3, desktop: 5 },
-    gap: 0,
-    density: 'compact'
+    columns: { mobile: 1, tablet: 2, desktop: 3 },
+    gap: 16,
+    rowUnit: 150,
+    density: 'airy'
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
@@ -63,9 +64,10 @@ export const EDITORIAL_THEME: GalleryTheme = {
   version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-grid',
+    engine: 'masonry-classic',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
-    gap: 4,
+    gap: 6,
+    rowUnit: 150,
     density: 'comfortable'
   },
   surface: {
@@ -77,36 +79,12 @@ export const EDITORIAL_THEME: GalleryTheme = {
     enabled: true,
     maxCount: 15,
     spanRules: {
-      "1": { colSpan: 4, rowSpan: 2 }, // Hero interno (desktop)
+      "1": { colSpan: 1, rowSpan: 1 }, 
       "2": { colSpan: 2, rowSpan: 2 }, 
     }
   },
   typography: {
-    titleFont: 'Instrument Serif', // Exemplo de tipografia editorial
-  }
-};
-
-export const FINE_ART_THEME: GalleryTheme = {
-  ...DEFAULT_GALLERY_THEME,
-  id: 'fineart',
-  name: 'Fine Art',
-  version: '1.0.0',
-  layout: {
-    ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-grid',
-    columns: { mobile: 2, tablet: 2, desktop: 3 },
-    gap: 12,
-    density: 'airy'
-  },
-  surface: {
-    ...DEFAULT_GALLERY_THEME.surface,
-    background: '#F5F1EA',
-    borderRadius: '0px'
-  },
-  featured: {
-    ...DEFAULT_GALLERY_THEME.featured,
-    enabled: true,
-    maxCount: 5
+    titleFont: 'Instrument Serif',
   }
 };
 
@@ -114,7 +92,6 @@ export const THEME_REGISTRY: Record<string, GalleryTheme> = {
   lunari: LUNARI_THEME,
   clean: CLEAN_THEME,
   editorial: EDITORIAL_THEME,
-  fineart: FINE_ART_THEME,
 };
 
 export const DEFAULT_THEME_ID = 'lunari';
