@@ -522,7 +522,7 @@ export default function GalleryDetail() {
               <h1 className="text-2xl md:text-3xl font-bold">
                 {supabaseGallery.nomeSessao || 'Galeria'}
               </h1>
-              <StatusBadge status={getStatusDisplay(supabaseGallery.status)} />
+              <StatusBadge status={effectiveStatus} />
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
