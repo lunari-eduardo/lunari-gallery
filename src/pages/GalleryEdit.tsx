@@ -358,6 +358,8 @@ export default function GalleryEdit() {
         photoSpacing,
       };
 
+      const saleSettings = existingConfig.saleSettings;
+
       await updateGallery({
         id: gallery.id,
         data: {
@@ -371,6 +373,9 @@ export default function GalleryEdit() {
           valorFotoExtra: isBillingLocked ? gallery.valorFotoExtra : valorFotoExtra,
           prazoSelecao,
           configuracoes: mergedConfig,
+          venda_modo: saleSettings?.mode,
+          venda_pagamento_provedor: saleSettings?.paymentMethod,
+          venda_tipo_cobranca: saleSettings?.chargeType,
           theme_id: selectedThemeId || null,
           use_custom_theme: !!selectedThemeId,
           theme_overrides: {
