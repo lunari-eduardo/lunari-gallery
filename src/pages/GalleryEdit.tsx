@@ -358,7 +358,7 @@ export default function GalleryEdit() {
         photoSpacing,
       };
 
-      const saleSettings = existingConfig.saleSettings;
+      const saleSettings = existingConfig.saleSettings as any;
 
       await updateGallery({
         id: gallery.id,
