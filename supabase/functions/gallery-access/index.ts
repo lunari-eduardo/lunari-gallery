@@ -23,7 +23,6 @@ serve(async (req) => {
     const password = body.password
     const visitorId = body.visitorId
 
-
     // 1. Fetch gallery
     console.log(`Fetching gallery with token: ${publicToken}`)
     const { data: gallery, error: galleryError } = await supabase
@@ -44,7 +43,6 @@ serve(async (req) => {
       })
     }
 
-
     if (!gallery) {
       console.warn(`Gallery not found for token: ${publicToken}`)
       return new Response(JSON.stringify({ 
@@ -56,26 +54,35 @@ serve(async (req) => {
       })
     }
 
-    // 2. Check password if private
+    // 2. Pre-fetch studio settings for password/visitor screens
+    const { data: settings } = await supabase
+      .from('gallery_settings')
+      .select('*')
+      .eq('user_id', gallery.user_id)
+      .maybeSingle()
+
+    // 3. Check password if private
     if (gallery.permissao === 'private' && gallery.gallery_password !== password) {
       return new Response(JSON.stringify({ 
-        error: 'Invalid password',
-        code: 'WRONG_PASSWORD'
+        success: true,
+        requiresPassword: true,
+        sessionName: gallery.nome_sessao,
+        studioSettings: settings,
+        error: password ? 'Senha incorreta' : undefined,
+        code: password ? 'WRONG_PASSWORD' : 'AUTH_REQUIRED'
       }), {
-        status: 401,
+        status: password ? 401 : 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // 3. Fetch related data
+    // 4. Fetch related data
     const [
       { data: photos },
       { data: folders },
-      { data: settings },
     ] = await Promise.all([
       supabase.from('galeria_fotos').select('*').eq('galeria_id', gallery.id).order('order_index'),
       supabase.from('galeria_pastas').select('*').eq('galeria_id', gallery.id).order('ordem'),
-      supabase.from('gallery_settings').select('*').eq('user_id', gallery.user_id).maybeSingle(),
     ])
 
     // 3.1. CHECK FOR PENDING PAYMENT (Server-side Gating)
