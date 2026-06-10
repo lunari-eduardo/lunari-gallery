@@ -751,7 +751,7 @@ Deno.serve(async (req) => {
     // 9. Return response based on payment type
     // 🛡️ CRITICAL SAFETY CHECK: If payment was required but not created, BLOCK finalization
     if (shouldCreatePayment && (!paymentResponse || (!paymentResponse.checkoutUrl && paymentResponse.provedor !== 'pix_manual' && paymentResponse.provedor !== 'asaas'))) {
-      console.error(`❌ CRITICAL: Payment was required (R$ ${valorTotal}) but no checkout link was generated. Provider: ${paymentResponse?.provedor || 'none'}`);
+      console.error(`❌ CRITICAL: Payment was required (R$ ${valorTotal}) but no checkout link was generated. Provider: ${paymentResponse?.provedor || 'none'}, Mode: ${saleMode}`);
       await rollbackGalleryStatus();
       return errorResponse('Erro ao gerar link de pagamento. Por favor, tente novamente ou entre em contato com o suporte.', 500, 'PAYMENT_LINK_FAILED');
     }
