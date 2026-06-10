@@ -165,9 +165,10 @@ export function SelectionSummary({
             {extrasPagasTotal > 0 && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Extras já pagas</span>
-                <span className="font-medium text-muted-foreground">-{extrasPagasTotal}</span>
+                <span className="font-medium text-muted-foreground">{extrasPagasTotal}</span>
               </div>
             )}
+
             
             {extrasACobrar > 0 && (
               <div className="flex items-center justify-between">
