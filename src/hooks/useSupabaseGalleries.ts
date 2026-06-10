@@ -139,6 +139,9 @@ export interface CreateGaleriaData {
   theme_id?: string | null;
   use_custom_theme?: boolean;
   theme_overrides?: Json;
+  venda_modo?: string;
+  venda_pagamento_provedor?: string;
+  venda_tipo_cobranca?: string;
 }
 
 
