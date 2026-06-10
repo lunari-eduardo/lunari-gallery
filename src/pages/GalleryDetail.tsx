@@ -26,8 +26,11 @@ import {
   ChevronUp,
   CreditCard,
   RotateCcw,
+  RotateCw,
 } from 'lucide-react';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
+import { getEffectiveGalleryStatus } from '@/lib/galleryStatus';
+
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
