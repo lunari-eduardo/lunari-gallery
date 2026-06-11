@@ -1969,8 +1969,11 @@ export default function ClientGallery() {
       )}
 
       {/* Main Content - Full width gallery */}
-      <main className="flex-1 py-2 pb-28">
-        <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? galleryResponse?.settings?.photoSpacing ?? transformedGallery?.settings?.photoSpacing ?? 6}>
+      <main 
+        className="flex-1 py-2 pb-28" 
+        style={{ '--masonry-gap': `${supabaseGallery?.configuracoes?.photoSpacing ?? galleryResponse?.settings?.photoSpacing ?? transformedGallery?.settings?.photoSpacing ?? 8}px` } as React.CSSProperties}
+      >
+        <MasonryGrid gap={supabaseGallery?.configuracoes?.photoSpacing ?? galleryResponse?.settings?.photoSpacing ?? transformedGallery?.settings?.photoSpacing ?? 8}>
           {displayPhotos.map((photo) => {
             const originalIndex = localPhotos.findIndex(p => p.id === photo.id);
             return (

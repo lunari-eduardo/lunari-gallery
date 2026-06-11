@@ -16,10 +16,10 @@ interface MasonryItemProps {
   children: React.ReactNode;
 }
 
-export function MasonryGrid({ gap = 6, children }: MasonryGridProps) {
+export function MasonryGrid({ gap = 8, children }: MasonryGridProps) {
   return (
     <div
-      className="columns-2 sm:columns-3 lg:columns-4 gap-0"
+      className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-0 px-1 sm:px-2 md:px-4"
       style={{
         columnGap: `${gap}px`,
       }}
@@ -34,9 +34,9 @@ export function MasonryItem({ photoWidth, photoHeight, children }: MasonryItemPr
   
   return (
     <div
-      className="break-inside-avoid mb-0"
+      className="break-inside-avoid"
       style={{
-        marginBottom: `${0}px`,
+        marginBottom: `var(--masonry-gap, 8px)`,
         aspectRatio: `${aspectRatio}`,
       }}
     >
