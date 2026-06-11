@@ -756,37 +756,6 @@ export default function DeliverDetail() {
 
             <Separator />
             
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Apresentação</Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Estilo visual e layout da galeria
-                </p>
-              </div>
-              
-              <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider">Espaçamento entre fotos</Label>
-                  <div className="flex items-center gap-6">
-                    <Slider
-                      value={[photoSpacing]}
-                      onValueChange={(vals) => setPhotoSpacing(vals[0])}
-                      min={0}
-                      max={40}
-                      step={1}
-                      className="flex-1"
-                    />
-                    <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-muted/30 rounded-lg border border-dashed text-center">
-                  <p className="text-xs text-muted-foreground italic">
-                    Novos temas e layouts em breve
-                  </p>
-                </div>
-              </div>
-            </div>
 
             <Separator />
 
