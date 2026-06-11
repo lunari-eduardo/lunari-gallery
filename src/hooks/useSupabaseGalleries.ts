@@ -297,9 +297,9 @@ export function useSupabaseGalleries() {
           public_token: publicToken,
           session_id: data.sessionId,
           tipo: data.tipo || 'selecao',
-          theme_id: data.themeId || null,
-          use_custom_theme: data.useCustomTheme || false,
-          theme_overrides: data.themeOverrides || {},
+          theme_id: (data as any).themeId || null,
+          use_custom_theme: (data as any).useCustomTheme || false,
+          theme_overrides: (data as any).themeOverrides || {},
         } as any)
         .select()
         .single();
@@ -321,9 +321,9 @@ export function useSupabaseGalleries() {
       if (data.galleryPassword !== undefined) updateData.gallery_password = data.galleryPassword;
       if (data.configuracoes !== undefined) updateData.configuracoes = data.configuracoes;
       if (data.prazoSelecao !== undefined) updateData.prazo_selecao = data.prazoSelecao;
-      if (data.themeId !== undefined) updateData.theme_id = data.themeId;
-      if (data.useCustomTheme !== undefined) updateData.use_custom_theme = data.useCustomTheme;
-      if (data.themeOverrides !== undefined) updateData.theme_overrides = data.themeOverrides;
+      if ((data as any).themeId !== undefined) updateData.theme_id = (data as any).themeId;
+      if ((data as any).useCustomTheme !== undefined) updateData.use_custom_theme = (data as any).useCustomTheme;
+      if ((data as any).themeOverrides !== undefined) updateData.theme_overrides = (data as any).themeOverrides;
 
       const { data: result, error } = await supabase
         .from('galerias')
