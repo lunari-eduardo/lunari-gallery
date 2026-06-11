@@ -7,6 +7,11 @@ import { getSafeTheme, mergeThemeOverrides } from '@/lib/themeUtils';
 interface GalleryThemeContextType {
   theme: GalleryTheme;
   cssVars: Record<string, string>;
+  footer?: {
+    whatsapp?: string;
+    maps?: string;
+    instagrams?: string[];
+  };
 }
 
 const GalleryThemeContext = createContext<GalleryThemeContextType | undefined>(undefined);
@@ -17,6 +22,11 @@ interface GalleryThemeProviderProps {
   globalSettings?: Partial<GlobalSettings>;
   activeThemeId?: string;
   themeOverrides?: Partial<GalleryTheme>;
+  footer?: {
+    whatsapp?: string;
+    maps?: string;
+    instagrams?: string[];
+  };
 }
 
 export function GalleryThemeProvider({
@@ -24,7 +34,8 @@ export function GalleryThemeProvider({
   gallerySettings,
   globalSettings,
   activeThemeId,
-  themeOverrides
+  themeOverrides,
+  footer
 }: GalleryThemeProviderProps) {
   
   const resolvedTheme = useMemo(() => {
@@ -74,7 +85,7 @@ export function GalleryThemeProvider({
 
 
   return (
-    <GalleryThemeContext.Provider value={{ theme: resolvedTheme, cssVars }}>
+    <GalleryThemeContext.Provider value={{ theme: resolvedTheme, cssVars, footer }}>
       <div style={cssVars as any} className="gallery-theme-root contents min-h-screen" id="gallery-root">
         {children}
       </div>

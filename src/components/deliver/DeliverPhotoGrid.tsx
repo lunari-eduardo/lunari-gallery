@@ -110,7 +110,7 @@ export function DeliverPhotoGrid({
                 e.stopPropagation();
                 onDownload(photo);
               }}
-              className="absolute bottom-4 right-4 p-2.5 backdrop-blur-md bg-white/10 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 hover:bg-white/20 border border-white/20 active:scale-90"
+              className="absolute bottom-4 right-4 p-2.5 backdrop-blur-md bg-white/10 text-white rounded-full sm:opacity-0 group-hover:opacity-100 transition-all duration-500 hover:bg-white/20 border border-white/20 active:scale-90"
               title="Baixar"
             >
               <Download className="w-4 h-4" />

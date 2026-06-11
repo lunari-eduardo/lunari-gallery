@@ -229,6 +229,11 @@ export default function ClientDeliverGallery({ data }: Props) {
       globalSettings={data.studioSettings as any}
       activeThemeId={gallery.settings?.themeId}
       themeOverrides={gallery.settings?.themeOverrides}
+      footer={{
+        whatsapp: "wa.me/5551998807701",
+        maps: "maps.app.goo.gl/XVYSt7E869UvJNBG6?g_st=ic",
+        instagrams: ["@parquewiteck", "@meliterranea.cafe"]
+      }}
     >
       <ClientDeliverGalleryContent 
         data={data} 
