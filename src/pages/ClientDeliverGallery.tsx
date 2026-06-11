@@ -188,7 +188,7 @@ export default function ClientDeliverGallery({ data }: Props) {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 md:gap-8">
             {folders.map(folder => {
               const folderPhotos = allPhotos.filter(p => p.folderId === folder.id);
               const thumb = folderPhotos[0];
@@ -196,22 +196,31 @@ export default function ClientDeliverGallery({ data }: Props) {
                 <button
                   key={folder.id}
                   onClick={() => { setActiveFolderId(folder.id); setFolderViewMode('grid'); }}
-                  className="group relative aspect-[3/4] rounded-xl overflow-hidden transition-all hover:shadow-lg"
-                  style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }}
+                  className="group flex flex-col gap-4 text-left transition-all"
                 >
-                  {thumb ? (
-                    <img
-                      src={getPhotoUrlLib({ storageKey: thumb.storageKey, thumbPath: thumb.thumbPath, width: thumb.width, height: thumb.height }, 'thumbnail')}
-                      alt={folder.nome}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className="absolute inset-0" style={{ backgroundColor: isDark ? '#2A2520' : '#EDE9E4' }} />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
-                    <p className="text-white font-medium text-sm sm:text-base leading-tight">{folder.nome}</p>
-                    <p className="text-white/70 text-xs mt-0.5">{folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''}</p>
+                  <div 
+                    className="relative aspect-[4/5] overflow-hidden transition-all duration-500 shadow-sm group-hover:shadow-xl group-hover:-translate-y-1"
+                    style={{ borderRadius: 'var(--gallery-radius, 8px)' }}
+                  >
+                    {thumb ? (
+                      <img
+                        src={getPhotoUrlLib({ storageKey: thumb.storageKey, thumbPath: thumb.thumbPath, width: thumb.width, height: thumb.height }, 'thumbnail')}
+                        alt={folder.nome}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      />
+                    ) : (
+                      <div className="absolute inset-0" style={{ backgroundColor: isDark ? '#2A2520' : '#EDE9E4' }} />
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500" />
+                  </div>
+                  
+                  <div className="space-y-1 px-1">
+                    <p className="font-medium text-base sm:text-lg tracking-tight leading-tight group-hover:text-primary transition-colors">
+                      {folder.nome}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.2em] opacity-40 font-semibold">
+                      {folderPhotos.length} fotografias
+                    </p>
                   </div>
                 </button>
               );
@@ -248,6 +257,9 @@ export default function ClientDeliverGallery({ data }: Props) {
         handleCloseWelcome={handleCloseWelcome}
         lightboxIndex={lightboxIndex}
         setLightboxIndex={setLightboxIndex}
+        activeFolderId={activeFolderId}
+        setActiveFolderId={setActiveFolderId}
+        setFolderViewMode={setFolderViewMode}
       />
     </GalleryThemeProvider>
   );
@@ -257,7 +269,7 @@ export default function ClientDeliverGallery({ data }: Props) {
 function ClientDeliverGalleryContent({ 
   data, photos, allPhotos, coverPhoto, sessionFont, handleDownloadAll, 
   isDownloading, handleDownloadSingle, showWelcome, handleCloseWelcome,
-  lightboxIndex, setLightboxIndex
+  lightboxIndex, setLightboxIndex, activeFolderId, setActiveFolderId, setFolderViewMode
 }: any) {
   const { gallery, studioSettings } = data;
   const folders = data.folders || [];
@@ -305,34 +317,40 @@ function ClientDeliverGalleryContent({
         />
 
         {hasFolders && (
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
-            <div className="flex flex-wrap gap-2">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+            <div className="flex flex-wrap items-center gap-3">
               <button 
-                onClick={() => {}} 
-                className="px-3 py-1.5 rounded-lg text-sm transition-colors border" 
+                onClick={() => setFolderViewMode('albums')} 
+                className="group flex items-center gap-2 px-4 py-2 rounded-full text-xs uppercase tracking-widest font-semibold transition-all border bg-white/5 hover:bg-white/10 active:scale-95" 
                 style={{ 
-                  backgroundColor: 'transparent', 
                   color: textColor, 
-                  borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', 
-                  opacity: 0.7 
+                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
                 }}
               >
-                ← Álbuns
+                <span className="opacity-40 group-hover:translate-x-[-2px] transition-transform">←</span> 
+                Álbuns
               </button>
+              
+              <div className="h-4 w-px bg-white/10 mx-1" />
+
               {folders.map((f: any) => {
+                const isActive = f.id === activeFolderId;
                 const count = allPhotos.filter((p: any) => p.folderId === f.id).length;
                 return (
                   <button 
                     key={f.id} 
-                    className="px-3 py-1.5 rounded-lg text-sm transition-colors border" 
+                    onClick={() => setActiveFolderId(f.id)}
+                    className={cn(
+                      "px-4 py-2 rounded-full text-[10px] uppercase tracking-[0.15em] font-bold transition-all border active:scale-95",
+                      isActive ? "bg-primary text-primary-foreground border-primary" : "bg-transparent opacity-60 hover:opacity-100"
+                    )}
                     style={{ 
-                      backgroundColor: 'transparent', 
-                      color: textColor, 
-                      borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', 
-                      opacity: 0.7 
+                      color: isActive ? 'var(--gallery-primary-foreground)' : textColor, 
+                      backgroundColor: isActive ? 'var(--gallery-primary)' : 'transparent',
+                      borderColor: isActive ? 'var(--gallery-primary)' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'), 
                     }}
                   >
-                    {f.nome} ({count})
+                    {f.nome} <span className="opacity-40 ml-1">({count})</span>
                   </button>
                 );
               })}

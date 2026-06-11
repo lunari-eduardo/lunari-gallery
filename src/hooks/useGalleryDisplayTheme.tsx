@@ -73,12 +73,16 @@ export function GalleryThemeProvider({
   const cssVars = useMemo(() => {
     const vars: Record<string, string> = {
       '--gallery-bg': resolvedTheme.surface.background || 'transparent',
+      '--gallery-primary': resolvedTheme.surface.primaryColor || 'hsl(var(--primary))',
+      '--gallery-primary-foreground': resolvedTheme.surface.primaryForeground || 'hsl(var(--primary-foreground))',
+      '--gallery-accent': resolvedTheme.surface.accentColor || 'hsl(var(--accent))',
       '--gallery-gap': `${resolvedTheme.layout.gap}px`,
       '--gallery-cols-m': `${resolvedTheme.layout.columns.mobile}`,
       '--gallery-cols-t': `${resolvedTheme.layout.columns.tablet}`,
       '--gallery-cols-d': `${resolvedTheme.layout.columns.desktop}`,
       '--gallery-hover-scale': `${resolvedTheme.motion?.hoverScale ?? 1.005}`,
       '--gallery-row-unit': `${resolvedTheme.layout.rowUnit || 220}px`,
+      '--gallery-radius': resolvedTheme.surface.borderRadius || '0px',
     };
     return vars;
   }, [resolvedTheme]);
