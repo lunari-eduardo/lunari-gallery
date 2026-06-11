@@ -46,8 +46,8 @@ export function DeliverFloatingBar({
   return (
     <div 
       className={cn(
-        "fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 w-[95%] max-w-2xl",
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-10 pointer-events-none"
+        "fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 w-[95%] max-w-2xl",
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
       )}
     >
       <div 
@@ -110,7 +110,7 @@ export function DeliverFloatingBar({
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 w-8 p-0 rounded-full opacity-40 hover:opacity-100"
+            className="h-8 w-8 p-0 rounded-full opacity-40 hover:opacity-100 hidden md:flex"
           >
             <Info className="w-4 h-4" />
           </Button>
