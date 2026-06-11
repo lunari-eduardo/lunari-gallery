@@ -177,7 +177,7 @@ export default function Dashboard() {
   const [selectStatusFilter, setSelectStatusFilter] = useState<GalleryStatus | 'all'>('all');
   const [deliverStatusFilter, setDeliverStatusFilter] = useState<DeliverStatusFilter>('all');
   
-  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, reopenSelection, refetch } = useSupabaseGalleries();
+  const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, reopenSelection, refetch } = useSupabaseGalleries() as any;
   const { settings } = useSettings();
 
   // Share, Delete & Reactivate modal state
