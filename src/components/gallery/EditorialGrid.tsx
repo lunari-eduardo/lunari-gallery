@@ -20,7 +20,7 @@ interface GridCell {
 }
 
 /**
- * Editorial Grid Component - Masonry-style using CSS Grid
+ * Editorial Grid Component - Masonry-style using absolute positioning
  * Preserves photo aspect ratio without cropping.
  */
 export const EditorialGrid: React.FC<EditorialGridProps> = ({
