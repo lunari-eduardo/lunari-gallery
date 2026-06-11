@@ -244,8 +244,8 @@ export default function Dashboard() {
       gallery.clientName.toLowerCase().includes(search.toLowerCase()) ||
       gallery.sessionName.toLowerCase().includes(search.toLowerCase());
     if (deliverStatusFilter === 'all') return matchesSearch;
-    if (deliverStatusFilter === 'published') return matchesSearch && gallery.status === 'sent';
-    if (deliverStatusFilter === 'expired') return matchesSearch && gallery.status === 'expired';
+    if (deliverStatusFilter === 'published') return matchesSearch && gallery.status === 'enviado';
+    if (deliverStatusFilter === 'expired') return matchesSearch && gallery.status === 'expirado';
     return matchesSearch;
   });
 
@@ -264,8 +264,8 @@ export default function Dashboard() {
 
   const deliverStats = {
     total: deliverGalleries.length,
-    published: deliverGalleries.filter(g => g.status === 'sent').length,
-    expired: deliverGalleries.filter(g => g.status === 'expired').length,
+    published: deliverGalleries.filter(g => g.status === 'enviado').length,
+    expired: deliverGalleries.filter(g => g.status === 'expirado').length,
   };
 
   const deleteTarget = allGalleries.find(g => g.id === deleteGalleryId);

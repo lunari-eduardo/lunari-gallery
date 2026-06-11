@@ -356,15 +356,16 @@ export function useSupabaseGalleries() {
 
   const publishGallery = useMutation({
     mutationFn: async (id: string) => {
-      const { data: result, error } = await supabase
-        .from('galerias')
-        .update({ status: 'sent', published_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('prepare_gallery_share', { 
+        p_gallery_id: id,
+        p_mark_as_sent: false 
+      });
       
       if (error) throw error;
-      return transformGaleria(result);
+      const result = data as any;
+      if (result?.error) throw new Error(result.error);
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleries'] });
@@ -383,7 +384,6 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleries'] });
-      queryClient.invalidateQueries({ queryKey: ['galerias'] });
     }
   });
 
@@ -397,8 +397,10 @@ export function useSupabaseGalleries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleries'] });
-      queryClient.invalidateQueries({ queryKey: ['galerias'] });
       queryClient.invalidateQueries({ queryKey: ['galeria-fotos'] });
+      queryClient.invalidateQueries({ queryKey: ['gallery-credits'] });
+      queryClient.invalidateQueries({ queryKey: ['photographer-account'] });
+      queryClient.invalidateQueries({ queryKey: ['photo-credits'] });
     }
   });
 
