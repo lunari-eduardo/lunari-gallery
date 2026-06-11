@@ -314,34 +314,40 @@ function ClientDeliverGalleryContent({
         />
 
         {hasFolders && (
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
-            <div className="flex flex-wrap gap-2">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+            <div className="flex flex-wrap items-center gap-3">
               <button 
-                onClick={() => {}} 
-                className="px-3 py-1.5 rounded-lg text-sm transition-colors border" 
+                onClick={() => setFolderViewMode('albums')} 
+                className="group flex items-center gap-2 px-4 py-2 rounded-full text-xs uppercase tracking-widest font-semibold transition-all border bg-white/5 hover:bg-white/10 active:scale-95" 
                 style={{ 
-                  backgroundColor: 'transparent', 
                   color: textColor, 
-                  borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', 
-                  opacity: 0.7 
+                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
                 }}
               >
-                ← Álbuns
+                <span className="opacity-40 group-hover:translate-x-[-2px] transition-transform">←</span> 
+                Álbuns
               </button>
+              
+              <div className="h-4 w-px bg-white/10 mx-1" />
+
               {folders.map((f: any) => {
+                const isActive = f.id === activeFolderId;
                 const count = allPhotos.filter((p: any) => p.folderId === f.id).length;
                 return (
                   <button 
                     key={f.id} 
-                    className="px-3 py-1.5 rounded-lg text-sm transition-colors border" 
+                    onClick={() => setActiveFolderId(f.id)}
+                    className={cn(
+                      "px-4 py-2 rounded-full text-[10px] uppercase tracking-[0.15em] font-bold transition-all border active:scale-95",
+                      isActive ? "bg-primary text-primary-foreground border-primary" : "bg-transparent opacity-60 hover:opacity-100"
+                    )}
                     style={{ 
-                      backgroundColor: 'transparent', 
-                      color: textColor, 
-                      borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)', 
-                      opacity: 0.7 
+                      color: isActive ? 'var(--gallery-primary-foreground)' : textColor, 
+                      backgroundColor: isActive ? 'var(--gallery-primary)' : 'transparent',
+                      borderColor: isActive ? 'var(--gallery-primary)' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'), 
                     }}
                   >
-                    {f.nome} ({count})
+                    {f.nome} <span className="opacity-40 ml-1">({count})</span>
                   </button>
                 );
               })}
