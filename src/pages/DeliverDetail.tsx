@@ -153,9 +153,9 @@ export default function DeliverDetail() {
           coverPhotoId: coverPhotoId || undefined,
           photoSpacing: photoSpacing,
         },
-        theme_id: useCustomTheme ? activeThemeId : null,
-        use_custom_theme: useCustomTheme,
-        theme_overrides: themeOverrides,
+        themeId: useCustomTheme ? activeThemeId : null,
+        useCustomTheme: useCustomTheme,
+        themeOverrides: themeOverrides,
         prazoSelecao: expirationDate,
 
       }});
@@ -184,7 +184,7 @@ export default function DeliverDetail() {
 
   const handlePhotoDelete = async (photoId: string) => {
     if (!id) return;
-    await deletePhoto({ galleryId: id, photoId });
+    await deletePhoto({ photoId } as any);
     setPhotos(prev => prev.filter(p => p.id !== photoId));
     // Se a foto excluída era a capa, resetar
     if (coverPhotoId === photoId) {

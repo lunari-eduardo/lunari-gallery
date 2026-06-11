@@ -417,7 +417,7 @@ export default function GalleryEdit() {
 
   const handleReactivate = async (days: number = 7) => {
     try {
-      await reopenSelection({ id: gallery.id, days });
+      await reopenSelection({ id: gallery.id, days } as any);
       // Aguarda o refetch para garantir que publicToken esteja atualizado.
       await queryClient.invalidateQueries({ queryKey: ['galerias'] });
       await queryClient.refetchQueries({ queryKey: ['galerias'] });
@@ -432,7 +432,7 @@ export default function GalleryEdit() {
   };
 
   const handleDeletePhoto = async (photoId: string) => {
-    await deletePhoto({ photoId });
+    await deletePhoto({ photoId } as any);
     setLocalPhotoCount(prev => Math.max(0, (prev || 1) - 1));
     setSelectedIds(prev => {
       if (!prev.has(photoId)) return prev;
@@ -469,7 +469,7 @@ export default function GalleryEdit() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     try {
-      await deletePhotos({ galleryId: gallery.id, photoIds: ids });
+      await deletePhotos({ photoIds: ids } as any);
       setLocalPhotoCount(prev => Math.max(0, (prev || ids.length) - ids.length));
       toast.success(`${ids.length} foto${ids.length !== 1 ? 's' : ''} excluída${ids.length !== 1 ? 's' : ''}`);
       setSelectedIds(new Set());
