@@ -379,8 +379,8 @@ export function useSupabaseGalleries() {
   });
 
   const reopenSelection = useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
-      const { error } = await supabase.rpc('reopen_gallery_selection' as any, { gallery_id: id });
+    mutationFn: async (params: { id: string; [key: string]: any }) => {
+      const { error } = await supabase.rpc('reopen_gallery_selection' as any, { gallery_id: params.id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -389,7 +389,7 @@ export function useSupabaseGalleries() {
   });
 
   const deletePhoto = useMutation({
-    mutationFn: async ({ photoId }: { photoId: string }) => {
+    mutationFn: async (params: { photoId: string; [key: string]: any }) => {
       const { error } = await supabase
         .from('galeria_fotos')
         .delete()
@@ -402,7 +402,7 @@ export function useSupabaseGalleries() {
   });
 
   const deletePhotos = useMutation({
-    mutationFn: async ({ photoIds }: { photoIds: string[] }) => {
+    mutationFn: async (params: { photoIds: string[]; [key: string]: any }) => {
       const { error } = await supabase
         .from('galeria_fotos')
         .delete()
@@ -428,6 +428,11 @@ export function useSupabaseGalleries() {
     sendGallery: sendGallery.mutateAsync,
     reopenSelection: reopenSelection.mutateAsync,
     deletePhoto: deletePhoto.mutateAsync,
-    deletePhotos: deletePhotos.mutateAsync
+    deletePhotos: deletePhotos.mutateAsync,
+    getPhotoUrl: (photo: any, type: any) => getPhotoUrlFromLib(photo, type),
+    isUpdating: updateGallery.isPending,
+    isDeleting: deleteGallery.isPending,
+    isDeletingPhoto: deletePhoto.isPending,
+    isDeletingPhotos: deletePhotos.isPending,
   };
 }
