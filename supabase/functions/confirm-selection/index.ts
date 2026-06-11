@@ -609,17 +609,18 @@ Deno.serve(async (req) => {
     }
 
     // 8. Confirm gallery selection (atomic status update)
-    // Se statusPagamento for 'pendente', a galeria não é finalizada ('selecao_completa')
-    // mas sim colocada em espera de pagamento ('aguardando_pagamento').
-    const shouldFinalizeNow = !shouldCreatePayment;
+    // CRITICAL: Selection is considered finished even if payment is pending.
+    // status: 'selecao_completa' (dashboard Concluída)
+    // status_selecao: 'aguardando_pagamento' (client logic shows payment)
+    const shouldFinalizeSelection = true; // Always finalize selection when confirm-selection is successful
 
     if (visitorId) {
-      // ── PUBLIC GALLERY: Update visitor, NOT the gallery status ──
+      // ── PUBLIC GALLERY: Update visitor ──
       const visitorUpdateData: Record<string, unknown> = {
-        status: shouldFinalizeNow ? 'finalizado' : 'em_andamento',
-        status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
+        status: 'finalizado',
+        status_selecao: shouldCreatePayment ? 'aguardando_pagamento' : 'selecao_completa',
         fotos_selecionadas: selectedCount || 0,
-        finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
+        finalized_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
@@ -662,9 +663,9 @@ Deno.serve(async (req) => {
     } else {
       // ── PRIVATE GALLERY: Original flow — update gallery directly ──
       const updateData: Record<string, unknown> = {
-        status: shouldFinalizeNow ? 'selecao_completa' : 'selecao_iniciada', // Keep as started if payment is pending
-        status_selecao: shouldFinalizeNow ? 'selecao_completa' : 'aguardando_pagamento',
-        finalized_at: shouldFinalizeNow ? new Date().toISOString() : null,
+        status: 'selecao_completa', // Now always set to completed so dashboard shows "Concluída"
+        status_selecao: shouldCreatePayment ? 'aguardando_pagamento' : 'selecao_completa',
+        finalized_at: new Date().toISOString(),
         fotos_selecionadas: selectedCount || 0,
         valor_extras: valorTotal,
         status_pagamento: statusPagamento,
@@ -724,7 +725,7 @@ Deno.serve(async (req) => {
         p_total_extras: totalExtrasAbsoluto,
         p_valor_unitario: valorUnitario,
         p_total_valor: totalValorAbsoluto,
-        p_status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
+        p_status_galeria: 'selecao_completa',
       });
 
       if (sessionError) {
@@ -736,7 +737,7 @@ Deno.serve(async (req) => {
             qtd_fotos_extra: totalExtrasAbsoluto,
             valor_foto_extra: valorUnitario,
             valor_total_foto_extra: totalValorAbsoluto,
-            status_galeria: shouldFinalizeNow ? 'selecao_completa' : 'em_selecao',
+            status_galeria: 'selecao_completa',
             updated_at: new Date().toISOString(),
           })
           .eq('session_id', gallery.session_id);
