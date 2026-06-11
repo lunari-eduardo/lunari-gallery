@@ -993,18 +993,31 @@ export default function ClientGallery() {
     }
   };
 
-  // Password screen - BEFORE error check
-  if (requiresPassword && !gallery) {
+  // Unified Access Screen (Password and/or Visitor)
+  if ((requiresPassword && !sessionPassword) || (requiresVisitor && !visitorId)) {
     return (
-      <PasswordScreen
+      <UnifiedAccessScreen
         sessionName={galleryResponse?.sessionName}
         sessionFont={getFontFamilyById(supabaseGallery?.configuracoes?.sessionFont || galleryResponse?.settings?.sessionFont)}
         titleCaseMode={(supabaseGallery?.configuracoes?.titleCaseMode || galleryResponse?.settings?.titleCaseMode) as TitleCaseMode || 'normal'}
         studioName={galleryResponse?.studioSettings?.studio_name}
         studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
-        onSubmit={handlePasswordSubmit}
-        error={passwordError}
-        isLoading={isCheckingPassword}
+        requiresPassword={requiresPassword && !sessionPassword}
+        requiresVisitor={requiresVisitor && !visitorId}
+        totalPhotos={galleryResponse?.pagination?.total || localPhotos.length}
+        includedPhotos={transformedGallery?.includedPhotos}
+        deadline={transformedGallery?.settings?.deadline}
+        welcomeMessage={supabaseGallery?.configuracoes?.welcomeMessage || galleryResponse?.settings?.welcomeMessage}
+        onSubmit={async (data) => {
+          if (data.password) {
+            await handlePasswordSubmit(data.password);
+          }
+          if (data.visitor) {
+            await handleVisitorSubmit(data.visitor);
+          }
+        }}
+        error={passwordError || visitorError}
+        isLoading={isCheckingPassword || isRegisteringVisitor}
         themeStyles={themeStyles}
         backgroundMode={effectiveBackgroundMode}
       />
@@ -1063,23 +1076,6 @@ export default function ClientGallery() {
     }
   };
 
-  // Visitor identification screen - for public galleries
-  if (requiresVisitor && !gallery) {
-    return (
-      <VisitorIdentificationScreen
-        sessionName={galleryResponse?.sessionName}
-        sessionFont={getFontFamilyById(supabaseGallery?.configuracoes?.sessionFont || galleryResponse?.settings?.sessionFont)}
-        titleCaseMode={(supabaseGallery?.configuracoes?.titleCaseMode || galleryResponse?.settings?.titleCaseMode) as TitleCaseMode || 'normal'}
-        studioName={galleryResponse?.studioSettings?.studio_name}
-        studioLogo={galleryResponse?.studioSettings?.studio_logo_url}
-        onSubmit={handleVisitorSubmit}
-        error={visitorError}
-        isLoading={isRegisteringVisitor}
-        themeStyles={themeStyles}
-        backgroundMode={effectiveBackgroundMode}
-      />
-    );
-  }
   if (galleryResponse?.deliver) {
     return <ClientDeliverGallery data={galleryResponse} />;
   }
