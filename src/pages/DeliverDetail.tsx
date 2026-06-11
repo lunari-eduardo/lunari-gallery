@@ -99,11 +99,18 @@ export default function DeliverDetail() {
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
       setCoverPhotoId(gallery.configuracoes?.coverPhotoId || null);
-      setPhotoSpacing(gallery.configuracoes?.photoSpacing ?? 6);
       setActiveThemeId(gallery.themeId || DEFAULT_THEME_ID);
       setUseCustomTheme(gallery.useCustomTheme || false);
       setThemeOverrides(gallery.themeOverrides || {});
-
+      
+      // Migrate legacy gap to overrides if needed
+      const legacyGap = gallery.configuracoes?.photoSpacing;
+      if (legacyGap !== undefined && !gallery.themeOverrides?.layout?.gap) {
+        setThemeOverrides((prev: any) => ({
+          ...prev,
+          layout: { ...(prev.layout || {}), gap: legacyGap }
+        }));
+      }
     }
   }, [gallery]);
 
