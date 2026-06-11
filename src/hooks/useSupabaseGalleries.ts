@@ -316,6 +316,12 @@ export function useSupabaseGalleries() {
     mutationFn: async ({ id, data }: { id: string; data: Partial<CreateGaleriaData> }) => {
       const updateData: any = {};
       if (data.nomeSessao !== undefined) updateData.nome_sessao = data.nomeSessao;
+      if (data.clienteNome !== undefined) updateData.cliente_nome = data.clienteNome;
+      if (data.clienteEmail !== undefined) updateData.cliente_email = data.clienteEmail;
+      if (data.clienteTelefone !== undefined) updateData.cliente_telefone = data.clienteTelefone;
+      if (data.nomePacote !== undefined) updateData.nome_pacote = data.nomePacote;
+      if (data.fotosIncluidas !== undefined) updateData.fotos_incluidas = data.fotosIncluidas;
+      if (data.valorFotoExtra !== undefined) updateData.valor_foto_extra = data.valorFotoExtra;
       if (data.mensagemBoasVindas !== undefined) updateData.mensagem_boas_vindas = data.mensagemBoasVindas;
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
       if (data.galleryPassword !== undefined) updateData.gallery_password = data.galleryPassword;
@@ -324,6 +330,10 @@ export function useSupabaseGalleries() {
       if ((data as any).themeId !== undefined) updateData.theme_id = (data as any).themeId;
       if ((data as any).useCustomTheme !== undefined) updateData.use_custom_theme = (data as any).useCustomTheme;
       if ((data as any).themeOverrides !== undefined) updateData.theme_overrides = (data as any).themeOverrides;
+      if ((data as any).venda_modo !== undefined) updateData.venda_modo = (data as any).venda_modo;
+      if ((data as any).venda_pagamento_provedor !== undefined) updateData.venda_pagamento_provedor = (data as any).venda_pagamento_provedor;
+      if ((data as any).venda_tipo_cobranca !== undefined) updateData.venda_tipo_cobranca = (data as any).venda_tipo_cobranca;
+
 
       const { data: result, error } = await supabase
         .from('galerias')

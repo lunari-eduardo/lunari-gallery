@@ -328,7 +328,7 @@ export default function GalleryEdit() {
 
   // Galeria concluída: bloqueia edição de parâmetros que afetam cobrança.
   // Reativar a seleção libera novamente esses campos.
-  const isBillingLocked = gallery.statusSelecao === 'selecao_completa' || gallery.finalizedAt != null;
+  const isBillingLocked = (gallery.statusSelecao === 'selecao_completa' || gallery.finalizedAt != null) && gallery.status !== 'selecao_iniciada';
 
   // Galeria vinculada ao Lunari Studio (sessão do projeto Studio).
   const isLunariLinked = !!gallery.sessionId;

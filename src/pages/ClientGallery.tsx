@@ -399,14 +399,20 @@ export default function ClientGallery() {
       packageName: (isEdgeFunctionFormat ? supabaseGallery.packageName : supabaseGallery.nome_pacote) || 'Pacote',
       includedPhotos: (isEdgeFunctionFormat ? supabaseGallery.includedPhotos : supabaseGallery.fotos_incluidas) ?? 0,
       extraPhotoPrice: (() => {
-        // Sessão (regras_congeladas.pacote.valorFotoExtra) é a fonte única.
+        // Prioridade 1: Valor explícito definido na galeria (manual override)
+        const fromGallery = Number(isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra);
+        if (fromGallery > 0) return fromGallery;
+
+        // Prioridade 2: Valor congelado da sessão de Gestão
         const regras: any = isEdgeFunctionFormat
           ? (supabaseGallery as any).regrasCongeladas
           : (supabaseGallery as any).regras_congeladas;
         const fromRegras = Number(regras?.pacote?.valorFotoExtra ?? 0);
         if (fromRegras > 0) return fromRegras;
-        return (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra) ?? 0;
+
+        return 0;
       })(),
+
       status: 'sent' as Gallery['status'],
       selectionStatus: (isEdgeFunctionFormat ? supabaseGallery.selectionStatus : supabaseGallery.status_selecao) === 'selecao_completa' ? 'confirmed' : 'in_progress',
       createdAt: new Date(),
