@@ -379,7 +379,7 @@ export function useSupabaseGalleries() {
   });
 
   const reopenSelection = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id }: { id: string }) => {
       const { error } = await supabase.rpc('reopen_gallery_selection' as any, { gallery_id: id });
       if (error) throw error;
     },
@@ -389,7 +389,7 @@ export function useSupabaseGalleries() {
   });
 
   const deletePhoto = useMutation({
-    mutationFn: async (photoId: string) => {
+    mutationFn: async ({ photoId }: { photoId: string }) => {
       const { error } = await supabase
         .from('galeria_fotos')
         .delete()
@@ -402,7 +402,7 @@ export function useSupabaseGalleries() {
   });
 
   const deletePhotos = useMutation({
-    mutationFn: async (photoIds: string[]) => {
+    mutationFn: async ({ photoIds }: { photoIds: string[] }) => {
       const { error } = await supabase
         .from('galeria_fotos')
         .delete()
