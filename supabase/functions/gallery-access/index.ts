@@ -27,7 +27,7 @@ serve(async (req) => {
     console.log(`Fetching gallery with token: ${publicToken}`)
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('*, gallery_settings:user_id(default_theme_id, theme_overrides)')
+      .select('*')
       .eq('public_token', publicToken)
       .maybeSingle()
 
@@ -54,17 +54,15 @@ serve(async (req) => {
       })
     }
 
-    // Resolve owner settings (account theme)
-    const accountTheme = Array.isArray(gallery.gallery_settings) 
-      ? gallery.gallery_settings[0] 
-      : gallery.gallery_settings;
-
     // 2. Pre-fetch studio settings (detailed)
     const { data: settings } = await supabase
       .from('gallery_settings')
       .select('*')
       .eq('user_id', gallery.user_id)
       .maybeSingle()
+
+    // Resolve owner settings (account theme)
+    const accountTheme = settings;
 
     // 3. Check password if private
     if (gallery.permissao === 'private' && gallery.gallery_password !== password) {
