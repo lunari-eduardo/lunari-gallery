@@ -134,91 +134,84 @@ export function SelectionSummary({
 
   // Default card variant
   return (
-    <div className="lunari-card p-4 md:p-6 space-y-4">
-      <h3 className="text-lg font-semibold">Resumo da Seleção</h3>
-      
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Fotos incluídas</span>
-          <span className="font-medium">{includedPhotos}</span>
+    <div className="glass p-6 md:p-8 space-y-6 shadow-xl border-white/5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl font-light tracking-tight">Resumo da Seleção</h3>
+        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+          <Check className="h-4 w-4 text-primary" />
         </div>
-        
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Selecionadas</span>
-          <span className={cn(
-            'font-medium',
-            isOverLimit ? 'text-primary' : 'text-foreground'
-          )}>
-            {selectedCount}
-          </span>
+      </div>
+      
+      <div className="space-y-4">
+        {/* Progress Bar Section */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-xs uppercase tracking-widest opacity-50">
+            <span>Progresso da Seleção</span>
+            <span>{Math.round((selectedCount / includedPhotos) * 100)}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div 
+              className={cn(
+                "h-full transition-all duration-1000 ease-out",
+                isOverLimit ? "bg-amber-500" : "bg-primary"
+              )}
+              style={{ width: `${Math.min(100, (selectedCount / includedPhotos) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase tracking-widest opacity-40 block">Fotos Incluídas</span>
+            <span className="text-xl font-medium">{includedPhotos}</span>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase tracking-widest opacity-40 block">Selecionadas</span>
+            <span className={cn(
+              'text-xl font-bold transition-colors',
+              isOverLimit ? 'text-amber-500' : 'text-primary'
+            )}>
+              {selectedCount}
+            </span>
+          </div>
         </div>
 
         {isOverLimit && (
-          <>
-            <div className="h-px bg-border" />
-            
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Fotos extras totais</span>
-              <span className="font-medium text-primary">+{totalExtras}</span>
+          <div className="space-y-4 pt-4 border-t border-white/5 animate-fade-in">
+            <div className="flex items-center justify-between text-sm">
+              <span className="opacity-60">Fotos extras</span>
+              <span className="font-semibold text-amber-500">+{totalExtras}</span>
             </div>
             
             {extrasPagasTotal > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Extras já pagas</span>
-                <span className="font-medium text-muted-foreground">{extrasPagasTotal}</span>
+              <div className="flex items-center justify-between text-xs opacity-50">
+                <span>Extras já pagas</span>
+                <span className="line-through">-{extrasPagasTotal}</span>
               </div>
             )}
 
-            
-            {extrasACobrar > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Extras a pagar</span>
-                <span className="font-medium text-primary">+{extrasACobrar}</span>
-              </div>
-            )}
-            
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Valor por extra</span>
-              <span className="font-medium">R$ {displayUnitPrice.toFixed(2)}</span>
+            <div className="flex items-center justify-between text-sm">
+              <span className="opacity-60">Valor unitário</span>
+              <span>R$ {displayUnitPrice.toFixed(2)}</span>
             </div>
             
-            <div className="h-px bg-border" />
-            
-            {valorJaPago > 0 && valorTotalIdeal > 0 && (
-              <>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Valor total ({totalExtras} fotos)</span>
-                  <span className="font-medium">R$ {valorTotalIdeal.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Já pago</span>
-                  <span className="font-medium text-muted-foreground">
-                    {displayTotal === 0 ? '' : '-'}R$ {valorJaPago.toFixed(2)}
-                  </span>
-                </div>
-              </>
-            )}
-
-            
-            <div className="flex items-center justify-between">
-              <span className="font-medium">Valor a pagar</span>
-              <span className="text-lg font-bold text-primary">
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <span className="text-base font-medium">Total adicional</span>
+              <span className="text-2xl font-bold text-primary">
                 R$ {displayTotal.toFixed(2)}
               </span>
             </div>
-          </>
+          </div>
         )}
       </div>
 
       {isOverLimit && gallery.settings.allowExtraPhotos && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/10 text-sm">
-          <AlertCircle className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-          <p className="text-primary">
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm">
+          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+          <p className="text-amber-500/90 leading-relaxed">
             {isClient 
-              ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do pacote. O valor adicional será cobrado posteriormente.`
-              : displayTotal > 0
-                ? `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor adicional: R$ ${displayTotal.toFixed(2)}`
-                : `Cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}. Valor já pago: R$ ${valorJaPago.toFixed(2)}`
+              ? `Você selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} além do seu pacote original.`
+              : `O cliente selecionou ${extraCount} foto${extraCount > 1 ? 's' : ''} extra${extraCount > 1 ? 's' : ''}.`
             }
           </p>
         </div>
@@ -227,19 +220,24 @@ export function SelectionSummary({
       {isClient && !isConfirmed && !isBlocked && (
         <Button 
           onClick={onConfirm}
-          variant="terracotta"
-          className="w-full"
+          variant="default"
+          className="w-full shadow-lg hover:shadow-primary/20 transition-all duration-500 h-14 text-base tracking-wide"
           size="lg"
+          style={{ 
+            backgroundColor: 'var(--gallery-primary)',
+            color: 'var(--gallery-primary-foreground)',
+            borderRadius: 'var(--gallery-radius)'
+          }}
         >
-          <Check className="h-4 w-4 mr-2" />
+          <Check className="h-5 w-5 mr-2" />
           Confirmar Seleção
         </Button>
       )}
 
       {isConfirmed && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm">
-          <Check className="h-4 w-4 flex-shrink-0" />
-          <p>Seleção confirmada com sucesso!</p>
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 text-sm animate-scale-in">
+          <Check className="h-5 w-5 flex-shrink-0" />
+          <p className="font-medium">Sua seleção foi enviada com sucesso!</p>
         </div>
       )}
     </div>
