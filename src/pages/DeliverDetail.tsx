@@ -100,9 +100,9 @@ export default function DeliverDetail() {
       setExpirationDate(gallery.prazoSelecao || undefined);
       setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
       setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
-      setActiveThemeId((gallery as any).theme_id || (gallery.configuracoes as any)?.themeId || DEFAULT_THEME_ID);
-      setUseCustomTheme((gallery as any).use_custom_theme ?? !!(gallery as any).theme_id);
-      setThemeOverrides((gallery as any).theme_overrides || (gallery.configuracoes as any)?.themeOverrides || {});
+      setActiveThemeId(gallery.themeId || DEFAULT_THEME_ID);
+      setUseCustomTheme(gallery.useCustomTheme || false);
+      setThemeOverrides(gallery.themeOverrides || {});
 
     }
   }, [gallery]);
@@ -153,9 +153,9 @@ export default function DeliverDetail() {
           coverPhotoId: coverPhotoId,
           photoSpacing: photoSpacing,
         },
-        theme_id: useCustomTheme ? activeThemeId : null,
-        use_custom_theme: useCustomTheme,
-        theme_overrides: themeOverrides,
+        themeId: useCustomTheme ? activeThemeId : null,
+        useCustomTheme: useCustomTheme,
+        themeOverrides: themeOverrides,
         prazoSelecao: expirationDate,
 
       }});

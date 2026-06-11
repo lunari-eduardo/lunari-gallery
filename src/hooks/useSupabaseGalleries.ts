@@ -196,6 +196,9 @@ function transformGaleria(row: any): Galeria {
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
     firstPhotoKey: photos[0]?.storage_key || null,
     coverPhotoKey,
+    themeId: row.theme_id,
+    useCustomTheme: row.use_custom_theme ?? false,
+    themeOverrides: row.theme_overrides ?? {},
   };
 }
 
@@ -227,6 +230,7 @@ function transformPhoto(row: any): GaleriaPhoto {
     comment: row.comment,
     orderIndex: row.order_index,
     pastaId: row.pasta_id || null,
+    pesoVisual: row.peso_visual ?? 0,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
@@ -345,9 +349,9 @@ export function useSupabaseGalleries() {
           gallery_password: data.galleryPassword || null,
           session_id: data.sessionId || null, // Session ID from Gestão
           origin: data.origin || 'manual', // Track creation origin
-          theme_id: data.theme_id || null,
-          use_custom_theme: data.use_custom_theme || false,
-          theme_overrides: data.theme_overrides || {},
+          theme_id: data.themeId || null,
+          use_custom_theme: data.useCustomTheme || false,
+          theme_overrides: data.themeOverrides || {},
           regras_congeladas: data.regrasCongeladas ? (data.regrasCongeladas as unknown as Json) : null, // Frozen pricing rules
           venda_modo: data.venda_modo || null,
           venda_pagamento_provedor: data.venda_pagamento_provedor || null,
@@ -434,9 +438,9 @@ export function useSupabaseGalleries() {
       if (data.prazoSelecaoDias !== undefined) updateData.prazo_selecao_dias = data.prazoSelecaoDias;
       if (data.prazoSelecao !== undefined) updateData.prazo_selecao = data.prazoSelecao.toISOString();
       if (data.permissao !== undefined) updateData.permissao = data.permissao;
-      if (data.theme_id !== undefined) updateData.theme_id = data.theme_id;
-      if (data.use_custom_theme !== undefined) updateData.use_custom_theme = data.use_custom_theme;
-      if (data.theme_overrides !== undefined) updateData.theme_overrides = data.theme_overrides;
+      if (data.themeId !== undefined) updateData.theme_id = data.themeId;
+      if (data.useCustomTheme !== undefined) updateData.use_custom_theme = data.useCustomTheme;
+      if (data.themeOverrides !== undefined) updateData.theme_overrides = data.themeOverrides;
       if (data.venda_modo !== undefined) updateData.venda_modo = data.venda_modo;
       if (data.venda_pagamento_provedor !== undefined) updateData.venda_pagamento_provedor = data.venda_pagamento_provedor;
       if (data.venda_tipo_cobranca !== undefined) updateData.venda_tipo_cobranca = data.venda_tipo_cobranca;
