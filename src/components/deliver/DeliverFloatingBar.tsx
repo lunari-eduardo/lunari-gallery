@@ -1,4 +1,4 @@
-import { Download, Image, Info } from 'lucide-react';
+import { Download, Image, Info, MessageCircle, MapPin, Instagram } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { applyTitleCase } from '@/lib/textTransform';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
@@ -24,7 +24,7 @@ export function DeliverFloatingBar({
   primaryColor,
   isVisible: forcedIsVisible
 }: DeliverFloatingBarProps) {
-  const { theme } = useGalleryDisplayTheme();
+  const { theme, footer } = useGalleryDisplayTheme();
   const [internalIsVisible, setInternalIsVisible] = useState(false);
   const isVisible = forcedIsVisible !== undefined ? forcedIsVisible : internalIsVisible;
   const titleCaseMode = theme.typography?.titleCaseMode || 'normal';
@@ -75,11 +75,42 @@ export function DeliverFloatingBar({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
+          {footer?.whatsapp && (
+            <a 
+              href={`https://${footer.whatsapp}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-8 w-8 flex items-center justify-center rounded-full opacity-60 hover:opacity-100 hover:bg-white/10 transition-all"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
+          )}
+          {footer?.maps && (
+            <a 
+              href={`https://${footer.maps}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-8 w-8 flex items-center justify-center rounded-full opacity-60 hover:opacity-100 hover:bg-white/10 transition-all"
+            >
+              <MapPin className="w-4 h-4" />
+            </a>
+          )}
+          {footer?.instagrams?.map((handle, i) => (
+            <a 
+              key={i}
+              href={`https://instagram.com/${handle.replace('@', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-8 w-8 flex items-center justify-center rounded-full opacity-60 hover:opacity-100 hover:bg-white/10 transition-all"
+            >
+              <Instagram className="w-4 h-4" />
+            </a>
+          ))}
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 w-8 p-0 rounded-full opacity-60 hover:opacity-100"
+            className="h-8 w-8 p-0 rounded-full opacity-40 hover:opacity-100"
           >
             <Info className="w-4 h-4" />
           </Button>
@@ -87,7 +118,7 @@ export function DeliverFloatingBar({
             size="sm"
             onClick={onDownloadAll}
             disabled={isDownloading}
-            className="h-8 px-4 rounded-full text-xs font-medium transition-transform active:scale-95"
+            className="h-8 px-4 rounded-full text-xs font-medium transition-transform active:scale-95 ml-1"
             style={{
               backgroundColor: primaryColor || (isDark ? '#FFFFFF' : '#1C1917'),
               color: isDark ? '#1C1917' : '#FFFFFF',
