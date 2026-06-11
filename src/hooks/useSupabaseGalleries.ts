@@ -136,9 +136,9 @@ export interface CreateGaleriaData {
   origin?: 'manual' | 'gestao'; // Track how gallery was created
   regrasCongeladas?: RegrasCongeladas | null; // Frozen pricing rules from Lunari Studio
   tipo?: 'selecao' | 'entrega'; // Gallery type
-  theme_id?: string | null;
-  use_custom_theme?: boolean;
-  theme_overrides?: Json;
+  themeId?: string | null;
+  useCustomTheme?: boolean;
+  themeOverrides?: any;
   venda_modo?: string;
   venda_pagamento_provedor?: string;
   venda_tipo_cobranca?: string;
