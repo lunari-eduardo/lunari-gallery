@@ -48,6 +48,10 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
     return () => observer.disconnect();
   }, [externalWidth]);
 
+  // Use a small horizontal padding for the absolute container to avoid sticking to edges
+  const horizontalPadding = internalWidth < 640 ? 12 : 24;
+  const availableWidth = Math.max(0, internalWidth - horizontalPadding * 2);
+
   const columns = useMemo(() => {
     if (availableWidth < 640) return 2;
     if (availableWidth < 1024) return 3;
@@ -96,7 +100,7 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
     });
 
     return { cells, totalHeight: Math.max(...colHeights) };
-  }, [photos, columns, internalWidth, gap]);
+  }, [photos, columns, availableWidth, gap]);
 
   return (
     <div
