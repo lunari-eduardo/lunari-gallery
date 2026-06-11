@@ -107,7 +107,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
         currentRowWidth = 0;
       }
 
-      currentRow.push({ photo, width: virtualWidth, height: targetRowHeight, isFeatured });
+      currentRow.push({ photo, width: virtualWidth, height: effectiveRowHeight, isFeatured });
       currentRowWidth += virtualWidth + gap;
     });
 
