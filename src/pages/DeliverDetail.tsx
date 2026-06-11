@@ -598,7 +598,7 @@ export default function DeliverDetail() {
                       </div>
                     )}
 
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100">
                       <Button
                         variant={weight > 0 ? 'default' : 'secondary'}
                         size="icon"
@@ -642,7 +642,7 @@ export default function DeliverDetail() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-2 py-1 truncate opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                       {photo.originalFilename}
                     </p>
                   </div>
