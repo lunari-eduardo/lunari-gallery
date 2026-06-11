@@ -393,7 +393,7 @@ export function useSupabaseGalleries() {
       const { error } = await supabase
         .from('galeria_fotos')
         .delete()
-        .eq('id', photoId);
+        .eq('id', params.photoId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -406,7 +406,7 @@ export function useSupabaseGalleries() {
       const { error } = await supabase
         .from('galeria_fotos')
         .delete()
-        .in('id', photoIds);
+        .in('id', params.photoIds);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -429,7 +429,7 @@ export function useSupabaseGalleries() {
     reopenSelection: reopenSelection.mutateAsync,
     deletePhoto: deletePhoto.mutateAsync,
     deletePhotos: deletePhotos.mutateAsync,
-    getPhotoUrl: (photo: any, type: any) => getPhotoUrlFromLib(photo, type),
+    getPhotoUrl: (photo: any, type: any, ...args: any[]) => getPhotoUrlFromLib(photo, type),
     isUpdating: updateGallery.isPending,
     isDeleting: deleteGallery.isPending,
     isDeletingPhoto: deletePhoto.isPending,
