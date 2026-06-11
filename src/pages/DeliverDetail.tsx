@@ -98,8 +98,8 @@ export default function DeliverDetail() {
       setIsPrivate(gallery.permissao === 'private');
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
-      setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
-      setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
+      setCoverPhotoId(gallery.configuracoes?.coverPhotoId || null);
+      setPhotoSpacing(gallery.configuracoes?.photoSpacing ?? 6);
       setActiveThemeId(gallery.themeId || DEFAULT_THEME_ID);
       setUseCustomTheme(gallery.useCustomTheme || false);
       setThemeOverrides(gallery.themeOverrides || {});
