@@ -22,6 +22,7 @@ export interface GaleriaPhoto {
   isSelected: boolean;
   isFavorite: boolean;
   comment: string | null;
+  pesoVisual: number;
   orderIndex: number;
   pastaId: string | null;
   createdAt: Date;
@@ -196,6 +197,9 @@ function transformGaleria(row: any): Galeria {
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
     firstPhotoKey: photos[0]?.storage_key || null,
     coverPhotoKey,
+    themeId: row.theme_id,
+    useCustomTheme: row.use_custom_theme ?? false,
+    themeOverrides: row.theme_overrides ?? {},
     themeId: row.theme_id,
     useCustomTheme: row.use_custom_theme ?? false,
     themeOverrides: row.theme_overrides ?? {},
