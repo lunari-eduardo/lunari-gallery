@@ -465,7 +465,11 @@ export default function DeliverDetail() {
 
             <div className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium">Preview do Tema: {THEME_REGISTRY[activeThemeId]?.name}</h4>
+                <h4 className="font-medium">
+                  Preview: {useCustomTheme 
+                    ? `${THEME_REGISTRY[activeThemeId]?.name} (personalizado)` 
+                    : 'Herança da conta'}
+                </h4>
                 <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
                   <Button 
                     variant={previewViewport === 'mobile' ? 'secondary' : 'ghost'} 
@@ -494,7 +498,7 @@ export default function DeliverDetail() {
                 </div>
               </div>
               
-              <div className="aspect-[16/10] bg-muted rounded-2xl border-4 border-muted overflow-hidden relative group shadow-lg">
+              <div className="min-h-[600px] h-[70vh] bg-muted rounded-2xl border border-muted overflow-hidden relative group shadow-lg">
                 <div className="absolute inset-0 bg-background overflow-hidden flex flex-col">
                    <ThemePreviewCanvas 
                      themeId={activeThemeId}
@@ -502,6 +506,7 @@ export default function DeliverDetail() {
                      viewport={previewViewport}
                      skipHero={true}
                      isBlueprint={false}
+                     previewPhotos={photos.slice(0, 12)}
                    />
                 </div>
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">

@@ -432,7 +432,7 @@ export default function GalleryEdit() {
   };
 
   const handleDeletePhoto = async (photoId: string) => {
-    await deletePhoto({ galleryId: gallery.id, photoId });
+    await deletePhoto({ photoId });
     setLocalPhotoCount(prev => Math.max(0, (prev || 1) - 1));
     setSelectedIds(prev => {
       if (!prev.has(photoId)) return prev;
