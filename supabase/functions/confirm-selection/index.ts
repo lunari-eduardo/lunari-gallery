@@ -260,46 +260,46 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}`);
 
-    // Sessão é a fonte única de verdade do valor da foto extra.
-    // `regrasCongeladas.pacote.valorFotoExtra` (vindo da sessão) prevalece.
-    // O fallback escalar de galeria só é usado para galerias standalone sem
-    // regras_congeladas (legado).
+    // ── SOURCE OF TRUTH FOR PRICE ──
+    // Order:
+    // 1. Column `valor_foto_extra` from `galerias` (explicit user override)
+    // 2. Session `regras_congeladas.pacote.valorFotoExtra`
+    // 3. Gallery `regras_congeladas.pacote.valorFotoExtra`
+    
     let regrasCongeladasSource: RegrasCongeladas | null = null;
-    let fallbackPrice = 0;
+    let fallbackPrice = Number(gallery.valor_foto_extra || 0);
 
-    if (gallery.session_id) {
-      const { data: sessao, error: sessaoError } = await supabase
-        .from('clientes_sessoes')
-        .select('id, regras_congeladas')
-        .eq('session_id', gallery.session_id)
-        .single();
+    if (fallbackPrice <= 0) {
+      if (gallery.session_id) {
+        const { data: sessao, error: sessaoError } = await supabase
+          .from('clientes_sessoes')
+          .select('id, regras_congeladas')
+          .eq('session_id', gallery.session_id)
+          .single();
 
-      if (sessaoError) {
-        console.warn('Session fetch error:', sessaoError.message);
+        if (sessaoError) {
+          console.warn('Session fetch error:', sessaoError.message);
+        }
+
+        if (sessao?.regras_congeladas) {
+          console.log('📊 Using regrasCongeladas from session (Lunari Studio mode)');
+          regrasCongeladasSource = sessao.regras_congeladas as RegrasCongeladas;
+        }
       }
 
-      if (sessao?.regras_congeladas) {
-        console.log('📊 Using regrasCongeladas from session (Lunari Studio mode)');
-        regrasCongeladasSource = sessao.regras_congeladas as RegrasCongeladas;
+      // Standalone: usa regras_congeladas da própria galeria, se houver.
+      if (!regrasCongeladasSource && gallery.regras_congeladas) {
+        console.log('📊 Using regrasCongeladas from gallery (standalone mode)');
+        regrasCongeladasSource = gallery.regras_congeladas as RegrasCongeladas;
       }
-    }
 
-    // Standalone: usa regras_congeladas da própria galeria, se houver.
-    if (!regrasCongeladasSource && gallery.regras_congeladas) {
-      console.log('📊 Using regrasCongeladas from gallery (standalone mode)');
-      regrasCongeladasSource = gallery.regras_congeladas as RegrasCongeladas;
-    }
-
-    // Fallback final: coluna escalar da galeria (só para galerias antigas
-    // sem regras_congeladas em nenhum dos lados).
-    if (!regrasCongeladasSource) {
-      fallbackPrice = gallery.valor_foto_extra || 0;
+      if (regrasCongeladasSource) {
+        fallbackPrice = Number((regrasCongeladasSource as any)?.pacote?.valorFotoExtra ?? 0);
+      }
     } else {
-      fallbackPrice =
-        Number((regrasCongeladasSource as any)?.pacote?.valorFotoExtra ?? 0)
-        || gallery.valor_foto_extra
-        || 0;
+      console.log(`📊 Using explicit override from gallery column: R$ ${fallbackPrice}`);
     }
+
 
     // Calculate using credit system with whatever regras we found (or null)
     const resultado = calcularPrecoProgressivoComCredito(
