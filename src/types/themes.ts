@@ -17,6 +17,9 @@ export interface GalleryThemeSurface {
   headerStyle: 'glass' | 'solid' | 'transparent';
   buttonStyle: 'outline' | 'solid' | 'ghost';
   borderRadius: string;
+  primaryColor?: string;
+  primaryForeground?: string;
+  accentColor?: string;
 }
 
 export interface GalleryThemeFeatured {
