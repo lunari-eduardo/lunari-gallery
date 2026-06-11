@@ -421,13 +421,13 @@ export function useSupabaseGalleries() {
     refetch,
     getGallery,
     fetchGalleryPhotos,
-    createGallery,
-    updateGallery,
-    deleteGallery,
-    publishGallery,
-    sendGallery,
-    reopenSelection,
-    deletePhoto,
-    deletePhotos
+    createGallery: createGallery.mutateAsync,
+    updateGallery: updateGallery.mutateAsync,
+    deleteGallery: deleteGallery.mutateAsync,
+    publishGallery: publishGallery.mutateAsync,
+    sendGallery: sendGallery.mutateAsync,
+    reopenSelection: reopenSelection.mutateAsync,
+    deletePhoto: deletePhoto.mutateAsync,
+    deletePhotos: deletePhotos.mutateAsync
   };
 }
