@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getPhotoUrl as getPhotoUrlFromLib, getOriginalPhotoUrl } from '@/lib/photoUrl';
@@ -240,7 +240,8 @@ export function useSupabaseGalleries() {
   const {
     data: galleries = [],
     isLoading,
-    error
+    error,
+    refetch
   } = useQuery({
     queryKey: ['galleries'],
     queryFn: async () => {
@@ -289,7 +290,7 @@ export function useSupabaseGalleries() {
           fotos_incluidas: data.fotosIncluidas,
           valor_foto_extra: data.valorFotoExtra,
           mensagem_boas_vindas: data.mensagemBoasVindas,
-          configuracoes: data.configuracoes,
+          configuracoes: data.configuracoes as any,
           prazo_selecao: data.prazoSelecao,
           permissao: data.permissao || 'private',
           gallery_password: data.galleryPassword,
@@ -353,14 +354,80 @@ export function useSupabaseGalleries() {
     },
   });
 
+  const publishGallery = useMutation({
+    mutationFn: async (id: string) => {
+      const { data: result, error } = await supabase
+        .from('galerias')
+        .update({ status: 'sent', published_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return transformGaleria(result);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['galleries'] });
+    },
+  });
+
+  const sendGallery = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('send_gallery_notification', { gallery_id: id });
+      if (error) throw error;
+    }
+  });
+
+  const reopenSelection = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('reopen_gallery_selection', { gallery_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['galleries'] });
+    }
+  });
+
+  const deletePhoto = useMutation({
+    mutationFn: async (photoId: string) => {
+      const { error } = await supabase
+        .from('galeria_fotos')
+        .delete()
+        .eq('id', photoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['galleries'] });
+    }
+  });
+
+  const deletePhotos = useMutation({
+    mutationFn: async (photoIds: string[]) => {
+      const { error } = await supabase
+        .from('galeria_fotos')
+        .delete()
+        .in('id', photoIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['galleries'] });
+    }
+  });
+
   return {
     galleries,
     isLoading,
     error,
+    refetch,
     getGallery,
     fetchGalleryPhotos,
     createGallery,
     updateGallery,
-    deleteGallery
+    deleteGallery,
+    publishGallery,
+    sendGallery,
+    reopenSelection,
+    deletePhoto,
+    deletePhotos
   };
 }
