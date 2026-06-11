@@ -54,8 +54,8 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
     return 4;
   }, [internalWidth]);
 
-  const gridCells = useMemo(() => {
-    if (internalWidth <= 0 || photos.length === 0) return [];
+  const gridData = useMemo(() => {
+    if (internalWidth <= 0 || photos.length === 0) return { cells: [], totalHeight: 0 };
 
     const cells: GridCell[] = [];
     const colHeights = new Array(columns).fill(0);
@@ -65,7 +65,6 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
       const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
       const colSpan = weight === 1 && columns > 1 ? 2 : 1;
       
-      // Find the column(s) with minimum height
       let bestCol = 0;
       let minHeight = Infinity;
       
@@ -84,13 +83,12 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
       cells.push({
         photo,
         col: bestCol,
-        row: 0, // Not strictly used for CSS Grid Masonry positioning via style
+        row: minHeight, // Using row field to store top offset
         colSpan,
         rowSpan: 1,
         height
       });
 
-      // Update heights for all columns spanned
       const newHeight = minHeight + height + gap;
       for (let c = bestCol; c < bestCol + colSpan; c++) {
         colHeights[c] = newHeight;
@@ -105,30 +103,17 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
       ref={containerRef}
       className="w-full relative"
       style={{ 
-        height: `${gridCells.totalHeight}px`,
+        height: `${gridData.totalHeight}px`,
       }}
     >
-      {gridCells.cells?.map((cell, idx) => {
+      {gridData.cells.map((cell) => {
         const columnWidth = (internalWidth - gap * (columns - 1)) / columns;
         const left = cell.col * (columnWidth + gap);
         
-        // Find top offset for this cell (we need to recalculate or store it)
-        // For simplicity in this layout, we'll use absolute positioning for true masonry
-        let top = 0;
-        const colHeights = new Array(columns).fill(0);
-        for(let i=0; i<idx; i++) {
-          const c = gridCells.cells[i];
-          const h = c.height + gap;
-          for(let col=c.col; col < c.col + c.colSpan; col++) {
-            colHeights[col] += h;
-          }
-        }
-        top = Math.max(...colHeights.slice(cell.col, cell.col + cell.colSpan));
-
         const style: React.CSSProperties = {
           position: 'absolute',
           left: `${left}px`,
-          top: `${top}px`,
+          top: `${cell.row}px`,
           width: `${columnWidth * cell.colSpan + (cell.colSpan > 1 ? gap : 0)}px`,
           height: `${cell.height}px`,
           cursor: 'pointer',
