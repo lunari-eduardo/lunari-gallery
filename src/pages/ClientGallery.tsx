@@ -18,8 +18,7 @@ import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
-import { PasswordScreen } from '@/components/PasswordScreen';
-import { VisitorIdentificationScreen } from '@/components/VisitorIdentificationScreen';
+import { UnifiedAccessScreen } from '@/components/UnifiedAccessScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
 import { PaymentPendingScreen } from '@/components/PaymentPendingScreen';
@@ -1673,86 +1672,12 @@ export default function ClientGallery() {
     );
   }
 
-  // Tela de boas-vindas - apenas para galerias NÃO confirmadas
-  if (showWelcome) {
-    return (
-      <div 
-        className={cn(
-          "min-h-screen flex flex-col bg-background text-foreground",
-          effectiveBackgroundMode === 'dark' && 'dark'
-        )}
-        style={themeStyles}
-      >
-        {galleryResponse?.studioSettings?.studio_logo_url && (
-          <header className="flex items-center justify-center p-4 border-b border-border/50">
-            <img 
-              src={galleryResponse.studioSettings.studio_logo_url} 
-              alt={galleryResponse?.studioSettings?.studio_name || 'Logo'} 
-              className="h-[150px] sm:h-[150px] md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain"
-            />
-          </header>
-        )}
-        
-        <main className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full text-center space-y-8 animate-slide-up">
-            <div className="space-y-1">
-              <h1 
-                className="text-4xl sm:text-5xl font-normal"
-                style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
-              >
-                {applyTitleCase(gallery.sessionName, gallery.settings.titleCaseMode || 'normal')}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {localPhotos.length} fotos disponíveis
-              </p>
-            </div>
-
-            {welcomeMessage && (
-              <div className="border-t border-border/30 pt-5 text-left">
-                <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                  {welcomeMessage}
-                </p>
-              </div>
-            )}
-
-            <div className="border-t border-border/30 pt-5 flex items-center justify-center gap-6 text-sm text-muted-foreground">
-              <span>{gallery.includedPhotos} fotos contratadas</span>
-              {hasDeadline && (
-                <span>
-                  até {format(gallery.settings.deadline, "dd 'de' MMM", { locale: ptBR })}
-                </span>
-              )}
-            </div>
-
-            {isNearDeadline && (
-              <p className="text-sm font-medium text-warning">
-                Atenção: {hoursUntilDeadline}h restantes para seleção
-              </p>
-            )}
-
-            {isExpired && (
-              <p className="text-sm font-medium text-destructive">
-                Prazo de seleção expirado
-              </p>
-            )}
-
-            <Button 
-              variant="terracotta" 
-              className="w-full rounded-sm"
-              onClick={() => {
-                setShowWelcome(false);
-                if (hasFolders) {
-                  setFolderViewMode('albums');
-                  setActiveFolderId(null);
-                }
-              }}
-            >
-              {isExpired ? 'Visualizar Galeria' : 'Começar Seleção'}
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
+  // Welcome screen is now integrated into the access screen.
+  // If we reach here, user is authenticated. 
+  // We only show welcome if it was explicitly requested AND we haven't skipped it.
+  if (showWelcome && !requiresPassword && !requiresVisitor) {
+    // If it was already shown or we don't need it, we skip it
+    setShowWelcome(false);
   }
 
   // Render Unified Confirmation Step (combines Review + Checkout)
@@ -1912,24 +1837,36 @@ export default function ClientGallery() {
                     setActiveFolderId(folder.id);
                     setFolderViewMode('grid');
                   }}
-                  className="group relative aspect-[3/4] overflow-hidden cursor-pointer"
+                  className="group relative aspect-[4/5] overflow-hidden cursor-pointer rounded-sm ring-1 ring-white/10 hover:ring-primary/50 transition-all duration-500"
                 >
                   {coverUrl ? (
                     <img
                       src={coverUrl}
                       alt={folder.nome}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"
                     />
                   ) : (
-                    <div className="absolute inset-0 bg-muted" />
+                    <div className="absolute inset-0 bg-zinc-900" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
-                    <p className="text-white font-semibold text-base tracking-wide leading-tight">{folder.nome}</p>
-                    <p className="text-white/60 text-xs mt-1">
-                      {folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''}
-                      {folderSelectedCount > 0 && ` · ${folderSelectedCount} selecionada${folderSelectedCount !== 1 ? 's' : ''}`}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6 text-left transform translate-y-1 group-hover:translate-y-0 transition-transform duration-500">
+                    <p 
+                      className="text-white font-light text-2xl tracking-tight mb-1"
+                      style={{ fontFamily: getFontFamilyById(gallery.settings.sessionFont) }}
+                    >
+                      {folder.nome}
                     </p>
+                    <div className="flex items-center gap-3">
+                      <p className="text-white/40 text-[10px] uppercase tracking-[0.2em] font-medium">
+                        {folderPhotos.length} fotos
+                      </p>
+                      {folderSelectedCount > 0 && (
+                        <span className="flex items-center gap-1 text-primary text-[10px] uppercase tracking-[0.2em] font-bold">
+                          <Check className="h-2.5 w-2.5" />
+                          {folderSelectedCount} selecionadas
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               );

@@ -112,7 +112,7 @@ export function ClientGalleryHeader({
               <img 
                 src={studioLogoUrl} 
                 alt={studioName || 'Logo'} 
-                className="h-[150px] sm:h-[150px] md:h-40 lg:h-[200px] max-w-[280px] sm:max-w-[360px] md:max-w-[450px] lg:max-w-[600px] object-contain"
+                className="h-20 sm:h-24 md:h-28 lg:h-32 w-auto object-contain"
               />
             ) : (
               <Logo size="md" variant="gallery" />
