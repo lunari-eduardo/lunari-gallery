@@ -257,6 +257,9 @@ export default function ClientDeliverGallery({ data }: Props) {
         handleCloseWelcome={handleCloseWelcome}
         lightboxIndex={lightboxIndex}
         setLightboxIndex={setLightboxIndex}
+        activeFolderId={activeFolderId}
+        setActiveFolderId={setActiveFolderId}
+        setFolderViewMode={setFolderViewMode}
       />
     </GalleryThemeProvider>
   );
@@ -266,7 +269,7 @@ export default function ClientDeliverGallery({ data }: Props) {
 function ClientDeliverGalleryContent({ 
   data, photos, allPhotos, coverPhoto, sessionFont, handleDownloadAll, 
   isDownloading, handleDownloadSingle, showWelcome, handleCloseWelcome,
-  lightboxIndex, setLightboxIndex
+  lightboxIndex, setLightboxIndex, activeFolderId, setActiveFolderId, setFolderViewMode
 }: any) {
   const { gallery, studioSettings } = data;
   const folders = data.folders || [];
