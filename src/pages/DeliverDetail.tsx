@@ -603,11 +603,12 @@ export default function DeliverDetail() {
                         variant={weight > 0 ? 'default' : 'secondary'}
                         size="icon"
                         className={cn('h-8 w-8', weight > 0 && 'bg-primary text-primary-foreground')}
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           const newWeight = weight > 0 ? 0 : 1;
                           const { supabase } = await import('@/integrations/supabase/client');
                           await supabase.from('galeria_fotos').update({ peso_visual: newWeight }).eq('id', photo.id);
-                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, peso_visual: newWeight } as any : p));
+                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, pesoVisual: newWeight } as any : p));
                           toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
                         }}
                         title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
