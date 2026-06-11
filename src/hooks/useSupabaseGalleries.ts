@@ -300,7 +300,7 @@ export function useSupabaseGalleries() {
           theme_id: data.themeId || null,
           use_custom_theme: data.useCustomTheme || false,
           theme_overrides: data.themeOverrides || {},
-        })
+        } as any)
         .select()
         .single();
       
@@ -373,14 +373,14 @@ export function useSupabaseGalleries() {
 
   const sendGallery = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('send_gallery_notification', { gallery_id: id });
+      const { error } = await supabase.rpc('send_gallery_notification' as any, { gallery_id: id });
       if (error) throw error;
     }
   });
 
   const reopenSelection = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('reopen_gallery_selection', { gallery_id: id });
+      const { error } = await supabase.rpc('reopen_gallery_selection' as any, { gallery_id: id });
       if (error) throw error;
     },
     onSuccess: () => {

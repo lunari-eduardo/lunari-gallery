@@ -150,12 +150,12 @@ export default function DeliverDetail() {
         configuracoes: {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
-          coverPhotoId: coverPhotoId,
+          coverPhotoId: coverPhotoId || undefined,
           photoSpacing: photoSpacing,
         },
-        themeId: useCustomTheme ? activeThemeId : null,
-        useCustomTheme: useCustomTheme,
-        themeOverrides: themeOverrides,
+        theme_id: useCustomTheme ? activeThemeId : null,
+        use_custom_theme: useCustomTheme,
+        theme_overrides: themeOverrides,
         prazoSelecao: expirationDate,
 
       }});
