@@ -195,9 +195,9 @@ export default function DeliverCreate() {
             clientMode,
             photoSpacing,
           },
-          theme_id: useCustomTheme ? activeThemeId : null,
-          use_custom_theme: useCustomTheme,
-          theme_overrides: themeOverrides,
+          themeId: useCustomTheme ? activeThemeId : null,
+          useCustomTheme: useCustomTheme,
+          themeOverrides: themeOverrides,
       });
       setSupabaseGalleryId(result.id);
       return result.id;

@@ -376,12 +376,12 @@ export default function GalleryEdit() {
           venda_modo: saleSettings?.mode,
           venda_pagamento_provedor: saleSettings?.paymentMethod,
           venda_tipo_cobranca: saleSettings?.chargeType,
-          theme_id: selectedThemeId || null,
-          use_custom_theme: !!selectedThemeId,
-          theme_overrides: {
-            ...(gallery as any).theme_overrides || {},
+          themeId: selectedThemeId || null,
+          useCustomTheme: !!selectedThemeId,
+          themeOverrides: {
+            ...(gallery as any).themeOverrides || {},
             layout: {
-              ...((gallery as any).theme_overrides as any)?.layout || {},
+              ...((gallery as any).themeOverrides as any)?.layout || {},
               gap: photoSpacing
             }
           }
