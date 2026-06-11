@@ -39,9 +39,12 @@ export function GalleryThemeProvider({
       theme = mergeThemeOverrides(theme, themeOverrides as any);
     }
 
-    if (gallerySettings?.photoSpacing !== undefined) {
+    // Gap handling: Prefer themeOverrides.layout.gap if it exists
+    if ((themeOverrides as any)?.layout?.gap !== undefined) {
+      theme.layout.gap = Number((themeOverrides as any).layout.gap);
+    } else if (gallerySettings?.photoSpacing !== undefined) {
       theme.layout.gap = Number(gallerySettings.photoSpacing);
-    } else if (globalSettings?.defaultPhotoSpacing !== undefined && !themeOverrides) {
+    } else if (globalSettings?.defaultPhotoSpacing !== undefined) {
       theme.layout.gap = Number(globalSettings.defaultPhotoSpacing);
     }
     

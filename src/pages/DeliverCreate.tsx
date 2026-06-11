@@ -39,7 +39,7 @@ export default function DeliverCreate() {
   const { clients, isLoading: isLoadingClients, createClient } = useGalleryClients();
   const { settings, updateSettings } = useSettings();
   const { settings: gallerySettings } = useGallerySettings();
-  const { createGallery, updateGallery, publishGallery } = useSupabaseGalleries();
+  const { createGallery, updateGallery, publishGallery } = useSupabaseGalleries() as any;
   const { canCreateTransfer, isAdmin, isLoading: isLoadingStorage, storageUsedBytes, storageLimitBytes, storageUsedPercent, hasTransferPlan, planName } = useTransferStorage();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -195,9 +195,9 @@ export default function DeliverCreate() {
             clientMode,
             photoSpacing,
           },
-          theme_id: useCustomTheme ? activeThemeId : null,
-          use_custom_theme: useCustomTheme,
-          theme_overrides: themeOverrides,
+          themeId: useCustomTheme ? activeThemeId : null,
+          useCustomTheme: useCustomTheme,
+          themeOverrides: themeOverrides,
       });
       setSupabaseGalleryId(result.id);
       return result.id;

@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { GalleryPhoto } from '@/types/gallery';
+import { cn } from '@/lib/utils';
 
 interface EditorialGridProps {
   photos: GalleryPhoto[];
@@ -15,19 +16,12 @@ interface GridCell {
   row: number;
   colSpan: number;
   rowSpan: number;
+  height: number;
 }
 
 /**
- * Editorial Grid Component - CSS Grid-based mosaico layout
- * 
- * Rules:
- * - peso_visual = 0: normal 1x1 block
- * - peso_visual = 1: featured 2x2 block
- * - peso_visual = 2: reserved for future large featured
- * 
- * Desktop: 4 cols base
- * Tablet: 3 cols base
- * Mobile: 2 cols base
+ * Editorial Grid Component - Masonry-style using absolute positioning
+ * Preserves photo aspect ratio without cropping.
  */
 export const EditorialGrid: React.FC<EditorialGridProps> = ({
   photos,
@@ -44,99 +38,90 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
       setInternalWidth(externalWidth);
       return;
     }
-
     if (!containerRef.current) return;
-
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setInternalWidth(entry.contentRect.width);
       }
     });
-
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, [externalWidth]);
 
-  // Determine columns based on width
-  const getColumns = (width: number): number => {
-    if (width < 640) return 2; // Mobile
-    if (width < 1024) return 3; // Tablet
-    return 4; // Desktop
-  };
+  // Use a small horizontal padding for the absolute container to avoid sticking to edges
+  const horizontalPadding = internalWidth < 640 ? 12 : 24;
+  const availableWidth = Math.max(0, internalWidth - horizontalPadding * 2);
 
-  const columns = getColumns(internalWidth);
+  const columns = useMemo(() => {
+    if (availableWidth < 640) return 2;
+    if (availableWidth < 1024) return 3;
+    return 4;
+  }, [availableWidth]);
 
-  // Compute grid layout with packing algorithm
-  const gridCells = useMemo(() => {
-    if (internalWidth <= 0 || photos.length === 0) return [];
+  const gridData = useMemo(() => {
+    if (availableWidth <= 0 || photos.length === 0) return { cells: [], totalHeight: 0 };
 
     const cells: GridCell[] = [];
-    const grid: boolean[][] = Array.from({ length: Math.ceil(photos.length * 2) }, () =>
-      Array(columns).fill(false)
-    );
+    const colHeights = new Array(columns).fill(0);
+    const columnWidth = (availableWidth - gap * (columns - 1)) / columns;
 
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i];
-      const weight = (photo as any).peso_visual || 0;
-      const colSpan = weight === 1 ? 2 : 1;
-      const rowSpan = weight === 1 ? 2 : 1;
-
-      // Find first available position
-      let placed = false;
-      for (let row = 0; row < grid.length && !placed; row++) {
-        for (let col = 0; col <= columns - colSpan && !placed; col++) {
-          // Check if space is available
-          let canPlace = true;
-          for (let r = row; r < row + rowSpan && r < grid.length; r++) {
-            for (let c = col; c < col + colSpan; c++) {
-              if (grid[r][c]) {
-                canPlace = false;
-                break;
-              }
-            }
-            if (!canPlace) break;
-          }
-
-          if (canPlace) {
-            // Mark grid as occupied
-            for (let r = row; r < row + rowSpan; r++) {
-              for (let c = col; c < col + colSpan; c++) {
-                grid[r][c] = true;
-              }
-            }
-            cells.push({ photo, col, row, colSpan, rowSpan });
-            placed = true;
-          }
+    photos.forEach((photo) => {
+      const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
+      const colSpan = weight === 1 && columns > 1 ? 2 : 1;
+      
+      let bestCol = 0;
+      let minHeight = Infinity;
+      
+      for (let c = 0; c <= columns - colSpan; c++) {
+        const maxHeightInSpan = Math.max(...colHeights.slice(c, c + colSpan));
+        if (maxHeightInSpan < minHeight) {
+          minHeight = maxHeightInSpan;
+          bestCol = c;
         }
       }
 
-      // If no space found (shouldn't happen), add at end as overflow
-      if (!placed) {
-        cells.push({ photo, col: 0, row: grid.length, colSpan: 1, rowSpan: 1 });
+      const aspectRatio = photo.width && photo.height ? photo.width / photo.height : 1.5;
+      const actualWidth = columnWidth * colSpan + (colSpan > 1 ? gap : 0);
+      const height = actualWidth / aspectRatio;
+
+      cells.push({
+        photo,
+        col: bestCol,
+        row: minHeight, // Using row field to store top offset
+        colSpan,
+        rowSpan: 1,
+        height
+      });
+
+      const newHeight = minHeight + height + gap;
+      for (let c = bestCol; c < bestCol + colSpan; c++) {
+        colHeights[c] = newHeight;
       }
-    }
+    });
 
-    return cells;
-  }, [photos, columns, internalWidth]);
-
-  // Calculate grid height based on used rows
-  const maxRow = gridCells.length > 0 ? Math.max(...gridCells.map(c => c.row + c.rowSpan)) : 1;
+    return { cells, totalHeight: Math.max(...colHeights) };
+  }, [photos, columns, availableWidth, gap]);
 
   return (
     <div
       ref={containerRef}
-      className="w-full"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${columns}, 1fr)`,
-        gap: `${gap}px`,
-        gridAutoRows: `${(internalWidth / columns - gap * (columns - 1) / columns) / (columns === 2 ? 0.75 : 1)}px`,
+      className="w-full relative"
+      style={{ 
+        height: `${gridData.totalHeight}px`,
+        paddingLeft: `${horizontalPadding}px`,
+        paddingRight: `${horizontalPadding}px`,
       }}
     >
-      {gridCells.map((cell) => {
+      {gridData.cells.map((cell) => {
+        const columnWidth = (availableWidth - gap * (columns - 1)) / columns;
+        const left = horizontalPadding + cell.col * (columnWidth + gap);
+        
         const style: React.CSSProperties = {
-          gridColumn: `${cell.col + 1} / span ${cell.colSpan}`,
-          gridRow: `${cell.row + 1} / span ${cell.rowSpan}`,
+          position: 'absolute',
+          left: `${left}px`,
+          top: `${cell.row}px`,
+          width: `${columnWidth * cell.colSpan + (cell.colSpan > 1 ? gap : 0)}px`,
+          height: `${cell.height}px`,
           cursor: 'pointer',
         };
 
@@ -144,15 +129,14 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
           return renderItem(cell.photo, style);
         }
 
-        const photoUrl =
-          (cell.photo as any).previewPath || cell.photo.previewUrl || cell.photo.thumbnailUrl;
+        const photoUrl = (cell.photo as any).previewPath || (cell.photo as any).previewUrl || (cell.photo as any).thumbnailUrl;
 
         return (
           <div
             key={cell.photo.id}
             style={style}
             onClick={() => onPhotoClick?.(cell.photo)}
-            className="overflow-hidden rounded-none"
+            className="overflow-hidden"
           >
             <img
               src={photoUrl}

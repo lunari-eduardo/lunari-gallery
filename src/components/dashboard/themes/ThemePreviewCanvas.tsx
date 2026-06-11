@@ -12,6 +12,7 @@ interface ThemePreviewCanvasProps {
   viewport: 'mobile' | 'tablet' | 'desktop';
   skipHero?: boolean;
   isBlueprint?: boolean;
+  previewPhotos?: any[];
 }
 
 export function ThemePreviewCanvas({
@@ -19,7 +20,8 @@ export function ThemePreviewCanvas({
   themeOverrides,
   viewport,
   skipHero = false,
-  isBlueprint = false
+  isBlueprint = false,
+  previewPhotos
 }: ThemePreviewCanvasProps) {
   const [headerVisible, setHeaderVisible] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -88,7 +90,7 @@ export function ThemePreviewCanvas({
 
             <div id="preview-grid" className="flex-1">
               <DeliverPhotoGrid 
-                photos={DEMO_PHOTOS as any}
+                photos={(previewPhotos || DEMO_PHOTOS) as any}
                 onPhotoClick={() => {}}
                 onDownload={() => {}}
                 galleryId="demo"

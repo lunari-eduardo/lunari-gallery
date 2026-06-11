@@ -98,12 +98,19 @@ export default function DeliverDetail() {
       setIsPrivate(gallery.permissao === 'private');
       setGalleryPassword(gallery.galleryPassword || '');
       setExpirationDate(gallery.prazoSelecao || undefined);
-      setCoverPhotoId((gallery.configuracoes as any)?.coverPhotoId || null);
-      setPhotoSpacing((gallery.configuracoes as any)?.photoSpacing ?? 6);
-      setActiveThemeId((gallery as any).theme_id || (gallery.configuracoes as any)?.themeId || DEFAULT_THEME_ID);
-      setUseCustomTheme((gallery as any).use_custom_theme ?? !!(gallery as any).theme_id);
-      setThemeOverrides((gallery as any).theme_overrides || (gallery.configuracoes as any)?.themeOverrides || {});
-
+      setCoverPhotoId(gallery.configuracoes?.coverPhotoId || null);
+      setActiveThemeId(gallery.themeId || DEFAULT_THEME_ID);
+      setUseCustomTheme(gallery.useCustomTheme || false);
+      setThemeOverrides(gallery.themeOverrides || {});
+      
+      // Migrate legacy gap to overrides if needed
+      const legacyGap = gallery.configuracoes?.photoSpacing;
+      if (legacyGap !== undefined && !gallery.themeOverrides?.layout?.gap) {
+        setThemeOverrides((prev: any) => ({
+          ...prev,
+          layout: { ...(prev.layout || {}), gap: legacyGap }
+        }));
+      }
     }
   }, [gallery]);
 
@@ -150,12 +157,12 @@ export default function DeliverDetail() {
         configuracoes: {
           ...gallery.configuracoes,
           notasInternas: internalNotes,
-          coverPhotoId: coverPhotoId,
-          photoSpacing: photoSpacing,
+          coverPhotoId: coverPhotoId || undefined,
+          photoSpacing: themeOverrides?.layout?.gap ?? photoSpacing,
         },
-        theme_id: useCustomTheme ? activeThemeId : null,
-        use_custom_theme: useCustomTheme,
-        theme_overrides: themeOverrides,
+        themeId: useCustomTheme ? activeThemeId : null,
+        useCustomTheme: useCustomTheme,
+        themeOverrides: themeOverrides,
         prazoSelecao: expirationDate,
 
       }});
@@ -184,7 +191,7 @@ export default function DeliverDetail() {
 
   const handlePhotoDelete = async (photoId: string) => {
     if (!id) return;
-    await deletePhoto({ galleryId: id, photoId });
+    await deletePhoto({ photoId } as any);
     setPhotos(prev => prev.filter(p => p.id !== photoId));
     // Se a foto excluída era a capa, resetar
     if (coverPhotoId === photoId) {
@@ -465,7 +472,11 @@ export default function DeliverDetail() {
 
             <div className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium">Preview do Tema: {THEME_REGISTRY[activeThemeId]?.name}</h4>
+                <h4 className="font-medium">
+                  Preview: {useCustomTheme 
+                    ? `${THEME_REGISTRY[activeThemeId]?.name} (personalizado)` 
+                    : 'Herança da conta'}
+                </h4>
                 <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
                   <Button 
                     variant={previewViewport === 'mobile' ? 'secondary' : 'ghost'} 
@@ -494,7 +505,7 @@ export default function DeliverDetail() {
                 </div>
               </div>
               
-              <div className="aspect-[16/10] bg-muted rounded-2xl border-4 border-muted overflow-hidden relative group shadow-lg">
+              <div className="min-h-[600px] h-[70vh] bg-muted rounded-2xl border border-muted overflow-hidden relative group shadow-lg">
                 <div className="absolute inset-0 bg-background overflow-hidden flex flex-col">
                    <ThemePreviewCanvas 
                      themeId={activeThemeId}
@@ -502,6 +513,7 @@ export default function DeliverDetail() {
                      viewport={previewViewport}
                      skipHero={true}
                      isBlueprint={false}
+                     previewPhotos={photos.slice(0, 12)}
                    />
                 </div>
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
@@ -586,16 +598,17 @@ export default function DeliverDetail() {
                       </div>
                     )}
 
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100">
                       <Button
                         variant={weight > 0 ? 'default' : 'secondary'}
                         size="icon"
                         className={cn('h-8 w-8', weight > 0 && 'bg-primary text-primary-foreground')}
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           const newWeight = weight > 0 ? 0 : 1;
                           const { supabase } = await import('@/integrations/supabase/client');
                           await supabase.from('galeria_fotos').update({ peso_visual: newWeight }).eq('id', photo.id);
-                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, peso_visual: newWeight } as any : p));
+                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, pesoVisual: newWeight } as any : p));
                           toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
                         }}
                         title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
@@ -629,7 +642,7 @@ export default function DeliverDetail() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-2 py-1 truncate opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                       {photo.originalFilename}
                     </p>
                   </div>
@@ -751,37 +764,6 @@ export default function DeliverDetail() {
 
             <Separator />
             
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Apresentação</Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Estilo visual e layout da galeria
-                </p>
-              </div>
-              
-              <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider">Espaçamento entre fotos</Label>
-                  <div className="flex items-center gap-6">
-                    <Slider
-                      value={[photoSpacing]}
-                      onValueChange={(vals) => setPhotoSpacing(vals[0])}
-                      min={0}
-                      max={40}
-                      step={1}
-                      className="flex-1"
-                    />
-                    <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-muted/30 rounded-lg border border-dashed text-center">
-                  <p className="text-xs text-muted-foreground italic">
-                    Novos temas e layouts em breve
-                  </p>
-                </div>
-              </div>
-            </div>
 
             <Separator />
 

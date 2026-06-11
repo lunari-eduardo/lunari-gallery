@@ -376,12 +376,12 @@ export default function GalleryEdit() {
           venda_modo: saleSettings?.mode,
           venda_pagamento_provedor: saleSettings?.paymentMethod,
           venda_tipo_cobranca: saleSettings?.chargeType,
-          theme_id: selectedThemeId || null,
-          use_custom_theme: !!selectedThemeId,
-          theme_overrides: {
-            ...(gallery as any).theme_overrides || {},
+          themeId: selectedThemeId || null,
+          useCustomTheme: !!selectedThemeId,
+          themeOverrides: {
+            ...(gallery as any).themeOverrides || {},
             layout: {
-              ...((gallery as any).theme_overrides as any)?.layout || {},
+              ...((gallery as any).themeOverrides as any)?.layout || {},
               gap: photoSpacing
             }
           }
@@ -417,7 +417,7 @@ export default function GalleryEdit() {
 
   const handleReactivate = async (days: number = 7) => {
     try {
-      await reopenSelection({ id: gallery.id, days });
+      await reopenSelection({ id: gallery.id, days } as any);
       // Aguarda o refetch para garantir que publicToken esteja atualizado.
       await queryClient.invalidateQueries({ queryKey: ['galerias'] });
       await queryClient.refetchQueries({ queryKey: ['galerias'] });
@@ -432,7 +432,7 @@ export default function GalleryEdit() {
   };
 
   const handleDeletePhoto = async (photoId: string) => {
-    await deletePhoto({ galleryId: gallery.id, photoId });
+    await deletePhoto({ photoId } as any);
     setLocalPhotoCount(prev => Math.max(0, (prev || 1) - 1));
     setSelectedIds(prev => {
       if (!prev.has(photoId)) return prev;
@@ -469,7 +469,7 @@ export default function GalleryEdit() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     try {
-      await deletePhotos({ galleryId: gallery.id, photoIds: ids });
+      await deletePhotos({ photoIds: ids } as any);
       setLocalPhotoCount(prev => Math.max(0, (prev || ids.length) - ids.length));
       toast.success(`${ids.length} foto${ids.length !== 1 ? 's' : ''} excluída${ids.length !== 1 ? 's' : ''}`);
       setSelectedIds(new Set());

@@ -100,6 +100,7 @@ export interface GalleryPhoto {
   isSelected: boolean;
   isFavorite: boolean;        // Foto favoritada pelo cliente
   comment?: string;
+  pesoVisual?: number;
   order: number;
   folderId?: string | null;   // pasta_id - folder association
 }

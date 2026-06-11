@@ -270,7 +270,7 @@ export default function GalleryCreate() {
     if (!supabaseGalleryId || deletingPhotoId) return;
     setDeletingPhotoId(photoId);
     try {
-      await deletePhoto({ galleryId: supabaseGalleryId, photoId });
+      await deletePhoto({ photoId } as any);
 
       // Refund 1 credit via RPC (handles subscription vs purchased bucket)
       if (user) {

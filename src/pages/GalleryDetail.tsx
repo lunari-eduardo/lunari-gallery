@@ -421,7 +421,7 @@ export default function GalleryDetail() {
   };
 
   const handleReopenSelection = async (days: number) => {
-    await reopenSupabaseSelection({ id: supabaseGallery.id, days });
+    await reopenSupabaseSelection({ id: supabaseGallery.id, days } as any);
     // Aguarda o refetch para garantir que publicToken esteja atualizado.
     await queryClient.invalidateQueries({ queryKey: ['galerias'] });
     await queryClient.refetchQueries({ queryKey: ['galerias'] });

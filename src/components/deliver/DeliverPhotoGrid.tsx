@@ -124,7 +124,7 @@ export function DeliverPhotoGrid({
   const containerBg = bgColor ? { backgroundColor: bgColor } : undefined;
 
   return (
-    <div className="min-h-[50vh] px-3 sm:px-6 lg:px-8 py-12" style={containerBg}>
+    <div className="min-h-[50vh] py-12" style={containerBg}>
       {isEditorialTheme ? (
         <EditorialGrid
           photos={photos as any}
