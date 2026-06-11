@@ -188,7 +188,7 @@ export default function ClientDeliverGallery({ data }: Props) {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 md:gap-8">
             {folders.map(folder => {
               const folderPhotos = allPhotos.filter(p => p.folderId === folder.id);
               const thumb = folderPhotos[0];
@@ -196,22 +196,31 @@ export default function ClientDeliverGallery({ data }: Props) {
                 <button
                   key={folder.id}
                   onClick={() => { setActiveFolderId(folder.id); setFolderViewMode('grid'); }}
-                  className="group relative aspect-[3/4] rounded-xl overflow-hidden transition-all hover:shadow-lg"
-                  style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }}
+                  className="group flex flex-col gap-4 text-left transition-all"
                 >
-                  {thumb ? (
-                    <img
-                      src={getPhotoUrlLib({ storageKey: thumb.storageKey, thumbPath: thumb.thumbPath, width: thumb.width, height: thumb.height }, 'thumbnail')}
-                      alt={folder.nome}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className="absolute inset-0" style={{ backgroundColor: isDark ? '#2A2520' : '#EDE9E4' }} />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
-                    <p className="text-white font-medium text-sm sm:text-base leading-tight">{folder.nome}</p>
-                    <p className="text-white/70 text-xs mt-0.5">{folderPhotos.length} foto{folderPhotos.length !== 1 ? 's' : ''}</p>
+                  <div 
+                    className="relative aspect-[4/5] overflow-hidden transition-all duration-500 shadow-sm group-hover:shadow-xl group-hover:-translate-y-1"
+                    style={{ borderRadius: 'var(--gallery-radius, 8px)' }}
+                  >
+                    {thumb ? (
+                      <img
+                        src={getPhotoUrlLib({ storageKey: thumb.storageKey, thumbPath: thumb.thumbPath, width: thumb.width, height: thumb.height }, 'thumbnail')}
+                        alt={folder.nome}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      />
+                    ) : (
+                      <div className="absolute inset-0" style={{ backgroundColor: isDark ? '#2A2520' : '#EDE9E4' }} />
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500" />
+                  </div>
+                  
+                  <div className="space-y-1 px-1">
+                    <p className="font-medium text-base sm:text-lg tracking-tight leading-tight group-hover:text-primary transition-colors">
+                      {folder.nome}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.2em] opacity-40 font-semibold">
+                      {folderPhotos.length} fotografias
+                    </p>
                   </div>
                 </button>
               );
