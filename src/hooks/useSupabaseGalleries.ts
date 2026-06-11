@@ -345,9 +345,11 @@ export function useSupabaseGalleries() {
       if (error) throw error;
       return transformGaleria(result);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['galleries'] });
+      queryClient.invalidateQueries({ queryKey: ['client-gallery', variables.id] });
     },
+
   });
 
   const deleteGallery = useMutation({
