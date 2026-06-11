@@ -373,18 +373,32 @@ export function useSupabaseGalleries() {
 
   const sendGallery = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('send_gallery_notification' as any, { gallery_id: id });
-      if (error) throw error;
-    }
-  });
-
-  const reopenSelection = useMutation({
-    mutationFn: async (params: { id: string; [key: string]: any }) => {
-      const { error } = await supabase.rpc('reopen_gallery_selection' as any, { gallery_id: params.id });
+      // Usando prepare_gallery_share (Opção B do plano) para marcar como enviada
+      // e obter o link público/token atualizado de forma atômica.
+      const { error } = await supabase.rpc('prepare_gallery_share', { 
+        p_gallery_id: id,
+        p_mark_as_sent: true 
+      });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleries'] });
+      queryClient.invalidateQueries({ queryKey: ['galerias'] });
+    }
+  });
+
+  const reopenSelection = useMutation({
+    mutationFn: async (params: { id: string; days?: number }) => {
+      const { error } = await supabase.rpc('reopen_gallery_selection' as any, { 
+        p_gallery_id: params.id,
+        p_days: params.days ?? 7
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['galleries'] });
+      queryClient.invalidateQueries({ queryKey: ['galerias'] });
+      queryClient.invalidateQueries({ queryKey: ['galeria-fotos'] });
     }
   });
 
