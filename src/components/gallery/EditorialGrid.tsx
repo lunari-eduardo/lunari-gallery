@@ -49,17 +49,17 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
   }, [externalWidth]);
 
   const columns = useMemo(() => {
-    if (internalWidth < 640) return 2;
-    if (internalWidth < 1024) return 3;
+    if (availableWidth < 640) return 2;
+    if (availableWidth < 1024) return 3;
     return 4;
-  }, [internalWidth]);
+  }, [availableWidth]);
 
   const gridData = useMemo(() => {
-    if (internalWidth <= 0 || photos.length === 0) return { cells: [], totalHeight: 0 };
+    if (availableWidth <= 0 || photos.length === 0) return { cells: [], totalHeight: 0 };
 
     const cells: GridCell[] = [];
     const colHeights = new Array(columns).fill(0);
-    const columnWidth = (internalWidth - gap * (columns - 1)) / columns;
+    const columnWidth = (availableWidth - gap * (columns - 1)) / columns;
 
     photos.forEach((photo) => {
       const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
@@ -104,11 +104,13 @@ export const EditorialGrid: React.FC<EditorialGridProps> = ({
       className="w-full relative"
       style={{ 
         height: `${gridData.totalHeight}px`,
+        paddingLeft: `${horizontalPadding}px`,
+        paddingRight: `${horizontalPadding}px`,
       }}
     >
       {gridData.cells.map((cell) => {
-        const columnWidth = (internalWidth - gap * (columns - 1)) / columns;
-        const left = cell.col * (columnWidth + gap);
+        const columnWidth = (availableWidth - gap * (columns - 1)) / columns;
+        const left = horizontalPadding + cell.col * (columnWidth + gap);
         
         const style: React.CSSProperties = {
           position: 'absolute',
