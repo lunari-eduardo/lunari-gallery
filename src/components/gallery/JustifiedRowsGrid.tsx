@@ -55,6 +55,9 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   const rows = useMemo(() => {
     if (internalWidth <= 0 || photos.length === 0) return [];
 
+    const effectiveRowHeight = internalWidth < 500 ? Math.max(140, internalWidth * 0.45) : targetRowHeight;
+    const minItemsPerRow = internalWidth < 500 ? 1 : 2;
+
     const layoutRows: LayoutRow[] = [];
     let currentRow: LayoutItem[] = [];
     let currentRowWidth = 0;
@@ -65,16 +68,17 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     photos.forEach((photo) => {
       // Read peso_visual from photo (set by fotógrafo in backend)
       // peso_visual: 0 = normal, 1 = featured (2x in justified rows)
-      const isFeatured = (photo as any).peso_visual === 1;
+      const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
+      const isFeatured = weight === 1;
 
 
       // Calculate initial width at targetRowHeight
       const aspectRatio = photo.width && photo.height ? photo.width / photo.height : 1.5;
-      const baseWidth = targetRowHeight * aspectRatio;
+      const baseWidth = effectiveRowHeight * aspectRatio;
       const virtualWidth = isFeatured ? baseWidth * FEATURED_MULTIPLIER : baseWidth;
 
-      // If adding this item exceeds container width, finalize row
-      if (currentRowWidth + virtualWidth > internalWidth && currentRow.length > 0) {
+      // If adding this item exceeds container width AND we have enough items, finalize row
+      if (currentRowWidth + virtualWidth > internalWidth && currentRow.length >= minItemsPerRow) {
         // Calculate the height that would make this row exactly internalWidth
         // Width = Height * sum(aspectRatio_i) + (n-1)*gap
         // Height = (internalWidth - (n-1)*gap) / sum(aspectRatio_i)
@@ -114,11 +118,11 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
           const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
           return {
             ...item,
-            width: targetRowHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
-            height: targetRowHeight
+            width: effectiveRowHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
+            height: effectiveRowHeight
           };
         }),
-        rowHeight: targetRowHeight
+        rowHeight: effectiveRowHeight
       });
     }
 
