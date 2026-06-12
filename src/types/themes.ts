@@ -16,6 +16,13 @@ export interface GalleryThemeLayout {
   gap?: number;
   rowUnit?: number;
   density?: 'comfortable' | 'compact' | 'airy';
+  /** Clean: grade rígida de tiles uniformes. */
+  uniformTile?: {
+    aspect: number;
+    tilesPerRow: { mobile: number; tablet: number; desktop: number };
+  };
+  /** Lunari: limite máximo de fotos por linha no engine justificado. */
+  maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
 }
 
 export interface GalleryThemeSurface {
