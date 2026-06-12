@@ -309,7 +309,12 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     );
   }
 
-
+  return (
+    <div
+      ref={containerRef}
+      className="w-full flex flex-col"
+      style={{ gap: `${gap}px` }}
+    >
       {rows.map((row, rowIndex) => (
         <div 
           key={rowIndex} 
