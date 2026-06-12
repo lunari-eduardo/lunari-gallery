@@ -592,15 +592,18 @@ export default function DeliverDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {photos.map(photo => {
                 const isCover = coverPhotoId === photo.id;
-                const weight = (photo as any).peso_visual || 0;
+                const weight = photo.pesoVisual ?? 0;
                 return (
                   <div
                     key={photo.id}
                     className={cn(
                       'group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all',
-                      isCover ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-transparent'
+                      isCover && 'border-amber-400 ring-2 ring-amber-400/30',
+                      !isCover && weight > 0 && 'border-blue-400 ring-1 ring-blue-400/30',
+                      !isCover && weight === 0 && 'border-transparent'
                     )}
                   >
+
                     <img
                       src={getPhotoUrl({ storageKey: photo.storageKey }, 'thumbnail')}
                       alt={photo.originalFilename}
