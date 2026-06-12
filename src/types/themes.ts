@@ -23,6 +23,8 @@ export interface GalleryThemeLayout {
   };
   /** Lunari: limite máximo de fotos por linha no engine justificado. */
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
+  /** Clean: masonry de colunas fixas preservando proporção original (estilo Pinterest). */
+  masonryColumns?: { mobile: number; tablet: number; desktop: number };
 }
 
 export interface GalleryThemeSurface {
