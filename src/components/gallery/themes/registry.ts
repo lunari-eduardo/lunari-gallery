@@ -21,6 +21,7 @@ export const LUNARI_THEME: GalleryTheme = {
     gap: 8,
     rowUnit: 280,
     density: 'comfortable',
+    maxItemsPerRow: { mobile: 3, tablet: 4, desktop: 5 },
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
