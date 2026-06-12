@@ -1,8 +1,8 @@
-import { Download, Play, Image as ImageIcon } from 'lucide-react';
+import { Download, Image as ImageIcon } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
 import { JustifiedRowsGrid } from '@/components/gallery/JustifiedRowsGrid';
-import { EditorialGrid } from '@/components/gallery/EditorialGrid';
+import { EditorialTemplatesGrid } from '@/components/gallery/EditorialTemplatesGrid';
 import { cn } from '@/lib/utils';
 import { GalleryPhoto } from '@/types/gallery';
 
@@ -39,16 +39,16 @@ export function DeliverPhotoGrid({
   galleryId
 }: DeliverPhotoGridProps) {
   const { theme } = useGalleryDisplayTheme();
-  
-  // Use editorial grid for editorial theme, justified rows for others
-  const isEditorialTheme = theme.id === 'editorial';
-  
+
+  const useTemplates = theme.layout.engine === 'editorial-templates';
+
   const config = {
     gap: theme.layout.gap ?? 6,
-    targetRowHeight: typeof window !== 'undefined' && window.innerWidth < 640 ? 180 : (
-      theme.id === 'clean' ? 320 : 
+    targetRowHeight: typeof window !== 'undefined' && window.innerWidth < 640 ? 220 : (
+      theme.id === 'clean' ? 320 :
+      theme.id === 'editorial' ? 340 :
       theme.id === 'lunari' ? 280 : 260
-    )
+    ),
   };
 
   const renderContent = (photo: DeliverPhoto, style: React.CSSProperties) => {
@@ -125,8 +125,8 @@ export function DeliverPhotoGrid({
 
   return (
     <div className="min-h-[50vh] py-12" style={containerBg}>
-      {isEditorialTheme ? (
-        <EditorialGrid
+      {useTemplates ? (
+        <EditorialTemplatesGrid
           photos={photos as any}
           gap={config.gap}
           onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
