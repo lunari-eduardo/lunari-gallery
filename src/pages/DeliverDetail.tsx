@@ -558,7 +558,7 @@ export default function DeliverDetail() {
                   Capa selecionada
                 </span>
               )}
-              {photos.some(p => (p.pesoVisual ?? 0) > 0) && (
+              {(THEME_REGISTRY[activeThemeId]?.featured?.enabled !== false) && photos.some(p => (p.pesoVisual ?? 0) > 0) && (
                 <span className="text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
                   <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
                   {photos.filter(p => (p.pesoVisual ?? 0) > 0).length} destaque{photos.filter(p => (p.pesoVisual ?? 0) > 0).length !== 1 ? 's' : ''}
