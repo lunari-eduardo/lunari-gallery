@@ -13,6 +13,13 @@ interface JustifiedRowsGridProps {
   featuredEnabled?: boolean;
   /** Quando definido, força N colunas por breakpoint preservando ordem e proporção. */
   fixedColumns?: { mobile: number; tablet: number; desktop: number };
+  /** Clean: grade rígida de tiles uniformes (mesmo tamanho, mesmo AR, ordem fixa). */
+  uniformTiles?: {
+    aspect: number;
+    tilesPerRow: { mobile: number; tablet: number; desktop: number };
+  };
+  /** Lunari: cap de fotos por linha no modo justificado. */
+  maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
 }
 
 interface LayoutItem {
