@@ -221,6 +221,20 @@ export default function DeliverDetail() {
     }
   };
 
+  const handleToggleHighlight = async (photoId: string, currentWeight: number) => {
+    const newWeight = currentWeight > 0 ? 0 : 1;
+    setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, pesoVisual: newWeight } : p));
+    const { error } = await supabase
+      .from('galeria_fotos')
+      .update({ peso_visual: newWeight })
+      .eq('id', photoId);
+    if (error) {
+      setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, pesoVisual: currentWeight } : p));
+      toast.error('Erro ao atualizar destaque');
+      return;
+    }
+    toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+
   const handleUploadComplete = (uploaded: UploadedPhoto[]) => {
     setShowUploader(false);
     if (id) {
