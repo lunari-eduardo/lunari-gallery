@@ -1,7 +1,13 @@
 import { TitleCaseMode } from "./gallery";
 
 export interface GalleryThemeLayout {
-  engine: 'editorial-grid' | 'masonry-classic';
+  /**
+   * Engines de layout disponíveis:
+   * - 'editorial-justified': linhas justificadas (zero vazios, ordem fixa)
+   * - 'editorial-templates': padrões editoriais pré-definidos (zero vazios, ordem fixa)
+   * - 'editorial-grid' / 'masonry-classic': @deprecated — normalizados para 'editorial-justified'
+   */
+  engine: 'editorial-justified' | 'editorial-templates' | 'editorial-grid' | 'masonry-classic';
   columns: {
     mobile: number;
     tablet: number;
@@ -65,7 +71,7 @@ export const DEFAULT_GALLERY_THEME: GalleryTheme = {
   name: 'Clássico',
   version: '1.0.0',
   layout: {
-    engine: 'editorial-grid',
+    engine: 'editorial-justified',
     columns: {
       mobile: 2,
       tablet: 3,

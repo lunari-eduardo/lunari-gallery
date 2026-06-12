@@ -13,87 +13,127 @@ export const LUNARI_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'lunari',
   name: 'Lunari',
-  version: '1.0.0',
+  version: '1.1.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-grid',
+    engine: 'editorial-justified',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
     gap: 8,
     rowUnit: 280,
-    density: 'comfortable'
+    density: 'comfortable',
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
     background: '#FAF9F7',
-    borderRadius: '0px'
+    borderRadius: '0px',
   },
   featured: {
     ...DEFAULT_GALLERY_THEME.featured,
-    enabled: false
-  }
+    enabled: false,
+  },
 };
 
 export const CLEAN_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'clean',
   name: 'Clean',
-  version: '1.0.0',
+  version: '1.1.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-grid',
+    engine: 'editorial-justified',
     columns: { mobile: 1, tablet: 2, desktop: 3 },
     gap: 16,
     rowUnit: 320,
-    density: 'airy'
+    density: 'airy',
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
     background: '#FFFFFF',
-    borderRadius: '0px'
+    borderRadius: '0px',
   },
   featured: {
     ...DEFAULT_GALLERY_THEME.featured,
-    enabled: false
-  }
+    enabled: false,
+  },
 };
 
+/**
+ * Editorial Clássico — linhas justificadas estilo Pixieset/Pic-Time.
+ * Cada linha preenche 100% da largura; última linha respeita altura média.
+ * Suporta peso_visual=1 (foto destaque ganha multiplier de largura na linha).
+ */
 export const EDITORIAL_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'editorial',
-  name: 'Editorial',
-  version: '1.0.0',
+  name: 'Editorial Clássico',
+  version: '2.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-grid',
+    engine: 'editorial-justified',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
-    gap: 6,
-    rowUnit: 260,
-    density: 'comfortable'
+    gap: 8,
+    rowUnit: 340,
+    density: 'comfortable',
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
     background: '#F8F6F2',
-    borderRadius: '0px'
+    borderRadius: '0px',
   },
   featured: {
     enabled: true,
     maxCount: 15,
     spanRules: {
-      "0": { colSpan: 1, rowSpan: 1 }, // Normal photo
-      "1": { colSpan: 2, rowSpan: 2 }, // Featured 2x2 (marked by fotógrafo)
-      "2": { colSpan: 2, rowSpan: 3 }, // Reserved for future large featured
-    }
+      '0': { colSpan: 1, rowSpan: 1 },
+      '1': { colSpan: 2, rowSpan: 2 },
+    },
   },
   typography: {
     titleFont: 'Instrument Serif',
-  }
+  },
 };
 
+/**
+ * Editorial Revista — sequência cíclica de templates editoriais pré-definidos.
+ * Cada template tem altura matematicamente fixa por largura → zero vazios.
+ * Destaques (peso_visual=1) caem nos slots grandes dos templates T1/T3/T5/M2/M4.
+ */
+export const EDITORIAL_MAGAZINE_THEME: GalleryTheme = {
+  ...DEFAULT_GALLERY_THEME,
+  id: 'editorial-magazine',
+  name: 'Editorial Revista',
+  version: '1.0.0',
+  layout: {
+    ...DEFAULT_GALLERY_THEME.layout,
+    engine: 'editorial-templates',
+    columns: { mobile: 2, tablet: 3, desktop: 4 },
+    gap: 8,
+    rowUnit: 320,
+    density: 'comfortable',
+  },
+  surface: {
+    ...DEFAULT_GALLERY_THEME.surface,
+    background: '#F4F2EE',
+    borderRadius: '0px',
+  },
+  featured: {
+    enabled: true,
+    maxCount: 20,
+    spanRules: {
+      '0': { colSpan: 1, rowSpan: 1 },
+      '1': { colSpan: 2, rowSpan: 2 },
+    },
+  },
+  typography: {
+    titleFont: 'Instrument Serif',
+  },
+};
 
 export const THEME_REGISTRY: Record<string, GalleryTheme> = {
   lunari: LUNARI_THEME,
   clean: CLEAN_THEME,
   editorial: EDITORIAL_THEME,
+  'editorial-magazine': EDITORIAL_MAGAZINE_THEME,
 };
 
 export const DEFAULT_THEME_ID = 'lunari';

@@ -55,34 +55,25 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   const rows = useMemo(() => {
     if (internalWidth <= 0 || photos.length === 0) return [];
 
-    const effectiveRowHeight = internalWidth < 500 ? Math.max(140, internalWidth * 0.45) : targetRowHeight;
-    const minItemsPerRow = internalWidth < 500 ? 1 : 2;
+    const isMobile = internalWidth < 500;
+    const effectiveRowHeight = isMobile ? Math.max(220, internalWidth * 0.55) : targetRowHeight;
+    const minItemsPerRow = isMobile ? 1 : 2;
 
     const layoutRows: LayoutRow[] = [];
     let currentRow: LayoutItem[] = [];
     let currentRowWidth = 0;
 
-    // Use a multiplier for featured photos to make them "heavier" in the row calculation
     const FEATURED_MULTIPLIER = 1.8;
 
     photos.forEach((photo) => {
-      // Read peso_visual from photo (set by fotógrafo in backend)
-      // peso_visual: 0 = normal, 1 = featured (2x in justified rows)
       const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
       const isFeatured = weight === 1;
 
-
-      // Calculate initial width at targetRowHeight
       const aspectRatio = photo.width && photo.height ? photo.width / photo.height : 1.5;
       const baseWidth = effectiveRowHeight * aspectRatio;
       const virtualWidth = isFeatured ? baseWidth * FEATURED_MULTIPLIER : baseWidth;
 
-      // If adding this item exceeds container width AND we have enough items, finalize row
       if (currentRowWidth + virtualWidth > internalWidth && currentRow.length >= minItemsPerRow) {
-        // Calculate the height that would make this row exactly internalWidth
-        // Width = Height * sum(aspectRatio_i) + (n-1)*gap
-        // Height = (internalWidth - (n-1)*gap) / sum(aspectRatio_i)
-        
         const rowGaps = (currentRow.length - 1) * gap;
         const sumAspectRatios = currentRow.reduce((acc, item) => {
           const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
@@ -97,10 +88,10 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
             return {
               ...item,
               height: finalHeight,
-              width: finalHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio)
+              width: finalHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
             };
           }),
-          rowHeight: finalHeight
+          rowHeight: finalHeight,
         });
 
         currentRow = [];
@@ -111,18 +102,36 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
       currentRowWidth += virtualWidth + gap;
     });
 
-    // Handle last row (usually not justified to full width to avoid huge photos)
+    // Última linha: SEMPRE justificada para preencher 100% da largura.
+    // Evita "área vazia" à direita interpretada como erro de carregamento.
+    // Se houver apenas 1 foto sobrando, é forçada a ocupar a largura total
+    // mantendo seu aspect-ratio (crop por object-cover quando necessário).
     if (currentRow.length > 0) {
+      const rowGaps = (currentRow.length - 1) * gap;
+      const sumAspectRatios = currentRow.reduce((acc, item) => {
+        const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
+        return acc + (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio);
+      }, 0);
+
+      // Cap: se a altura final fosse desproporcional (linha solitária com 1 foto vertical),
+      // limitamos pela altura média das linhas anteriores * 1.4 para não dominar a tela.
+      let finalHeight = (internalWidth - rowGaps) / sumAspectRatios;
+      if (currentRow.length === 1 && layoutRows.length > 0) {
+        const avgPrev = layoutRows.reduce((a, r) => a + r.rowHeight, 0) / layoutRows.length;
+        const cap = Math.min(finalHeight, avgPrev * 1.6);
+        finalHeight = Math.max(cap, effectiveRowHeight);
+      }
+
       layoutRows.push({
         items: currentRow.map(item => {
           const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
           return {
             ...item,
-            width: effectiveRowHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
-            height: effectiveRowHeight
+            height: finalHeight,
+            width: finalHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
           };
         }),
-        rowHeight: effectiveRowHeight
+        rowHeight: finalHeight,
       });
     }
 

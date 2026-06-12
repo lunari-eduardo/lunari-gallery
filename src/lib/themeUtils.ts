@@ -13,17 +13,32 @@ import { GalleryTheme } from '@/types/themes';
  */
 export function getSafeTheme(themeId: string | null | undefined): GalleryTheme {
   if (!themeId || typeof themeId !== 'string') {
-    return THEME_REGISTRY[DEFAULT_THEME_ID];
+    return normalizeEngine(THEME_REGISTRY[DEFAULT_THEME_ID]);
   }
 
   const theme = THEME_REGISTRY[themeId.toLowerCase()];
   if (theme) {
-    return theme;
+    return normalizeEngine(theme);
   }
 
-  // Fallback: invalid ID always returns default
   console.warn(`[Theme] Unknown theme ID: ${themeId}, falling back to ${DEFAULT_THEME_ID}`);
-  return THEME_REGISTRY[DEFAULT_THEME_ID];
+  return normalizeEngine(THEME_REGISTRY[DEFAULT_THEME_ID]);
+}
+
+/**
+ * Normaliza engines legados ('editorial-grid', 'masonry-classic') para o
+ * engine moderno equivalente ('editorial-justified'), garantindo que galerias
+ * antigas nunca renderizem com o algoritmo que gerava vazios.
+ */
+function normalizeEngine(theme: GalleryTheme): GalleryTheme {
+  const legacy = theme.layout?.engine;
+  if (legacy === 'editorial-grid' || legacy === 'masonry-classic') {
+    return {
+      ...theme,
+      layout: { ...theme.layout, engine: 'editorial-justified' },
+    };
+  }
+  return theme;
 }
 
 /**
