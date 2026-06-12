@@ -621,7 +621,7 @@ export default function DeliverDetail() {
                     
                     {/* Badge DESTAQUE */}
                     {weight > 0 && (
-                      <div className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10">
+                      <div className="absolute top-1.5 right-1.5 bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10 shadow-sm">
                         <Star className="h-2.5 w-2.5 fill-current" />
                         DESTAQUE
                       </div>
@@ -631,18 +631,16 @@ export default function DeliverDetail() {
                       <Button
                         variant={weight > 0 ? 'default' : 'secondary'}
                         size="icon"
-                        className={cn('h-8 w-8', weight > 0 && 'bg-primary text-primary-foreground')}
-                        onClick={async (e) => {
+                        className={cn('h-8 w-8', weight > 0 && 'bg-blue-500 hover:bg-blue-600 text-white')}
+                        onClick={(e) => {
                           e.stopPropagation();
-                          const newWeight = weight > 0 ? 0 : 1;
-                          const { supabase } = await import('@/integrations/supabase/client');
-                          await supabase.from('galeria_fotos').update({ peso_visual: newWeight }).eq('id', photo.id);
-                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, pesoVisual: newWeight } as any : p));
-                          toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+                          handleToggleHighlight(photo.id, weight);
                         }}
                         title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
+                        aria-label={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
                       >
                         <Star className={cn('h-4 w-4', weight > 0 && 'fill-current')} />
+
                       </Button>
                       <Button
                         variant={isCover ? 'default' : 'secondary'}
