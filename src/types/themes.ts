@@ -71,7 +71,7 @@ export const DEFAULT_GALLERY_THEME: GalleryTheme = {
   name: 'Clássico',
   version: '1.0.0',
   layout: {
-    engine: 'editorial-grid',
+    engine: 'editorial-justified',
     columns: {
       mobile: 2,
       tablet: 3,
