@@ -25,6 +25,8 @@ export interface GalleryThemeLayout {
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
   /** Clean: masonry de colunas fixas preservando proporção original (estilo Pinterest). */
   masonryColumns?: { mobile: number; tablet: number; desktop: number };
+  /** Editorial Clássico: foto peso_visual=1 ocupa bloco 2 colunas × 2 linhas reais. */
+  pairedRowsFeatured?: boolean;
 }
 
 export interface GalleryThemeSurface {
