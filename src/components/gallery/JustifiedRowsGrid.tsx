@@ -50,7 +50,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   uniformTiles,
   maxItemsPerRow,
   masonryColumns,
-}) => {
+  pairedRowsFeatured,
   const containerRef = useRef<HTMLDivElement>(null);
   const [internalWidth, setInternalWidth] = useState(0);
 
