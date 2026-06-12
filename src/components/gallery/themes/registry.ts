@@ -68,7 +68,7 @@ export const EDITORIAL_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'editorial',
   name: 'Editorial Clássico',
-  version: '2.0.0',
+  version: '2.1.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-justified',
@@ -76,6 +76,7 @@ export const EDITORIAL_THEME: GalleryTheme = {
     gap: 8,
     rowUnit: 340,
     density: 'comfortable',
+    pairedRowsFeatured: true,
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,

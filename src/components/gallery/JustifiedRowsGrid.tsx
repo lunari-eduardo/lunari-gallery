@@ -22,6 +22,8 @@ interface JustifiedRowsGridProps {
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
   /** Clean: masonry de colunas fixas preservando proporção original. */
   masonryColumns?: { mobile: number; tablet: number; desktop: number };
+  /** Editorial Clássico: foto destaque ocupa 2 colunas × 2 linhas reais. */
+  pairedRowsFeatured?: boolean;
 }
 
 interface LayoutItem {
@@ -48,6 +50,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   uniformTiles,
   maxItemsPerRow,
   masonryColumns,
+  pairedRowsFeatured,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [internalWidth, setInternalWidth] = useState(0);
@@ -264,6 +267,244 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
 
     return columns;
   }, [photos, internalWidth, gap, masonryColumns]);
+
+  // ============ MODO PAIRED ROWS FEATURED (Editorial Clássico) ============
+  // Foto destaque ocupa bloco 2 colunas × 2 linhas reais. Vizinhas adjacentes
+  // ao bloco preenchem o lado livre em 2 andares de altura H_half. Ordem
+  // narrativa preservada. Lados alternam (esq/dir) para ritmo editorial.
+  // Mobile (N=2): destaque vira hero 2x2 puro, sem lado livre.
+  const pairedLayout = useMemo(() => {
+    const hasFeatured = photos.some((p) => {
+      const w = (p as any).pesoVisual || (p as any).peso_visual || 0;
+      return w === 1;
+    });
+    if (!pairedRowsFeatured || !featuredEnabled || !hasFeatured) return null;
+    if (internalWidth <= 0 || photos.length === 0) return null;
+
+    const N = internalWidth < 640 ? 2 : internalWidth < 1024 ? 3 : 4;
+    const colWidth = (internalWidth - (N - 1) * gap) / N;
+    const ratioOf = (p: GalleryPhoto) =>
+      p.width && p.height ? p.width / p.height : 1.5;
+
+    const minBlockH = Math.max(targetRowHeight * 1.6, 360);
+    const maxBlockH = Math.max(targetRowHeight * 2.4, 720);
+
+    type PairedCell = {
+      photo: GalleryPhoto;
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+      isFeatured: boolean;
+    };
+    type Block =
+      | { kind: 'paired'; height: number; cells: PairedCell[] }
+      | { kind: 'row'; rowHeight: number; items: LayoutItem[] };
+
+    const blocks: Block[] = [];
+    const isFeat = (p: GalleryPhoto) => {
+      const w = (p as any).pesoVisual || (p as any).peso_visual || 0;
+      return w === 1;
+    };
+
+    let pendingNormal: GalleryPhoto[] = [];
+    let alternateSide: 'left' | 'right' = 'left';
+
+    // Empacota uma fila de fotos não-destaque em linhas justificadas (mesma
+    // lógica do flushRow padrão), respeitando minItemsPerRow.
+    const isMobile = internalWidth < 500;
+    const effectiveRowHeight = isMobile ? Math.max(220, internalWidth * 0.55) : targetRowHeight;
+    const minItemsPerRow = isMobile ? 1 : 2;
+
+    const flushNormalRows = () => {
+      if (pendingNormal.length === 0) return;
+      const queue = pendingNormal;
+      pendingNormal = [];
+      let row: LayoutItem[] = [];
+      let rowWidth = 0;
+      const pushRow = (justified: boolean) => {
+        if (row.length === 0) return;
+        const rowGaps = (row.length - 1) * gap;
+        const sumAR = row.reduce((a, it) => a + ratioOf(it.photo), 0);
+        let finalH = (internalWidth - rowGaps) / sumAR;
+        if (!justified && row.length === 1) {
+          finalH = Math.min(finalH, effectiveRowHeight * 1.4);
+        }
+        blocks.push({
+          kind: 'row',
+          rowHeight: finalH,
+          items: row.map((it) => ({
+            ...it,
+            height: finalH,
+            width: finalH * ratioOf(it.photo),
+          })),
+        });
+        row = [];
+        rowWidth = 0;
+      };
+      queue.forEach((photo) => {
+        const ar = ratioOf(photo);
+        const w = effectiveRowHeight * ar;
+        if (rowWidth + w > internalWidth && row.length >= minItemsPerRow) {
+          pushRow(true);
+        }
+        row.push({ photo, width: w, height: effectiveRowHeight, isFeatured: false });
+        rowWidth += w + gap;
+      });
+      pushRow(false);
+    };
+
+    let i = 0;
+    while (i < photos.length) {
+      const p = photos[i];
+      if (isFeat(p)) {
+        flushNormalRows();
+        if (N < 2) {
+          // Salvaguarda: sem 2 colunas, trata como linha normal.
+          pendingNormal.push(p);
+          i++;
+          continue;
+        }
+        // Bloco pareado
+        const blockW = 2 * colWidth + gap;
+        const arF = ratioOf(p);
+        const naturalH = blockW / arF;
+        const H_block = Math.max(minBlockH, Math.min(maxBlockH, naturalH));
+        const H_half = (H_block - gap) / 2;
+
+        const sideLeft = N === 2 ? true : alternateSide === 'left';
+        const featCol = sideLeft ? 0 : N - 2;
+        const featLeft = featCol * (colWidth + gap);
+
+        const cells: PairedCell[] = [
+          {
+            photo: p,
+            left: featLeft,
+            top: 0,
+            width: blockW,
+            height: H_block,
+            isFeatured: true,
+          },
+        ];
+
+        // Lado livre (N-2 colunas × 2 andares)
+        const freeCols = N - 2;
+        const sideStartCol = sideLeft ? 2 : 0;
+        const slotsNeeded = freeCols * 2;
+        let filled = 0;
+        for (let s = 0; s < slotsNeeded && i + 1 + s < photos.length; s++) {
+          const candidate = photos[i + 1 + s];
+          if (isFeat(candidate)) break; // próximo destaque interrompe o preenchimento
+          const colIdx = s % freeCols;
+          const rowIdx = Math.floor(s / freeCols);
+          const left = (sideStartCol + colIdx) * (colWidth + gap);
+          const top = rowIdx * (H_half + gap);
+          cells.push({
+            photo: candidate,
+            left,
+            top,
+            width: colWidth,
+            height: H_half,
+            isFeatured: false,
+          });
+          filled++;
+        }
+
+        blocks.push({ kind: 'paired', height: H_block, cells });
+        i += 1 + filled;
+        if (N > 2) alternateSide = sideLeft ? 'right' : 'left';
+      } else {
+        pendingNormal.push(p);
+        i++;
+      }
+    }
+    flushNormalRows();
+
+    return blocks;
+  }, [photos, internalWidth, gap, targetRowHeight, pairedRowsFeatured, featuredEnabled]);
+
+  if (pairedLayout) {
+    return (
+      <div
+        ref={containerRef}
+        className="w-full flex flex-col"
+        style={{ gap: `${gap}px` }}
+      >
+        {pairedLayout.map((block, bi) => {
+          if (block.kind === 'paired') {
+            return (
+              <div
+                key={`p-${bi}`}
+                className="relative w-full"
+                style={{ height: block.height }}
+              >
+                {block.cells.map((cell) => {
+                  const style: React.CSSProperties = {
+                    position: 'absolute',
+                    left: cell.left,
+                    top: cell.top,
+                    width: cell.width,
+                    height: cell.height,
+                    cursor: 'pointer',
+                  };
+                  if (renderItem) return renderItem(cell.photo, style);
+                  const photoUrl = (cell.photo as any).previewPath || cell.photo.previewUrl || cell.photo.thumbnailUrl;
+                  return (
+                    <div
+                      key={cell.photo.id}
+                      style={style}
+                      onClick={() => onPhotoClick?.(cell.photo)}
+                      className="overflow-hidden"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={cell.photo.filename}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+          return (
+            <div
+              key={`r-${bi}`}
+              className="flex flex-row overflow-hidden"
+              style={{ gap: `${gap}px`, height: block.rowHeight }}
+            >
+              {block.items.map((item) => {
+                const style: React.CSSProperties = {
+                  width: item.width,
+                  height: item.height,
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                };
+                if (renderItem) return renderItem(item.photo, style);
+                const photoUrl = (item.photo as any).previewPath || item.photo.previewUrl || item.photo.thumbnailUrl;
+                return (
+                  <div
+                    key={item.photo.id}
+                    style={style}
+                    onClick={() => onPhotoClick?.(item.photo)}
+                    className="overflow-hidden"
+                  >
+                    <img
+                      src={photoUrl}
+                      alt={item.photo.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (masonryColumns) {
     return (
