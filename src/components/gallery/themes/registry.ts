@@ -46,6 +46,10 @@ export const CLEAN_THEME: GalleryTheme = {
     gap: 16,
     rowUnit: 320,
     density: 'airy',
+    uniformTile: {
+      aspect: 3 / 2,
+      tilesPerRow: { mobile: 1, tablet: 2, desktop: 3 },
+    },
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
