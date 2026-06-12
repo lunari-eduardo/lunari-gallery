@@ -138,7 +138,8 @@ export function DeliverPhotoGrid({
           gap={config.gap}
           targetRowHeight={config.targetRowHeight}
           featuredEnabled={theme.featured?.enabled !== false}
-          fixedColumns={theme.id === 'clean' ? theme.layout.columns : undefined}
+          uniformTiles={theme.layout.uniformTile}
+          maxItemsPerRow={theme.layout.maxItemsPerRow}
           onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
           renderItem={(photo, style) => renderContent(photo as any, style)}
         />
