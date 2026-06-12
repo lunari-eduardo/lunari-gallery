@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
+import { supabase } from '@/integrations/supabase/client';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
