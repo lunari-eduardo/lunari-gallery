@@ -13,6 +13,13 @@ interface JustifiedRowsGridProps {
   featuredEnabled?: boolean;
   /** Quando definido, força N colunas por breakpoint preservando ordem e proporção. */
   fixedColumns?: { mobile: number; tablet: number; desktop: number };
+  /** Clean: grade rígida de tiles uniformes (mesmo tamanho, mesmo AR, ordem fixa). */
+  uniformTiles?: {
+    aspect: number;
+    tilesPerRow: { mobile: number; tablet: number; desktop: number };
+  };
+  /** Lunari: cap de fotos por linha no modo justificado. */
+  maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
 }
 
 interface LayoutItem {
@@ -36,6 +43,8 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   containerWidth: externalWidth,
   featuredEnabled = true,
   fixedColumns,
+  uniformTiles,
+  maxItemsPerRow,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [internalWidth, setInternalWidth] = useState(0);
@@ -68,7 +77,38 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     const ratioOf = (p: GalleryPhoto) =>
       p.width && p.height ? p.width / p.height : 1.5;
 
-    // ============ MODO COLUNAS FIXAS (Clean) ============
+    // ============ MODO TILES UNIFORMES (Clean) ============
+    // Todas as fotos viram tiles do MESMO tamanho e MESMO aspect ratio.
+    // A foto é encaixada via object-cover (corte central) — orientação
+    // original da foto não importa visualmente. Ordem narrativa preservada.
+    if (uniformTiles) {
+      const tilesPerRow = internalWidth < 640
+        ? uniformTiles.tilesPerRow.mobile
+        : internalWidth < 1024
+        ? uniformTiles.tilesPerRow.tablet
+        : uniformTiles.tilesPerRow.desktop;
+      const N = Math.max(1, tilesPerRow);
+      const rowGaps = (N - 1) * gap;
+      const tileWidth = (internalWidth - rowGaps) / N;
+      const tileHeight = tileWidth / uniformTiles.aspect;
+
+      const layoutRows: LayoutRow[] = [];
+      for (let i = 0; i < photos.length; i += N) {
+        const chunk = photos.slice(i, i + N);
+        layoutRows.push({
+          rowHeight: tileHeight,
+          items: chunk.map(p => ({
+            photo: p,
+            isFeatured: false,
+            height: tileHeight,
+            width: tileWidth,
+          })),
+        });
+      }
+      return layoutRows;
+    }
+
+    // ============ MODO COLUNAS FIXAS ============
     // Particiona fotos na ordem original em chunks de N colunas e justifica
     // cada chunk preservando proporção de cada item. Última linha parcial
     // herda altura média e fica alinhada à esquerda sem buracos visíveis.
@@ -113,11 +153,49 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     }
 
     // ============ MODO JUSTIFICADO PADRÃO ============
+    // Cap de itens por linha (Lunari): evita 6+ verticais minúsculas por linha.
+    const itemsCap = maxItemsPerRow
+      ? (internalWidth < 640
+          ? maxItemsPerRow.mobile
+          : internalWidth < 1024
+          ? maxItemsPerRow.tablet
+          : maxItemsPerRow.desktop)
+      : Infinity;
+
     const layoutRows: LayoutRow[] = [];
     let currentRow: LayoutItem[] = [];
     let currentRowWidth = 0;
 
-    const FEATURED_MULTIPLIER = 1.8;
+    // Peso de destaque é aplicado APENAS na lógica de quebra de linha
+    // (virtualWidth), NUNCA no AR renderizado. Assim, foto vertical destacada
+    // continua vertical (orientação preservada) e foto horizontal destacada
+    // continua horizontal — destaque vira "ocupar mais peso de linha".
+    const FEATURED_WEIGHT = 1.8;
+
+    const flushRow = (justified: boolean) => {
+      if (currentRow.length === 0) return;
+      const rowGaps = (currentRow.length - 1) * gap;
+      const sumAspectRatios = currentRow.reduce(
+        (acc, item) => acc + ratioOf(item.photo),
+        0,
+      );
+      let finalHeight = (internalWidth - rowGaps) / sumAspectRatios;
+      if (!justified && currentRow.length === 1 && layoutRows.length > 0) {
+        const avgPrev = layoutRows.reduce((a, r) => a + r.rowHeight, 0) / layoutRows.length;
+        const cap = Math.min(finalHeight, avgPrev * 1.6);
+        finalHeight = Math.max(cap, effectiveRowHeight);
+      }
+      layoutRows.push({
+        items: currentRow.map(item => ({
+          ...item,
+          height: finalHeight,
+          width: finalHeight * ratioOf(item.photo),
+        })),
+        rowHeight: finalHeight,
+      });
+      currentRow = [];
+      currentRowWidth = 0;
+    };
 
     photos.forEach((photo) => {
       const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
@@ -125,67 +203,26 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
 
       const aspectRatio = ratioOf(photo);
       const baseWidth = effectiveRowHeight * aspectRatio;
-      const virtualWidth = isFeatured ? baseWidth * FEATURED_MULTIPLIER : baseWidth;
+      const virtualWidth = isFeatured ? baseWidth * FEATURED_WEIGHT : baseWidth;
 
-      if (currentRowWidth + virtualWidth > internalWidth && currentRow.length >= minItemsPerRow) {
-        const rowGaps = (currentRow.length - 1) * gap;
-        const sumAspectRatios = currentRow.reduce((acc, item) => {
-          const ratio = ratioOf(item.photo);
-          return acc + (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio);
-        }, 0);
+      const overflowing =
+        currentRowWidth + virtualWidth > internalWidth &&
+        currentRow.length >= minItemsPerRow;
+      const reachedCap = currentRow.length >= itemsCap;
 
-        const finalHeight = (internalWidth - rowGaps) / sumAspectRatios;
-
-        layoutRows.push({
-          items: currentRow.map(item => {
-            const ratio = ratioOf(item.photo);
-            return {
-              ...item,
-              height: finalHeight,
-              width: finalHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
-            };
-          }),
-          rowHeight: finalHeight,
-        });
-
-        currentRow = [];
-        currentRowWidth = 0;
+      if (overflowing || reachedCap) {
+        flushRow(true);
       }
 
       currentRow.push({ photo, width: virtualWidth, height: effectiveRowHeight, isFeatured });
       currentRowWidth += virtualWidth + gap;
     });
 
-    // Última linha: SEMPRE justificada para preencher 100% da largura.
-    if (currentRow.length > 0) {
-      const rowGaps = (currentRow.length - 1) * gap;
-      const sumAspectRatios = currentRow.reduce((acc, item) => {
-        const ratio = ratioOf(item.photo);
-        return acc + (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio);
-      }, 0);
-
-      let finalHeight = (internalWidth - rowGaps) / sumAspectRatios;
-      if (currentRow.length === 1 && layoutRows.length > 0) {
-        const avgPrev = layoutRows.reduce((a, r) => a + r.rowHeight, 0) / layoutRows.length;
-        const cap = Math.min(finalHeight, avgPrev * 1.6);
-        finalHeight = Math.max(cap, effectiveRowHeight);
-      }
-
-      layoutRows.push({
-        items: currentRow.map(item => {
-          const ratio = ratioOf(item.photo);
-          return {
-            ...item,
-            height: finalHeight,
-            width: finalHeight * (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio),
-          };
-        }),
-        rowHeight: finalHeight,
-      });
-    }
+    // Última linha
+    flushRow(false);
 
     return layoutRows;
-  }, [photos, internalWidth, gap, targetRowHeight, featuredEnabled, fixedColumns]);
+  }, [photos, internalWidth, gap, targetRowHeight, featuredEnabled, fixedColumns, uniformTiles, maxItemsPerRow]);
 
   return (
     <div 

@@ -4,6 +4,8 @@ import {
   Template,
   selectTemplateBatch,
   computeStripHeight,
+  orientationFromAR,
+  PhotoOrientation,
 } from './editorialTemplates';
 
 interface EditorialTemplatesGridProps {
@@ -67,10 +69,20 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
       const nextPhoto = photos[idx];
       const isFeatured = ((nextPhoto as any).pesoVisual || (nextPhoto as any).peso_visual || 0) === 1;
 
+      // Janela de orientações das próximas fotos (lookahead = 6).
+      const lookahead = Math.min(remaining, 6);
+      const nextOrientations: PhotoOrientation[] = [];
+      for (let k = 0; k < lookahead; k++) {
+        const p = photos[idx + k];
+        const ar = p.width && p.height ? p.width / p.height : 1.5;
+        nextOrientations.push(orientationFromAR(ar));
+      }
+
       const { template, nextCursor } = selectTemplateBatch(
         remaining,
         cursor,
         isMobile,
+        nextOrientations,
         isFeatured,
       );
       cursor = nextCursor;
