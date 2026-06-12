@@ -41,7 +41,7 @@ export const CLEAN_THEME: GalleryTheme = {
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-justified',
-    columns: { mobile: 1, tablet: 2, desktop: 3 },
+    columns: { mobile: 2, tablet: 3, desktop: 4 },
     gap: 16,
     rowUnit: 320,
     density: 'airy',

@@ -558,7 +558,7 @@ export default function DeliverDetail() {
                   Capa selecionada
                 </span>
               )}
-              {photos.some(p => (p.pesoVisual ?? 0) > 0) && (
+              {(THEME_REGISTRY[activeThemeId]?.featured?.enabled !== false) && photos.some(p => (p.pesoVisual ?? 0) > 0) && (
                 <span className="text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
                   <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
                   {photos.filter(p => (p.pesoVisual ?? 0) > 0).length} destaque{photos.filter(p => (p.pesoVisual ?? 0) > 0).length !== 1 ? 's' : ''}
@@ -593,14 +593,16 @@ export default function DeliverDetail() {
               {photos.map(photo => {
                 const isCover = coverPhotoId === photo.id;
                 const weight = photo.pesoVisual ?? 0;
+                const themeSupportsFeatured = THEME_REGISTRY[activeThemeId]?.featured?.enabled !== false;
+                const showHighlight = themeSupportsFeatured && weight > 0;
                 return (
                   <div
                     key={photo.id}
                     className={cn(
                       'group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all',
                       isCover && 'border-amber-400 ring-2 ring-amber-400/30',
-                      !isCover && weight > 0 && 'border-blue-400 ring-1 ring-blue-400/30',
-                      !isCover && weight === 0 && 'border-transparent'
+                      !isCover && showHighlight && 'border-blue-400 ring-1 ring-blue-400/30',
+                      !isCover && !showHighlight && 'border-transparent'
                     )}
                   >
 
@@ -619,8 +621,8 @@ export default function DeliverDetail() {
                       </div>
                     )}
                     
-                    {/* Badge DESTAQUE */}
-                    {weight > 0 && (
+                    {/* Badge DESTAQUE — só quando tema suporta */}
+                    {showHighlight && (
                       <div className="absolute top-1.5 right-1.5 bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10 shadow-sm">
                         <Star className="h-2.5 w-2.5 fill-current" />
                         DESTAQUE
@@ -628,20 +630,21 @@ export default function DeliverDetail() {
                     )}
 
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100">
-                      <Button
-                        variant={weight > 0 ? 'default' : 'secondary'}
-                        size="icon"
-                        className={cn('h-8 w-8', weight > 0 && 'bg-blue-500 hover:bg-blue-600 text-white')}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleHighlight(photo.id, weight);
-                        }}
-                        title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
-                        aria-label={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
-                      >
-                        <Star className={cn('h-4 w-4', weight > 0 && 'fill-current')} />
-
-                      </Button>
+                      {themeSupportsFeatured && (
+                        <Button
+                          variant={weight > 0 ? 'default' : 'secondary'}
+                          size="icon"
+                          className={cn('h-8 w-8', weight > 0 && 'bg-blue-500 hover:bg-blue-600 text-white')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleHighlight(photo.id, weight);
+                          }}
+                          title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
+                          aria-label={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
+                        >
+                          <Star className={cn('h-4 w-4', weight > 0 && 'fill-current')} />
+                        </Button>
+                      )}
                       <Button
                         variant={isCover ? 'default' : 'secondary'}
                         size="icon"
