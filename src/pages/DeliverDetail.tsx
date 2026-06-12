@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
+import { supabase } from '@/integrations/supabase/client';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
@@ -219,6 +220,22 @@ export default function DeliverDetail() {
       setCoverPhotoId(coverPhotoId);
     }
   };
+
+  const handleToggleHighlight = async (photoId: string, currentWeight: number) => {
+    const newWeight = currentWeight > 0 ? 0 : 1;
+    setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, pesoVisual: newWeight } : p));
+    const { error } = await supabase
+      .from('galeria_fotos')
+      .update({ peso_visual: newWeight })
+      .eq('id', photoId);
+    if (error) {
+      setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, pesoVisual: currentWeight } : p));
+      toast.error('Erro ao atualizar destaque');
+      return;
+    }
+    toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+  };
+
 
   const handleUploadComplete = (uploaded: UploadedPhoto[]) => {
     setShowUploader(false);
@@ -530,21 +547,30 @@ export default function DeliverDetail() {
 
         {/* === FOTOS === */}
         <TabsContent value="photos" className="space-y-4 mt-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-lg">
-              {photos.length} fotos entregues
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="font-semibold text-lg">
+                {photos.length} fotos entregues
+              </h3>
               {coverPhotoId && (
-                <span className="ml-2 text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
+                <span className="text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
                   <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                   Capa selecionada
                 </span>
               )}
-            </h3>
+              {photos.some(p => (p.pesoVisual ?? 0) > 0) && (
+                <span className="text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
+                  <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                  {photos.filter(p => (p.pesoVisual ?? 0) > 0).length} destaque{photos.filter(p => (p.pesoVisual ?? 0) > 0).length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
             <Button onClick={() => setShowUploader(true)} className="gap-2">
               <Upload className="h-4 w-4" />
               Adicionar fotos
             </Button>
           </div>
+
 
           {showUploader && (
             <div className="border rounded-lg p-4 bg-card">
@@ -566,15 +592,18 @@ export default function DeliverDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {photos.map(photo => {
                 const isCover = coverPhotoId === photo.id;
-                const weight = (photo as any).peso_visual || 0;
+                const weight = photo.pesoVisual ?? 0;
                 return (
                   <div
                     key={photo.id}
                     className={cn(
                       'group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all',
-                      isCover ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-transparent'
+                      isCover && 'border-amber-400 ring-2 ring-amber-400/30',
+                      !isCover && weight > 0 && 'border-blue-400 ring-1 ring-blue-400/30',
+                      !isCover && weight === 0 && 'border-transparent'
                     )}
                   >
+
                     <img
                       src={getPhotoUrl({ storageKey: photo.storageKey }, 'thumbnail')}
                       alt={photo.originalFilename}
@@ -592,7 +621,7 @@ export default function DeliverDetail() {
                     
                     {/* Badge DESTAQUE */}
                     {weight > 0 && (
-                      <div className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10">
+                      <div className="absolute top-1.5 right-1.5 bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 z-10 shadow-sm">
                         <Star className="h-2.5 w-2.5 fill-current" />
                         DESTAQUE
                       </div>
@@ -602,18 +631,16 @@ export default function DeliverDetail() {
                       <Button
                         variant={weight > 0 ? 'default' : 'secondary'}
                         size="icon"
-                        className={cn('h-8 w-8', weight > 0 && 'bg-primary text-primary-foreground')}
-                        onClick={async (e) => {
+                        className={cn('h-8 w-8', weight > 0 && 'bg-blue-500 hover:bg-blue-600 text-white')}
+                        onClick={(e) => {
                           e.stopPropagation();
-                          const newWeight = weight > 0 ? 0 : 1;
-                          const { supabase } = await import('@/integrations/supabase/client');
-                          await supabase.from('galeria_fotos').update({ peso_visual: newWeight }).eq('id', photo.id);
-                          setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, pesoVisual: newWeight } as any : p));
-                          toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+                          handleToggleHighlight(photo.id, weight);
                         }}
                         title={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
+                        aria-label={weight > 0 ? 'Remover destaque' : 'Destacar na grade'}
                       >
                         <Star className={cn('h-4 w-4', weight > 0 && 'fill-current')} />
+
                       </Button>
                       <Button
                         variant={isCover ? 'default' : 'secondary'}
