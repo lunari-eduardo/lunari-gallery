@@ -9,6 +9,10 @@ interface JustifiedRowsGridProps {
   onPhotoClick?: (photo: GalleryPhoto) => void;
   renderItem?: (photo: GalleryPhoto, style: React.CSSProperties) => React.ReactNode;
   containerWidth?: number;
+  /** Quando false, ignora pesoVisual e nunca amplia fotos destacadas. Default: true. */
+  featuredEnabled?: boolean;
+  /** Quando definido, força N colunas por breakpoint preservando ordem e proporção. */
+  fixedColumns?: { mobile: number; tablet: number; desktop: number };
 }
 
 interface LayoutItem {
@@ -30,6 +34,8 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   onPhotoClick,
   renderItem,
   containerWidth: externalWidth,
+  featuredEnabled = true,
+  fixedColumns,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [internalWidth, setInternalWidth] = useState(0);
