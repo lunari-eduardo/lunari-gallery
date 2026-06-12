@@ -234,6 +234,8 @@ export default function DeliverDetail() {
       return;
     }
     toast.success(newWeight > 0 ? 'Foto destacada' : 'Destaque removido');
+  };
+
 
   const handleUploadComplete = (uploaded: UploadedPhoto[]) => {
     setShowUploader(false);
