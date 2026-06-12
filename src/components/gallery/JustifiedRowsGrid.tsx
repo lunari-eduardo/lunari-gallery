@@ -20,6 +20,8 @@ interface JustifiedRowsGridProps {
   };
   /** Lunari: cap de fotos por linha no modo justificado. */
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
+  /** Clean: masonry de colunas fixas preservando proporção original. */
+  masonryColumns?: { mobile: number; tablet: number; desktop: number };
 }
 
 interface LayoutItem {
