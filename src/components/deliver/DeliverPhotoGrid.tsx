@@ -140,6 +140,7 @@ export function DeliverPhotoGrid({
           featuredEnabled={theme.featured?.enabled !== false}
           uniformTiles={theme.layout.uniformTile}
           maxItemsPerRow={theme.layout.maxItemsPerRow}
+          masonryColumns={theme.layout.masonryColumns}
           onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
           renderItem={(photo, style) => renderContent(photo as any, style)}
         />

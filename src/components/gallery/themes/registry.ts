@@ -38,7 +38,7 @@ export const CLEAN_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'clean',
   name: 'Clean',
-  version: '1.1.0',
+  version: '1.2.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-justified',
@@ -46,10 +46,7 @@ export const CLEAN_THEME: GalleryTheme = {
     gap: 16,
     rowUnit: 320,
     density: 'airy',
-    uniformTile: {
-      aspect: 3 / 2,
-      tilesPerRow: { mobile: 1, tablet: 2, desktop: 3 },
-    },
+    masonryColumns: { mobile: 2, tablet: 3, desktop: 4 },
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
