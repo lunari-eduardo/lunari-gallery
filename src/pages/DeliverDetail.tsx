@@ -547,21 +547,30 @@ export default function DeliverDetail() {
 
         {/* === FOTOS === */}
         <TabsContent value="photos" className="space-y-4 mt-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-lg">
-              {photos.length} fotos entregues
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="font-semibold text-lg">
+                {photos.length} fotos entregues
+              </h3>
               {coverPhotoId && (
-                <span className="ml-2 text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
+                <span className="text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
                   <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                   Capa selecionada
                 </span>
               )}
-            </h3>
+              {photos.some(p => (p.pesoVisual ?? 0) > 0) && (
+                <span className="text-xs font-normal text-muted-foreground inline-flex items-center gap-1">
+                  <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                  {photos.filter(p => (p.pesoVisual ?? 0) > 0).length} destaque{photos.filter(p => (p.pesoVisual ?? 0) > 0).length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
             <Button onClick={() => setShowUploader(true)} className="gap-2">
               <Upload className="h-4 w-4" />
               Adicionar fotos
             </Button>
           </div>
+
 
           {showUploader && (
             <div className="border rounded-lg p-4 bg-card">
