@@ -65,6 +65,54 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     const effectiveRowHeight = isMobile ? Math.max(220, internalWidth * 0.55) : targetRowHeight;
     const minItemsPerRow = isMobile ? 1 : 2;
 
+    const ratioOf = (p: GalleryPhoto) =>
+      p.width && p.height ? p.width / p.height : 1.5;
+
+    // ============ MODO COLUNAS FIXAS (Clean) ============
+    // Particiona fotos na ordem original em chunks de N colunas e justifica
+    // cada chunk preservando proporção de cada item. Última linha parcial
+    // herda altura média e fica alinhada à esquerda sem buracos visíveis.
+    if (fixedColumns) {
+      const cols = internalWidth < 640
+        ? fixedColumns.mobile
+        : internalWidth < 1024
+        ? fixedColumns.tablet
+        : fixedColumns.desktop;
+
+      const chunks: GalleryPhoto[][] = [];
+      for (let i = 0; i < photos.length; i += cols) {
+        chunks.push(photos.slice(i, i + cols));
+      }
+
+      const fullChunks = chunks.filter(c => c.length === cols);
+      const avgRatio = fullChunks.length > 0
+        ? fullChunks.reduce((acc, c) => acc + c.reduce((a, p) => a + ratioOf(p), 0), 0)
+          / (fullChunks.length * cols)
+        : 1.5;
+
+      const layoutRows: LayoutRow[] = chunks.map((chunk) => {
+        const N = chunk.length;
+        const sumRatio = chunk.reduce((a, p) => a + ratioOf(p), 0);
+        const rowGaps = (cols - 1) * gap;
+        const denom = N === cols
+          ? sumRatio
+          : sumRatio + (cols - N) * avgRatio;
+        const rowHeight = (internalWidth - rowGaps) / denom;
+        return {
+          rowHeight,
+          items: chunk.map(p => ({
+            photo: p,
+            isFeatured: false,
+            height: rowHeight,
+            width: rowHeight * ratioOf(p),
+          })),
+        };
+      });
+
+      return layoutRows;
+    }
+
+    // ============ MODO JUSTIFICADO PADRÃO ============
     const layoutRows: LayoutRow[] = [];
     let currentRow: LayoutItem[] = [];
     let currentRowWidth = 0;
@@ -73,16 +121,16 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
 
     photos.forEach((photo) => {
       const weight = (photo as any).pesoVisual || (photo as any).peso_visual || 0;
-      const isFeatured = weight === 1;
+      const isFeatured = featuredEnabled && weight === 1;
 
-      const aspectRatio = photo.width && photo.height ? photo.width / photo.height : 1.5;
+      const aspectRatio = ratioOf(photo);
       const baseWidth = effectiveRowHeight * aspectRatio;
       const virtualWidth = isFeatured ? baseWidth * FEATURED_MULTIPLIER : baseWidth;
 
       if (currentRowWidth + virtualWidth > internalWidth && currentRow.length >= minItemsPerRow) {
         const rowGaps = (currentRow.length - 1) * gap;
         const sumAspectRatios = currentRow.reduce((acc, item) => {
-          const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
+          const ratio = ratioOf(item.photo);
           return acc + (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio);
         }, 0);
 
@@ -90,7 +138,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
 
         layoutRows.push({
           items: currentRow.map(item => {
-            const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
+            const ratio = ratioOf(item.photo);
             return {
               ...item,
               height: finalHeight,
@@ -109,18 +157,13 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     });
 
     // Última linha: SEMPRE justificada para preencher 100% da largura.
-    // Evita "área vazia" à direita interpretada como erro de carregamento.
-    // Se houver apenas 1 foto sobrando, é forçada a ocupar a largura total
-    // mantendo seu aspect-ratio (crop por object-cover quando necessário).
     if (currentRow.length > 0) {
       const rowGaps = (currentRow.length - 1) * gap;
       const sumAspectRatios = currentRow.reduce((acc, item) => {
-        const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
+        const ratio = ratioOf(item.photo);
         return acc + (item.isFeatured ? ratio * FEATURED_MULTIPLIER : ratio);
       }, 0);
 
-      // Cap: se a altura final fosse desproporcional (linha solitária com 1 foto vertical),
-      // limitamos pela altura média das linhas anteriores * 1.4 para não dominar a tela.
       let finalHeight = (internalWidth - rowGaps) / sumAspectRatios;
       if (currentRow.length === 1 && layoutRows.length > 0) {
         const avgPrev = layoutRows.reduce((a, r) => a + r.rowHeight, 0) / layoutRows.length;
@@ -130,7 +173,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
 
       layoutRows.push({
         items: currentRow.map(item => {
-          const ratio = item.photo.width && item.photo.height ? item.photo.width / item.photo.height : 1.5;
+          const ratio = ratioOf(item.photo);
           return {
             ...item,
             height: finalHeight,
@@ -142,7 +185,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     }
 
     return layoutRows;
-  }, [photos, internalWidth, gap, targetRowHeight]);
+  }, [photos, internalWidth, gap, targetRowHeight, featuredEnabled, fixedColumns]);
 
   return (
     <div 
