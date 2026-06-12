@@ -4,6 +4,8 @@ import {
   Template,
   selectTemplateBatch,
   computeStripHeight,
+  orientationFromAR,
+  PhotoOrientation,
 } from './editorialTemplates';
 
 interface EditorialTemplatesGridProps {
