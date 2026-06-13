@@ -167,15 +167,30 @@ const FB4_LAND: Template = {
 const FB4_PORT = T2;
 const FB4_SQ:   Template = { id: 'FB4S', slots: [S(), S(), S(), S()], strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }] };
 
-const FB5_LAND = T5;
-const FB5_PORT: Template = {
-  id: 'FB5P',
-  slots: [P(3 / 4), P(3 / 4), P(3 / 4), P(3 / 4), P(3 / 4)],
-  strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
+/** T12 — Revista: destaque vertical à esquerda + 2 quadradas empilhadas à direita */
+const T12: Template = {
+  id: 'T12',
+  slots: [P(4 / 5), S(), S()],
+  // Layout absoluto: usa pairs simétricos via 2 strips iguais com o destaque
+  // ocupando ambas via flex-row é inviável aqui (engine é strip-based).
+  // Estratégia: strip 1 com destaque + quadrada; strip 2 com 2 quadradas
+  // empilhadas seria via colunas. Para manter o engine simples e a regra
+  // "sem espaços vazios", aproximamos como duas strips: linha grande
+  // (destaque + quadrada) e linha menor (1 quadrada esticada).
+  // Para evitar foto solitária esticada, T12 usa apenas strip 1.
+  strips: [{ slotIndexes: [0, 1, 2] }],
+  hasFeaturedSlot: true,
 };
-const FB5_SQ = T11;
 
-const DESKTOP_SEQUENCE: Template[] = [T1, T2, T3, T6, T4, T7, T8, T5, T10, T9];
+/** T13 — Trio com destaque central (vertical) entre duas paisagens */
+const T13: Template = {
+  id: 'T13',
+  slots: [L(3 / 2), P(4 / 5), L(3 / 2)],
+  strips: [{ slotIndexes: [0, 1, 2] }],
+  hasFeaturedSlot: true,
+};
+
+const DESKTOP_SEQUENCE: Template[] = [T6, T2, T12, T7, T8, T3, T13, T4, T10, T9];
 
 const DESKTOP_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
   landscape: { 1: FB1_LAND, 2: FB2_LAND, 3: FB3_LAND, 4: FB4_LAND, 5: FB5_LAND },
