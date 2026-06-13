@@ -478,7 +478,7 @@ export default function ClientGallery() {
   const photos = useMemo((): GalleryPhoto[] => {
     if (!supabasePhotos || !transformedGallery) return [];
     
-    return supabasePhotos.map((photo) => {
+    const mapped = supabasePhotos.map((photo) => {
       const photoWidth = photo.width || 800;
       const photoHeight = photo.height || 600;
       const storagePath = photo.storage_key;
@@ -511,6 +511,10 @@ export default function ClientGallery() {
         coverUrl: photo.cover_path ? getPhotoUrl({ storageKey: photo.cover_path }, 'thumbnail') : null,
       };
     });
+
+    // Ordem canônica única para qualquer galeria: alfabética natural pelo
+    // nome original do arquivo. Garante leitura linha-a-linha 1 -> 2 -> 3.
+    return sortPhotosByNaturalFilename(mapped);
   }, [supabasePhotos, transformedGallery]);
 
   // 5. Mutation for toggling selection via Edge Function
