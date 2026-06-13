@@ -60,51 +60,14 @@ export const CLEAN_THEME: GalleryTheme = {
 };
 
 /**
- * Editorial Clássico — linhas justificadas estilo Pixieset/Pic-Time.
- * Cada linha preenche 100% da largura; última linha respeita altura média.
- * Suporta peso_visual=1 (foto destaque ganha multiplier de largura na linha).
+ * Editorial — sequência cíclica de templates editoriais pré-definidos.
+ * Cada template tem altura matematicamente fixa por largura → zero vazios.
+ * Destaques (peso_visual=1) caem nos slots grandes dos templates T1/T3/T5/M2/M4.
  */
 export const EDITORIAL_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'editorial',
-  name: 'Editorial Clássico',
-  version: '2.1.0',
-  layout: {
-    ...DEFAULT_GALLERY_THEME.layout,
-    engine: 'editorial-justified',
-    columns: { mobile: 2, tablet: 3, desktop: 4 },
-    gap: 8,
-    rowUnit: 340,
-    density: 'comfortable',
-    pairedRowsFeatured: true,
-  },
-  surface: {
-    ...DEFAULT_GALLERY_THEME.surface,
-    background: '#F8F6F2',
-    borderRadius: '0px',
-  },
-  featured: {
-    enabled: true,
-    maxCount: 15,
-    spanRules: {
-      '0': { colSpan: 1, rowSpan: 1 },
-      '1': { colSpan: 2, rowSpan: 2 },
-    },
-  },
-  typography: {
-    titleFont: 'Instrument Serif',
-  },
-};
-
-/**
- * Editorial Revista — sequência cíclica de templates editoriais pré-definidos.
- * Cada template tem altura matematicamente fixa por largura → zero vazios.
- * Destaques (peso_visual=1) caem nos slots grandes dos templates T1/T3/T5/M2/M4.
- */
-export const EDITORIAL_MAGAZINE_THEME: GalleryTheme = {
-  ...DEFAULT_GALLERY_THEME,
-  id: 'editorial-magazine',
-  name: 'Editorial Revista',
+  name: 'Editorial',
   version: '1.0.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
@@ -136,7 +99,9 @@ export const THEME_REGISTRY: Record<string, GalleryTheme> = {
   lunari: LUNARI_THEME,
   clean: CLEAN_THEME,
   editorial: EDITORIAL_THEME,
-  'editorial-magazine': EDITORIAL_MAGAZINE_THEME,
+  // Alias retrocompat: galerias antigas salvas com 'editorial-magazine' caem no novo Editorial.
+  'editorial-magazine': EDITORIAL_THEME,
 };
 
 export const DEFAULT_THEME_ID = 'lunari';
+
