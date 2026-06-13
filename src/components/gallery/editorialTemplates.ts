@@ -34,6 +34,12 @@ export interface Template {
   slots: TemplateSlot[];
   strips: TemplateStrip[];
   hasFeaturedSlot?: boolean;
+  /**
+   * Índice do slot dominante quando hasFeaturedSlot=true. Default 0.
+   * Templates com featuredSlotIndex !== 0 não podem ser usados para destaque
+   * sem violar a ordem narrativa, portanto só entram como template comum.
+   */
+  featuredSlotIndex?: number;
 }
 
 // ============================================================
@@ -76,6 +82,7 @@ const T1: Template = {
   slots: [L(3 / 2), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** T2 — Quarteto retrato (4 verticais) */
@@ -91,6 +98,7 @@ const T3: Template = {
   slots: [L(16 / 9), L(3 / 2), L(3 / 2)],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** T4 — Díptico landscape */
@@ -106,6 +114,7 @@ const T5: Template = {
   slots: [L(21 / 9), A(), A(), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2, 3, 4] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** T6 — Trio simétrico horizontal */
@@ -172,36 +181,36 @@ const FB4_LAND: Template = {
 const FB4_PORT = T2;
 const FB4_SQ:   Template = { id: 'FB4S', slots: [A(), A(), A(), A()], strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }] };
 
-/** T12 — Revista: destaque vertical à esquerda + 2 quadradas empilhadas à direita */
+/**
+ * T12 — Revista (redesenhado): destaque retrato hero em strip solo +
+ * par de quase-quadradas na strip seguinte. Slot 0 é o destaque.
+ */
 const T12: Template = {
   id: 'T12',
   slots: [P(4 / 5), A(), A()],
-  // Layout absoluto: usa pairs simétricos via 2 strips iguais com o destaque
-  // ocupando ambas via flex-row é inviável aqui (engine é strip-based).
-  // Estratégia: strip 1 com destaque + quadrada; strip 2 com 2 quadradas
-  // empilhadas seria via colunas. Para manter o engine simples e a regra
-  // "sem espaços vazios", aproximamos como duas strips: linha grande
-  // (destaque + quadrada) e linha menor (1 quadrada esticada).
-  // Para evitar foto solitária esticada, T12 usa apenas strip 1.
-  strips: [{ slotIndexes: [0, 1, 2] }],
+  strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
-/** T13 — Trio com destaque central dominante (vertical maior entre 2 retratos menores) */
+/**
+ * T13 — Trio com retrato central maior. featuredSlotIndex=1 inviabiliza
+ * uso como destaque (violaria ordem narrativa), portanto entra apenas
+ * como template comum no sequence.
+ */
 const T13: Template = {
   id: 'T13',
-  // Destaque P(4/5)=0.8 entre dois P(2/3)=0.667 → destaque ~20% mais largo.
   slots: [P(2 / 3), P(4 / 5), P(2 / 3)],
   strips: [{ slotIndexes: [0, 1, 2] }],
-  hasFeaturedSlot: true,
+  hasFeaturedSlot: false,
 };
 
-/** T14 — Par de destaques verticais lado a lado (clustering) */
+/** T14 — Par de retratos lado a lado (composição neutra, não-destaque). */
 const T14: Template = {
   id: 'T14',
   slots: [P(4 / 5), P(4 / 5)],
   strips: [{ slotIndexes: [0, 1] }],
-  hasFeaturedSlot: true,
+  hasFeaturedSlot: false,
 };
 
 const FB5_LAND: Template = {
@@ -245,6 +254,7 @@ const M2: Template = {
   slots: [L(3 / 2), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** M3 — 4 quadradas em 2x2 */
@@ -260,6 +270,7 @@ const M4: Template = {
   slots: [L(16 / 9), P(3 / 4), P(3 / 4)],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** M5 — Par retrato */
@@ -275,6 +286,7 @@ const M6: Template = {
   slots: [P(3 / 4), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 const MFB1_LAND: Template = { id: 'MFB1L', slots: [L(3 / 2)], strips: [{ slotIndexes: [0] }] };
@@ -344,6 +356,48 @@ const MOBILE_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
 };
 
 // ============================================================
+// FEATURED CATALOG — templates de destaque por orientação da foto-cabeça.
+// Todos têm featuredSlotIndex=0 (a foto destacada vai no primeiro slot,
+// preservando a ordem narrativa).
+// ============================================================
+
+/** Destaque solo — última linha de defesa: 1 foto isolada na strip. */
+const TF_SOLO_L: Template = {
+  id: 'TF_SOLO_L',
+  slots: [L(3 / 2)],
+  strips: [{ slotIndexes: [0] }],
+  hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
+};
+const TF_SOLO_P: Template = {
+  id: 'TF_SOLO_P',
+  slots: [P(3 / 4)],
+  strips: [{ slotIndexes: [0] }],
+  hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
+};
+const TF_SOLO_S: Template = {
+  id: 'TF_SOLO_S',
+  slots: [A()],
+  strips: [{ slotIndexes: [0] }],
+  hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
+};
+
+/** Catálogo ordenado por preferência (do mais rico ao solo). */
+const FEATURED_DESKTOP: Record<PhotoOrientation, Template[]> = {
+  landscape: [T3, T1, T5, TF_SOLO_L],
+  portrait:  [T12, TF_SOLO_P],
+  square:    [T1, TF_SOLO_S],
+};
+
+const FEATURED_MOBILE: Record<PhotoOrientation, Template[]> = {
+  landscape: [M4, M2, TF_SOLO_L],
+  portrait:  [M6, TF_SOLO_P],
+  square:    [M2, TF_SOLO_S],
+};
+
+// ============================================================
 // SELECTION ALGORITHM
 // ============================================================
 
@@ -378,11 +432,15 @@ function maxStripCells(t: Template): number {
 /**
  * Escolhe template para o batch corrente.
  *
- * Recebe a janela de orientações das próximas fotos (mesma ordem).
- * Garante: zero órfãs (fallback exato para N=1..5) E zero violação de
- * orientação (foto vertical nunca em slot horizontal e vice-versa).
+ * Garantias:
+ * 1. Ordem narrativa: photos[idx] sempre vai para slot[0].
+ * 2. Zero órfãs: fallback exato para N=1..5.
+ * 3. Zero violação de orientação (foto vertical nunca em slot horizontal).
+ * 4. Se a foto-cabeça é destaque, SEMPRE retorna template com hasFeaturedSlot
+ *    e featuredSlotIndex=0 (degrada até solo). Nunca cai em template comum.
  *
- * `maxItemsPerStrip` (opcional) descarta templates cuja maior strip exceda o cap.
+ * `avoidIds` permite a engine pedir re-seleção quando um template gera
+ * vazio horizontal excessivo após cálculo de larguras (rede de segurança).
  */
 export function selectTemplateBatch(
   remaining: number,
@@ -391,21 +449,45 @@ export function selectTemplateBatch(
   nextOrientations: PhotoOrientation[],
   nextPhotoIsFeatured: boolean,
   maxItemsPerStrip?: number,
+  avoidIds?: Set<string>,
 ): { template: Template; nextCursor: number } {
   const sequence = isMobile ? MOBILE_SEQUENCE : DESKTOP_SEQUENCE;
   const fallbacks = isMobile ? MOBILE_FALLBACKS : DESKTOP_FALLBACKS;
+  const featuredCatalog = isMobile ? FEATURED_MOBILE : FEATURED_DESKTOP;
   const stripCapOk = (t: Template) =>
     maxItemsPerStrip === undefined || maxStripCells(t) <= maxItemsPerStrip;
+  const notAvoided = (t: Template) => !avoidIds || !avoidIds.has(t.id);
 
-  // Caso 1: poucas fotos restantes — usa fallback exato pela orientação dominante.
+  // Caso 1 (destaque): catálogo dirigido por orientação da foto-cabeça.
+  // Garante que TODA foto marcada como destaque receba template de destaque.
+  if (nextPhotoIsFeatured) {
+    const head = nextOrientations[0];
+    const candidates = featuredCatalog[head] ?? [];
+    for (const cand of candidates) {
+      if (cand.slots.length > remaining) continue;
+      if (!stripCapOk(cand)) continue;
+      if (cand.featuredSlotIndex !== undefined && cand.featuredSlotIndex !== 0) continue;
+      if (!templateMatchesOrientations(cand, nextOrientations)) continue;
+      if (!notAvoided(cand)) continue;
+      // cursor não avança por catálogo de destaque (sequência narrativa
+      // segue independente).
+      return { template: cand, nextCursor: cursor };
+    }
+    // Último recurso de destaque: solo da orientação da foto.
+    const solo =
+      head === 'landscape' ? TF_SOLO_L : head === 'portrait' ? TF_SOLO_P : TF_SOLO_S;
+    return { template: solo, nextCursor: cursor };
+  }
+
+  // Caso 2: poucas fotos restantes — fallback exato pela orientação dominante.
   if (remaining <= 5) {
     const dom = dominantOrientation(nextOrientations.slice(0, remaining));
     let fb = fallbacks[dom][remaining];
-    if (!templateMatchesOrientations(fb, nextOrientations)) {
+    if (!templateMatchesOrientations(fb, nextOrientations) || !notAvoided(fb)) {
       const alt: PhotoOrientation[] = ['portrait', 'landscape', 'square'];
       for (const o of alt) {
         const cand = fallbacks[o][remaining];
-        if (templateMatchesOrientations(cand, nextOrientations)) {
+        if (templateMatchesOrientations(cand, nextOrientations) && notAvoided(cand)) {
           fb = cand;
           break;
         }
@@ -417,29 +499,17 @@ export function selectTemplateBatch(
     return { template: fb, nextCursor: cursor };
   }
 
-  // Caso 2: foto destaque na cabeça — prioriza template com slot grande.
-  if (nextPhotoIsFeatured) {
-    for (let probe = 0; probe < sequence.length; probe++) {
-      const cand = sequence[(cursor + probe) % sequence.length];
-      if (!cand.hasFeaturedSlot) continue;
-      if (cand.slots.length > remaining) continue;
-      if (!stripCapOk(cand)) continue;
-      if (!templateMatchesOrientations(cand, nextOrientations)) continue;
-      return { template: cand, nextCursor: cursor + probe + 1 };
-    }
-  }
-
   // Caso 3: próximo template do sequence que case orientações e respeite o cap.
   for (let probe = 0; probe < sequence.length; probe++) {
     const cand = sequence[(cursor + probe) % sequence.length];
     if (cand.slots.length > remaining) continue;
     if (!stripCapOk(cand)) continue;
     if (!templateMatchesOrientations(cand, nextOrientations)) continue;
+    if (!notAvoided(cand)) continue;
     return { template: cand, nextCursor: cursor + probe + 1 };
   }
 
-  // Caso 4: nenhum template casou perfeitamente — consome 1 foto via fallback
-  // exato de orientação para a primeira foto. Garante progresso sem violação.
+  // Caso 4: nenhum template casou — consome 1 foto via fallback exato.
   const head = nextOrientations[0];
   return { template: fallbacks[head][1], nextCursor: cursor };
 }

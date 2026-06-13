@@ -128,102 +128,188 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
         nextOrientations.push(orientationFromAR(ar));
       }
 
-      const { template, nextCursor } = selectTemplateBatch(
-        remaining,
-        cursor,
-        isMobile,
-        nextOrientations,
-        isFeatured,
-        stripCap,
-      );
-      cursor = nextCursor;
+      // Loop de seleção com rede de segurança: até 2 reseleções se uma
+      // strip do template gerar vazio horizontal > 5%.
+      const avoidIds = new Set<string>();
+      let attempt = 0;
+      let chosen: { template: Template; nextCursor: number } | null = null;
+      let plannedStrips: PlannedStrip[] = [];
+      let consumed = 0;
 
-      const consumed = template.slots.length;
-      const batchPhotos = photos.slice(idx, idx + consumed);
+      while (attempt < 3) {
+        const sel = selectTemplateBatch(
+          remaining,
+          cursor,
+          isMobile,
+          nextOrientations,
+          isFeatured,
+          stripCap,
+          avoidIds.size > 0 ? avoidIds : undefined,
+        );
+        const template = sel.template;
+        consumed = template.slots.length;
+        const batchPhotos = photos.slice(idx, idx + consumed);
+
+        // Planeja todas as strips do template e mede vazio.
+        const stripsTmp: PlannedStrip[] = [];
+        let worstEmptyPct = 0;
+        let forceCropApplied = false;
+
+        for (const strip of template.strips) {
+          const isFeaturedStrip =
+            !!template.hasFeaturedSlot &&
+            strip.slotIndexes.includes(template.featuredSlotIndex ?? 0);
+
+          const cellsMeta = strip.slotIndexes.map((slotIdx) => {
+            const slot = template.slots[slotIdx];
+            const photo = batchPhotos[slotIdx];
+            const photoAR =
+              photo && photo.width && photo.height ? photo.width / photo.height : 1;
+            const naturalAR =
+              slot.ar > 0 ? slot.ar : Math.max(0.6, Math.min(2.0, photoAR));
+            // Regra anti-distorção (conservadora para o fotógrafo):
+            // - Retrato (AR<1): até quadrado (1.0).
+            // - Quase-quadrado: até 1.10.
+            // - Paisagem: AR natural + 0.20 (crop vertical ≤ ~8%, teto 2.4).
+            let maxAR: number;
+            if (naturalAR < 0.95) maxAR = 1.0;
+            else if (naturalAR < 1.15) maxAR = 1.10;
+            else maxAR = Math.min(naturalAR + 0.20, 2.4);
+            return { slot, photo, naturalAR, maxAR };
+          });
+
+          const sumNaturalAR = cellsMeta.reduce((a, c) => a + c.naturalAR, 0);
+          const gaps = (cellsMeta.length - 1) * gap;
+          const widthForCells = Math.max(0, innerWidth - gaps);
+          let h = widthForCells / sumNaturalAR;
+
+          // Teto de altura — caps elevados em strip de destaque para
+          // garantir presença visual.
+          const single = cellsMeta.length === 1;
+          const onlyAR = single ? cellsMeta[0].naturalAR : 0;
+          let cap = innerWidth * 0.62;
+          if (single && onlyAR < 1) cap = innerWidth * 0.55;
+          if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
+          if (isFeaturedStrip && single) {
+            // Hero solo de destaque: mais alto para "parecer destaque".
+            if (onlyAR < 1) cap = innerWidth * 0.78;
+            else if (onlyAR >= 1.7) cap = innerWidth * 0.55;
+            else cap = innerWidth * 0.62;
+          }
+          const vhCap = isFeaturedStrip ? viewportH * 0.90 : viewportH * 0.78;
+          cap = Math.min(cap, vhCap);
+
+          let widths = cellsMeta.map((c) => c.naturalAR * h);
+
+          if (h > cap) {
+            h = cap;
+            widths = cellsMeta.map((c) => c.naturalAR * h);
+            let totalW = widths.reduce((a, w) => a + w, 0);
+            const targetW = widthForCells;
+
+            for (let iter = 0; iter < 6 && targetW - totalW > 0.5; iter++) {
+              const deficit = targetW - totalW;
+              const slack = cellsMeta.reduce((a, c, i) => {
+                const cellMaxW = c.maxAR * h;
+                return a + Math.max(0, cellMaxW - widths[i]);
+              }, 0);
+              if (slack <= 0.5) break;
+              for (let i = 0; i < widths.length; i++) {
+                const cellMaxW = cellsMeta[i].maxAR * h;
+                const cellSlack = Math.max(0, cellMaxW - widths[i]);
+                const add = deficit * (cellSlack / slack);
+                widths[i] = Math.min(cellMaxW, widths[i] + add);
+              }
+              totalW = widths.reduce((a, w) => a + w, 0);
+            }
+          }
+
+          let totalW = widths.reduce((a, w) => a + w, 0);
+          let emptyPct = (widthForCells - totalW) / Math.max(1, innerWidth);
+
+          // Última tentativa: aceitar crop adicional (até naturalAR+0.45)
+          // para garantir 0% de vazio. Só na 3ª tentativa.
+          if (emptyPct > 0.05 && attempt === 2) {
+            const targetW = widthForCells;
+            for (let iter = 0; iter < 6 && targetW - totalW > 0.5; iter++) {
+              const deficit = targetW - totalW;
+              const hardSlack = cellsMeta.reduce((a, c, i) => {
+                const hardMax = c.naturalAR >= 1.15
+                  ? Math.min(c.naturalAR + 0.45, 2.8) * h
+                  : c.maxAR * h;
+                return a + Math.max(0, hardMax - widths[i]);
+              }, 0);
+              if (hardSlack <= 0.5) break;
+              for (let i = 0; i < widths.length; i++) {
+                const hardMax = cellsMeta[i].naturalAR >= 1.15
+                  ? Math.min(cellsMeta[i].naturalAR + 0.45, 2.8) * h
+                  : cellsMeta[i].maxAR * h;
+                const cellSlack = Math.max(0, hardMax - widths[i]);
+                const add = deficit * (cellSlack / hardSlack);
+                widths[i] = Math.min(hardMax, widths[i] + add);
+              }
+              totalW = widths.reduce((a, w) => a + w, 0);
+            }
+            emptyPct = (widthForCells - totalW) / Math.max(1, innerWidth);
+            forceCropApplied = true;
+          }
+
+          if (emptyPct > worstEmptyPct) worstEmptyPct = emptyPct;
+
+          const cells = cellsMeta.map((c, i) => ({
+            photo: c.photo,
+            width: widths[i],
+          }));
+          const contentWidth = totalW + (cells.length - 1) * gap;
+          stripsTmp.push({ height: h, contentWidth, cells });
+        }
+
+        // Se vazio relevante e ainda há tentativas, evita este template.
+        if (worstEmptyPct > 0.05 && attempt < 2) {
+          avoidIds.add(template.id);
+          attempt++;
+          continue;
+        }
+
+        chosen = sel;
+        plannedStrips = stripsTmp;
+
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.debug('[editorial]', {
+            headPhotoId: (nextPhoto as any).id,
+            headOrient: nextOrientations[0],
+            isFeatured,
+            templateId: template.id,
+            featuredSlotIndex: template.featuredSlotIndex,
+            attempts: attempt + 1,
+            emptyPct: Number(worstEmptyPct.toFixed(4)),
+            forceCropApplied,
+          });
+        }
+        break;
+      }
+
+      // Falha rara: usa o último resultado mesmo com vazio.
+      if (!chosen) {
+        const sel = selectTemplateBatch(
+          remaining, cursor, isMobile, nextOrientations, isFeatured, stripCap,
+        );
+        chosen = sel;
+        consumed = sel.template.slots.length;
+      }
+
+      cursor = chosen.nextCursor;
       idx += consumed;
 
-      // Atualiza cooldown.
-      if (isFeatured && template.hasFeaturedSlot) {
+      // Cooldown (mantido por compatibilidade; padrão do tema = 0).
+      if (isFeatured && chosen.template.hasFeaturedSlot) {
         cooldown = featuredCooldown;
       } else {
         cooldown = Math.max(0, cooldown - consumed);
       }
 
-      for (const strip of template.strips) {
-        const cellsMeta = strip.slotIndexes.map((slotIdx) => {
-          const slot = template.slots[slotIdx];
-          const photo = batchPhotos[slotIdx];
-          const photoAR =
-            photo && photo.width && photo.height ? photo.width / photo.height : 1;
-          // Slot 'any' (ar=0) usa o AR REAL da foto, com clamp pra evitar
-          // extremos que quebrem a strip. Slots com AR fixo (destaque/L/P)
-          // mantêm a decisão editorial original.
-          const naturalAR =
-            slot.ar > 0 ? slot.ar : Math.max(0.6, Math.min(2.0, photoAR));
-          // Limite máximo de AR permitido por célula (regra anti-distorção):
-          // - Retrato (AR<1): pode esticar até QUADRADO (1.0) no máximo.
-          // - Quase-quadrado: até 1.10.
-          // - Paisagem: até seu AR natural (não pode achatar mais).
-          let maxAR: number;
-          if (naturalAR < 0.95) maxAR = 1.0;
-          else if (naturalAR < 1.15) maxAR = 1.10;
-          else maxAR = naturalAR;
-          return { slot, photo, naturalAR, maxAR };
-        });
-
-        const sumNaturalAR = cellsMeta.reduce((a, c) => a + c.naturalAR, 0);
-        const gaps = (cellsMeta.length - 1) * gap;
-        const widthForCells = Math.max(0, innerWidth - gaps);
-        let h = widthForCells / sumNaturalAR;
-
-        // Teto de altura (evita fotos gigantes em telas grandes).
-        const single = cellsMeta.length === 1;
-        const onlyAR = single ? cellsMeta[0].naturalAR : 0;
-        let cap = innerWidth * 0.62;
-        if (single && onlyAR < 1) cap = innerWidth * 0.55;
-        if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
-        cap = Math.min(cap, viewportH * 0.78);
-
-        // Larguras iniciais (sem alargamento).
-        let widths = cellsMeta.map((c) => c.naturalAR * h);
-
-        if (h > cap) {
-          // Precisamos preencher 100% da largura sem ultrapassar maxAR de
-          // cada célula. Estratégia: fixa h = cap; distribui o "déficit"
-          // de largura proporcionalmente entre células que ainda têm
-          // folga (AR < maxAR). Repete até preencher ou esgotar folga.
-          h = cap;
-          widths = cellsMeta.map((c) => c.naturalAR * h);
-          let totalW = widths.reduce((a, w) => a + w, 0);
-          const targetW = widthForCells;
-
-          for (let iter = 0; iter < 6 && targetW - totalW > 0.5; iter++) {
-            const deficit = targetW - totalW;
-            // Folga total disponível.
-            const slack = cellsMeta.reduce((a, c, i) => {
-              const cellMaxW = c.maxAR * h;
-              return a + Math.max(0, cellMaxW - widths[i]);
-            }, 0);
-            if (slack <= 0.5) break;
-            for (let i = 0; i < widths.length; i++) {
-              const cellMaxW = cellsMeta[i].maxAR * h;
-              const cellSlack = Math.max(0, cellMaxW - widths[i]);
-              const add = deficit * (cellSlack / slack);
-              widths[i] = Math.min(cellMaxW, widths[i] + add);
-            }
-            totalW = widths.reduce((a, w) => a + w, 0);
-          }
-        }
-
-        const cells = cellsMeta.map((c, i) => ({
-          photo: c.photo,
-          width: widths[i],
-        }));
-        const contentWidth =
-          cells.reduce((a, c) => a + c.width, 0) + (cells.length - 1) * gap;
-
-        out.push({ height: h, contentWidth, cells });
-      }
+      for (const s of plannedStrips) out.push(s);
     }
 
     return out;
