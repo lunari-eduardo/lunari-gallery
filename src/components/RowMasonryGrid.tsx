@@ -11,9 +11,17 @@ import React, { useEffect, useMemo, useRef, useState, isValidElement, Children }
  * componente em telas de entrega/preview do fotógrafo.
  */
 
+interface ColumnsConfig {
+  mobile?: number;
+  tablet?: number;
+  desktop?: number;
+  desktopLarge?: number;
+}
+
 interface RowMasonryGridProps {
   gap?: number;
   targetRowHeight?: number;
+  columns?: ColumnsConfig;
   children: React.ReactNode;
 }
 
@@ -35,12 +43,24 @@ interface LayoutRow {
 }
 
 export function RowMasonryItem({ children }: RowMasonryItemProps) {
-  // Renderização real é controlada pelo grid; este componente é apenas
-  // um "marcador" para extrair photoWidth/photoHeight via props.
   return <>{children}</>;
 }
 
-export function RowMasonryGrid({ gap = 8, targetRowHeight = 240, children }: RowMasonryGridProps) {
+const DEFAULT_COLS: Required<ColumnsConfig> = {
+  mobile: 2,
+  tablet: 3,
+  desktop: 4,
+  desktopLarge: 5,
+};
+
+function colsFor(w: number, cfg: Required<ColumnsConfig>): number {
+  if (w >= 1280) return cfg.desktopLarge;
+  if (w >= 1024) return cfg.desktop;
+  if (w >= 640) return cfg.tablet;
+  return cfg.mobile;
+}
+
+export function RowMasonryGrid({ gap = 8, targetRowHeight = 240, columns, children }: RowMasonryGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -69,46 +89,40 @@ export function RowMasonryGrid({ gap = 8, targetRowHeight = 240, children }: Row
   const rows: LayoutRow[] = useMemo(() => {
     if (width <= 0 || items.length === 0) return [];
 
-    const isMobile = width < 500;
-    const effectiveRowHeight = isMobile ? Math.max(220, width * 0.55) : targetRowHeight;
-    const minItemsPerRow = isMobile ? 1 : 2;
+    const cfg: Required<ColumnsConfig> = { ...DEFAULT_COLS, ...(columns ?? {}) };
+    const N = Math.max(1, colsFor(width, cfg));
 
     const built: LayoutRow[] = [];
-    let row: ParsedItem[] = [];
-    let acc = 0;
 
-    const flush = (justified: boolean) => {
-      if (row.length === 0) return;
-      const rowGaps = (row.length - 1) * gap;
-      const sumAR = row.reduce((a, it) => a + it.ar, 0);
-      let h = (width - rowGaps) / sumAR;
-      if (!justified) {
-        if (built.length > 0) {
-          const avgPrev = built.reduce((a, r) => a + r.height, 0) / built.length;
-          const cap = Math.min(h, avgPrev * 1.6);
-          h = Math.max(cap, effectiveRowHeight);
-        } else {
-          h = Math.min(h, effectiveRowHeight * 1.4);
-        }
+    for (let i = 0; i < items.length; i += N) {
+      const slice = items.slice(i, i + N);
+      const count = slice.length;
+      const rowGaps = (count - 1) * gap;
+      const sumAR = slice.reduce((a, it) => a + it.ar, 0) || 1;
+      let rowH = (width - rowGaps) / sumAR;
+
+      // Cap apenas em última linha incompleta — evita foto solitária gigante.
+      if (count < N) {
+        const avgPrev = built.length > 0
+          ? built.reduce((a, r) => a + r.height, 0) / built.length
+          : targetRowHeight;
+        const cap = avgPrev * 1.4;
+        if (rowH > cap) rowH = cap;
       }
-      built.push({
-        height: h,
-        items: row.map((it) => ({ key: it.key, node: it.node, width: h * it.ar, height: h })),
-      });
-      row = [];
-      acc = 0;
-    };
 
-    items.forEach((it) => {
-      const w = effectiveRowHeight * it.ar;
-      if (acc + w > width && row.length >= minItemsPerRow) flush(true);
-      row.push(it);
-      acc += w + gap;
-    });
-    flush(false);
+      built.push({
+        height: rowH,
+        items: slice.map((it) => ({
+          key: it.key,
+          node: it.node,
+          width: rowH * it.ar,
+          height: rowH,
+        })),
+      });
+    }
 
     return built;
-  }, [items, width, gap, targetRowHeight]);
+  }, [items, width, gap, targetRowHeight, columns]);
 
   return (
     <div ref={containerRef} className="w-full flex flex-col" style={{ gap: `${gap}px` }}>
@@ -132,3 +146,4 @@ export function RowMasonryGrid({ gap = 8, targetRowHeight = 240, children }: Row
     </div>
   );
 }
+
