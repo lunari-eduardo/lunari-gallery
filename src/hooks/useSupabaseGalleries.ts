@@ -265,10 +265,14 @@ export function useSupabaseGalleries() {
       .from('galeria_fotos')
       .select('*')
       .eq('galeria_id', galleryId)
-      .order('order_index', { ascending: true });
+      .order('original_filename', { ascending: true })
+      .order('id', { ascending: true });
     
     if (error) throw error;
-    return (data || []).map(transformPhoto);
+    const rows = (data || []).map(transformPhoto);
+    // Aplica ordenação natural ("a (2)" < "a (10)") como fonte única.
+    const { sortPhotosByNaturalFilename } = await import('@/lib/photoOrdering');
+    return sortPhotosByNaturalFilename(rows);
   };
 
   const createGallery = useMutation({
