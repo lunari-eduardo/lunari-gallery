@@ -11,6 +11,7 @@ import { TitleCaseMode } from '@/types/gallery';
 import { PhotoPaths, getPhotoUrl as getPhotoUrlLib } from '@/lib/photoUrl';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { sortPhotosByNaturalFilename } from '@/lib/photoOrdering';
 
 interface DeliverGalleryData {
   gallery: {
