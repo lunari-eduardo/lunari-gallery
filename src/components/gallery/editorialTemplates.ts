@@ -356,6 +356,48 @@ const MOBILE_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
 };
 
 // ============================================================
+// FEATURED CATALOG — templates de destaque por orientação da foto-cabeça.
+// Todos têm featuredSlotIndex=0 (a foto destacada vai no primeiro slot,
+// preservando a ordem narrativa).
+// ============================================================
+
+/** Destaque solo — última linha de defesa: 1 foto isolada na strip. */
+const TF_SOLO_L: Template = {
+  id: 'TF_SOLO_L',
+  slots: [L(3 / 2)],
+  strips: [{ slotIndexes: [0] }],
+  hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
+};
+const TF_SOLO_P: Template = {
+  id: 'TF_SOLO_P',
+  slots: [P(3 / 4)],
+  strips: [{ slotIndexes: [0] }],
+  hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
+};
+const TF_SOLO_S: Template = {
+  id: 'TF_SOLO_S',
+  slots: [A()],
+  strips: [{ slotIndexes: [0] }],
+  hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
+};
+
+/** Catálogo ordenado por preferência (do mais rico ao solo). */
+const FEATURED_DESKTOP: Record<PhotoOrientation, Template[]> = {
+  landscape: [T3, T1, T5, TF_SOLO_L],
+  portrait:  [T12, TF_SOLO_P],
+  square:    [T1, TF_SOLO_S],
+};
+
+const FEATURED_MOBILE: Record<PhotoOrientation, Template[]> = {
+  landscape: [M4, M2, TF_SOLO_L],
+  portrait:  [M6, TF_SOLO_P],
+  square:    [M2, TF_SOLO_S],
+};
+
+// ============================================================
 // SELECTION ALGORITHM
 // ============================================================
 
