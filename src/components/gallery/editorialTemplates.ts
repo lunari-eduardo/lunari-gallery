@@ -98,6 +98,7 @@ const T3: Template = {
   slots: [L(16 / 9), L(3 / 2), L(3 / 2)],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** T4 — Díptico landscape */
