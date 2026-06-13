@@ -358,7 +358,8 @@ export default function ClientGallery() {
         .from('galeria_fotos')
         .select('*')
         .eq('galeria_id', galleryId)
-        .order('original_filename', { ascending: true });
+        .order('original_filename', { ascending: true })
+        .order('id', { ascending: true });
       
       if (error) {
         console.error('Photos fetch error:', error);
