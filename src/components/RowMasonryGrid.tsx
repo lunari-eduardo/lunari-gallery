@@ -54,8 +54,10 @@ const DEFAULT_COLS: Required<ColumnsConfig> = {
 };
 
 function colsFor(w: number, cfg: Required<ColumnsConfig>): number {
-  if (w >= 1280) return cfg.desktopLarge;
-  if (w >= 1024) return cfg.desktop;
+  // Espelha breakpoints do grid legado (Tailwind):
+  // columns-2 sm:columns-3 md:columns-4 lg:columns-5
+  if (w >= 1024) return cfg.desktopLarge;
+  if (w >= 768) return cfg.desktop;
   if (w >= 640) return cfg.tablet;
   return cfg.mobile;
 }
