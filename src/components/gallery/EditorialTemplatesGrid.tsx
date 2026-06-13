@@ -158,38 +158,66 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           // Slot 'any' (ar=0) usa o AR REAL da foto, com clamp pra evitar
           // extremos que quebrem a strip. Slots com AR fixo (destaque/L/P)
           // mantêm a decisão editorial original.
-          const effectiveAR =
+          const naturalAR =
             slot.ar > 0 ? slot.ar : Math.max(0.6, Math.min(2.0, photoAR));
-          return { slot, photo, effectiveAR };
+          // Limite máximo de AR permitido por célula (regra anti-distorção):
+          // - Retrato (AR<1): pode esticar até QUADRADO (1.0) no máximo.
+          // - Quase-quadrado: até 1.10.
+          // - Paisagem: até seu AR natural (não pode achatar mais).
+          let maxAR: number;
+          if (naturalAR < 0.95) maxAR = 1.0;
+          else if (naturalAR < 1.15) maxAR = 1.10;
+          else maxAR = naturalAR;
+          return { slot, photo, naturalAR, maxAR };
         });
 
-        const sumAR = cellsMeta.reduce((a, c) => a + c.effectiveAR, 0);
+        const sumNaturalAR = cellsMeta.reduce((a, c) => a + c.naturalAR, 0);
         const gaps = (cellsMeta.length - 1) * gap;
         const widthForCells = Math.max(0, innerWidth - gaps);
-        let h = widthForCells / sumAR;
+        let h = widthForCells / sumNaturalAR;
 
         // Teto de altura (evita fotos gigantes em telas grandes).
         const single = cellsMeta.length === 1;
-        const onlyAR = single ? cellsMeta[0].effectiveAR : 0;
+        const onlyAR = single ? cellsMeta[0].naturalAR : 0;
         let cap = innerWidth * 0.62;
         if (single && onlyAR < 1) cap = innerWidth * 0.55;
         if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
         cap = Math.min(cap, viewportH * 0.78);
 
-        // Quando precisa capar, NÃO reduzimos apenas a altura (geraria
-        // espaço branco lateral). Em vez disso, alargamos cada célula
-        // proporcionalmente até preencher 100% da largura — corte leve
-        // via object-cover em cima/baixo é aceitável e mantém o ritmo
-        // editorial sem janelas brancas.
-        let widthScale = 1;
+        // Larguras iniciais (sem alargamento).
+        let widths = cellsMeta.map((c) => c.naturalAR * h);
+
         if (h > cap) {
-          widthScale = h / cap; // > 1 → alarga
+          // Precisamos preencher 100% da largura sem ultrapassar maxAR de
+          // cada célula. Estratégia: fixa h = cap; distribui o "déficit"
+          // de largura proporcionalmente entre células que ainda têm
+          // folga (AR < maxAR). Repete até preencher ou esgotar folga.
           h = cap;
+          widths = cellsMeta.map((c) => c.naturalAR * h);
+          let totalW = widths.reduce((a, w) => a + w, 0);
+          const targetW = widthForCells;
+
+          for (let iter = 0; iter < 6 && targetW - totalW > 0.5; iter++) {
+            const deficit = targetW - totalW;
+            // Folga total disponível.
+            const slack = cellsMeta.reduce((a, c, i) => {
+              const cellMaxW = c.maxAR * h;
+              return a + Math.max(0, cellMaxW - widths[i]);
+            }, 0);
+            if (slack <= 0.5) break;
+            for (let i = 0; i < widths.length; i++) {
+              const cellMaxW = cellsMeta[i].maxAR * h;
+              const cellSlack = Math.max(0, cellMaxW - widths[i]);
+              const add = deficit * (cellSlack / slack);
+              widths[i] = Math.min(cellMaxW, widths[i] + add);
+            }
+            totalW = widths.reduce((a, w) => a + w, 0);
+          }
         }
 
-        const cells = cellsMeta.map((c) => ({
+        const cells = cellsMeta.map((c, i) => ({
           photo: c.photo,
-          width: c.effectiveAR * h * widthScale,
+          width: widths[i],
         }));
         const contentWidth =
           cells.reduce((a, c) => a + c.width, 0) + (cells.length - 1) * gap;
