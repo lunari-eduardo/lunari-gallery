@@ -1,8 +1,15 @@
 import React from 'react';
+import { RowMasonryGrid, RowMasonryItem } from '@/components/RowMasonryGrid';
 
 /**
- * Simple Masonry Grid - para uso em previews/admin
- * Componente legado mantido para compatibilidade com GalleryPreview, GalleryDetail, etc.
+ * Wrapper de compatibilidade.
+ *
+ * O `MasonryGrid` legado usava CSS columns, que distribui itens em sentido
+ * vertical (col 1 top->bottom, depois col 2...). Isso quebra a leitura
+ * linha-a-linha 1 -> 2 -> 3 / 4 -> 5 -> 6 exigida em qualquer galeria.
+ *
+ * Agora delegamos para o `RowMasonryGrid`, que mantém a ordem narrativa
+ * estrita por linha e respeita as colunas por dispositivo (2/3/4/5).
  */
 
 interface MasonryGridProps {
@@ -17,30 +24,13 @@ interface MasonryItemProps {
 }
 
 export function MasonryGrid({ gap = 8, children }: MasonryGridProps) {
-  return (
-    <div
-      className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-0 px-1 sm:px-2 md:px-4"
-      style={{
-        columnGap: `${gap}px`,
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <RowMasonryGrid gap={gap}>{children}</RowMasonryGrid>;
 }
 
 export function MasonryItem({ photoWidth, photoHeight, children }: MasonryItemProps) {
-  const aspectRatio = (photoHeight && photoWidth) ? (photoWidth / photoHeight) : 1;
-  
   return (
-    <div
-      className="break-inside-avoid"
-      style={{
-        marginBottom: `var(--masonry-gap, 8px)`,
-        aspectRatio: `${aspectRatio}`,
-      }}
-    >
+    <RowMasonryItem photoWidth={photoWidth} photoHeight={photoHeight}>
       {children}
-    </div>
+    </RowMasonryItem>
   );
 }
