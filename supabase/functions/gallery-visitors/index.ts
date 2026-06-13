@@ -117,7 +117,9 @@ Deno.serve(async (req) => {
         const { data: photos } = await supabase
           .from('galeria_fotos')
           .select('id, storage_key, original_filename, filename, width, height, thumb_path, preview_path')
-          .in('id', selectedFotoIds);
+          .in('id', selectedFotoIds)
+          .order('original_filename', { ascending: true })
+          .order('id', { ascending: true });
         selectedPhotos = photos || [];
       }
 

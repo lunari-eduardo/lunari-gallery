@@ -84,7 +84,14 @@ serve(async (req) => {
       { data: photos },
       { data: folders },
     ] = await Promise.all([
-      supabase.from('galeria_fotos').select('*').eq('galeria_id', gallery.id).order('order_index'),
+      // Ordem canônica: alfabética pelo nome original (estável + id como desempate).
+      // Frontend ainda aplica natural sort por causa de "(10)" vs "(2)".
+      supabase
+        .from('galeria_fotos')
+        .select('*')
+        .eq('galeria_id', gallery.id)
+        .order('original_filename', { ascending: true })
+        .order('id', { ascending: true }),
       supabase.from('galeria_pastas').select('*').eq('galeria_id', gallery.id).order('ordem'),
     ])
 

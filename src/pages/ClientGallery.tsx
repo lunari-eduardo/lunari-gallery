@@ -49,6 +49,7 @@ import { applyTitleCase } from '@/lib/textTransform';
 import { useImageProtection } from '@/hooks/useImageProtection';
 import ClientDeliverGallery from '@/pages/ClientDeliverGallery';
 import { applyTheme, DEFAULT_THEME, type ThemePresetId, type VisualThemeMode } from '@/lib/visualTheme';
+import { sortPhotosByNaturalFilename } from '@/lib/photoOrdering';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
@@ -358,7 +359,8 @@ export default function ClientGallery() {
         .from('galeria_fotos')
         .select('*')
         .eq('galeria_id', galleryId)
-        .order('original_filename', { ascending: true });
+        .order('original_filename', { ascending: true })
+        .order('id', { ascending: true });
       
       if (error) {
         console.error('Photos fetch error:', error);
@@ -476,7 +478,7 @@ export default function ClientGallery() {
   const photos = useMemo((): GalleryPhoto[] => {
     if (!supabasePhotos || !transformedGallery) return [];
     
-    return supabasePhotos.map((photo) => {
+    const mapped = supabasePhotos.map((photo) => {
       const photoWidth = photo.width || 800;
       const photoHeight = photo.height || 600;
       const storagePath = photo.storage_key;
@@ -509,6 +511,10 @@ export default function ClientGallery() {
         coverUrl: photo.cover_path ? getPhotoUrl({ storageKey: photo.cover_path }, 'thumbnail') : null,
       };
     });
+
+    // Ordem canônica única para qualquer galeria: alfabética natural pelo
+    // nome original do arquivo. Garante leitura linha-a-linha 1 -> 2 -> 3.
+    return sortPhotosByNaturalFilename(mapped);
   }, [supabasePhotos, transformedGallery]);
 
   // 5. Mutation for toggling selection via Edge Function
@@ -687,16 +693,17 @@ export default function ClientGallery() {
         if (prev.length === 0 || prev.length !== photos.length) {
           return photos;
         }
-        // Atualizar apenas campos não-editáveis (URLs, dimensions)
-        // mantendo isSelected, isFavorite, comment do estado local
-        return prev.map(localPhoto => {
-          const serverPhoto = photos.find(p => p.id === localPhoto.id);
-          return serverPhoto ? {
+        // Segue SEMPRE a ordem canônica do servidor (alfabética natural),
+        // mas preserva o estado local de seleção/favorito/comentário.
+        const localById = new Map(prev.map(p => [p.id, p]));
+        return photos.map(serverPhoto => {
+          const localPhoto = localById.get(serverPhoto.id);
+          return localPhoto ? {
             ...serverPhoto,
             isSelected: localPhoto.isSelected,
             isFavorite: localPhoto.isFavorite,
             comment: localPhoto.comment,
-          } : localPhoto;
+          } : serverPhoto;
         });
       });
       

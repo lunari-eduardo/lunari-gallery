@@ -11,6 +11,7 @@ import { TitleCaseMode } from '@/types/gallery';
 import { PhotoPaths, getPhotoUrl as getPhotoUrlLib } from '@/lib/photoUrl';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { sortPhotosByNaturalFilename } from '@/lib/photoOrdering';
 
 interface DeliverGalleryData {
   gallery: {
@@ -90,7 +91,7 @@ export default function ClientDeliverGallery({ data }: Props) {
     : undefined;
 
   const allPhotos: DeliverPhoto[] = useMemo(() => {
-    return data.photos.map((p) => ({
+    const mapped = data.photos.map((p) => ({
       id: p.id,
       storageKey: p.storage_key,
       originalPath: p.original_path,
@@ -104,6 +105,8 @@ export default function ClientDeliverGallery({ data }: Props) {
       mimeType: (p as any).mime_type || null,
       peso_visual: (p as any).peso_visual || 0,
     }));
+    // Ordem canônica: alfabética natural pelo nome original.
+    return sortPhotosByNaturalFilename(mapped);
   }, [data.photos]);
 
 
