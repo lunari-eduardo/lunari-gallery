@@ -187,11 +187,20 @@ const T12: Template = {
   hasFeaturedSlot: true,
 };
 
-/** T13 — Trio com destaque central (vertical) entre duas paisagens */
+/** T13 — Trio com destaque central dominante (vertical maior entre 2 retratos menores) */
 const T13: Template = {
   id: 'T13',
-  slots: [L(3 / 2), P(4 / 5), L(3 / 2)],
+  // Destaque P(4/5)=0.8 entre dois P(2/3)=0.667 → destaque ~20% mais largo.
+  slots: [P(2 / 3), P(4 / 5), P(2 / 3)],
   strips: [{ slotIndexes: [0, 1, 2] }],
+  hasFeaturedSlot: true,
+};
+
+/** T14 — Par de destaques verticais lado a lado (clustering) */
+const T14: Template = {
+  id: 'T14',
+  slots: [P(4 / 5), P(4 / 5)],
+  strips: [{ slotIndexes: [0, 1] }],
   hasFeaturedSlot: true,
 };
 
