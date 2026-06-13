@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import { Download, Image as ImageIcon } from 'lucide-react';
 import { getPhotoUrl, PhotoPaths } from '@/lib/photoUrl';
 import { useGalleryDisplayTheme } from '@/hooks/useGalleryDisplayTheme';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { JustifiedRowsGrid } from '@/components/gallery/JustifiedRowsGrid';
 import { EditorialTemplatesGrid } from '@/components/gallery/EditorialTemplatesGrid';
 import { cn } from '@/lib/utils';
