@@ -34,6 +34,12 @@ export interface Template {
   slots: TemplateSlot[];
   strips: TemplateStrip[];
   hasFeaturedSlot?: boolean;
+  /**
+   * Índice do slot dominante quando hasFeaturedSlot=true. Default 0.
+   * Templates com featuredSlotIndex !== 0 não podem ser usados para destaque
+   * sem violar a ordem narrativa, portanto só entram como template comum.
+   */
+  featuredSlotIndex?: number;
 }
 
 // ============================================================
