@@ -73,7 +73,7 @@ const A = (): TemplateSlot => ({ ar: 0, orientation: 'any' });
 /** T1 — Capa: 1 panorâmica horizontal + 2 quadradas */
 const T1: Template = {
   id: 'T1',
-  slots: [L(3 / 2), S(), S()],
+  slots: [L(3 / 2), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
 };
@@ -103,7 +103,7 @@ const T4: Template = {
 /** T5 — Mix denso: 1 panorâmica + 4 quadradas */
 const T5: Template = {
   id: 'T5',
-  slots: [L(21 / 9), S(), S(), S(), S()],
+  slots: [L(21 / 9), A(), A(), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2, 3, 4] }],
   hasFeaturedSlot: true,
 };
@@ -146,7 +146,7 @@ const T10: Template = {
 /** T11 — Quintento misto: 1 retrato grande + 4 quadrados (para batches mistos) */
 const T11: Template = {
   id: 'T11',
-  slots: [S(), S(), S(), S(), S()],
+  slots: [A(), A(), A(), A(), A()],
   strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
 };
 
@@ -154,15 +154,15 @@ const T11: Template = {
 // Cada N tem variantes por orientação dominante do resíduo.
 const FB1_LAND: Template = { id: 'FB1L', slots: [L(3 / 2)], strips: [{ slotIndexes: [0] }] };
 const FB1_PORT: Template = { id: 'FB1P', slots: [P(3 / 4)], strips: [{ slotIndexes: [0] }] };
-const FB1_SQ:   Template = { id: 'FB1S', slots: [S()],      strips: [{ slotIndexes: [0] }] };
+const FB1_SQ:   Template = { id: 'FB1S', slots: [A()],      strips: [{ slotIndexes: [0] }] };
 
 const FB2_LAND = T4;
 const FB2_PORT = T9;
-const FB2_SQ:   Template = { id: 'FB2S', slots: [S(), S()], strips: [{ slotIndexes: [0, 1] }] };
+const FB2_SQ:   Template = { id: 'FB2S', slots: [A(), A()], strips: [{ slotIndexes: [0, 1] }] };
 
 const FB3_LAND = T6;
 const FB3_PORT = T8;
-const FB3_SQ:   Template = { id: 'FB3S', slots: [S(), S(), S()], strips: [{ slotIndexes: [0, 1, 2] }] };
+const FB3_SQ:   Template = { id: 'FB3S', slots: [A(), A(), A()], strips: [{ slotIndexes: [0, 1, 2] }] };
 
 const FB4_LAND: Template = {
   id: 'FB4L',
@@ -170,12 +170,12 @@ const FB4_LAND: Template = {
   strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }],
 };
 const FB4_PORT = T2;
-const FB4_SQ:   Template = { id: 'FB4S', slots: [S(), S(), S(), S()], strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }] };
+const FB4_SQ:   Template = { id: 'FB4S', slots: [A(), A(), A(), A()], strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }] };
 
 /** T12 — Revista: destaque vertical à esquerda + 2 quadradas empilhadas à direita */
 const T12: Template = {
   id: 'T12',
-  slots: [P(4 / 5), S(), S()],
+  slots: [P(4 / 5), A(), A()],
   // Layout absoluto: usa pairs simétricos via 2 strips iguais com o destaque
   // ocupando ambas via flex-row é inviável aqui (engine é strip-based).
   // Estratégia: strip 1 com destaque + quadrada; strip 2 com 2 quadradas
@@ -207,7 +207,7 @@ const FB5_PORT: Template = {
 };
 const FB5_SQ: Template = {
   id: 'FB5S',
-  slots: [S(), S(), S(), S(), S()],
+  slots: [A(), A(), A(), A(), A()],
   strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
 };
 
@@ -226,14 +226,14 @@ const DESKTOP_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
 /** M1 — Par quadrado */
 const M1: Template = {
   id: 'M1',
-  slots: [S(), S()],
+  slots: [A(), A()],
   strips: [{ slotIndexes: [0, 1] }],
 };
 
 /** M2 — Hero landscape + par quadrado */
 const M2: Template = {
   id: 'M2',
-  slots: [L(3 / 2), S(), S()],
+  slots: [L(3 / 2), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
 };
@@ -241,7 +241,7 @@ const M2: Template = {
 /** M3 — 4 quadradas em 2x2 */
 const M3: Template = {
   id: 'M3',
-  slots: [S(), S(), S(), S()],
+  slots: [A(), A(), A(), A()],
   strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }],
 };
 
@@ -263,14 +263,14 @@ const M5: Template = {
 /** M6 — Hero retrato + par quadrado */
 const M6: Template = {
   id: 'M6',
-  slots: [P(3 / 4), S(), S()],
+  slots: [P(3 / 4), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
 };
 
 const MFB1_LAND: Template = { id: 'MFB1L', slots: [L(3 / 2)], strips: [{ slotIndexes: [0] }] };
 const MFB1_PORT: Template = { id: 'MFB1P', slots: [P(3 / 4)], strips: [{ slotIndexes: [0] }] };
-const MFB1_SQ:   Template = { id: 'MFB1S', slots: [S()],      strips: [{ slotIndexes: [0] }] };
+const MFB1_SQ:   Template = { id: 'MFB1S', slots: [A()],      strips: [{ slotIndexes: [0] }] };
 
 const MFB2_LAND: Template = { id: 'MFB2L', slots: [L(3 / 2), L(3 / 2)], strips: [{ slotIndexes: [0, 1] }] };
 const MFB2_PORT = M5;
@@ -286,7 +286,7 @@ const MFB3_PORT: Template = {
   slots: [P(3 / 4), P(3 / 4), P(3 / 4)],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
 };
-const MFB3_SQ:   Template = { id: 'MFB3S', slots: [S(), S(), S()], strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }] };
+const MFB3_SQ:   Template = { id: 'MFB3S', slots: [A(), A(), A()], strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }] };
 
 const MFB4_SQ = M3;
 const MFB4_PORT: Template = {
@@ -319,7 +319,7 @@ const MFB5_PORT: Template = {
 };
 const MFB5_SQ:   Template = {
   id: 'MFB5S',
-  slots: [S(), S(), S(), S(), S()],
+  slots: [A(), A(), A(), A(), A()],
   strips: [
     { slotIndexes: [0, 1] },
     { slotIndexes: [2, 3, 4] },
