@@ -166,7 +166,7 @@ export function DeliverPhotoGrid({
   const containerBg = bgColor ? { backgroundColor: bgColor } : undefined;
 
   return (
-    <div className="min-h-[50vh] py-12" style={containerBg}>
+    <div ref={containerRef} className="min-h-[50vh] py-12" style={containerBg}>
       {useTemplates ? (
         <EditorialTemplatesGrid
           photos={photos as any}
