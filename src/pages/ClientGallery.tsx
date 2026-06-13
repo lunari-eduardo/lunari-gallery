@@ -49,6 +49,7 @@ import { applyTitleCase } from '@/lib/textTransform';
 import { useImageProtection } from '@/hooks/useImageProtection';
 import ClientDeliverGallery from '@/pages/ClientDeliverGallery';
 import { applyTheme, DEFAULT_THEME, type ThemePresetId, type VisualThemeMode } from '@/lib/visualTheme';
+import { sortPhotosByNaturalFilename } from '@/lib/photoOrdering';
 
 // Helper to convert HEX to HSL values for CSS variables
 function hexToHsl(hex: string): string | null {
