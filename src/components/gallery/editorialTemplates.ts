@@ -114,6 +114,7 @@ const T5: Template = {
   slots: [L(21 / 9), A(), A(), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2, 3, 4] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** T6 — Trio simétrico horizontal */
