@@ -181,36 +181,36 @@ const FB4_LAND: Template = {
 const FB4_PORT = T2;
 const FB4_SQ:   Template = { id: 'FB4S', slots: [A(), A(), A(), A()], strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3] }] };
 
-/** T12 — Revista: destaque vertical à esquerda + 2 quadradas empilhadas à direita */
+/**
+ * T12 — Revista (redesenhado): destaque retrato hero em strip solo +
+ * par de quase-quadradas na strip seguinte. Slot 0 é o destaque.
+ */
 const T12: Template = {
   id: 'T12',
   slots: [P(4 / 5), A(), A()],
-  // Layout absoluto: usa pairs simétricos via 2 strips iguais com o destaque
-  // ocupando ambas via flex-row é inviável aqui (engine é strip-based).
-  // Estratégia: strip 1 com destaque + quadrada; strip 2 com 2 quadradas
-  // empilhadas seria via colunas. Para manter o engine simples e a regra
-  // "sem espaços vazios", aproximamos como duas strips: linha grande
-  // (destaque + quadrada) e linha menor (1 quadrada esticada).
-  // Para evitar foto solitária esticada, T12 usa apenas strip 1.
-  strips: [{ slotIndexes: [0, 1, 2] }],
+  strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
-/** T13 — Trio com destaque central dominante (vertical maior entre 2 retratos menores) */
+/**
+ * T13 — Trio com retrato central maior. featuredSlotIndex=1 inviabiliza
+ * uso como destaque (violaria ordem narrativa), portanto entra apenas
+ * como template comum no sequence.
+ */
 const T13: Template = {
   id: 'T13',
-  // Destaque P(4/5)=0.8 entre dois P(2/3)=0.667 → destaque ~20% mais largo.
   slots: [P(2 / 3), P(4 / 5), P(2 / 3)],
   strips: [{ slotIndexes: [0, 1, 2] }],
-  hasFeaturedSlot: true,
+  hasFeaturedSlot: false,
 };
 
-/** T14 — Par de destaques verticais lado a lado (clustering) */
+/** T14 — Par de retratos lado a lado (composição neutra, não-destaque). */
 const T14: Template = {
   id: 'T14',
   slots: [P(4 / 5), P(4 / 5)],
   strips: [{ slotIndexes: [0, 1] }],
-  hasFeaturedSlot: true,
+  hasFeaturedSlot: false,
 };
 
 const FB5_LAND: Template = {
