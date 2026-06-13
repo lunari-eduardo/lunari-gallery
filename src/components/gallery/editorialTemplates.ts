@@ -432,11 +432,15 @@ function maxStripCells(t: Template): number {
 /**
  * Escolhe template para o batch corrente.
  *
- * Recebe a janela de orientações das próximas fotos (mesma ordem).
- * Garante: zero órfãs (fallback exato para N=1..5) E zero violação de
- * orientação (foto vertical nunca em slot horizontal e vice-versa).
+ * Garantias:
+ * 1. Ordem narrativa: photos[idx] sempre vai para slot[0].
+ * 2. Zero órfãs: fallback exato para N=1..5.
+ * 3. Zero violação de orientação (foto vertical nunca em slot horizontal).
+ * 4. Se a foto-cabeça é destaque, SEMPRE retorna template com hasFeaturedSlot
+ *    e featuredSlotIndex=0 (degrada até solo). Nunca cai em template comum.
  *
- * `maxItemsPerStrip` (opcional) descarta templates cuja maior strip exceda o cap.
+ * `avoidIds` permite a engine pedir re-seleção quando um template gera
+ * vazio horizontal excessivo após cálculo de larguras (rede de segurança).
  */
 export function selectTemplateBatch(
   remaining: number,
@@ -445,21 +449,45 @@ export function selectTemplateBatch(
   nextOrientations: PhotoOrientation[],
   nextPhotoIsFeatured: boolean,
   maxItemsPerStrip?: number,
+  avoidIds?: Set<string>,
 ): { template: Template; nextCursor: number } {
   const sequence = isMobile ? MOBILE_SEQUENCE : DESKTOP_SEQUENCE;
   const fallbacks = isMobile ? MOBILE_FALLBACKS : DESKTOP_FALLBACKS;
+  const featuredCatalog = isMobile ? FEATURED_MOBILE : FEATURED_DESKTOP;
   const stripCapOk = (t: Template) =>
     maxItemsPerStrip === undefined || maxStripCells(t) <= maxItemsPerStrip;
+  const notAvoided = (t: Template) => !avoidIds || !avoidIds.has(t.id);
 
-  // Caso 1: poucas fotos restantes — usa fallback exato pela orientação dominante.
+  // Caso 1 (destaque): catálogo dirigido por orientação da foto-cabeça.
+  // Garante que TODA foto marcada como destaque receba template de destaque.
+  if (nextPhotoIsFeatured) {
+    const head = nextOrientations[0];
+    const candidates = featuredCatalog[head] ?? [];
+    for (const cand of candidates) {
+      if (cand.slots.length > remaining) continue;
+      if (!stripCapOk(cand)) continue;
+      if (cand.featuredSlotIndex !== undefined && cand.featuredSlotIndex !== 0) continue;
+      if (!templateMatchesOrientations(cand, nextOrientations)) continue;
+      if (!notAvoided(cand)) continue;
+      // cursor não avança por catálogo de destaque (sequência narrativa
+      // segue independente).
+      return { template: cand, nextCursor: cursor };
+    }
+    // Último recurso de destaque: solo da orientação da foto.
+    const solo =
+      head === 'landscape' ? TF_SOLO_L : head === 'portrait' ? TF_SOLO_P : TF_SOLO_S;
+    return { template: solo, nextCursor: cursor };
+  }
+
+  // Caso 2: poucas fotos restantes — fallback exato pela orientação dominante.
   if (remaining <= 5) {
     const dom = dominantOrientation(nextOrientations.slice(0, remaining));
     let fb = fallbacks[dom][remaining];
-    if (!templateMatchesOrientations(fb, nextOrientations)) {
+    if (!templateMatchesOrientations(fb, nextOrientations) || !notAvoided(fb)) {
       const alt: PhotoOrientation[] = ['portrait', 'landscape', 'square'];
       for (const o of alt) {
         const cand = fallbacks[o][remaining];
-        if (templateMatchesOrientations(cand, nextOrientations)) {
+        if (templateMatchesOrientations(cand, nextOrientations) && notAvoided(cand)) {
           fb = cand;
           break;
         }
@@ -471,29 +499,17 @@ export function selectTemplateBatch(
     return { template: fb, nextCursor: cursor };
   }
 
-  // Caso 2: foto destaque na cabeça — prioriza template com slot grande.
-  if (nextPhotoIsFeatured) {
-    for (let probe = 0; probe < sequence.length; probe++) {
-      const cand = sequence[(cursor + probe) % sequence.length];
-      if (!cand.hasFeaturedSlot) continue;
-      if (cand.slots.length > remaining) continue;
-      if (!stripCapOk(cand)) continue;
-      if (!templateMatchesOrientations(cand, nextOrientations)) continue;
-      return { template: cand, nextCursor: cursor + probe + 1 };
-    }
-  }
-
   // Caso 3: próximo template do sequence que case orientações e respeite o cap.
   for (let probe = 0; probe < sequence.length; probe++) {
     const cand = sequence[(cursor + probe) % sequence.length];
     if (cand.slots.length > remaining) continue;
     if (!stripCapOk(cand)) continue;
     if (!templateMatchesOrientations(cand, nextOrientations)) continue;
+    if (!notAvoided(cand)) continue;
     return { template: cand, nextCursor: cursor + probe + 1 };
   }
 
-  // Caso 4: nenhum template casou perfeitamente — consome 1 foto via fallback
-  // exato de orientação para a primeira foto. Garante progresso sem violação.
+  // Caso 4: nenhum template casou — consome 1 foto via fallback exato.
   const head = nextOrientations[0];
   return { template: fallbacks[head][1], nextCursor: cursor };
 }
