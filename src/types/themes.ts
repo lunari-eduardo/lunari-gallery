@@ -27,6 +27,19 @@ export interface GalleryThemeLayout {
   masonryColumns?: { mobile: number; tablet: number; desktop: number };
   /** Editorial Clássico: foto peso_visual=1 ocupa bloco 2 colunas × 2 linhas reais. */
   pairedRowsFeatured?: boolean;
+  /** Editorial: largura máxima do container por breakpoint (px). null = sem cap. */
+  maxContainerWidth?: {
+    /** >=1280 e <1600 */
+    desktopSm?: number | null;
+    /** >=1600 e <2000 */
+    desktopMd?: number | null;
+    /** >=2000 */
+    desktopLg?: number | null;
+  };
+  /** Editorial: máximo de fotos por strip (linha de template). */
+  maxItemsPerStrip?: { mobile: number; tablet: number; desktop: number };
+  /** Editorial: cooldown de destaques — N fotos não-destaque entre dois destaques. */
+  featuredCooldown?: number;
 }
 
 export interface GalleryThemeSurface {
