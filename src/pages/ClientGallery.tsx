@@ -13,7 +13,7 @@ import {
   Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MasonryGrid, MasonryItem } from '@/components/MasonryGrid';
+import { RowMasonryGrid as MasonryGrid, RowMasonryItem as MasonryItem } from '@/components/RowMasonryGrid';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
