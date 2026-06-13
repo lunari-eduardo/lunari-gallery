@@ -3,7 +3,6 @@ import { GalleryPhoto } from '@/types/gallery';
 import {
   Template,
   selectTemplateBatch,
-  computeStripHeight,
   orientationFromAR,
   PhotoOrientation,
 } from './editorialTemplates';
@@ -151,23 +150,46 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
       }
 
       for (const strip of template.strips) {
-        const ratios = strip.slotIndexes.map((i) => template.slots[i].ar);
-        const sumAR = ratios.reduce((a, b) => a + b, 0);
-        let h = computeStripHeight(strip, template, innerWidth, gap);
+        const cellsMeta = strip.slotIndexes.map((slotIdx) => {
+          const slot = template.slots[slotIdx];
+          const photo = batchPhotos[slotIdx];
+          const photoAR =
+            photo && photo.width && photo.height ? photo.width / photo.height : 1;
+          // Slot 'any' (ar=0) usa o AR REAL da foto, com clamp pra evitar
+          // extremos que quebrem a strip. Slots com AR fixo (destaque/L/P)
+          // mantêm a decisão editorial original.
+          const effectiveAR =
+            slot.ar > 0 ? slot.ar : Math.max(0.6, Math.min(2.0, photoAR));
+          return { slot, photo, effectiveAR };
+        });
 
-        // Teto de altura (evita fotos gigantes).
-        const single = strip.slotIndexes.length === 1;
-        const slotOrient = single ? template.slots[strip.slotIndexes[0]].orientation : null;
+        const sumAR = cellsMeta.reduce((a, c) => a + c.effectiveAR, 0);
+        const gaps = (cellsMeta.length - 1) * gap;
+        const widthForCells = Math.max(0, innerWidth - gaps);
+        let h = widthForCells / sumAR;
+
+        // Teto de altura (evita fotos gigantes em telas grandes).
+        const single = cellsMeta.length === 1;
+        const onlyAR = single ? cellsMeta[0].effectiveAR : 0;
         let cap = innerWidth * 0.62;
-        if (single && slotOrient === 'portrait') cap = innerWidth * 0.55;
-        if (single && slotOrient === 'landscape' && ratios[0] >= 1.7) cap = innerWidth * 0.42;
+        if (single && onlyAR < 1) cap = innerWidth * 0.55;
+        if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
         cap = Math.min(cap, viewportH * 0.78);
 
-        if (h > cap) h = cap;
+        // Quando precisa capar, NÃO reduzimos apenas a altura (geraria
+        // espaço branco lateral). Em vez disso, alargamos cada célula
+        // proporcionalmente até preencher 100% da largura — corte leve
+        // via object-cover em cima/baixo é aceitável e mantém o ritmo
+        // editorial sem janelas brancas.
+        let widthScale = 1;
+        if (h > cap) {
+          widthScale = h / cap; // > 1 → alarga
+          h = cap;
+        }
 
-        const cells = strip.slotIndexes.map((slotIdx) => ({
-          photo: batchPhotos[slotIdx],
-          width: h * template.slots[slotIdx].ar,
+        const cells = cellsMeta.map((c) => ({
+          photo: c.photo,
+          width: c.effectiveAR * h * widthScale,
         }));
         const contentWidth =
           cells.reduce((a, c) => a + c.width, 0) + (cells.length - 1) * gap;
@@ -190,8 +212,6 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
         style={{ gap: `${gap}px`, width: innerWidth || '100%' }}
       >
         {strips.map((strip, i) => {
-          const justify =
-            strip.contentWidth < innerWidth - 1 ? 'center' : 'flex-start';
           return (
             <div
               key={i}
@@ -199,7 +219,7 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
               style={{
                 gap: `${gap}px`,
                 height: strip.height,
-                justifyContent: justify,
+                justifyContent: 'flex-start',
               }}
             >
               {strip.cells.map((cell, ci) => {
