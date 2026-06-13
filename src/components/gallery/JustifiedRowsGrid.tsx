@@ -516,16 +516,16 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     return (
       <div
         ref={containerRef}
-        className="w-full flex flex-row items-start"
+        className="w-full flex flex-col"
         style={{ gap: `${gap}px` }}
       >
-        {masonryLayout?.map((col, ci) => (
+        {masonryLayout?.map((row, ri) => (
           <div
-            key={ci}
-            className="flex flex-col"
-            style={{ width: col.width, gap: `${gap}px`, flexShrink: 0 }}
+            key={ri}
+            className="flex flex-row overflow-hidden"
+            style={{ gap: `${gap}px`, height: row.height }}
           >
-            {col.items.map((item) => {
+            {row.items.map((item) => {
               const style: React.CSSProperties = {
                 width: item.width,
                 height: item.height,
