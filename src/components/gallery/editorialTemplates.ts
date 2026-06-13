@@ -82,6 +82,7 @@ const T1: Template = {
   slots: [L(3 / 2), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** T2 — Quarteto retrato (4 verticais) */
