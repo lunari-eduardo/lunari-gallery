@@ -693,16 +693,17 @@ export default function ClientGallery() {
         if (prev.length === 0 || prev.length !== photos.length) {
           return photos;
         }
-        // Atualizar apenas campos não-editáveis (URLs, dimensions)
-        // mantendo isSelected, isFavorite, comment do estado local
-        return prev.map(localPhoto => {
-          const serverPhoto = photos.find(p => p.id === localPhoto.id);
-          return serverPhoto ? {
+        // Segue SEMPRE a ordem canônica do servidor (alfabética natural),
+        // mas preserva o estado local de seleção/favorito/comentário.
+        const localById = new Map(prev.map(p => [p.id, p]));
+        return photos.map(serverPhoto => {
+          const localPhoto = localById.get(serverPhoto.id);
+          return localPhoto ? {
             ...serverPhoto,
             isSelected: localPhoto.isSelected,
             isFavorite: localPhoto.isFavorite,
             comment: localPhoto.comment,
-          } : localPhoto;
+          } : serverPhoto;
         });
       });
       
