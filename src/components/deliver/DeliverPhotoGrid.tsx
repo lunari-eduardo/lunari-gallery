@@ -129,6 +129,9 @@ export function DeliverPhotoGrid({
         <EditorialTemplatesGrid
           photos={photos as any}
           gap={config.gap}
+          maxContainerWidth={theme.layout.maxContainerWidth}
+          maxItemsPerStrip={theme.layout.maxItemsPerStrip}
+          featuredCooldown={theme.layout.featuredCooldown}
           onPhotoClick={(photo) => onPhotoClick(photos.findIndex(p => p.id === photo.id))}
           renderItem={(photo, style) => renderContent(photo as any, style)}
         />
