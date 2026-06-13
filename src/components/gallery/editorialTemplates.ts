@@ -60,6 +60,11 @@ function slotAccepts(slot: SlotOrientation, photo: PhotoOrientation): boolean {
 const L = (ar: number): TemplateSlot => ({ ar, orientation: 'landscape' });
 const P = (ar: number): TemplateSlot => ({ ar, orientation: 'portrait' });
 const S = (): TemplateSlot => ({ ar: 1, orientation: 'square' });
+/**
+ * A() — slot livre. `ar: 0` é sentinela: o engine usará o AR REAL da foto
+ * alocada (com clamp). Evita corte forçado em quadrado.
+ */
+const A = (): TemplateSlot => ({ ar: 0, orientation: 'any' });
 
 // ============================================================
 // DESKTOP / TABLET TEMPLATES (>= 640px)
