@@ -86,7 +86,7 @@ export const EDITORIAL_THEME: GalleryTheme = {
       desktopLg: 1440,
     },
     maxItemsPerStrip: { mobile: 2, tablet: 3, desktop: 4 },
-    featuredCooldown: 4,
+    featuredCooldown: 0,
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
