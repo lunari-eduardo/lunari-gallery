@@ -41,6 +41,25 @@ export function DeliverPhotoGrid({
   galleryId
 }: DeliverPhotoGridProps) {
   const { theme } = useGalleryDisplayTheme();
+  const isMobile = useIsMobile();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Tap fora desativa o estado "ativo" no mobile.
+  useEffect(() => {
+    if (!isMobile || !activeId) return;
+    const onDocTap = (e: Event) => {
+      const target = e.target as Node | null;
+      if (containerRef.current && target && containerRef.current.contains(target)) return;
+      setActiveId(null);
+    };
+    document.addEventListener('touchstart', onDocTap, { passive: true });
+    document.addEventListener('mousedown', onDocTap);
+    return () => {
+      document.removeEventListener('touchstart', onDocTap);
+      document.removeEventListener('mousedown', onDocTap);
+    };
+  }, [isMobile, activeId]);
 
   const useTemplates = theme.layout.engine === 'editorial-templates';
 
