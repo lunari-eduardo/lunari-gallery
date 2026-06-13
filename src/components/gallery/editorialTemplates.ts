@@ -286,6 +286,7 @@ const M6: Template = {
   slots: [P(3 / 4), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 const MFB1_LAND: Template = { id: 'MFB1L', slots: [L(3 / 2)], strips: [{ slotIndexes: [0] }] };
