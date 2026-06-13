@@ -254,6 +254,7 @@ const M2: Template = {
   slots: [L(3 / 2), A(), A()],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** M3 — 4 quadradas em 2x2 */
