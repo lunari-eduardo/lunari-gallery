@@ -230,11 +230,12 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
     return layoutRows;
   }, [photos, internalWidth, gap, targetRowHeight, featuredEnabled, fixedColumns, uniformTiles, maxItemsPerRow]);
 
-  // ============ MODO MASONRY DE COLUNAS FIXAS (Clean) ============
-  // Colunas verticais independentes (estilo Pinterest). Cada foto entra na
-  // coluna de menor altura acumulada, preservando a ordem narrativa
-  // aproximadamente da esquerda para a direita / topo para baixo. Proporção
-  // original 100% preservada — sem corte, sem object-cover dependente.
+  // ============ MODO COLUNAS FIXAS SEQUENCIAL (Clean) ============
+  // Rejeita o antigo algoritmo "shortest-column" (estilo Pinterest) porque
+  // ele reordena visualmente as fotos. Aqui particionamos fotos na ORDEM
+  // ORIGINAL em chunks de N (colunas por dispositivo) e justificamos cada
+  // linha igualando altura. Proporção de cada foto é preservada dentro
+  // da linha (width = rowH * AR). Ordem 1 -> 2 -> 3 / 4 -> 5 -> 6 garantida.
   const masonryLayout = useMemo(() => {
     if (!masonryColumns || internalWidth <= 0 || photos.length === 0) return null;
 
@@ -244,28 +245,33 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
       ? masonryColumns.tablet
       : masonryColumns.desktop;
     const N = Math.max(1, cols);
-    const colWidth = (internalWidth - (N - 1) * gap) / N;
 
     const ratioOf = (p: GalleryPhoto) =>
       p.width && p.height ? p.width / p.height : 1.5;
 
-    const heights = new Array(N).fill(0);
-    const columns: Array<{ width: number; items: Array<{ photo: GalleryPhoto; width: number; height: number }> }> =
-      Array.from({ length: N }, () => ({ width: colWidth, items: [] }));
+    const rows: Array<{ height: number; items: Array<{ photo: GalleryPhoto; width: number; height: number }> }> = [];
 
-    photos.forEach((photo) => {
-      const ar = ratioOf(photo);
-      const h = colWidth / ar;
-      let idx = 0;
-      let min = heights[0];
-      for (let i = 1; i < N; i++) {
-        if (heights[i] < min) { min = heights[i]; idx = i; }
+    for (let i = 0; i < photos.length; i += N) {
+      const slice = photos.slice(i, i + N);
+      const count = slice.length;
+      const rowGaps = (count - 1) * gap;
+      const sumAR = slice.reduce((a, p) => a + ratioOf(p), 0) || 1;
+      let rowH = (internalWidth - rowGaps) / sumAR;
+
+      // Última linha incompleta: limita altura para evitar foto solitária gigante.
+      if (count < N && rows.length > 0) {
+        const avgPrev = rows.reduce((a, r) => a + r.height, 0) / rows.length;
+        const cap = avgPrev * 1.4;
+        if (rowH > cap) rowH = cap;
       }
-      columns[idx].items.push({ photo, width: colWidth, height: h });
-      heights[idx] += h + gap;
-    });
 
-    return columns;
+      rows.push({
+        height: rowH,
+        items: slice.map((p) => ({ photo: p, width: rowH * ratioOf(p), height: rowH })),
+      });
+    }
+
+    return rows;
   }, [photos, internalWidth, gap, masonryColumns]);
 
   // ============ MODO PAIRED ROWS FEATURED (Editorial Clássico) ============
