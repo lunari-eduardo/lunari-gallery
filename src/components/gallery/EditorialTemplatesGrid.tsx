@@ -14,10 +14,22 @@ interface EditorialTemplatesGridProps {
   onPhotoClick?: (photo: GalleryPhoto) => void;
   renderItem?: (photo: GalleryPhoto, style: React.CSSProperties) => React.ReactNode;
   containerWidth?: number;
+  /** Editorial: largura máxima do container por breakpoint (px). */
+  maxContainerWidth?: {
+    desktopSm?: number | null;
+    desktopMd?: number | null;
+    desktopLg?: number | null;
+  };
+  /** Editorial: máximo de fotos por strip (linha de template). */
+  maxItemsPerStrip?: { mobile: number; tablet: number; desktop: number };
+  /** Editorial: cooldown — fotos não-destaque entre dois destaques. */
+  featuredCooldown?: number;
 }
 
 interface PlannedStrip {
   height: number;
+  /** Soma de larguras das células (após cap). Usado para centralizar. */
+  contentWidth: number;
   cells: Array<{
     photo: GalleryPhoto;
     width: number;
@@ -27,11 +39,14 @@ interface PlannedStrip {
 /**
  * Editorial Templates Grid — engine "revista".
  *
- * Preenche a galeria usando sequência cíclica de templates editoriais.
- * Cada strip ocupa 100% da largura por construção (justified math),
- * portanto NÃO existem espaços vazios dentro ou entre templates.
+ * Refinamentos v1.1:
+ *  - Container com largura máxima por breakpoint (telas grandes).
+ *  - Filtro `maxItemsPerStrip` aplicado na seleção de template.
+ *  - Cooldown de destaques: 1 destaque a cada N fotos.
+ *  - Teto absoluto de altura por strip (evita fotos gigantes); quando a strip
+ *    é capada, células encolhem proporcionalmente e a linha é centralizada.
  *
- * A ordem narrativa das fotos é preservada: photos[i] entra no slot i.
+ * Ordem narrativa: photos[i] sempre cai no slot i. Sem reordenação.
  */
 export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
   photos,
@@ -39,37 +54,73 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
   onPhotoClick,
   renderItem,
   containerWidth: externalWidth,
+  maxContainerWidth,
+  maxItemsPerStrip,
+  featuredCooldown = 0,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [internalWidth, setInternalWidth] = useState(0);
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [outerWidth, setOuterWidth] = useState(0);
+  const [viewportH, setViewportH] = useState(
+    typeof window !== 'undefined' ? window.innerHeight : 900,
+  );
 
   useEffect(() => {
     if (externalWidth !== undefined) {
-      setInternalWidth(externalWidth);
+      setOuterWidth(externalWidth);
       return;
     }
-    if (!containerRef.current) return;
+    if (!outerRef.current) return;
     const obs = new ResizeObserver((entries) => {
-      for (const e of entries) setInternalWidth(e.contentRect.width);
+      for (const e of entries) setOuterWidth(e.contentRect.width);
     });
-    obs.observe(containerRef.current);
+    obs.observe(outerRef.current);
     return () => obs.disconnect();
   }, [externalWidth]);
 
-  const strips: PlannedStrip[] = useMemo(() => {
-    if (internalWidth <= 0 || photos.length === 0) return [];
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
-    const isMobile = internalWidth < 640;
+  // Largura efetiva do container (com cap por breakpoint).
+  const innerWidth = useMemo(() => {
+    if (outerWidth <= 0) return 0;
+    if (!maxContainerWidth) return outerWidth;
+    let cap: number | null | undefined = undefined;
+    if (outerWidth >= 2000) cap = maxContainerWidth.desktopLg;
+    else if (outerWidth >= 1600) cap = maxContainerWidth.desktopMd;
+    else if (outerWidth >= 1280) cap = maxContainerWidth.desktopSm;
+    if (cap && cap > 0) return Math.min(outerWidth, cap);
+    return outerWidth;
+  }, [outerWidth, maxContainerWidth]);
+
+  // Cap de itens por strip por breakpoint.
+  const stripCap = useMemo(() => {
+    if (!maxItemsPerStrip) return undefined;
+    if (innerWidth < 640) return maxItemsPerStrip.mobile;
+    if (innerWidth < 1024) return maxItemsPerStrip.tablet;
+    return maxItemsPerStrip.desktop;
+  }, [innerWidth, maxItemsPerStrip]);
+
+  const strips: PlannedStrip[] = useMemo(() => {
+    if (innerWidth <= 0 || photos.length === 0) return [];
+
+    const isMobile = innerWidth < 640;
     const out: PlannedStrip[] = [];
     let cursor = 0;
     let idx = 0;
+    // Cooldown: quantas fotos ainda precisam passar até liberar próximo destaque.
+    let cooldown = 0;
 
     while (idx < photos.length) {
       const remaining = photos.length - idx;
       const nextPhoto = photos[idx];
-      const isFeatured = ((nextPhoto as any).pesoVisual || (nextPhoto as any).peso_visual || 0) === 1;
+      const rawFeatured =
+        ((nextPhoto as any).pesoVisual || (nextPhoto as any).peso_visual || 0) === 1;
+      const isFeatured = rawFeatured && cooldown <= 0;
 
-      // Janela de orientações das próximas fotos (lookahead = 6).
       const lookahead = Math.min(remaining, 6);
       const nextOrientations: PhotoOrientation[] = [];
       for (let k = 0; k < lookahead; k++) {
@@ -84,73 +135,108 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
         isMobile,
         nextOrientations,
         isFeatured,
+        stripCap,
       );
       cursor = nextCursor;
 
-      const batchPhotos = photos.slice(idx, idx + template.slots.length);
-      idx += template.slots.length;
+      const consumed = template.slots.length;
+      const batchPhotos = photos.slice(idx, idx + consumed);
+      idx += consumed;
+
+      // Atualiza cooldown.
+      if (isFeatured && template.hasFeaturedSlot) {
+        cooldown = featuredCooldown;
+      } else {
+        cooldown = Math.max(0, cooldown - consumed);
+      }
 
       for (const strip of template.strips) {
-        const h = computeStripHeight(strip, template, internalWidth, gap);
-        const cells = strip.slotIndexes.map((slotIdx) => {
-          const ar = template.slots[slotIdx].ar;
-          return {
-            photo: batchPhotos[slotIdx],
-            width: h * ar,
-          };
-        });
-        out.push({ height: h, cells });
+        const ratios = strip.slotIndexes.map((i) => template.slots[i].ar);
+        const sumAR = ratios.reduce((a, b) => a + b, 0);
+        let h = computeStripHeight(strip, template, innerWidth, gap);
+
+        // Teto de altura (evita fotos gigantes).
+        const single = strip.slotIndexes.length === 1;
+        const slotOrient = single ? template.slots[strip.slotIndexes[0]].orientation : null;
+        let cap = innerWidth * 0.62;
+        if (single && slotOrient === 'portrait') cap = innerWidth * 0.55;
+        if (single && slotOrient === 'landscape' && ratios[0] >= 1.7) cap = innerWidth * 0.42;
+        cap = Math.min(cap, viewportH * 0.78);
+
+        if (h > cap) h = cap;
+
+        const cells = strip.slotIndexes.map((slotIdx) => ({
+          photo: batchPhotos[slotIdx],
+          width: h * template.slots[slotIdx].ar,
+        }));
+        const contentWidth =
+          cells.reduce((a, c) => a + c.width, 0) + (cells.length - 1) * gap;
+
+        out.push({ height: h, contentWidth, cells });
       }
     }
 
     return out;
-  }, [photos, internalWidth, gap]);
+  }, [photos, innerWidth, gap, viewportH, stripCap, featuredCooldown]);
 
   return (
     <div
-      ref={containerRef}
-      className="w-full flex flex-col"
-      style={{ gap: `${gap}px` }}
+      ref={outerRef}
+      className="w-full flex justify-center"
     >
-      {strips.map((strip, i) => (
-        <div
-          key={i}
-          className="flex flex-row overflow-hidden"
-          style={{ gap: `${gap}px`, height: strip.height }}
-        >
-          {strip.cells.map((cell, ci) => {
-            const style: React.CSSProperties = {
-              width: cell.width,
-              height: strip.height,
-              flexShrink: 0,
-              cursor: 'pointer',
-            };
-            if (!cell.photo) return null;
-            if (renderItem) return renderItem(cell.photo, style);
+      <div
+        ref={innerRef}
+        className="flex flex-col"
+        style={{ gap: `${gap}px`, width: innerWidth || '100%' }}
+      >
+        {strips.map((strip, i) => {
+          const justify =
+            strip.contentWidth < innerWidth - 1 ? 'center' : 'flex-start';
+          return (
+            <div
+              key={i}
+              className="flex flex-row overflow-hidden"
+              style={{
+                gap: `${gap}px`,
+                height: strip.height,
+                justifyContent: justify,
+              }}
+            >
+              {strip.cells.map((cell, ci) => {
+                const style: React.CSSProperties = {
+                  width: cell.width,
+                  height: strip.height,
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                };
+                if (!cell.photo) return null;
+                if (renderItem) return renderItem(cell.photo, style);
 
-            const url =
-              (cell.photo as any).previewPath ||
-              (cell.photo as any).previewUrl ||
-              (cell.photo as any).thumbnailUrl;
+                const url =
+                  (cell.photo as any).previewPath ||
+                  (cell.photo as any).previewUrl ||
+                  (cell.photo as any).thumbnailUrl;
 
-            return (
-              <div
-                key={cell.photo.id ?? ci}
-                style={style}
-                onClick={() => onPhotoClick?.(cell.photo)}
-                className="overflow-hidden"
-              >
-                <img
-                  src={url}
-                  alt={cell.photo.filename}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              </div>
-            );
-          })}
-        </div>
-      ))}
+                return (
+                  <div
+                    key={cell.photo.id ?? ci}
+                    style={style}
+                    onClick={() => onPhotoClick?.(cell.photo)}
+                    className="overflow-hidden"
+                  >
+                    <img
+                      src={url}
+                      alt={cell.photo.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -62,13 +62,17 @@ export const CLEAN_THEME: GalleryTheme = {
 /**
  * Editorial — sequência cíclica de templates editoriais pré-definidos.
  * Cada template tem altura matematicamente fixa por largura → zero vazios.
- * Destaques (peso_visual=1) caem nos slots grandes dos templates T1/T3/T5/M2/M4.
+ * Refinamentos v1.1.0:
+ *  - Container com largura máxima por breakpoint (telas grandes).
+ *  - Máximo de fotos por strip (densidade controlada).
+ *  - Cooldown de destaques (1 destaque a cada ~5 fotos).
+ *  - Tetos de altura aplicados no engine para evitar fotos gigantes.
  */
 export const EDITORIAL_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'editorial',
   name: 'Editorial',
-  version: '1.0.0',
+  version: '1.1.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-templates',
@@ -76,6 +80,13 @@ export const EDITORIAL_THEME: GalleryTheme = {
     gap: 8,
     rowUnit: 320,
     density: 'comfortable',
+    maxContainerWidth: {
+      desktopSm: 1200,
+      desktopMd: 1360,
+      desktopLg: 1440,
+    },
+    maxItemsPerStrip: { mobile: 2, tablet: 3, desktop: 4 },
+    featuredCooldown: 4,
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,
