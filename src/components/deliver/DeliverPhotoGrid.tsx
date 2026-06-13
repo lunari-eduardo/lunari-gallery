@@ -86,6 +86,16 @@ export function DeliverPhotoGrid({
     
     const url = isDemo ? (photo as any).previewPath : getPhotoUrl(paths, 'preview');
     const index = photos.findIndex(p => p.id === photo.id);
+    const isActive = isMobile && activeId === photo.id;
+
+    const handleMediaClick = (e: React.MouseEvent) => {
+      if (isMobile && !isActive) {
+        e.stopPropagation();
+        setActiveId(photo.id);
+        return;
+      }
+      onPhotoClick(index);
+    };
 
     return (
       <div 
@@ -93,7 +103,8 @@ export function DeliverPhotoGrid({
         style={style}
         className={cn(
           "group relative cursor-pointer overflow-hidden w-full rounded-none",
-          "transition-all duration-300"
+          "transition-all duration-300",
+          isActive && "is-active"
         )}
       >
         {isBlueprint ? (
@@ -111,7 +122,7 @@ export function DeliverPhotoGrid({
                 loop
                 playsInline
                 className="w-full h-full object-cover block transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale,1.02)]"
-                onClick={() => onPhotoClick(index)}
+                onClick={handleMediaClick}
               />
             ) : (
               <img
@@ -120,18 +131,28 @@ export function DeliverPhotoGrid({
                 loading="lazy"
                 decoding="async"
                 className="w-full h-full block object-cover transition-transform duration-1000 ease-out group-hover:scale-[var(--gallery-hover-scale,1.02)]"
-                onClick={() => onPhotoClick(index)}
+                onClick={handleMediaClick}
               />
             )}
             
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+            <div
+              className={cn(
+                "absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent transition-opacity duration-500 pointer-events-none",
+                "opacity-0 group-hover:opacity-100",
+                isActive && "opacity-100"
+              )}
+            />
             
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDownload(photo);
               }}
-              className="absolute bottom-4 right-4 p-2.5 backdrop-blur-md bg-white/10 text-white rounded-full sm:opacity-0 group-hover:opacity-100 transition-all duration-500 hover:bg-white/20 border border-white/20 active:scale-90"
+              className={cn(
+                "absolute bottom-4 right-4 p-2.5 backdrop-blur-md bg-white/10 text-white rounded-full transition-all duration-500 hover:bg-white/20 border border-white/20 active:scale-90",
+                "opacity-0 group-hover:opacity-100",
+                isActive && "opacity-100"
+              )}
               title="Baixar"
             >
               <Download className="w-4 h-4" />
