@@ -190,6 +190,22 @@ const T13: Template = {
   hasFeaturedSlot: true,
 };
 
+const FB5_LAND: Template = {
+  id: 'FB5L',
+  slots: [L(3 / 2), L(3 / 2), L(3 / 2), L(3 / 2), L(3 / 2)],
+  strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
+};
+const FB5_PORT: Template = {
+  id: 'FB5P',
+  slots: [P(3 / 4), P(3 / 4), P(3 / 4), P(3 / 4), P(3 / 4)],
+  strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
+};
+const FB5_SQ: Template = {
+  id: 'FB5S',
+  slots: [S(), S(), S(), S(), S()],
+  strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
+};
+
 const DESKTOP_SEQUENCE: Template[] = [T6, T2, T12, T7, T8, T3, T13, T4, T10, T9];
 
 const DESKTOP_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
