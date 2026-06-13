@@ -270,6 +270,7 @@ const M4: Template = {
   slots: [L(16 / 9), P(3 / 4), P(3 / 4)],
   strips: [{ slotIndexes: [0] }, { slotIndexes: [1, 2] }],
   hasFeaturedSlot: true,
+  featuredSlotIndex: 0,
 };
 
 /** M5 — Par retrato */
