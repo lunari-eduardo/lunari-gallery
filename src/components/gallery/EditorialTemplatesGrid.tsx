@@ -3,7 +3,6 @@ import { GalleryPhoto } from '@/types/gallery';
 import {
   Template,
   selectTemplateBatch,
-  computeStripHeight,
   orientationFromAR,
   PhotoOrientation,
 } from './editorialTemplates';
