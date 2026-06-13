@@ -220,7 +220,7 @@ const FB5_SQ: Template = {
   strips: [{ slotIndexes: [0, 1] }, { slotIndexes: [2, 3, 4] }],
 };
 
-const DESKTOP_SEQUENCE: Template[] = [T6, T2, T12, T7, T8, T3, T13, T4, T10, T9];
+const DESKTOP_SEQUENCE: Template[] = [T6, T2, T14, T7, T8, T3, T13, T4, T10, T9, T12];
 
 const DESKTOP_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
   landscape: { 1: FB1_LAND, 2: FB2_LAND, 3: FB3_LAND, 4: FB4_LAND, 5: FB5_LAND },
