@@ -354,12 +354,21 @@ function dominantOrientation(orientations: PhotoOrientation[]): PhotoOrientation
   return 'square';
 }
 
+/** Maior número de fotos em uma única strip de um template. */
+function maxStripCells(t: Template): number {
+  let m = 0;
+  for (const s of t.strips) m = Math.max(m, s.slotIndexes.length);
+  return m;
+}
+
 /**
  * Escolhe template para o batch corrente.
  *
  * Recebe a janela de orientações das próximas fotos (mesma ordem).
  * Garante: zero órfãs (fallback exato para N=1..5) E zero violação de
  * orientação (foto vertical nunca em slot horizontal e vice-versa).
+ *
+ * `maxItemsPerStrip` (opcional) descarta templates cuja maior strip exceda o cap.
  */
 export function selectTemplateBatch(
   remaining: number,
@@ -367,16 +376,17 @@ export function selectTemplateBatch(
   isMobile: boolean,
   nextOrientations: PhotoOrientation[],
   nextPhotoIsFeatured: boolean,
+  maxItemsPerStrip?: number,
 ): { template: Template; nextCursor: number } {
   const sequence = isMobile ? MOBILE_SEQUENCE : DESKTOP_SEQUENCE;
   const fallbacks = isMobile ? MOBILE_FALLBACKS : DESKTOP_FALLBACKS;
+  const stripCapOk = (t: Template) =>
+    maxItemsPerStrip === undefined || maxStripCells(t) <= maxItemsPerStrip;
 
   // Caso 1: poucas fotos restantes — usa fallback exato pela orientação dominante.
   if (remaining <= 5) {
     const dom = dominantOrientation(nextOrientations.slice(0, remaining));
     let fb = fallbacks[dom][remaining];
-    // Se o fallback dominante não casar exatamente (caso muito misto),
-    // tenta os outros antes de degradar para o quadrado (coringa).
     if (!templateMatchesOrientations(fb, nextOrientations)) {
       const alt: PhotoOrientation[] = ['portrait', 'landscape', 'square'];
       for (const o of alt) {
@@ -386,7 +396,6 @@ export function selectTemplateBatch(
           break;
         }
       }
-      // Última garantia: fallback quadrado aceita qualquer foto via object-cover
       if (!templateMatchesOrientations(fb, nextOrientations)) {
         fb = fallbacks.square[remaining];
       }
@@ -394,22 +403,23 @@ export function selectTemplateBatch(
     return { template: fb, nextCursor: cursor };
   }
 
-  // Caso 2: foto destaque na cabeça — prioriza template com slot grande
-  // QUE TAMBÉM case orientações da janela.
+  // Caso 2: foto destaque na cabeça — prioriza template com slot grande.
   if (nextPhotoIsFeatured) {
     for (let probe = 0; probe < sequence.length; probe++) {
       const cand = sequence[(cursor + probe) % sequence.length];
       if (!cand.hasFeaturedSlot) continue;
       if (cand.slots.length > remaining) continue;
+      if (!stripCapOk(cand)) continue;
       if (!templateMatchesOrientations(cand, nextOrientations)) continue;
       return { template: cand, nextCursor: cursor + probe + 1 };
     }
   }
 
-  // Caso 3: próximo template do sequence que case orientações.
+  // Caso 3: próximo template do sequence que case orientações e respeite o cap.
   for (let probe = 0; probe < sequence.length; probe++) {
     const cand = sequence[(cursor + probe) % sequence.length];
     if (cand.slots.length > remaining) continue;
+    if (!stripCapOk(cand)) continue;
     if (!templateMatchesOrientations(cand, nextOrientations)) continue;
     return { template: cand, nextCursor: cursor + probe + 1 };
   }
