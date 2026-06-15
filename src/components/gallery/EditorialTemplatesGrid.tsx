@@ -192,12 +192,12 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           if (single && onlyAR < 1) cap = innerWidth * 0.55;
           if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
           if (isFeaturedStrip && single) {
-            // Hero solo de destaque: mais alto para "parecer destaque".
-            if (onlyAR < 1) cap = innerWidth * 0.78;
-            else if (onlyAR >= 1.7) cap = innerWidth * 0.55;
-            else cap = innerWidth * 0.62;
+            // Hero solo de destaque: presença visual obrigatória.
+            if (onlyAR < 1) cap = innerWidth * 0.85;        // retrato grande
+            else if (onlyAR >= 1.7) cap = innerWidth * 0.58; // panorâmica
+            else cap = innerWidth * 0.68;                    // landscape padrão
           }
-          const vhCap = isFeaturedStrip ? viewportH * 0.90 : viewportH * 0.78;
+          const vhCap = isFeaturedStrip ? viewportH * 0.92 : viewportH * 0.78;
           cap = Math.min(cap, vhCap);
 
           let widths = cellsMeta.map((c) => c.naturalAR * h);
