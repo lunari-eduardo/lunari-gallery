@@ -350,7 +350,8 @@ const MFB5_SQ:   Template = {
   ],
 };
 
-const MOBILE_SEQUENCE: Template[] = [M2, M3, M1, M4, M6, M5, M3, M2];
+// M2/M4/M6 são templates de DESTAQUE — removidos do sequence comum.
+const MOBILE_SEQUENCE: Template[] = [M3, M1, M5, M3, M1, M5];
 
 const MOBILE_FALLBACKS: Record<PhotoOrientation, Record<number, Template>> = {
   landscape: { 1: MFB1_LAND, 2: MFB2_LAND, 3: MFB3_LAND, 4: MFB4_LAND, 5: MFB5_LAND },
