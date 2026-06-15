@@ -110,8 +110,16 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
     const out: PlannedStrip[] = [];
     let cursor = 0;
     let idx = 0;
-    // Cooldown: quantas fotos ainda precisam passar até liberar próximo destaque.
     let cooldown = 0;
+
+    if (import.meta.env.DEV) {
+      const featCount = photos.filter(
+        (p) => ((p as any).pesoVisual || (p as any).peso_visual || 0) === 1,
+      ).length;
+      // eslint-disable-next-line no-console
+      console.debug('[editorial] init', { total: photos.length, featured: featCount });
+    }
+
 
     while (idx < photos.length) {
       const remaining = photos.length - idx;
