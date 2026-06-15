@@ -57,6 +57,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   uniformTiles,
   maxItemsPerRow,
   masonryColumns,
+  uniformGridSpan,
   pairedRowsFeatured,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
