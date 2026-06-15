@@ -38,15 +38,20 @@ export const CLEAN_THEME: GalleryTheme = {
   ...DEFAULT_GALLERY_THEME,
   id: 'clean',
   name: 'Clean',
-  version: '1.2.0',
+  version: '1.3.0',
   layout: {
     ...DEFAULT_GALLERY_THEME.layout,
     engine: 'editorial-justified',
     columns: { mobile: 2, tablet: 3, desktop: 4 },
-    gap: 16,
+    gap: 12,
     rowUnit: 320,
     density: 'airy',
-    masonryColumns: { mobile: 2, tablet: 3, desktop: 4 },
+    uniformGridSpan: {
+      cols: { mobile: 2, tablet: 3, desktop: 4 },
+      cellAspect: 3 / 4, // célula base retrato 3:4 → horizontal span 2 vira AR ≈ 1.5
+      landscapeSpan: 2,
+      lookaheadSwap: true,
+    },
   },
   surface: {
     ...DEFAULT_GALLERY_THEME.surface,

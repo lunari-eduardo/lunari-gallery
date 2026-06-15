@@ -25,6 +25,18 @@ export interface GalleryThemeLayout {
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
   /** Clean: masonry de colunas fixas preservando proporção original (estilo Pinterest). */
   masonryColumns?: { mobile: number; tablet: number; desktop: number };
+  /**
+   * Clean v2: grade uniforme com span horizontal.
+   * Verticais ocupam 1 célula (AR = cellAspect). Horizontais ocupam
+   * `landscapeSpan` colunas × 1 linha. Lookahead-swap mínimo evita buracos.
+   */
+  uniformGridSpan?: {
+    cols: { mobile: number; tablet: number; desktop: number };
+    /** width/height da célula base. 3/4 = retrato. */
+    cellAspect: number;
+    landscapeSpan: 1 | 2;
+    lookaheadSwap?: boolean;
+  };
   /** Editorial Clássico: foto peso_visual=1 ocupa bloco 2 colunas × 2 linhas reais. */
   pairedRowsFeatured?: boolean;
   /** Editorial: largura máxima do container por breakpoint (px). null = sem cap. */

@@ -22,6 +22,13 @@ interface JustifiedRowsGridProps {
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
   /** Clean: masonry de colunas fixas preservando proporção original. */
   masonryColumns?: { mobile: number; tablet: number; desktop: number };
+  /** Clean v2: grade uniforme; horizontais ocupam N colunas. */
+  uniformGridSpan?: {
+    cols: { mobile: number; tablet: number; desktop: number };
+    cellAspect: number;
+    landscapeSpan: 1 | 2;
+    lookaheadSwap?: boolean;
+  };
   /** Editorial Clássico: foto destaque ocupa 2 colunas × 2 linhas reais. */
   pairedRowsFeatured?: boolean;
 }
@@ -50,6 +57,7 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
   uniformTiles,
   maxItemsPerRow,
   masonryColumns,
+  uniformGridSpan,
   pairedRowsFeatured,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -428,6 +436,109 @@ export const JustifiedRowsGrid: React.FC<JustifiedRowsGridProps> = ({
 
     return blocks;
   }, [photos, internalWidth, gap, targetRowHeight, pairedRowsFeatured, featuredEnabled]);
+
+  // ============ MODO UNIFORM GRID SPAN (Clean v2) ============
+  // Grade rígida: verticais 1 célula, horizontais span N colunas × 1 linha.
+  // Altura uniforme = colW / cellAspect (ex.: 3/4 → rowH = colW * 4/3).
+  // Look-ahead-swap mínimo evita "buraco" quando horizontal cai na última coluna.
+  const uniformGridLayout = useMemo(() => {
+    if (!uniformGridSpan || internalWidth <= 0 || photos.length === 0) return null;
+
+    const N = Math.max(
+      1,
+      internalWidth < 640
+        ? uniformGridSpan.cols.mobile
+        : internalWidth < 1024
+        ? uniformGridSpan.cols.tablet
+        : uniformGridSpan.cols.desktop,
+    );
+    const colW = (internalWidth - (N - 1) * gap) / N;
+    const rowH = colW / uniformGridSpan.cellAspect;
+    const lspan = Math.min(uniformGridSpan.landscapeSpan, N) as 1 | 2;
+    const lookahead = uniformGridSpan.lookaheadSwap !== false;
+
+    const arOf = (p: GalleryPhoto) =>
+      p.width && p.height ? p.width / p.height : 1.5;
+    // landscape se AR ≥ 1.18 (mesma regra do editorial)
+    const isLand = (p: GalleryPhoto) => arOf(p) >= 1.18;
+
+    // Build span list (with optional swap)
+    const ordered: GalleryPhoto[] = photos.slice();
+    if (lookahead && lspan === 2 && N >= 2) {
+      let col = 0;
+      let i = 0;
+      while (i < ordered.length) {
+        const span = isLand(ordered[i]) ? 2 : 1;
+        if (span === 2 && col === N - 1) {
+          // tenta swap com próxima vertical (janela 1)
+          if (i + 1 < ordered.length && !isLand(ordered[i + 1])) {
+            const tmp = ordered[i];
+            ordered[i] = ordered[i + 1];
+            ordered[i + 1] = tmp;
+            col = (col + 1) % N;
+            i++;
+            continue;
+          }
+          // não dá: aceita célula vazia, horizontal vai pra próxima linha
+          col = 0;
+          continue;
+        }
+        col = (col + span) % N;
+        i++;
+      }
+    }
+
+    return {
+      N,
+      colW,
+      rowH,
+      lspan,
+      photos: ordered.map((p) => ({ photo: p, span: isLand(p) ? lspan : 1 })),
+    };
+  }, [photos, internalWidth, gap, uniformGridSpan]);
+
+  if (uniformGridLayout) {
+    const { N, rowH, photos: items } = uniformGridLayout;
+    return (
+      <div
+        ref={containerRef}
+        className="w-full"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${N}, 1fr)`,
+          gridAutoRows: `${rowH}px`,
+          gap: `${gap}px`,
+        }}
+      >
+        {items.map(({ photo, span }) => {
+          const style: React.CSSProperties = {
+            gridColumn: `span ${span}`,
+            gridRow: 'span 1',
+            cursor: 'pointer',
+            overflow: 'hidden',
+          };
+          if (renderItem) return renderItem(photo, style);
+          const photoUrl =
+            (photo as any).previewPath || photo.previewUrl || photo.thumbnailUrl;
+          return (
+            <div
+              key={photo.id}
+              style={style}
+              onClick={() => onPhotoClick?.(photo)}
+              className="overflow-hidden"
+            >
+              <img
+                src={photoUrl}
+                alt={photo.filename}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (pairedLayout) {
     return (

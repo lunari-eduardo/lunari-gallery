@@ -110,8 +110,16 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
     const out: PlannedStrip[] = [];
     let cursor = 0;
     let idx = 0;
-    // Cooldown: quantas fotos ainda precisam passar até liberar próximo destaque.
     let cooldown = 0;
+
+    if (import.meta.env.DEV) {
+      const featCount = photos.filter(
+        (p) => ((p as any).pesoVisual || (p as any).peso_visual || 0) === 1,
+      ).length;
+      // eslint-disable-next-line no-console
+      console.debug('[editorial] init', { total: photos.length, featured: featCount });
+    }
+
 
     while (idx < photos.length) {
       const remaining = photos.length - idx;
@@ -145,6 +153,7 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           isFeatured,
           stripCap,
           avoidIds.size > 0 ? avoidIds : undefined,
+          idx === 0 && !isFeatured, // forbidLeadingSolo: nada de retrato solo no topo
         );
         const template = sel.template;
         consumed = template.slots.length;
@@ -191,12 +200,12 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           if (single && onlyAR < 1) cap = innerWidth * 0.55;
           if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
           if (isFeaturedStrip && single) {
-            // Hero solo de destaque: mais alto para "parecer destaque".
-            if (onlyAR < 1) cap = innerWidth * 0.78;
-            else if (onlyAR >= 1.7) cap = innerWidth * 0.55;
-            else cap = innerWidth * 0.62;
+            // Hero solo de destaque: presença visual obrigatória.
+            if (onlyAR < 1) cap = innerWidth * 0.85;        // retrato grande
+            else if (onlyAR >= 1.7) cap = innerWidth * 0.58; // panorâmica
+            else cap = innerWidth * 0.68;                    // landscape padrão
           }
-          const vhCap = isFeaturedStrip ? viewportH * 0.90 : viewportH * 0.78;
+          const vhCap = isFeaturedStrip ? viewportH * 0.92 : viewportH * 0.78;
           cap = Math.min(cap, vhCap);
 
           let widths = cellsMeta.map((c) => c.naturalAR * h);
