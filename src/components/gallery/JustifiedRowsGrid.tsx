@@ -22,6 +22,13 @@ interface JustifiedRowsGridProps {
   maxItemsPerRow?: { mobile: number; tablet: number; desktop: number };
   /** Clean: masonry de colunas fixas preservando proporção original. */
   masonryColumns?: { mobile: number; tablet: number; desktop: number };
+  /** Clean v2: grade uniforme; horizontais ocupam N colunas. */
+  uniformGridSpan?: {
+    cols: { mobile: number; tablet: number; desktop: number };
+    cellAspect: number;
+    landscapeSpan: 1 | 2;
+    lookaheadSwap?: boolean;
+  };
   /** Editorial Clássico: foto destaque ocupa 2 colunas × 2 linhas reais. */
   pairedRowsFeatured?: boolean;
 }
