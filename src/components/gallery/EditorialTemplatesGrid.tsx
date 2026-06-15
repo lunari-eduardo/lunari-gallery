@@ -145,6 +145,7 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           isFeatured,
           stripCap,
           avoidIds.size > 0 ? avoidIds : undefined,
+          idx === 0 && !isFeatured, // forbidLeadingSolo: nada de retrato solo no topo
         );
         const template = sel.template;
         consumed = template.slots.length;
