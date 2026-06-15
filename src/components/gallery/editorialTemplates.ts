@@ -454,6 +454,7 @@ export function selectTemplateBatch(
   nextPhotoIsFeatured: boolean,
   maxItemsPerStrip?: number,
   avoidIds?: Set<string>,
+  forbidLeadingSolo?: boolean,
 ): { template: Template; nextCursor: number } {
   const sequence = isMobile ? MOBILE_SEQUENCE : DESKTOP_SEQUENCE;
   const fallbacks = isMobile ? MOBILE_FALLBACKS : DESKTOP_FALLBACKS;
@@ -461,9 +462,19 @@ export function selectTemplateBatch(
   const stripCapOk = (t: Template) =>
     maxItemsPerStrip === undefined || maxStripCells(t) <= maxItemsPerStrip;
   const notAvoided = (t: Template) => !avoidIds || !avoidIds.has(t.id);
+  // Bloqueia templates cuja PRIMEIRA strip tem só 1 célula NÃO-destaque
+  // (evita "retrato pequeno solo" no início da galeria).
+  const leadingSoloOk = (t: Template) => {
+    if (!forbidLeadingSolo) return true;
+    const firstStrip = t.strips[0];
+    if (!firstStrip || firstStrip.slotIndexes.length > 1) return true;
+    const slotIdx = firstStrip.slotIndexes[0];
+    const isFeaturedStrip =
+      !!t.hasFeaturedSlot && slotIdx === (t.featuredSlotIndex ?? 0);
+    return isFeaturedStrip;
+  };
 
   // Caso 1 (destaque): catálogo dirigido por orientação da foto-cabeça.
-  // Garante que TODA foto marcada como destaque receba template de destaque.
   if (nextPhotoIsFeatured) {
     const head = nextOrientations[0];
     const candidates = featuredCatalog[head] ?? [];
@@ -473,11 +484,8 @@ export function selectTemplateBatch(
       if (cand.featuredSlotIndex !== undefined && cand.featuredSlotIndex !== 0) continue;
       if (!templateMatchesOrientations(cand, nextOrientations)) continue;
       if (!notAvoided(cand)) continue;
-      // cursor não avança por catálogo de destaque (sequência narrativa
-      // segue independente).
       return { template: cand, nextCursor: cursor };
     }
-    // Último recurso de destaque: solo da orientação da foto.
     const solo =
       head === 'landscape' ? TF_SOLO_L : head === 'portrait' ? TF_SOLO_P : TF_SOLO_S;
     return { template: solo, nextCursor: cursor };
@@ -503,14 +511,27 @@ export function selectTemplateBatch(
     return { template: fb, nextCursor: cursor };
   }
 
-  // Caso 3: próximo template do sequence que case orientações e respeite o cap.
+  // Caso 3: sequence comum, com filtro anti-solo na cabeça.
   for (let probe = 0; probe < sequence.length; probe++) {
     const cand = sequence[(cursor + probe) % sequence.length];
     if (cand.slots.length > remaining) continue;
     if (!stripCapOk(cand)) continue;
     if (!templateMatchesOrientations(cand, nextOrientations)) continue;
     if (!notAvoided(cand)) continue;
+    if (!leadingSoloOk(cand)) continue;
     return { template: cand, nextCursor: cursor + probe + 1 };
+  }
+
+  // Caso 3b: tenta novamente sem o filtro leadingSolo (último recurso).
+  if (forbidLeadingSolo) {
+    for (let probe = 0; probe < sequence.length; probe++) {
+      const cand = sequence[(cursor + probe) % sequence.length];
+      if (cand.slots.length > remaining) continue;
+      if (!stripCapOk(cand)) continue;
+      if (!templateMatchesOrientations(cand, nextOrientations)) continue;
+      if (!notAvoided(cand)) continue;
+      return { template: cand, nextCursor: cursor + probe + 1 };
+    }
   }
 
   // Caso 4: nenhum template casou — consome 1 foto via fallback exato.
