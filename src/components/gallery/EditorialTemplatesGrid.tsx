@@ -27,8 +27,10 @@ interface EditorialTemplatesGridProps {
 
 interface PlannedStrip {
   height: number;
-  /** Soma de larguras das células (após cap). Usado para centralizar. */
+  /** Soma de larguras das células + gaps. Usado para centralizar quando < innerWidth. */
   contentWidth: number;
+  /** true quando a strip não preencheu 100% da largura (deve ser centralizada). */
+  needsCenter: boolean;
   cells: Array<{
     photo: GalleryPhoto;
     width: number;
@@ -190,34 +192,40 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           const sumNaturalAR = cellsMeta.reduce((a, c) => a + c.naturalAR, 0);
           const gaps = (cellsMeta.length - 1) * gap;
           const widthForCells = Math.max(0, innerWidth - gaps);
-          let h = widthForCells / sumNaturalAR;
 
-          // Teto de altura — caps elevados em strip de destaque para
-          // garantir presença visual.
+          // FIT-WIDTH-FIRST: a altura natural que preenche 100% da largura.
+          const hIdeal = widthForCells / sumNaturalAR;
+
+          // Tetos de altura apenas por viewport / absoluto — não por fração de innerWidth.
+          // Strips comuns só são capadas quando a altura natural extrapolaria o viewport.
           const single = cellsMeta.length === 1;
           const onlyAR = single ? cellsMeta[0].naturalAR : 0;
-          let cap = innerWidth * 0.62;
-          if (single && onlyAR < 1) cap = innerWidth * 0.55;
-          if (single && onlyAR >= 1.7) cap = innerWidth * 0.42;
+
+          let vhCap: number;
+          let absCap: number;
           if (isFeaturedStrip && single) {
-            // Hero solo de destaque: presença visual obrigatória.
-            if (onlyAR < 1) cap = innerWidth * 0.85;        // retrato grande
-            else if (onlyAR >= 1.7) cap = innerWidth * 0.58; // panorâmica
-            else cap = innerWidth * 0.68;                    // landscape padrão
+            // Hero destacado solo: presença forte, mas limitado ao viewport.
+            vhCap = viewportH * 0.92;
+            absCap = 1200;
+          } else if (single) {
+            // Solo comum (raro — geralmente última foto da galeria).
+            vhCap = viewportH * 0.82;
+            absCap = onlyAR < 1 ? 900 : 760;
+          } else {
+            // Strips com 2+ células: cap generoso, na prática quase nunca aciona.
+            vhCap = viewportH * 0.80;
+            absCap = 820;
           }
-          const vhCap = isFeaturedStrip ? viewportH * 0.92 : viewportH * 0.78;
-          cap = Math.min(cap, vhCap);
+          const cap = Math.min(vhCap, absCap);
 
+          let h = Math.min(hIdeal, cap);
           let widths = cellsMeta.map((c) => c.naturalAR * h);
+          let totalW = widths.reduce((a, w) => a + w, 0);
 
-          if (h > cap) {
-            h = cap;
-            widths = cellsMeta.map((c) => c.naturalAR * h);
-            let totalW = widths.reduce((a, w) => a + w, 0);
-            const targetW = widthForCells;
-
-            for (let iter = 0; iter < 6 && targetW - totalW > 0.5; iter++) {
-              const deficit = targetW - totalW;
+          // Quando h foi capada, larguras encolhem; tenta recuperar via crop controlado (até maxAR).
+          if (h < hIdeal - 0.5) {
+            for (let iter = 0; iter < 6 && widthForCells - totalW > 0.5; iter++) {
+              const deficit = widthForCells - totalW;
               const slack = cellsMeta.reduce((a, c, i) => {
                 const cellMaxW = c.maxAR * h;
                 return a + Math.max(0, cellMaxW - widths[i]);
@@ -233,33 +241,31 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
             }
           }
 
-          let totalW = widths.reduce((a, w) => a + w, 0);
-          let emptyPct = (widthForCells - totalW) / Math.max(1, innerWidth);
+          // emptyPct mede vazio RELATIVO ao espaço útil (não ao innerWidth).
+          let emptyPct = (widthForCells - totalW) / Math.max(1, widthForCells);
 
-          // Última tentativa: aceitar crop adicional (até naturalAR+0.45)
-          // para garantir 0% de vazio. Só na 3ª tentativa.
-          if (emptyPct > 0.05 && attempt === 2) {
-            const targetW = widthForCells;
-            for (let iter = 0; iter < 6 && targetW - totalW > 0.5; iter++) {
-              const deficit = targetW - totalW;
-              const hardSlack = cellsMeta.reduce((a, c, i) => {
-                const hardMax = c.naturalAR >= 1.15
+          // 3ª tentativa: hard-crop também para retratos (até 1.18) e paisagens (+0.45).
+          if (emptyPct > 0.02 && attempt === 2) {
+            for (let iter = 0; iter < 6 && widthForCells - totalW > 0.5; iter++) {
+              const deficit = widthForCells - totalW;
+              const hardMaxOf = (c: typeof cellsMeta[number]) =>
+                c.naturalAR >= 1.15
                   ? Math.min(c.naturalAR + 0.45, 2.8) * h
-                  : c.maxAR * h;
-                return a + Math.max(0, hardMax - widths[i]);
-              }, 0);
+                  : Math.min(c.naturalAR + 0.30, 1.18) * h;
+              const hardSlack = cellsMeta.reduce(
+                (a, c, i) => a + Math.max(0, hardMaxOf(c) - widths[i]),
+                0,
+              );
               if (hardSlack <= 0.5) break;
               for (let i = 0; i < widths.length; i++) {
-                const hardMax = cellsMeta[i].naturalAR >= 1.15
-                  ? Math.min(cellsMeta[i].naturalAR + 0.45, 2.8) * h
-                  : cellsMeta[i].maxAR * h;
+                const hardMax = hardMaxOf(cellsMeta[i]);
                 const cellSlack = Math.max(0, hardMax - widths[i]);
                 const add = deficit * (cellSlack / hardSlack);
                 widths[i] = Math.min(hardMax, widths[i] + add);
               }
               totalW = widths.reduce((a, w) => a + w, 0);
             }
-            emptyPct = (widthForCells - totalW) / Math.max(1, innerWidth);
+            emptyPct = (widthForCells - totalW) / Math.max(1, widthForCells);
             forceCropApplied = true;
           }
 
@@ -270,15 +276,17 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
             width: widths[i],
           }));
           const contentWidth = totalW + (cells.length - 1) * gap;
-          stripsTmp.push({ height: h, contentWidth, cells });
+          const needsCenter = innerWidth - contentWidth > 0.5;
+          stripsTmp.push({ height: h, contentWidth, needsCenter, cells });
         }
 
         // Se vazio relevante e ainda há tentativas, evita este template.
-        if (worstEmptyPct > 0.05 && attempt < 2) {
+        if (worstEmptyPct > 0.02 && attempt < 2) {
           avoidIds.add(template.id);
           attempt++;
           continue;
         }
+
 
         chosen = sel;
         plannedStrips = stripsTmp;
@@ -331,10 +339,15 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
     >
       <div
         ref={innerRef}
-        className="flex flex-col"
+        className="flex flex-col items-center"
         style={{ gap: `${gap}px`, width: innerWidth || '100%' }}
       >
         {strips.map((strip, i) => {
+          const isLast = i === strips.length - 1;
+          // Regra: só a última strip pode ficar centralizada (foto solitária final).
+          // Strips intermediárias que por acaso não preencheram 100% também
+          // são centralizadas (fallback) para nunca aparecerem flush-left.
+          const useContentWidth = strip.needsCenter;
           return (
             <div
               key={i}
@@ -342,7 +355,9 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
               style={{
                 gap: `${gap}px`,
                 height: strip.height,
-                justifyContent: 'flex-start',
+                width: useContentWidth ? strip.contentWidth : '100%',
+                marginLeft: 'auto',
+                marginRight: 'auto',
               }}
             >
               {strip.cells.map((cell, ci) => {
@@ -380,6 +395,7 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           );
         })}
       </div>
+
     </div>
   );
 };
