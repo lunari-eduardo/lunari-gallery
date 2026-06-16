@@ -27,8 +27,10 @@ interface EditorialTemplatesGridProps {
 
 interface PlannedStrip {
   height: number;
-  /** Soma de larguras das células (após cap). Usado para centralizar. */
+  /** Soma de larguras das células + gaps. Usado para centralizar quando < innerWidth. */
   contentWidth: number;
+  /** true quando a strip não preencheu 100% da largura (deve ser centralizada). */
+  needsCenter: boolean;
   cells: Array<{
     photo: GalleryPhoto;
     width: number;
