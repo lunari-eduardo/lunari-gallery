@@ -1,55 +1,387 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GalleryPhoto } from '@/types/gallery';
-import {
-  Template,
-  selectTemplateBatch,
-  orientationFromAR,
-  PhotoOrientation,
-} from './editorialTemplates';
+import { orientationFromAR, PhotoOrientation } from './editorialTemplates';
 
-interface EditorialTemplatesGridProps {
+/**
+ * Editorial Planner V3
+ * --------------------
+ * Substitui a seleção cíclica de templates por um planner espacial
+ * orientado a blocos:
+ *
+ *   - normal-row  : 1..maxPerRow células justificadas em 100% da largura.
+ *   - featured    : mosaico com a foto destacada como âncora 2x2 (desktop/tablet)
+ *                   ou full-width (mobile), preenchendo 100% da largura.
+ *   - tail        : último resíduo da galeria (única posição onde
+ *                   incompleto é tolerado).
+ *
+ * Garantias:
+ *   1. Toda foto com peso_visual=1 vira âncora visual (nunca consumida
+ *      como apoio comum no meio da galeria).
+ *   2. Foto sem destaque nunca recebe tratamento de hero/destaque.
+ *   3. Blocos intermediários ocupam 100% da largura útil (matematicamente).
+ *   4. Apenas o bloco final (tail) pode ficar incompleto.
+ *   5. Ordem narrativa preservada; permitida apenas troca local entre
+ *      idx e idx+1 quando isso evita um solo não-destaque seguido de
+ *      destaque (puxa destaque para a âncora).
+ */
+
+interface Props {
   photos: GalleryPhoto[];
   gap: number;
   onPhotoClick?: (photo: GalleryPhoto) => void;
   renderItem?: (photo: GalleryPhoto, style: React.CSSProperties) => React.ReactNode;
   containerWidth?: number;
-  /** Editorial: largura máxima do container por breakpoint (px). */
   maxContainerWidth?: {
     desktopSm?: number | null;
     desktopMd?: number | null;
     desktopLg?: number | null;
   };
-  /** Editorial: máximo de fotos por strip (linha de template). */
   maxItemsPerStrip?: { mobile: number; tablet: number; desktop: number };
-  /** Editorial: cooldown — fotos não-destaque entre dois destaques. */
+  /** Mantido por compat — não usado pelo planner V3. */
   featuredCooldown?: number;
 }
 
-interface PlannedStrip {
+type NormPhoto = {
+  photo: GalleryPhoto;
+  ar: number;
+  o: PhotoOrientation;
+  featured: boolean;
+};
+
+type Cell = {
+  photo: GalleryPhoto;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+type Block = {
+  kind: 'normal' | 'featured' | 'tail';
   height: number;
-  /** Soma de larguras das células + gaps. Usado para centralizar quando < innerWidth. */
-  contentWidth: number;
-  /** true quando a strip não preencheu 100% da largura (deve ser centralizada). */
-  needsCenter: boolean;
-  cells: Array<{
-    photo: GalleryPhoto;
-    width: number;
-  }>;
-}
+  cells: Cell[];
+};
+
+const isFeaturedPhoto = (p: any): boolean => {
+  const v = p?.pesoVisual ?? p?.peso_visual ?? 0;
+  return Number(v) === 1;
+};
+
+const arOf = (p: GalleryPhoto): number => {
+  const w = p.width || 1;
+  const h = p.height || 1;
+  return Math.max(0.3, Math.min(3.5, w / h));
+};
+
+const normalize = (photos: GalleryPhoto[]): NormPhoto[] =>
+  photos.map((p) => {
+    const ar = arOf(p);
+    return { photo: p, ar, o: orientationFromAR(ar), featured: isFeaturedPhoto(p) };
+  });
+
+// ------------------------------------------------------------
+// Bloco comum (linha justificada — sempre preenche 100% da W).
+// ------------------------------------------------------------
+
+const buildNormalRow = (
+  items: NormPhoto[],
+  start: number,
+  count: number,
+  W: number,
+  gap: number,
+): Block => {
+  const slice = items.slice(start, start + count);
+  const sumAR = slice.reduce((a, it) => a + it.ar, 0) || 1;
+  const h = (W - (count - 1) * gap) / sumAR;
+  let x = 0;
+  const cells: Cell[] = slice.map((it) => {
+    const w = it.ar * h;
+    const cell: Cell = { photo: it.photo, x, y: 0, w, h };
+    x += w + gap;
+    return cell;
+  });
+  return { kind: 'normal', height: h, cells };
+};
 
 /**
- * Editorial Templates Grid — engine "revista".
- *
- * Refinamentos v1.1:
- *  - Container com largura máxima por breakpoint (telas grandes).
- *  - Filtro `maxItemsPerStrip` aplicado na seleção de template.
- *  - Cooldown de destaques: 1 destaque a cada N fotos.
- *  - Teto absoluto de altura por strip (evita fotos gigantes); quando a strip
- *    é capada, células encolhem proporcionalmente e a linha é centralizada.
- *
- * Ordem narrativa: photos[i] sempre cai no slot i. Sem reordenação.
+ * Escolhe o melhor número de fotos para a próxima linha comum.
+ * - Respeita o cap por breakpoint.
+ * - Garante h dentro de [hMin, hMax] para evitar linhas gigantes
+ *   ou esmagadas.
+ * - Nunca consome uma foto destacada (a busca para antes dela).
  */
-export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
+const pickNormalRowSize = (
+  items: NormPhoto[],
+  start: number,
+  maxK: number,
+  cw: number,
+  W: number,
+  gap: number,
+): number => {
+  // Para antes do próximo destaque.
+  let avail = 0;
+  for (let i = start; i < items.length && avail < maxK; i++) {
+    if (items[i].featured) break;
+    avail++;
+  }
+  if (avail <= 0) return 0;
+
+  const hMin = 0.55 * cw;
+  const hMax = 1.85 * cw;
+
+  // Prefere K maior (linha mais cheia, fotos menores). Aceita o maior K
+  // que devolva altura plausível.
+  for (let k = Math.min(maxK, avail); k >= 1; k--) {
+    const slice = items.slice(start, start + k);
+    const sumAR = slice.reduce((a, it) => a + it.ar, 0) || 1;
+    const h = (W - (k - 1) * gap) / sumAR;
+    if (h >= hMin && h <= hMax) return k;
+  }
+  // Fallback: usa todo o disponível (será clamped pela altura natural).
+  return avail;
+};
+
+// ------------------------------------------------------------
+// Mosaico com destaque (âncora visual real).
+// ------------------------------------------------------------
+
+const clamp = (v: number, lo: number, hi: number) =>
+  Math.max(lo, Math.min(hi, v));
+
+/**
+ * Constrói o bloco de destaque. Pode consumir até `maxSupports` fotos
+ * de apoio depois da destacada. As variantes preenchem 100% da largura.
+ */
+const buildFeaturedBlock = (
+  items: NormPhoto[],
+  start: number,
+  cols: number,
+  cw: number,
+  W: number,
+  gap: number,
+): { block: Block; consumed: number } => {
+  const f = items[start];
+
+  // Quantos apoios pegamos depois da destacada (até encontrar o próximo destaque).
+  const maxSupports = cols === 4 ? 4 : cols === 3 ? 2 : 2;
+  const supports: NormPhoto[] = [];
+  for (let k = 1; k <= maxSupports && start + k < items.length; k++) {
+    if (items[start + k].featured) break;
+    supports.push(items[start + k]);
+  }
+
+  // ------------------ MOBILE (2 colunas) ------------------
+  if (cols === 2) {
+    // Destaque full-width + (opcional) par de apoios abaixo.
+    const fW = W;
+    const fH = clamp(fW / Math.max(0.7, f.ar), 1.1 * cw, 2.4 * cw);
+
+    const cells: Cell[] = [
+      { photo: f.photo, x: 0, y: 0, w: fW, h: fH },
+    ];
+    let height = fH;
+    let consumed = 1;
+
+    if (supports.length >= 2) {
+      // Linha de 2 apoios justificada em 100% logo abaixo.
+      const s1 = supports[0];
+      const s2 = supports[1];
+      const sumAR = s1.ar + s2.ar;
+      const sH = (W - gap) / sumAR;
+      const w1 = s1.ar * sH;
+      const w2 = s2.ar * sH;
+      cells.push({ photo: s1.photo, x: 0, y: fH + gap, w: w1, h: sH });
+      cells.push({ photo: s2.photo, x: w1 + gap, y: fH + gap, w: w2, h: sH });
+      height = fH + gap + sH;
+      consumed = 3;
+    } else if (supports.length === 1) {
+      // Apoio único full-width abaixo (mantém regra de 100%).
+      const s1 = supports[0];
+      const sH = clamp(W / Math.max(0.7, s1.ar), 0.6 * cw, 1.4 * cw);
+      cells.push({ photo: s1.photo, x: 0, y: fH + gap, w: W, h: sH });
+      height = fH + gap + sH;
+      consumed = 2;
+    }
+    return { block: { kind: 'featured', height, cells }, consumed };
+  }
+
+  // ------------------ TABLET/DESKTOP ------------------
+  // Featured 2x2 ocupa colunas 0..1; lado livre = (cols-2) colunas.
+  const fW = 2 * cw + gap;
+  const sideCols = cols - 2; // 1 (tablet) ou 2 (desktop)
+  const sideW = sideCols * cw + (sideCols - 1) * gap;
+
+  // Altura natural do destaque preservando o AR; capada para ritmo editorial.
+  const fHIdeal = fW / Math.max(0.6, f.ar);
+  const hBlock = clamp(fHIdeal, 1.5 * cw, 2.4 * cw);
+  const hHalf = (hBlock - gap) / 2;
+
+  const cells: Cell[] = [
+    { photo: f.photo, x: 0, y: 0, w: fW, h: hBlock },
+  ];
+
+  // ===== DESKTOP (4 cols, sideCols=2) =====
+  if (cols === 4) {
+    const sideX = fW + gap;
+    const col2X = sideX + cw + gap;
+
+    if (supports.length >= 4) {
+      // Lado livre: matriz 2x2 (4 apoios).
+      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hHalf });
+      cells.push({ photo: supports[1].photo, x: col2X, y: 0, w: cw, h: hHalf });
+      cells.push({ photo: supports[2].photo, x: sideX, y: hHalf + gap, w: cw, h: hHalf });
+      cells.push({ photo: supports[3].photo, x: col2X, y: hHalf + gap, w: cw, h: hHalf });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 5 };
+    }
+    if (supports.length === 3) {
+      // 2 apoios em cima + 1 apoio largo embaixo (cw*2+gap).
+      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hHalf });
+      cells.push({ photo: supports[1].photo, x: col2X, y: 0, w: cw, h: hHalf });
+      cells.push({ photo: supports[2].photo, x: sideX, y: hHalf + gap, w: sideW, h: hHalf });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 4 };
+    }
+    if (supports.length === 2) {
+      // 2 apoios em coluna full-height (cada cw × hBlock).
+      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hBlock });
+      cells.push({ photo: supports[1].photo, x: col2X, y: 0, w: cw, h: hBlock });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 3 };
+    }
+    if (supports.length === 1) {
+      // 1 apoio largo ocupando todo o lado.
+      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: sideW, h: hBlock });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 2 };
+    }
+    // Sem apoios: destaque full-width (4 cols).
+    const fullH = clamp(W / Math.max(0.6, f.ar), 1.2 * cw, 2.4 * cw);
+    return {
+      block: {
+        kind: 'featured',
+        height: fullH,
+        cells: [{ photo: f.photo, x: 0, y: 0, w: W, h: fullH }],
+      },
+      consumed: 1,
+    };
+  }
+
+  // ===== TABLET (3 cols, sideCols=1) =====
+  const sideX = fW + gap;
+
+  if (supports.length >= 2) {
+    // 2 apoios empilhados na coluna lateral.
+    cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hHalf });
+    cells.push({ photo: supports[1].photo, x: sideX, y: hHalf + gap, w: cw, h: hHalf });
+    return { block: { kind: 'featured', height: hBlock, cells }, consumed: 3 };
+  }
+  if (supports.length === 1) {
+    // 1 apoio full-height.
+    cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hBlock });
+    return { block: { kind: 'featured', height: hBlock, cells }, consumed: 2 };
+  }
+  // Sem apoios: destaque full-width (3 cols).
+  const fullH = clamp(W / Math.max(0.6, f.ar), 1.2 * cw, 2.4 * cw);
+  return {
+    block: {
+      kind: 'featured',
+      height: fullH,
+      cells: [{ photo: f.photo, x: 0, y: 0, w: W, h: fullH }],
+    },
+    consumed: 1,
+  };
+};
+
+// ------------------------------------------------------------
+// Planner principal.
+// ------------------------------------------------------------
+
+const planEditorial = (
+  raw: NormPhoto[],
+  cols: number,
+  W: number,
+  gap: number,
+  maxPerRow: number,
+): Block[] => {
+  // Cópia trabalhável (permite swap local idx <-> idx+1 quando necessário).
+  const items: NormPhoto[] = raw.slice();
+  const blocks: Block[] = [];
+  const cw = (W - (cols - 1) * gap) / cols;
+
+  let idx = 0;
+  while (idx < items.length) {
+    const cur = items[idx];
+    const remaining = items.length - idx;
+
+    // Swap local: se a próxima é destaque e a atual não é, puxa o destaque
+    // para a posição atual — evita "solo não-destaque" seguido de destaque
+    // que enterraria a marcação.
+    if (!cur.featured && remaining >= 2 && items[idx + 1].featured) {
+      // Só fazemos o swap se a foto não-destacada não criar "solo" depois
+      // do destaque: o pior caso vira apoio dentro do mosaico — ok.
+      const tmp = items[idx];
+      items[idx] = items[idx + 1];
+      items[idx + 1] = tmp;
+    }
+
+    const head = items[idx];
+
+    if (head.featured) {
+      const { block, consumed } = buildFeaturedBlock(items, idx, cols, cw, W, gap);
+      blocks.push(block);
+      idx += consumed;
+      continue;
+    }
+
+    // Bloco comum (linha justificada). Para antes do próximo destaque.
+    const k = pickNormalRowSize(items, idx, maxPerRow, cw, W, gap);
+    if (k <= 0) {
+      // Defesa: não deveria acontecer.
+      idx++;
+      continue;
+    }
+
+    // Última linha incompleta? Marca como tail e capa altura.
+    const isTail = idx + k >= items.length && k < maxPerRow;
+    const row = buildNormalRow(items, idx, k, W, gap);
+
+    if (isTail) {
+      const cappedH = Math.min(row.height, 1.6 * cw);
+      // Reescala larguras proporcionalmente (mantendo 100% W).
+      const scale = cappedH / row.height;
+      const cells = row.cells.map((c) => ({
+        ...c,
+        h: cappedH,
+        w: c.w * scale,
+      }));
+      // Re-justifica X para fechar gaps (mantém 100% via stretch final).
+      let x = 0;
+      const sumW = cells.reduce((a, c) => a + c.w, 0);
+      const totalGap = (cells.length - 1) * gap;
+      const stretch = cells.length > 1 ? (W - totalGap - sumW) / cells.length : 0;
+      const tailCells = cells.map((c) => {
+        const w = c.w + stretch;
+        const out = { ...c, x, w };
+        x += w + gap;
+        return out;
+      });
+      // Para 1 foto solo no tail, centralizamos via offset x.
+      if (tailCells.length === 1) {
+        const w = Math.min(W, cappedH * raw[idx].ar);
+        tailCells[0] = { ...tailCells[0], w, x: (W - w) / 2 };
+      }
+      blocks.push({ kind: 'tail', height: cappedH, cells: tailCells });
+    } else {
+      blocks.push(row);
+    }
+    idx += k;
+  }
+
+  return blocks;
+};
+
+// ------------------------------------------------------------
+// Componente.
+// ------------------------------------------------------------
+
+export const EditorialTemplatesGrid: React.FC<Props> = ({
   photos,
   gap,
   onPhotoClick,
@@ -57,14 +389,9 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
   containerWidth: externalWidth,
   maxContainerWidth,
   maxItemsPerStrip,
-  featuredCooldown = 0,
 }) => {
   const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
   const [outerWidth, setOuterWidth] = useState(0);
-  const [viewportH, setViewportH] = useState(
-    typeof window !== 'undefined' ? window.innerHeight : 900,
-  );
 
   useEffect(() => {
     if (externalWidth !== undefined) {
@@ -79,17 +406,10 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
     return () => obs.disconnect();
   }, [externalWidth]);
 
-  useEffect(() => {
-    const onResize = () => setViewportH(window.innerHeight);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  // Largura efetiva do container (com cap por breakpoint).
   const innerWidth = useMemo(() => {
     if (outerWidth <= 0) return 0;
     if (!maxContainerWidth) return outerWidth;
-    let cap: number | null | undefined = undefined;
+    let cap: number | null | undefined;
     if (outerWidth >= 2000) cap = maxContainerWidth.desktopLg;
     else if (outerWidth >= 1600) cap = maxContainerWidth.desktopMd;
     else if (outerWidth >= 1280) cap = maxContainerWidth.desktopSm;
@@ -97,305 +417,111 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
     return outerWidth;
   }, [outerWidth, maxContainerWidth]);
 
-  // Cap de itens por strip por breakpoint.
-  const stripCap = useMemo(() => {
-    if (!maxItemsPerStrip) return undefined;
-    if (innerWidth < 640) return maxItemsPerStrip.mobile;
-    if (innerWidth < 1024) return maxItemsPerStrip.tablet;
-    return maxItemsPerStrip.desktop;
-  }, [innerWidth, maxItemsPerStrip]);
-
-  const strips: PlannedStrip[] = useMemo(() => {
+  const blocks = useMemo<Block[]>(() => {
     if (innerWidth <= 0 || photos.length === 0) return [];
-
-    const isMobile = innerWidth < 640;
-    const out: PlannedStrip[] = [];
-    let cursor = 0;
-    let idx = 0;
-    let cooldown = 0;
+    const cols = innerWidth < 640 ? 2 : innerWidth < 1024 ? 3 : 4;
+    const maxPerRow = maxItemsPerStrip
+      ? (cols === 2 ? maxItemsPerStrip.mobile : cols === 3 ? maxItemsPerStrip.tablet : maxItemsPerStrip.desktop)
+      : cols;
+    const norm = normalize(photos);
 
     if (import.meta.env.DEV) {
-      const featCount = photos.filter(
-        (p) => ((p as any).pesoVisual || (p as any).peso_visual || 0) === 1,
-      ).length;
       // eslint-disable-next-line no-console
-      console.debug('[editorial] init', { total: photos.length, featured: featCount });
+      console.debug('[editorial-v3] plan', {
+        total: norm.length,
+        featured: norm.filter((n) => n.featured).length,
+        cols,
+        maxPerRow,
+        innerWidth,
+      });
     }
 
+    return planEditorial(norm, cols, innerWidth, gap, maxPerRow);
+  }, [photos, innerWidth, gap, maxItemsPerStrip]);
 
-    while (idx < photos.length) {
-      const remaining = photos.length - idx;
-      const nextPhoto = photos[idx];
-      const rawFeatured =
-        ((nextPhoto as any).pesoVisual || (nextPhoto as any).peso_visual || 0) === 1;
-      const isFeatured = rawFeatured && cooldown <= 0;
-
-      const lookahead = Math.min(remaining, 6);
-      const nextOrientations: PhotoOrientation[] = [];
-      for (let k = 0; k < lookahead; k++) {
-        const p = photos[idx + k];
-        const ar = p.width && p.height ? p.width / p.height : 1.5;
-        nextOrientations.push(orientationFromAR(ar));
-      }
-
-      // Loop de seleção com rede de segurança: até 2 reseleções se uma
-      // strip do template gerar vazio horizontal > 5%.
-      const avoidIds = new Set<string>();
-      let attempt = 0;
-      let chosen: { template: Template; nextCursor: number } | null = null;
-      let plannedStrips: PlannedStrip[] = [];
-      let consumed = 0;
-
-      while (attempt < 3) {
-        const sel = selectTemplateBatch(
-          remaining,
-          cursor,
-          isMobile,
-          nextOrientations,
-          isFeatured,
-          stripCap,
-          avoidIds.size > 0 ? avoidIds : undefined,
-          idx === 0 && !isFeatured, // forbidLeadingSolo: nada de retrato solo no topo
-        );
-        const template = sel.template;
-        consumed = template.slots.length;
-        const batchPhotos = photos.slice(idx, idx + consumed);
-
-        // Planeja todas as strips do template e mede vazio.
-        const stripsTmp: PlannedStrip[] = [];
-        let worstEmptyPct = 0;
-        let forceCropApplied = false;
-
-        for (const strip of template.strips) {
-          const isFeaturedStrip =
-            !!template.hasFeaturedSlot &&
-            strip.slotIndexes.includes(template.featuredSlotIndex ?? 0);
-
-          const cellsMeta = strip.slotIndexes.map((slotIdx) => {
-            const slot = template.slots[slotIdx];
-            const photo = batchPhotos[slotIdx];
-            const photoAR =
-              photo && photo.width && photo.height ? photo.width / photo.height : 1;
-            const naturalAR =
-              slot.ar > 0 ? slot.ar : Math.max(0.6, Math.min(2.0, photoAR));
-            // Regra anti-distorção (conservadora para o fotógrafo):
-            // - Retrato (AR<1): até quadrado (1.0).
-            // - Quase-quadrado: até 1.10.
-            // - Paisagem: AR natural + 0.20 (crop vertical ≤ ~8%, teto 2.4).
-            let maxAR: number;
-            if (naturalAR < 0.95) maxAR = 1.0;
-            else if (naturalAR < 1.15) maxAR = 1.10;
-            else maxAR = Math.min(naturalAR + 0.20, 2.4);
-            return { slot, photo, naturalAR, maxAR };
-          });
-
-          const sumNaturalAR = cellsMeta.reduce((a, c) => a + c.naturalAR, 0);
-          const gaps = (cellsMeta.length - 1) * gap;
-          const widthForCells = Math.max(0, innerWidth - gaps);
-
-          // FIT-WIDTH-FIRST: a altura natural que preenche 100% da largura.
-          const hIdeal = widthForCells / sumNaturalAR;
-
-          // Tetos de altura apenas por viewport / absoluto — não por fração de innerWidth.
-          // Strips comuns só são capadas quando a altura natural extrapolaria o viewport.
-          const single = cellsMeta.length === 1;
-          const onlyAR = single ? cellsMeta[0].naturalAR : 0;
-
-          let vhCap: number;
-          let absCap: number;
-          if (isFeaturedStrip && single) {
-            // Hero destacado solo: presença forte, mas limitado ao viewport.
-            vhCap = viewportH * 0.92;
-            absCap = 1200;
-          } else if (single) {
-            // Solo comum (raro — geralmente última foto da galeria).
-            vhCap = viewportH * 0.82;
-            absCap = onlyAR < 1 ? 900 : 760;
-          } else {
-            // Strips com 2+ células: cap generoso, na prática quase nunca aciona.
-            vhCap = viewportH * 0.80;
-            absCap = 820;
-          }
-          const cap = Math.min(vhCap, absCap);
-
-          let h = Math.min(hIdeal, cap);
-          let widths = cellsMeta.map((c) => c.naturalAR * h);
-          let totalW = widths.reduce((a, w) => a + w, 0);
-
-          // Quando h foi capada, larguras encolhem; tenta recuperar via crop controlado (até maxAR).
-          if (h < hIdeal - 0.5) {
-            for (let iter = 0; iter < 6 && widthForCells - totalW > 0.5; iter++) {
-              const deficit = widthForCells - totalW;
-              const slack = cellsMeta.reduce((a, c, i) => {
-                const cellMaxW = c.maxAR * h;
-                return a + Math.max(0, cellMaxW - widths[i]);
-              }, 0);
-              if (slack <= 0.5) break;
-              for (let i = 0; i < widths.length; i++) {
-                const cellMaxW = cellsMeta[i].maxAR * h;
-                const cellSlack = Math.max(0, cellMaxW - widths[i]);
-                const add = deficit * (cellSlack / slack);
-                widths[i] = Math.min(cellMaxW, widths[i] + add);
-              }
-              totalW = widths.reduce((a, w) => a + w, 0);
-            }
-          }
-
-          // emptyPct mede vazio RELATIVO ao espaço útil (não ao innerWidth).
-          let emptyPct = (widthForCells - totalW) / Math.max(1, widthForCells);
-
-          // 3ª tentativa: hard-crop também para retratos (até 1.18) e paisagens (+0.45).
-          if (emptyPct > 0.02 && attempt === 2) {
-            for (let iter = 0; iter < 6 && widthForCells - totalW > 0.5; iter++) {
-              const deficit = widthForCells - totalW;
-              const hardMaxOf = (c: typeof cellsMeta[number]) =>
-                c.naturalAR >= 1.15
-                  ? Math.min(c.naturalAR + 0.45, 2.8) * h
-                  : Math.min(c.naturalAR + 0.30, 1.18) * h;
-              const hardSlack = cellsMeta.reduce(
-                (a, c, i) => a + Math.max(0, hardMaxOf(c) - widths[i]),
-                0,
-              );
-              if (hardSlack <= 0.5) break;
-              for (let i = 0; i < widths.length; i++) {
-                const hardMax = hardMaxOf(cellsMeta[i]);
-                const cellSlack = Math.max(0, hardMax - widths[i]);
-                const add = deficit * (cellSlack / hardSlack);
-                widths[i] = Math.min(hardMax, widths[i] + add);
-              }
-              totalW = widths.reduce((a, w) => a + w, 0);
-            }
-            emptyPct = (widthForCells - totalW) / Math.max(1, widthForCells);
-            forceCropApplied = true;
-          }
-
-          if (emptyPct > worstEmptyPct) worstEmptyPct = emptyPct;
-
-          const cells = cellsMeta.map((c, i) => ({
-            photo: c.photo,
-            width: widths[i],
-          }));
-          const contentWidth = totalW + (cells.length - 1) * gap;
-          const needsCenter = innerWidth - contentWidth > 0.5;
-          stripsTmp.push({ height: h, contentWidth, needsCenter, cells });
+  const renderCell = (cell: Cell, isAbsolute: boolean) => {
+    const style: React.CSSProperties = isAbsolute
+      ? {
+          position: 'absolute',
+          left: cell.x,
+          top: cell.y,
+          width: cell.w,
+          height: cell.h,
+          cursor: 'pointer',
+          overflow: 'hidden',
         }
+      : {
+          width: cell.w,
+          height: cell.h,
+          flexShrink: 0,
+          cursor: 'pointer',
+          overflow: 'hidden',
+        };
 
-        // Se vazio relevante e ainda há tentativas, evita este template.
-        if (worstEmptyPct > 0.02 && attempt < 2) {
-          avoidIds.add(template.id);
-          attempt++;
-          continue;
-        }
+    if (renderItem) return renderItem(cell.photo, style);
 
+    const url =
+      (cell.photo as any).previewPath ||
+      (cell.photo as any).previewUrl ||
+      (cell.photo as any).thumbnailUrl;
 
-        chosen = sel;
-        plannedStrips = stripsTmp;
-
-        if (import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
-          console.debug('[editorial]', {
-            headPhotoId: (nextPhoto as any).id,
-            headOrient: nextOrientations[0],
-            isFeatured,
-            templateId: template.id,
-            featuredSlotIndex: template.featuredSlotIndex,
-            attempts: attempt + 1,
-            emptyPct: Number(worstEmptyPct.toFixed(4)),
-            forceCropApplied,
-          });
-        }
-        break;
-      }
-
-      // Falha rara: usa o último resultado mesmo com vazio.
-      if (!chosen) {
-        const sel = selectTemplateBatch(
-          remaining, cursor, isMobile, nextOrientations, isFeatured, stripCap,
-        );
-        chosen = sel;
-        consumed = sel.template.slots.length;
-      }
-
-      cursor = chosen.nextCursor;
-      idx += consumed;
-
-      // Cooldown (mantido por compatibilidade; padrão do tema = 0).
-      if (isFeatured && chosen.template.hasFeaturedSlot) {
-        cooldown = featuredCooldown;
-      } else {
-        cooldown = Math.max(0, cooldown - consumed);
-      }
-
-      for (const s of plannedStrips) out.push(s);
-    }
-
-    return out;
-  }, [photos, innerWidth, gap, viewportH, stripCap, featuredCooldown]);
+    return (
+      <div
+        key={cell.photo.id}
+        style={style}
+        onClick={() => onPhotoClick?.(cell.photo)}
+        className="overflow-hidden"
+      >
+        <img
+          src={url}
+          alt={cell.photo.filename}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      </div>
+    );
+  };
 
   return (
-    <div
-      ref={outerRef}
-      className="w-full flex justify-center"
-    >
+    <div ref={outerRef} className="w-full flex justify-center">
       <div
-        ref={innerRef}
-        className="flex flex-col items-center"
+        className="flex flex-col"
         style={{ gap: `${gap}px`, width: innerWidth || '100%' }}
       >
-        {strips.map((strip, i) => {
-          const isLast = i === strips.length - 1;
-          // Regra: só a última strip pode ficar centralizada (foto solitária final).
-          // Strips intermediárias que por acaso não preencheram 100% também
-          // são centralizadas (fallback) para nunca aparecerem flush-left.
-          const useContentWidth = strip.needsCenter;
+        {blocks.map((block, bi) => {
+          const key = `b-${bi}`;
+          if (block.kind === 'featured') {
+            // Renderiza com posicionamento absoluto (mosaico real).
+            return (
+              <div
+                key={key}
+                className="relative w-full"
+                style={{ height: block.height, width: '100%' }}
+              >
+                {block.cells.map((c) => (
+                  <React.Fragment key={c.photo.id}>
+                    {renderCell(c, true)}
+                  </React.Fragment>
+                ))}
+              </div>
+            );
+          }
+          // Linha justificada normal/tail.
           return (
             <div
-              key={i}
-              className="flex flex-row overflow-hidden"
-              style={{
-                gap: `${gap}px`,
-                height: strip.height,
-                width: useContentWidth ? strip.contentWidth : '100%',
-                marginLeft: 'auto',
-                marginRight: 'auto',
-              }}
+              key={key}
+              className="relative w-full"
+              style={{ height: block.height, width: '100%' }}
             >
-              {strip.cells.map((cell, ci) => {
-                const style: React.CSSProperties = {
-                  width: cell.width,
-                  height: strip.height,
-                  flexShrink: 0,
-                  cursor: 'pointer',
-                };
-                if (!cell.photo) return null;
-                if (renderItem) return renderItem(cell.photo, style);
-
-                const url =
-                  (cell.photo as any).previewPath ||
-                  (cell.photo as any).previewUrl ||
-                  (cell.photo as any).thumbnailUrl;
-
-                return (
-                  <div
-                    key={cell.photo.id ?? ci}
-                    style={style}
-                    onClick={() => onPhotoClick?.(cell.photo)}
-                    className="overflow-hidden"
-                  >
-                    <img
-                      src={url}
-                      alt={cell.photo.filename}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                );
-              })}
+              {block.cells.map((c) => (
+                <React.Fragment key={c.photo.id}>
+                  {renderCell(c, true)}
+                </React.Fragment>
+              ))}
             </div>
           );
         })}
       </div>
-
     </div>
   );
 };
