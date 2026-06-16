@@ -3,26 +3,25 @@ import { GalleryPhoto } from '@/types/gallery';
 import { orientationFromAR, PhotoOrientation } from './editorialTemplates';
 
 /**
- * Editorial Planner V3
+ * Editorial Planner V4
  * --------------------
- * Substitui a seleção cíclica de templates por um planner espacial
- * orientado a blocos:
- *
- *   - normal-row  : 1..maxPerRow células justificadas em 100% da largura.
- *   - featured    : mosaico com a foto destacada como âncora 2x2 (desktop/tablet)
- *                   ou full-width (mobile), preenchendo 100% da largura.
- *   - tail        : último resíduo da galeria (única posição onde
- *                   incompleto é tolerado).
+ * Evolução do V3 com foco em HIERARQUIA REAL de destaque e ritmo
+ * editorial variado.
  *
  * Garantias:
- *   1. Toda foto com peso_visual=1 vira âncora visual (nunca consumida
- *      como apoio comum no meio da galeria).
- *   2. Foto sem destaque nunca recebe tratamento de hero/destaque.
- *   3. Blocos intermediários ocupam 100% da largura útil (matematicamente).
- *   4. Apenas o bloco final (tail) pode ficar incompleto.
- *   5. Ordem narrativa preservada; permitida apenas troca local entre
- *      idx e idx+1 quando isso evita um solo não-destaque seguido de
- *      destaque (puxa destaque para a âncora).
+ *  1. Toda foto com peso_visual=1 vira âncora visual (2x2 desktop/tablet,
+ *     full-width mobile) e nunca é consumida como apoio.
+ *  2. Foto sem destaque nunca recebe linha justificada gigante:
+ *     - Desktop: linhas comuns têm K ∈ {3,4}. Nunca 1 ou 2 no meio.
+ *     - Tablet:  linhas comuns têm K ∈ {2,3}. Nunca 1 no meio.
+ *     - Mobile:  linhas comuns têm K = 2. K=1 só no tail final.
+ *  3. Quando antes de um destaque sobram 1, 2 ou 5 fotos comuns (desktop)
+ *     que dariam linha tosca, elas são ABSORVIDAS como apoios laterais do
+ *     bloco de destaque seguinte.
+ *  4. Lado da âncora alterna entre blocos (esquerda/direita) para quebrar
+ *     a sensação de padrão repetitivo.
+ *  5. Blocos intermediários SEMPRE preenchem 100% da largura útil.
+ *  6. Apenas o tail (final da galeria) pode ser incompleto/centralizado.
  */
 
 interface Props {
@@ -37,7 +36,7 @@ interface Props {
     desktopLg?: number | null;
   };
   maxItemsPerStrip?: { mobile: number; tablet: number; desktop: number };
-  /** Mantido por compat — não usado pelo planner V3. */
+  /** Mantido por compat — não usado pelo planner V4. */
   featuredCooldown?: number;
 }
 
@@ -62,6 +61,16 @@ type Block = {
   cells: Cell[];
 };
 
+type AnchorSide = 'left' | 'right';
+
+interface PlanCtx {
+  cols: number;
+  cw: number;
+  W: number;
+  gap: number;
+  lastAnchorSide: AnchorSide | null;
+}
+
 const isFeaturedPhoto = (p: any): boolean => {
   const v = p?.pesoVisual ?? p?.peso_visual ?? 0;
   return Number(v) === 1;
@@ -79,11 +88,14 @@ const normalize = (photos: GalleryPhoto[]): NormPhoto[] =>
     return { photo: p, ar, o: orientationFromAR(ar), featured: isFeaturedPhoto(p) };
   });
 
+const clamp = (v: number, lo: number, hi: number) =>
+  Math.max(lo, Math.min(hi, v));
+
 // ------------------------------------------------------------
-// Bloco comum (linha justificada — sempre preenche 100% da W).
+// Linha justificada (sempre preenche 100% da W).
 // ------------------------------------------------------------
 
-const buildNormalRow = (
+const buildJustifiedRow = (
   items: NormPhoto[],
   start: number,
   count: number,
@@ -103,89 +115,138 @@ const buildNormalRow = (
   return { kind: 'normal', height: h, cells };
 };
 
+// ------------------------------------------------------------
+// Particionamento de comuns em chunks "limpos".
+// Desktop: usa 3s e 4s. Tablet: usa 2s e 3s. Mobile: pares.
+// Pressupõe que `n` foi escolhido por chooseAbsorb para ser válido.
+// ------------------------------------------------------------
+
+const partitionDesktop = (n: number): number[] => {
+  // Conjunto não-particionável em {3,4}: {1, 2, 5}.
+  // Para qualquer outro n>=0, monta como 4s + um eventual 3 ou 3,3.
+  if (n <= 0) return [];
+  if (n === 3) return [3];
+  if (n === 4) return [4];
+  if (n === 6) return [3, 3];
+  if (n === 7) return [4, 3];
+  if (n === 8) return [4, 4];
+  if (n === 9) return [3, 3, 3];
+  // n >= 10: aplica 4s até resto cair em {3,4,6,7,8,9}.
+  const out: number[] = [];
+  let r = n;
+  while (r > 9) {
+    out.push(4);
+    r -= 4;
+  }
+  return [...out, ...partitionDesktop(r)];
+};
+
+const partitionTablet = (n: number): number[] => {
+  // Conjunto não-particionável em {2,3}: {1}.
+  if (n <= 0) return [];
+  if (n === 2) return [2];
+  if (n === 3) return [3];
+  if (n === 4) return [2, 2];
+  if (n === 5) return [3, 2];
+  const out: number[] = [];
+  let r = n;
+  while (r > 5) {
+    out.push(3);
+    r -= 3;
+  }
+  return [...out, ...partitionTablet(r)];
+};
+
+const partitionMobile = (n: number): number[] => {
+  // Pares; só sobra 1 no final.
+  const out: number[] = [];
+  let r = n;
+  while (r >= 2) {
+    out.push(2);
+    r -= 2;
+  }
+  if (r === 1) out.push(1);
+  return out;
+};
+
+const partitionCommons = (n: number, cols: number): number[] => {
+  if (cols === 4) return partitionDesktop(n);
+  if (cols === 3) return partitionTablet(n);
+  return partitionMobile(n);
+};
+
+const isValidCommonCount = (n: number, cols: number): boolean => {
+  if (n === 0) return true;
+  if (cols === 4) return n !== 1 && n !== 2 && n !== 5;
+  if (cols === 3) return n !== 1;
+  return n % 2 === 0;
+};
+
 /**
- * Escolhe o melhor número de fotos para a próxima linha comum.
- * - Respeita o cap por breakpoint.
- * - Garante h dentro de [hMin, hMax] para evitar linhas gigantes
- *   ou esmagadas.
- * - Nunca consome uma foto destacada (a busca para antes dela).
+ * Escolhe quantas fotos comuns (entre 0 e maxBudget) o próximo bloco de
+ * destaque deve "absorver" como apoios laterais, para que as comuns
+ * restantes formem somente linhas válidas (3 ou 4 desktop, 2 ou 3 tablet,
+ * pares no mobile). Prefere absorver MENOS para manter densidade.
  */
-const pickNormalRowSize = (
-  items: NormPhoto[],
-  start: number,
-  maxK: number,
-  cw: number,
-  W: number,
-  gap: number,
-): number => {
-  // Para antes do próximo destaque.
-  let avail = 0;
-  for (let i = start; i < items.length && avail < maxK; i++) {
-    if (items[i].featured) break;
-    avail++;
+const chooseAbsorb = (total: number, cols: number, maxBudget: number): number => {
+  const cap = Math.min(total, maxBudget);
+  for (let absorb = 0; absorb <= cap; absorb++) {
+    if (isValidCommonCount(total - absorb, cols)) return absorb;
   }
-  if (avail <= 0) return 0;
-
-  const hMin = 0.55 * cw;
-  const hMax = 1.85 * cw;
-
-  // Prefere K maior (linha mais cheia, fotos menores). Aceita o maior K
-  // que devolva altura plausível.
-  for (let k = Math.min(maxK, avail); k >= 1; k--) {
-    const slice = items.slice(start, start + k);
-    const sumAR = slice.reduce((a, it) => a + it.ar, 0) || 1;
-    const h = (W - (k - 1) * gap) / sumAR;
-    if (h >= hMin && h <= hMax) return k;
-  }
-  // Fallback: usa todo o disponível (será clamped pela altura natural).
-  return avail;
+  return cap;
 };
 
 // ------------------------------------------------------------
-// Mosaico com destaque (âncora visual real).
+// Bloco de destaque (V4).
+// Posicionamento absoluto. Âncora 2x2 (desktop/tablet) ou full-width
+// (mobile). Lado da âncora alterna para variar o ritmo.
 // ------------------------------------------------------------
 
-const clamp = (v: number, lo: number, hi: number) =>
-  Math.max(lo, Math.min(hi, v));
+const computeAnchorHeight = (ar: number, cw: number): number => {
+  const fW = 2 * cw + 0; // gap é pequeno; ignorado para clamp por cw.
+  const ideal = fW / Math.max(0.6, ar);
+  // Min subiu (1.5 -> 1.7) para garantir destaque > comum de 3 retratos.
+  return clamp(ideal, 1.7 * cw, 2.45 * cw);
+};
 
-/**
- * Constrói o bloco de destaque. Pode consumir até `maxSupports` fotos
- * de apoio depois da destacada. As variantes preenchem 100% da largura.
- */
-const buildFeaturedBlock = (
+interface FeaturedResult {
+  block: Block;
+  consumed: number;        // total de itens consumidos a partir de `beforeStart`
+  anchorSide: AnchorSide;  // lado escolhido (left/right) — para alternância
+}
+
+const buildFeaturedV4 = (
   items: NormPhoto[],
-  start: number,
-  cols: number,
-  cw: number,
-  W: number,
-  gap: number,
-): { block: Block; consumed: number } => {
-  const f = items[start];
+  beforeStart: number,
+  beforeCount: number,
+  featuredIdx: number,
+  ctx: PlanCtx,
+): FeaturedResult => {
+  const { cols, cw, W, gap, lastAnchorSide } = ctx;
+  const f = items[featuredIdx];
 
-  // Quantos apoios pegamos depois da destacada (até encontrar o próximo destaque).
-  const maxSupports = cols === 4 ? 4 : cols === 3 ? 2 : 2;
-  const supports: NormPhoto[] = [];
-  for (let k = 1; k <= maxSupports && start + k < items.length; k++) {
-    if (items[start + k].featured) break;
-    supports.push(items[start + k]);
+  // Apoios "depois" da destacada (até encontrar próxima destacada).
+  const targetSupports = cols === 4 ? 4 : 2;
+  const needFromAfter = Math.max(0, targetSupports - beforeCount);
+  const afterSupports: NormPhoto[] = [];
+  for (let k = 1; k <= needFromAfter && featuredIdx + k < items.length; k++) {
+    if (items[featuredIdx + k].featured) break;
+    afterSupports.push(items[featuredIdx + k]);
   }
+  const beforeSupports = items.slice(beforeStart, beforeStart + beforeCount);
+  const supports = [...beforeSupports, ...afterSupports];
+  const afterConsumed = afterSupports.length;
 
-  // ------------------ MOBILE (2 colunas) ------------------
+  // Alterna lado.
+  const anchorSide: AnchorSide = lastAnchorSide === 'left' ? 'right' : 'left';
+
+  // ===== MOBILE (cols=2) =====
   if (cols === 2) {
-    // Destaque full-width + (opcional) par de apoios abaixo.
-    const fW = W;
-    const fH = clamp(fW / Math.max(0.7, f.ar), 1.1 * cw, 2.4 * cw);
-
-    const cells: Cell[] = [
-      { photo: f.photo, x: 0, y: 0, w: fW, h: fH },
-    ];
+    const fH = clamp(W / Math.max(0.7, f.ar), 1.25 * cw, 2.4 * cw);
+    const cells: Cell[] = [{ photo: f.photo, x: 0, y: 0, w: W, h: fH }];
     let height = fH;
-    let consumed = 1;
-
     if (supports.length >= 2) {
-      // Linha de 2 apoios justificada em 100% logo abaixo.
-      const s1 = supports[0];
-      const s2 = supports[1];
+      const [s1, s2] = supports;
       const sumAR = s1.ar + s2.ar;
       const sH = (W - gap) / sumAR;
       const w1 = s1.ar * sH;
@@ -193,104 +254,125 @@ const buildFeaturedBlock = (
       cells.push({ photo: s1.photo, x: 0, y: fH + gap, w: w1, h: sH });
       cells.push({ photo: s2.photo, x: w1 + gap, y: fH + gap, w: w2, h: sH });
       height = fH + gap + sH;
-      consumed = 3;
     } else if (supports.length === 1) {
-      // Apoio único full-width abaixo (mantém regra de 100%).
       const s1 = supports[0];
-      const sH = clamp(W / Math.max(0.7, s1.ar), 0.6 * cw, 1.4 * cw);
+      const sH = clamp(W / Math.max(0.7, s1.ar), 0.55 * cw, 1.3 * cw);
       cells.push({ photo: s1.photo, x: 0, y: fH + gap, w: W, h: sH });
       height = fH + gap + sH;
-      consumed = 2;
     }
-    return { block: { kind: 'featured', height, cells }, consumed };
-  }
-
-  // ------------------ TABLET/DESKTOP ------------------
-  // Featured 2x2 ocupa colunas 0..1; lado livre = (cols-2) colunas.
-  const fW = 2 * cw + gap;
-  const sideCols = cols - 2; // 1 (tablet) ou 2 (desktop)
-  const sideW = sideCols * cw + (sideCols - 1) * gap;
-
-  // Altura natural do destaque preservando o AR; capada para ritmo editorial.
-  const fHIdeal = fW / Math.max(0.6, f.ar);
-  const hBlock = clamp(fHIdeal, 1.5 * cw, 2.4 * cw);
-  const hHalf = (hBlock - gap) / 2;
-
-  const cells: Cell[] = [
-    { photo: f.photo, x: 0, y: 0, w: fW, h: hBlock },
-  ];
-
-  // ===== DESKTOP (4 cols, sideCols=2) =====
-  if (cols === 4) {
-    const sideX = fW + gap;
-    const col2X = sideX + cw + gap;
-
-    if (supports.length >= 4) {
-      // Lado livre: matriz 2x2 (4 apoios).
-      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hHalf });
-      cells.push({ photo: supports[1].photo, x: col2X, y: 0, w: cw, h: hHalf });
-      cells.push({ photo: supports[2].photo, x: sideX, y: hHalf + gap, w: cw, h: hHalf });
-      cells.push({ photo: supports[3].photo, x: col2X, y: hHalf + gap, w: cw, h: hHalf });
-      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 5 };
-    }
-    if (supports.length === 3) {
-      // 2 apoios em cima + 1 apoio largo embaixo (cw*2+gap).
-      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hHalf });
-      cells.push({ photo: supports[1].photo, x: col2X, y: 0, w: cw, h: hHalf });
-      cells.push({ photo: supports[2].photo, x: sideX, y: hHalf + gap, w: sideW, h: hHalf });
-      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 4 };
-    }
-    if (supports.length === 2) {
-      // 2 apoios em coluna full-height (cada cw × hBlock).
-      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hBlock });
-      cells.push({ photo: supports[1].photo, x: col2X, y: 0, w: cw, h: hBlock });
-      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 3 };
-    }
-    if (supports.length === 1) {
-      // 1 apoio largo ocupando todo o lado.
-      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: sideW, h: hBlock });
-      return { block: { kind: 'featured', height: hBlock, cells }, consumed: 2 };
-    }
-    // Sem apoios: destaque full-width (4 cols).
-    const fullH = clamp(W / Math.max(0.6, f.ar), 1.2 * cw, 2.4 * cw);
     return {
-      block: {
-        kind: 'featured',
-        height: fullH,
-        cells: [{ photo: f.photo, x: 0, y: 0, w: W, h: fullH }],
-      },
-      consumed: 1,
+      block: { kind: 'featured', height, cells },
+      consumed: beforeCount + 1 + afterConsumed,
+      anchorSide: 'left', // mobile não alterna (full-width)
     };
   }
 
-  // ===== TABLET (3 cols, sideCols=1) =====
-  const sideX = fW + gap;
+  // ===== DESKTOP/TABLET =====
+  const fW = 2 * cw + gap;
+  const sideCols = cols - 2;            // 2 desktop, 1 tablet
+  const sideW = sideCols * cw + Math.max(0, sideCols - 1) * gap;
 
+  const hBlock = computeAnchorHeight(f.ar, cw);
+  const hHalf = (hBlock - gap) / 2;
+
+  const anchorX = anchorSide === 'left' ? 0 : sideW + gap;
+  const sideX = anchorSide === 'left' ? fW + gap : 0;
+
+  const cells: Cell[] = [{ photo: f.photo, x: anchorX, y: 0, w: fW, h: hBlock }];
+
+  // ----- DESKTOP (cols=4) -----
+  if (cols === 4) {
+    const col2DX = cw + gap;
+    if (supports.length >= 4) {
+      cells.push({ photo: supports[0].photo, x: sideX,            y: 0,            w: cw, h: hHalf });
+      cells.push({ photo: supports[1].photo, x: sideX + col2DX,   y: 0,            w: cw, h: hHalf });
+      cells.push({ photo: supports[2].photo, x: sideX,            y: hHalf + gap,  w: cw, h: hHalf });
+      cells.push({ photo: supports[3].photo, x: sideX + col2DX,   y: hHalf + gap,  w: cw, h: hHalf });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: beforeCount + 1 + afterConsumed, anchorSide };
+    }
+    if (supports.length === 3) {
+      cells.push({ photo: supports[0].photo, x: sideX,            y: 0,           w: cw,    h: hHalf });
+      cells.push({ photo: supports[1].photo, x: sideX + col2DX,   y: 0,           w: cw,    h: hHalf });
+      cells.push({ photo: supports[2].photo, x: sideX,            y: hHalf + gap, w: sideW, h: hHalf });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: beforeCount + 1 + afterConsumed, anchorSide };
+    }
+    if (supports.length === 2) {
+      cells.push({ photo: supports[0].photo, x: sideX,            y: 0, w: cw, h: hBlock });
+      cells.push({ photo: supports[1].photo, x: sideX + col2DX,   y: 0, w: cw, h: hBlock });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: beforeCount + 1 + afterConsumed, anchorSide };
+    }
+    if (supports.length === 1) {
+      cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: sideW, h: hBlock });
+      return { block: { kind: 'featured', height: hBlock, cells }, consumed: beforeCount + 1 + afterConsumed, anchorSide };
+    }
+    const fullH = clamp(W / Math.max(0.6, f.ar), 1.3 * cw, 2.4 * cw);
+    return {
+      block: { kind: 'featured', height: fullH, cells: [{ photo: f.photo, x: 0, y: 0, w: W, h: fullH }] },
+      consumed: 1,
+      anchorSide,
+    };
+  }
+
+  // ----- TABLET (cols=3, sideCols=1) -----
   if (supports.length >= 2) {
-    // 2 apoios empilhados na coluna lateral.
-    cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hHalf });
+    cells.push({ photo: supports[0].photo, x: sideX, y: 0,           w: cw, h: hHalf });
     cells.push({ photo: supports[1].photo, x: sideX, y: hHalf + gap, w: cw, h: hHalf });
-    return { block: { kind: 'featured', height: hBlock, cells }, consumed: 3 };
+    return { block: { kind: 'featured', height: hBlock, cells }, consumed: beforeCount + 1 + afterConsumed, anchorSide };
   }
   if (supports.length === 1) {
-    // 1 apoio full-height.
     cells.push({ photo: supports[0].photo, x: sideX, y: 0, w: cw, h: hBlock });
-    return { block: { kind: 'featured', height: hBlock, cells }, consumed: 2 };
+    return { block: { kind: 'featured', height: hBlock, cells }, consumed: beforeCount + 1 + afterConsumed, anchorSide };
   }
-  // Sem apoios: destaque full-width (3 cols).
-  const fullH = clamp(W / Math.max(0.6, f.ar), 1.2 * cw, 2.4 * cw);
+  const fullH = clamp(W / Math.max(0.6, f.ar), 1.3 * cw, 2.4 * cw);
   return {
-    block: {
-      kind: 'featured',
-      height: fullH,
-      cells: [{ photo: f.photo, x: 0, y: 0, w: W, h: fullH }],
-    },
+    block: { kind: 'featured', height: fullH, cells: [{ photo: f.photo, x: 0, y: 0, w: W, h: fullH }] },
     consumed: 1,
+    anchorSide,
   };
 };
 
 // ------------------------------------------------------------
-// Planner principal.
+// Tail final (única posição onde k=1/k=2 são permitidos no meio?
+// Não — k=1/k=2 só aqui).
+// ------------------------------------------------------------
+
+const buildTailBlock = (
+  items: NormPhoto[],
+  start: number,
+  count: number,
+  W: number,
+  gap: number,
+  cw: number,
+): Block => {
+  const row = buildJustifiedRow(items, start, count, W, gap);
+  const cappedH = Math.min(row.height, 1.55 * cw);
+  if (count === 1) {
+    const ar = items[start].ar;
+    const w = Math.min(W, cappedH * ar);
+    return {
+      kind: 'tail',
+      height: cappedH,
+      cells: [{ photo: items[start].photo, x: (W - w) / 2, y: 0, w, h: cappedH }],
+    };
+  }
+  // Reescala mantendo 100% W.
+  const scale = cappedH / row.height;
+  const scaled = row.cells.map((c) => ({ ...c, h: cappedH, w: c.w * scale }));
+  const sumW = scaled.reduce((a, c) => a + c.w, 0);
+  const totalGap = (scaled.length - 1) * gap;
+  const stretch = (W - totalGap - sumW) / scaled.length;
+  let x = 0;
+  const out = scaled.map((c) => {
+    const w = c.w + stretch;
+    const o = { ...c, x, w };
+    x += w + gap;
+    return o;
+  });
+  return { kind: 'tail', height: cappedH, cells: out };
+};
+
+// ------------------------------------------------------------
+// Planner principal V4.
 // ------------------------------------------------------------
 
 const planEditorial = (
@@ -298,80 +380,79 @@ const planEditorial = (
   cols: number,
   W: number,
   gap: number,
-  maxPerRow: number,
 ): Block[] => {
-  // Cópia trabalhável (permite swap local idx <-> idx+1 quando necessário).
-  const items: NormPhoto[] = raw.slice();
+  const items = raw.slice();
   const blocks: Block[] = [];
   const cw = (W - (cols - 1) * gap) / cols;
+  const ctx: PlanCtx = { cols, cw, W, gap, lastAnchorSide: null };
 
-  let idx = 0;
-  while (idx < items.length) {
-    const cur = items[idx];
-    const remaining = items.length - idx;
+  // Quantos comuns "antes" um bloco de destaque pode absorver como apoio.
+  const maxAbsorb = cols === 4 ? 4 : cols === 3 ? 2 : 2;
 
-    // Swap local: se a próxima é destaque e a atual não é, puxa o destaque
-    // para a posição atual — evita "solo não-destaque" seguido de destaque
-    // que enterraria a marcação.
-    if (!cur.featured && remaining >= 2 && items[idx + 1].featured) {
-      // Só fazemos o swap se a foto não-destacada não criar "solo" depois
-      // do destaque: o pior caso vira apoio dentro do mosaico — ok.
-      const tmp = items[idx];
-      items[idx] = items[idx + 1];
-      items[idx + 1] = tmp;
+  let i = 0;
+  while (i < items.length) {
+    // Próximo destaque a partir de i.
+    let nextF = -1;
+    for (let j = i; j < items.length; j++) {
+      if (items[j].featured) { nextF = j; break; }
     }
 
-    const head = items[idx];
-
-    if (head.featured) {
-      const { block, consumed } = buildFeaturedBlock(items, idx, cols, cw, W, gap);
-      blocks.push(block);
-      idx += consumed;
-      continue;
-    }
-
-    // Bloco comum (linha justificada). Para antes do próximo destaque.
-    const k = pickNormalRowSize(items, idx, maxPerRow, cw, W, gap);
-    if (k <= 0) {
-      // Defesa: não deveria acontecer.
-      idx++;
-      continue;
-    }
-
-    // Última linha incompleta? Marca como tail e capa altura.
-    const isTail = idx + k >= items.length && k < maxPerRow;
-    const row = buildNormalRow(items, idx, k, W, gap);
-
-    if (isTail) {
-      const cappedH = Math.min(row.height, 1.6 * cw);
-      // Reescala larguras proporcionalmente (mantendo 100% W).
-      const scale = cappedH / row.height;
-      const cells = row.cells.map((c) => ({
-        ...c,
-        h: cappedH,
-        w: c.w * scale,
-      }));
-      // Re-justifica X para fechar gaps (mantém 100% via stretch final).
-      let x = 0;
-      const sumW = cells.reduce((a, c) => a + c.w, 0);
-      const totalGap = (cells.length - 1) * gap;
-      const stretch = cells.length > 1 ? (W - totalGap - sumW) / cells.length : 0;
-      const tailCells = cells.map((c) => {
-        const w = c.w + stretch;
-        const out = { ...c, x, w };
-        x += w + gap;
-        return out;
-      });
-      // Para 1 foto solo no tail, centralizamos via offset x.
-      if (tailCells.length === 1) {
-        const w = Math.min(W, cappedH * raw[idx].ar);
-        tailCells[0] = { ...tailCells[0], w, x: (W - w) / 2 };
+    if (nextF === -1) {
+      // Sem mais destaques — empacota o resto em chunks válidos + tail.
+      const n = items.length - i;
+      // Tenta partição "limpa"; se n inválido (1, 2 ou 5 desktop), libera tail.
+      let chunks: number[];
+      if (isValidCommonCount(n, cols)) {
+        chunks = partitionCommons(n, cols);
+      } else {
+        // Coloca o máximo possível em chunks válidos e deixa o resíduo como tail.
+        // Para n inválido, separa últimos 1, 2 ou 5 fotos como tail.
+        let tailSize = 0;
+        for (let t = 1; t <= n; t++) {
+          if (isValidCommonCount(n - t, cols)) {
+            tailSize = t;
+            break;
+          }
+        }
+        const head = n - tailSize;
+        chunks = [...partitionCommons(head, cols)];
+        if (tailSize > 0) chunks.push(-tailSize); // negativo marca tail
       }
-      blocks.push({ kind: 'tail', height: cappedH, cells: tailCells });
-    } else {
-      blocks.push(row);
+      let cursor = i;
+      for (const c of chunks) {
+        if (c < 0) {
+          const k = -c;
+          blocks.push(buildTailBlock(items, cursor, k, W, gap, cw));
+          cursor += k;
+        } else {
+          blocks.push(buildJustifiedRow(items, cursor, c, W, gap));
+          cursor += c;
+        }
+      }
+      i = items.length;
+      break;
     }
-    idx += k;
+
+    // Há destaque em nextF. Decide quantos comuns absorver como apoio.
+    const beforeTotal = nextF - i;
+    const absorb = chooseAbsorb(beforeTotal, cols, maxAbsorb);
+    const emitCount = beforeTotal - absorb;
+
+    if (emitCount > 0) {
+      const chunks = partitionCommons(emitCount, cols);
+      let cursor = i;
+      for (const k of chunks) {
+        blocks.push(buildJustifiedRow(items, cursor, k, W, gap));
+        cursor += k;
+      }
+      i += emitCount;
+    }
+
+    // Constrói o bloco de destaque consumindo `absorb` antes + apoios depois.
+    const r = buildFeaturedV4(items, i, absorb, nextF, ctx);
+    blocks.push(r.block);
+    ctx.lastAnchorSide = r.anchorSide;
+    i += r.consumed;
   }
 
   return blocks;
