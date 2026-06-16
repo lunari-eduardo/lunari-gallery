@@ -21,6 +21,8 @@ export interface DeliverPhoto {
   folderId?: string | null;
   mimeType?: string | null;
   peso_visual?: number;
+  /** Alias canônico em camelCase usado pelo motor Editorial V3. */
+  pesoVisual?: number;
 }
 
 interface DeliverPhotoGridProps {

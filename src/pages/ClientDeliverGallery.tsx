@@ -91,20 +91,25 @@ export default function ClientDeliverGallery({ data }: Props) {
     : undefined;
 
   const allPhotos: DeliverPhoto[] = useMemo(() => {
-    const mapped = data.photos.map((p) => ({
-      id: p.id,
-      storageKey: p.storage_key,
-      originalPath: p.original_path,
-      originalFilename: p.original_filename || p.filename || 'photo.jpg',
-      filename: p.filename,
-      width: p.width || 800,
-      height: p.height || 600,
-      thumbPath: p.thumb_path,
-      previewPath: p.preview_path,
-      folderId: p.pasta_id || null,
-      mimeType: (p as any).mime_type || null,
-      peso_visual: (p as any).peso_visual || 0,
-    }));
+    const mapped = data.photos.map((p) => {
+      const peso = Number((p as any).peso_visual ?? (p as any).pesoVisual ?? 0);
+      return {
+        id: p.id,
+        storageKey: p.storage_key,
+        originalPath: p.original_path,
+        originalFilename: p.original_filename || p.filename || 'photo.jpg',
+        filename: p.filename,
+        width: p.width || 800,
+        height: p.height || 600,
+        thumbPath: p.thumb_path,
+        previewPath: p.preview_path,
+        folderId: p.pasta_id || null,
+        mimeType: (p as any).mime_type || null,
+        // Canonicaliza ambos os nomes para o motor Editorial.
+        peso_visual: peso,
+        pesoVisual: peso,
+      } as DeliverPhoto;
+    });
     // Ordem canônica: alfabética natural pelo nome original.
     return sortPhotosByNaturalFilename(mapped);
   }, [data.photos]);
