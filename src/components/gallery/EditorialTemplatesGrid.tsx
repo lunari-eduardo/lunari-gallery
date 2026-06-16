@@ -339,10 +339,15 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
     >
       <div
         ref={innerRef}
-        className="flex flex-col"
+        className="flex flex-col items-center"
         style={{ gap: `${gap}px`, width: innerWidth || '100%' }}
       >
         {strips.map((strip, i) => {
+          const isLast = i === strips.length - 1;
+          // Regra: só a última strip pode ficar centralizada (foto solitária final).
+          // Strips intermediárias que por acaso não preencheram 100% também
+          // são centralizadas (fallback) para nunca aparecerem flush-left.
+          const useContentWidth = strip.needsCenter;
           return (
             <div
               key={i}
@@ -350,7 +355,9 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
               style={{
                 gap: `${gap}px`,
                 height: strip.height,
-                justifyContent: 'flex-start',
+                width: useContentWidth ? strip.contentWidth : '100%',
+                marginLeft: 'auto',
+                marginRight: 'auto',
               }}
             >
               {strip.cells.map((cell, ci) => {
@@ -388,6 +395,7 @@ export const EditorialTemplatesGrid: React.FC<EditorialTemplatesGridProps> = ({
           );
         })}
       </div>
+
     </div>
   );
 };
