@@ -508,7 +508,7 @@ export const EditorialTemplatesGrid: React.FC<Props> = ({
 
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.debug('[editorial-v3] plan', {
+      console.debug('[editorial-v4] plan', {
         total: norm.length,
         featured: norm.filter((n) => n.featured).length,
         cols,
@@ -517,7 +517,7 @@ export const EditorialTemplatesGrid: React.FC<Props> = ({
       });
     }
 
-    return planEditorial(norm, cols, innerWidth, gap, maxPerRow);
+    return planEditorial(norm, cols, innerWidth, gap);
   }, [photos, innerWidth, gap, maxItemsPerStrip]);
 
   const renderCell = (cell: Cell, isAbsolute: boolean) => {
