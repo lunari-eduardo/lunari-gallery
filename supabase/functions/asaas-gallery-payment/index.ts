@@ -450,7 +450,8 @@ Deno.serve(async (req) => {
         repassarTaxasProcessamento: !settings.absorverTaxa,
         repassarTaxaAntecipacao: false,
       },
-      snapshot_fotos_incluidas: body.snapshotFotosIncluidas || 0,
+      // Guardar null em vez de 0 para evitar que finalize_gallery_payment trate "snapshot ausente" como zero (bug histórico).
+      snapshot_fotos_incluidas: typeof body.snapshotFotosIncluidas === 'number' && body.snapshotFotosIncluidas > 0 ? body.snapshotFotosIncluidas : null,
       snapshot_regras_congeladas: body.snapshotRegrasCongeladas || null,
       correlation_id: body.correlationId || null,
     };
