@@ -4,6 +4,7 @@ import { FontSelect } from '@/components/FontSelect';
 import { TitleCaseMode } from '@/types/gallery';
 import { LogoUploader } from './LogoUploader';
 import { ThemeConfig } from './ThemeConfig';
+import { CoverConfig } from './CoverConfig';
 import { WatermarkSettings } from './WatermarkSettings';
 import { EmailTemplates } from './EmailTemplates';
 import { EmailAutomationSettings } from './EmailAutomationSettings';
@@ -93,7 +94,7 @@ export function PersonalizationSettings() {
          <h3 className="text-lg font-medium text-muted-foreground">Aparência da Galeria do Cliente</h3>
          <p className="text-sm text-muted-foreground">Essas configurações são aplicadas em todas as novas galerias. Galerias individuais podem sobrescrever essas preferências.</p>
          
-         {/* Theme Config (simplified) */}
+         {/* Theme Config (Grid layout — Seleção + Entrega) */}
          <div className="lunari-card p-6">
            <ThemeConfig
              defaultThemeId={settings.defaultThemeId || 'lunari'}
@@ -101,6 +102,15 @@ export function PersonalizationSettings() {
              onUpdate={(data) => updateSettings(data, { successMessage: 'Aparência da galeria atualizada.' })}
            />
          </div>
+
+         {/* Cover Config (Hero — exclusivo Galerias de Entrega) */}
+         <div className="lunari-card p-6">
+           <CoverConfig
+             defaultCoverId={settings.defaultCoverId || 'fullscreen'}
+             onUpdate={(data) => updateSettings(data, { successMessage: 'Capa padrão atualizada.' })}
+           />
+         </div>
+
 
         {/* Watermark */}
         <div className="lunari-card p-6">

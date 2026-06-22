@@ -192,6 +192,7 @@ export interface GlobalSettings {
   defaultPhotoSpacing?: number;
   defaultThemeId: string; // Tema padrão global da conta (persiste em gallery_settings)
   themeOverrides: Json; // Overrides globais de tema da conta (persiste em gallery_settings)
+  defaultCoverId: string; // Capa padrão das Galerias de Entrega (persiste em gallery_settings.default_cover_id)
 }
 
 

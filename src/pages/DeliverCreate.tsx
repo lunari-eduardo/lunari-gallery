@@ -27,6 +27,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeCatalog } from '@/components/dashboard/themes/ThemeCatalog';
 import { DEFAULT_THEME_ID } from '@/components/gallery/themes/registry';
+import { CoverCatalog } from '@/components/deliver/CoverCatalog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const steps = [
   { id: 1, name: 'Dados', icon: User },
@@ -78,6 +80,8 @@ export default function DeliverCreate() {
   const [useCustomTheme, setUseCustomTheme] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [themeOverrides, setThemeOverrides] = useState<any>({});
+  // null = herda capa padrão do fotógrafo
+  const [coverId, setCoverId] = useState<string | null>(null);
 
   // Initialize defaults from settings
   useEffect(() => {
@@ -198,6 +202,7 @@ export default function DeliverCreate() {
           themeId: useCustomTheme ? activeThemeId : null,
           useCustomTheme: useCustomTheme,
           themeOverrides: themeOverrides,
+          coverId: coverId,
       });
       setSupabaseGalleryId(result.id);
       return result.id;
@@ -260,6 +265,7 @@ export default function DeliverCreate() {
             clientMode,
             photoSpacing,
           },
+          coverId: coverId,
         },
       });
 
@@ -494,6 +500,24 @@ export default function DeliverCreate() {
                   </div>
                 )}
               </div>
+
+              {/* Capa da Galeria de Entrega (independente do Tema) */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-primary" />
+                  <Label className="text-base font-medium">Capa da Galeria</Label>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground ml-auto">Hero</span>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Apresentação inicial da galeria. Independe do Tema (grid).
+                </p>
+                <CoverCatalog
+                  selectedCoverId={coverId}
+                  onSelect={setCoverId}
+                  inheritLabel="Usar capa padrão do meu estúdio"
+                />
+              </div>
+
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">

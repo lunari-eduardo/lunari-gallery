@@ -62,6 +62,7 @@ export const mockGlobalSettings: GlobalSettings = {
   defaultAllowExtraPhotos: true,
   defaultWatermarkDisplay: 'all',
   defaultPhotoSpacing: 6,
+  defaultCoverId: 'fullscreen',
 };
 
 export const defaultWelcomeMessage = `Olá {cliente}! 💕

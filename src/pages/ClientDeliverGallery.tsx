@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { DeliverHero } from '@/components/deliver/DeliverHero';
+import { CoverRenderer } from '@/components/deliver/covers/CoverRenderer';
+import { resolveCoverId } from '@/components/deliver/covers/registry';
 import { DeliverHeader } from '@/components/deliver/DeliverHeader';
 import { DeliverPhotoGrid, DeliverPhoto } from '@/components/deliver/DeliverPhotoGrid';
 import { DeliverLightbox } from '@/components/deliver/DeliverLightbox';
@@ -27,6 +28,8 @@ interface DeliverGalleryData {
       photoSpacing?: number;
       themeId?: string;
       themeOverrides?: any;
+      coverId?: string | null;
+      defaultCoverId?: string | null;
     };
   };
   photos: Array<{
@@ -171,11 +174,16 @@ export default function ClientDeliverGallery({ data }: Props) {
     }
   };
 
+  const resolvedCoverId = resolveCoverId(
+    gallery.settings?.coverId ?? gallery.settings?.defaultCoverId ?? null
+  );
+
   // Album view for Transfer galleries
   if (hasFolders && folderViewMode === 'albums') {
     return (
       <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
-        <DeliverHero
+        <CoverRenderer
+          coverId={resolvedCoverId}
           coverPhoto={coverPhoto}
           sessionName={gallery.sessionName}
           studioName={studioSettings?.studio_name}
@@ -185,6 +193,7 @@ export default function ClientDeliverGallery({ data }: Props) {
           primaryColor={primaryColor}
           onEnter={() => setHeroEntered(true)}
         />
+
 
         <div id="deliver-gallery" className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="text-center mb-8">
@@ -257,6 +266,7 @@ export default function ClientDeliverGallery({ data }: Props) {
         photos={photos} 
         allPhotos={allPhotos}
         coverPhoto={coverPhoto}
+        coverId={resolvedCoverId}
         sessionFont={sessionFont}
         handleDownloadAll={handleDownloadAll}
         isDownloading={isDownloading}
@@ -275,7 +285,7 @@ export default function ClientDeliverGallery({ data }: Props) {
 
 
 function ClientDeliverGalleryContent({ 
-  data, photos, allPhotos, coverPhoto, sessionFont, handleDownloadAll, 
+  data, photos, allPhotos, coverPhoto, coverId, sessionFont, handleDownloadAll, 
   isDownloading, handleDownloadSingle, showWelcome, handleCloseWelcome,
   lightboxIndex, setLightboxIndex, activeFolderId, setActiveFolderId, setFolderViewMode
 }: any) {
@@ -304,14 +314,24 @@ function ClientDeliverGalleryContent({
   return (
     <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
       {!hasFolders && (
-        <DeliverHero coverPhoto={coverPhoto} sessionName={gallery.sessionName} studioName={studioSettings?.studio_name} sessionFont={sessionFont} titleCaseMode={gallery.settings?.titleCaseMode} isDark={isDark} primaryColor={primaryColor} onEnter={() => {
-          const gallerySection = document.getElementById('deliver-gallery');
-          if (gallerySection) {
-            gallerySection.scrollIntoView({ behavior: 'smooth' });
-          }
-        }} />
-
+        <CoverRenderer
+          coverId={coverId}
+          coverPhoto={coverPhoto}
+          sessionName={gallery.sessionName}
+          studioName={studioSettings?.studio_name}
+          sessionFont={sessionFont}
+          titleCaseMode={gallery.settings?.titleCaseMode}
+          isDark={isDark}
+          primaryColor={primaryColor}
+          onEnter={() => {
+            const gallerySection = document.getElementById('deliver-gallery');
+            if (gallerySection) {
+              gallerySection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+        />
       )}
+
 
       <div id="deliver-gallery">
         <DeliverHeader 

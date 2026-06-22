@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { CoverCatalog } from '@/components/deliver/CoverCatalog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
@@ -84,6 +85,7 @@ export default function DeliverDetail() {
   const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [useCustomTheme, setUseCustomTheme] = useState(false);
   const [themeOverrides, setThemeOverrides] = useState<any>({});
+  const [coverId, setCoverId] = useState<string | null>(null);
   const [previewViewport, setPreviewViewport] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
 
 
@@ -103,6 +105,7 @@ export default function DeliverDetail() {
       setActiveThemeId(gallery.themeId || DEFAULT_THEME_ID);
       setUseCustomTheme(gallery.useCustomTheme || false);
       setThemeOverrides(gallery.themeOverrides || {});
+      setCoverId((gallery as any).coverId ?? null);
       
       // Migrate legacy gap to overrides if needed
       const legacyGap = gallery.configuracoes?.photoSpacing;
@@ -164,6 +167,7 @@ export default function DeliverDetail() {
         themeId: useCustomTheme ? activeThemeId : null,
         useCustomTheme: useCustomTheme,
         themeOverrides: themeOverrides,
+        coverId: coverId,
         prazoSelecao: expirationDate,
 
       }});
@@ -478,6 +482,21 @@ export default function DeliverDetail() {
                   </div>
                 </div>
               )}
+
+              {/* Capa da Galeria de Entrega — independente do Tema */}
+              <div className="space-y-4 pt-2 border-t">
+                <div>
+                  <Label className="text-base font-semibold">Capa da Galeria</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Apresentação inicial (Hero). Independe do Tema (grid).
+                  </p>
+                </div>
+                <CoverCatalog
+                  selectedCoverId={coverId}
+                  onSelect={setCoverId}
+                />
+              </div>
+
 
               <div className="pt-4 border-t">
                 <Button onClick={handleSave} className="w-full gap-2 rounded-xl" disabled={saving}>
