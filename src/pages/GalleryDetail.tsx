@@ -519,11 +519,50 @@ export default function GalleryDetail() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <div className="flex items-center gap-3 mb-1">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h1 className="text-2xl md:text-3xl font-bold">
                 {supabaseGallery.nomeSessao || 'Galeria'}
               </h1>
               <StatusBadge status={effectiveStatus} />
+              {(() => {
+                const vendido = supabaseGallery.valorTotalVendido || 0;
+                const pendente = calculatedExtraTotal || 0;
+                if (vendido <= 0 && pendente <= 0) return null;
+                if (vendido > 0 && pendente > 0) {
+                  return (
+                    <button
+                      onClick={() => setActiveTab('details')}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30 hover:opacity-80 transition"
+                      title="Ver detalhes do pagamento"
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      Parcial · Pago R$ {vendido.toFixed(2)} / Pendente R$ {pendente.toFixed(2)}
+                    </button>
+                  );
+                }
+                if (pendente > 0) {
+                  return (
+                    <button
+                      onClick={() => setActiveTab('details')}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:opacity-80 transition"
+                      title="Ver detalhes do pagamento"
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      Pendente R$ {pendente.toFixed(2)}
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => setActiveTab('details')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30 hover:opacity-80 transition"
+                    title="Ver detalhes do pagamento"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Pago R$ {vendido.toFixed(2)}
+                  </button>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
