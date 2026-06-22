@@ -266,6 +266,7 @@ export default function ClientDeliverGallery({ data }: Props) {
         photos={photos} 
         allPhotos={allPhotos}
         coverPhoto={coverPhoto}
+        coverId={resolvedCoverId}
         sessionFont={sessionFont}
         handleDownloadAll={handleDownloadAll}
         isDownloading={isDownloading}
@@ -284,7 +285,7 @@ export default function ClientDeliverGallery({ data }: Props) {
 
 
 function ClientDeliverGalleryContent({ 
-  data, photos, allPhotos, coverPhoto, sessionFont, handleDownloadAll, 
+  data, photos, allPhotos, coverPhoto, coverId, sessionFont, handleDownloadAll, 
   isDownloading, handleDownloadSingle, showWelcome, handleCloseWelcome,
   lightboxIndex, setLightboxIndex, activeFolderId, setActiveFolderId, setFolderViewMode
 }: any) {
@@ -313,14 +314,24 @@ function ClientDeliverGalleryContent({
   return (
     <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
       {!hasFolders && (
-        <DeliverHero coverPhoto={coverPhoto} sessionName={gallery.sessionName} studioName={studioSettings?.studio_name} sessionFont={sessionFont} titleCaseMode={gallery.settings?.titleCaseMode} isDark={isDark} primaryColor={primaryColor} onEnter={() => {
-          const gallerySection = document.getElementById('deliver-gallery');
-          if (gallerySection) {
-            gallerySection.scrollIntoView({ behavior: 'smooth' });
-          }
-        }} />
-
+        <CoverRenderer
+          coverId={coverId}
+          coverPhoto={coverPhoto}
+          sessionName={gallery.sessionName}
+          studioName={studioSettings?.studio_name}
+          sessionFont={sessionFont}
+          titleCaseMode={gallery.settings?.titleCaseMode}
+          isDark={isDark}
+          primaryColor={primaryColor}
+          onEnter={() => {
+            const gallerySection = document.getElementById('deliver-gallery');
+            if (gallerySection) {
+              gallerySection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+        />
       )}
+
 
       <div id="deliver-gallery">
         <DeliverHeader 
