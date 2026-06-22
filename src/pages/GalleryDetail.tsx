@@ -868,13 +868,23 @@ export default function GalleryDetail() {
               )}
 
 
-              <SelectionSummary 
-                gallery={galleryForSummary} 
+              <SelectionSummary
+                gallery={galleryForSummary}
                 regrasCongeladas={regrasCongeladas}
                 extrasPagasTotal={extrasPagasTotal}
                 extrasACobrar={extrasACobrar}
                 valorJaPago={valorJaPago}
+                saleSettings={galleryForSummary.saleSettings}
+                billingInfo={{
+                  valorTotalVendido: supabaseGallery.valorTotalVendido || 0,
+                  valorPendente: calculatedExtraTotal || 0,
+                  statusPagamento: supabaseGallery.statusPagamento || 'sem_cobranca',
+                  totalExtrasVendidas: supabaseGallery.totalFotosExtrasVendidas || 0,
+                  ultimoPagamentoEm: cobrancaData?.data_pagamento || null,
+                  onVerDetalhes: () => setActiveTab('details'),
+                }}
               />
+
 
               {/* Payment Status Card — só aparece quando há saldo NOVO ou cobrança pendente atual.
                   Histórico (valorTotalVendido) NÃO entra como pendente para evitar a falsa impressão
