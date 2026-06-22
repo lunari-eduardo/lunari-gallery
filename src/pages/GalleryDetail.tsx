@@ -72,6 +72,7 @@ export default function GalleryDetail() {
   const [showSelectedPhotos, setShowSelectedPhotos] = useState(false);
   const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
   const [activeDetailFolderId, setActiveDetailFolderId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('selection');
   
   // Get settings for email templates
   const { settings } = useSettings();
