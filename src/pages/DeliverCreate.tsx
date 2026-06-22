@@ -265,6 +265,7 @@ export default function DeliverCreate() {
             clientMode,
             photoSpacing,
           },
+          coverId: coverId,
         },
       });
 
