@@ -602,7 +602,7 @@ export default function GalleryDetail() {
       )}
 
       {/* Main Content */}
-      <Tabs defaultValue="selection" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="photos">Fotos ({transformedPhotos.length})</TabsTrigger>
           <TabsTrigger value="selection">Seleção ({selectedPhotos.length})</TabsTrigger>
