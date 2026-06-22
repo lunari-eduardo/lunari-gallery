@@ -179,6 +179,7 @@ function transformGaleria(row: any): Galeria {
     themeId: row.theme_id,
     useCustomTheme: row.use_custom_theme ?? false,
     themeOverrides: row.theme_overrides ?? {},
+    coverId: row.cover_id ?? null,
   };
 }
 
@@ -304,6 +305,7 @@ export function useSupabaseGalleries() {
           theme_id: (data as any).themeId || null,
           use_custom_theme: (data as any).useCustomTheme || false,
           theme_overrides: (data as any).themeOverrides || {},
+          cover_id: (data as any).coverId ?? null,
         } as any)
         .select()
         .single();
@@ -334,6 +336,7 @@ export function useSupabaseGalleries() {
       if ((data as any).themeId !== undefined) updateData.theme_id = (data as any).themeId;
       if ((data as any).useCustomTheme !== undefined) updateData.use_custom_theme = (data as any).useCustomTheme;
       if ((data as any).themeOverrides !== undefined) updateData.theme_overrides = (data as any).themeOverrides;
+      if ((data as any).coverId !== undefined) updateData.cover_id = (data as any).coverId;
       if ((data as any).venda_modo !== undefined) updateData.venda_modo = (data as any).venda_modo;
       if ((data as any).venda_pagamento_provedor !== undefined) updateData.venda_pagamento_provedor = (data as any).venda_pagamento_provedor;
       if ((data as any).venda_tipo_cobranca !== undefined) updateData.venda_tipo_cobranca = (data as any).venda_tipo_cobranca;
