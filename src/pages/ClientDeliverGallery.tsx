@@ -28,6 +28,8 @@ interface DeliverGalleryData {
       photoSpacing?: number;
       themeId?: string;
       themeOverrides?: any;
+      coverId?: string | null;
+      defaultCoverId?: string | null;
     };
   };
   photos: Array<{
@@ -172,11 +174,16 @@ export default function ClientDeliverGallery({ data }: Props) {
     }
   };
 
+  const resolvedCoverId = resolveCoverId(
+    gallery.settings?.coverId ?? gallery.settings?.defaultCoverId ?? null
+  );
+
   // Album view for Transfer galleries
   if (hasFolders && folderViewMode === 'albums') {
     return (
       <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
-        <DeliverHero
+        <CoverRenderer
+          coverId={resolvedCoverId}
           coverPhoto={coverPhoto}
           sessionName={gallery.sessionName}
           studioName={studioSettings?.studio_name}
@@ -186,6 +193,7 @@ export default function ClientDeliverGallery({ data }: Props) {
           primaryColor={primaryColor}
           onEnter={() => setHeroEntered(true)}
         />
+
 
         <div id="deliver-gallery" className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="text-center mb-8">
