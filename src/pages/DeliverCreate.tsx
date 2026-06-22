@@ -27,6 +27,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeCatalog } from '@/components/dashboard/themes/ThemeCatalog';
 import { DEFAULT_THEME_ID } from '@/components/gallery/themes/registry';
+import { CoverCatalog } from '@/components/deliver/CoverCatalog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const steps = [
   { id: 1, name: 'Dados', icon: User },
@@ -78,6 +80,8 @@ export default function DeliverCreate() {
   const [useCustomTheme, setUseCustomTheme] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [themeOverrides, setThemeOverrides] = useState<any>({});
+  // null = herda capa padrão do fotógrafo
+  const [coverId, setCoverId] = useState<string | null>(null);
 
   // Initialize defaults from settings
   useEffect(() => {
@@ -198,6 +202,7 @@ export default function DeliverCreate() {
           themeId: useCustomTheme ? activeThemeId : null,
           useCustomTheme: useCustomTheme,
           themeOverrides: themeOverrides,
+          coverId: coverId,
       });
       setSupabaseGalleryId(result.id);
       return result.id;
