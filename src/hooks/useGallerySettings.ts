@@ -126,6 +126,7 @@ function rowsToSettings(
     defaultPhotoSpacing: settingsRow.default_photo_spacing ?? 8,
     defaultThemeId: settingsRow.default_theme_id ?? 'lunari',
     themeOverrides: settingsRow.theme_overrides || {},
+    defaultCoverId: settingsRow.default_cover_id ?? 'fullscreen',
   } : defaultSettings;
 
   // Single custom theme (if exists)
@@ -360,6 +361,9 @@ export function useGallerySettings() {
       }
       if (data.themeOverrides !== undefined) {
         updateData.theme_overrides = data.themeOverrides;
+      }
+      if (data.defaultCoverId !== undefined) {
+        updateData.default_cover_id = data.defaultCoverId || 'fullscreen';
       }
 
       // Nothing to update
