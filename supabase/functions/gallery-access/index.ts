@@ -226,6 +226,9 @@ serve(async (req) => {
             themeId: themeId,
             useCustomTheme: gallery.use_custom_theme ?? false,
             themeOverrides: themeOverrides,
+            // Capa (apenas Galeria de Entrega): override por galeria + default do fotógrafo
+            coverId: (gallery as any).cover_id ?? null,
+            defaultCoverId: (settings as any)?.default_cover_id ?? 'fullscreen',
           },
         },
         photos: filteredPhotos,

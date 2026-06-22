@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { DeliverHero } from '@/components/deliver/DeliverHero';
+import { CoverRenderer } from '@/components/deliver/covers/CoverRenderer';
+import { resolveCoverId } from '@/components/deliver/covers/registry';
 import { DeliverHeader } from '@/components/deliver/DeliverHeader';
 import { DeliverPhotoGrid, DeliverPhoto } from '@/components/deliver/DeliverPhotoGrid';
 import { DeliverLightbox } from '@/components/deliver/DeliverLightbox';
