@@ -40,6 +40,7 @@ const defaultSettings: Omit<GlobalSettings, 'customTheme' | 'emailTemplates' | '
   defaultPhotoSpacing: 6,
   defaultThemeId: 'lunari',
   themeOverrides: {},
+  defaultCoverId: 'fullscreen',
 };
 
 const defaultEmailTemplates: Omit<EmailTemplate, 'id'>[] = [
