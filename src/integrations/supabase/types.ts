@@ -2400,6 +2400,7 @@ export type Database = {
           cliente_nome: string | null
           cliente_telefone: string | null
           configuracoes: Json | null
+          cover_id: string | null
           created_at: string
           density: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em: string | null
@@ -2445,6 +2446,7 @@ export type Database = {
           cliente_nome?: string | null
           cliente_telefone?: string | null
           configuracoes?: Json | null
+          cover_id?: string | null
           created_at?: string
           density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
@@ -2490,6 +2492,7 @@ export type Database = {
           cliente_nome?: string | null
           cliente_telefone?: string | null
           configuracoes?: Json | null
+          cover_id?: string | null
           created_at?: string
           density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
@@ -2644,6 +2647,7 @@ export type Database = {
           default_allow_download: boolean | null
           default_allow_extra_photos: boolean | null
           default_charge_type: string | null
+          default_cover_id: string
           default_expiration_days: number | null
           default_gallery_permission: string | null
           default_image_resize: number
@@ -2677,6 +2681,7 @@ export type Database = {
           default_allow_download?: boolean | null
           default_allow_extra_photos?: boolean | null
           default_charge_type?: string | null
+          default_cover_id?: string
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
           default_image_resize?: number
@@ -2710,6 +2715,7 @@ export type Database = {
           default_allow_download?: boolean | null
           default_allow_extra_photos?: boolean | null
           default_charge_type?: string | null
+          default_cover_id?: string
           default_expiration_days?: number | null
           default_gallery_permission?: string | null
           default_image_resize?: number
@@ -3958,6 +3964,276 @@ export type Database = {
           },
         ]
       }
+      support_attachments: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          id: string
+          kind: Database["public"]["Enums"]["support_attachment_kind"]
+          message_id: string | null
+          mime_type: string | null
+          r2_key: string
+          size_bytes: number | null
+          ticket_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["support_attachment_kind"]
+          message_id?: string | null
+          mime_type?: string | null
+          r2_key: string
+          size_bytes?: number | null
+          ticket_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["support_attachment_kind"]
+          message_id?: string | null
+          mime_type?: string | null
+          r2_key?: string
+          size_bytes?: number | null
+          ticket_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "support_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_attachments_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_faq_articles: {
+        Row: {
+          active: boolean
+          category: Database["public"]["Enums"]["support_faq_category"]
+          created_at: string
+          helpful_count: number
+          id: string
+          keywords: string[]
+          media: Json
+          not_helpful_count: number
+          ordem: number
+          pergunta: string
+          published: boolean
+          resposta: string
+          search_tsv: unknown
+          slug: string
+          source_ticket_id: string | null
+          updated_at: string
+          views_count: number
+        }
+        Insert: {
+          active?: boolean
+          category: Database["public"]["Enums"]["support_faq_category"]
+          created_at?: string
+          helpful_count?: number
+          id?: string
+          keywords?: string[]
+          media?: Json
+          not_helpful_count?: number
+          ordem?: number
+          pergunta: string
+          published?: boolean
+          resposta: string
+          search_tsv?: unknown
+          slug: string
+          source_ticket_id?: string | null
+          updated_at?: string
+          views_count?: number
+        }
+        Update: {
+          active?: boolean
+          category?: Database["public"]["Enums"]["support_faq_category"]
+          created_at?: string
+          helpful_count?: number
+          id?: string
+          keywords?: string[]
+          media?: Json
+          not_helpful_count?: number
+          ordem?: number
+          pergunta?: string
+          published?: boolean
+          resposta?: string
+          search_tsv?: unknown
+          slug?: string
+          source_ticket_id?: string | null
+          updated_at?: string
+          views_count?: number
+        }
+        Relationships: []
+      }
+      support_faq_feedback: {
+        Row: {
+          article_id: string
+          created_at: string
+          helpful: boolean
+          id: string
+          user_id: string
+        }
+        Insert: {
+          article_id: string
+          created_at?: string
+          helpful: boolean
+          id?: string
+          user_id: string
+        }
+        Update: {
+          article_id?: string
+          created_at?: string
+          helpful?: boolean
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_faq_feedback_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "support_faq_articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_internal_notes: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_internal_notes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_messages: {
+        Row: {
+          author_id: string
+          author_role: Database["public"]["Enums"]["support_message_author_role"]
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+        }
+        Insert: {
+          author_id: string
+          author_role: Database["public"]["Enums"]["support_message_author_role"]
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+        }
+        Update: {
+          author_id?: string
+          author_role?: Database["public"]["Enums"]["support_message_author_role"]
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          assunto: string
+          categoria: Database["public"]["Enums"]["support_ticket_category"]
+          closed_at: string | null
+          created_at: string
+          id: string
+          last_message_at: string
+          numero: number
+          priority: Database["public"]["Enums"]["support_ticket_priority"]
+          status: Database["public"]["Enums"]["support_ticket_status"]
+          suggestion_status:
+            | Database["public"]["Enums"]["support_suggestion_status"]
+            | null
+          technical_snapshot: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          assunto: string
+          categoria: Database["public"]["Enums"]["support_ticket_category"]
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          numero?: never
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          suggestion_status?:
+            | Database["public"]["Enums"]["support_suggestion_status"]
+            | null
+          technical_snapshot?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          assunto?: string
+          categoria?: Database["public"]["Enums"]["support_ticket_category"]
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          numero?: never
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          suggestion_status?:
+            | Database["public"]["Enums"]["support_suggestion_status"]
+            | null
+          technical_snapshot?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       system_audit_logs: {
         Row: {
           correlation_id: string
@@ -4992,6 +5268,43 @@ export type Database = {
         Returns: undefined
       }
       start_studio_trial: { Args: never; Returns: Json }
+      support_faq_increment_view: {
+        Args: { _article_id: string }
+        Returns: undefined
+      }
+      support_faq_register_feedback: {
+        Args: { _article_id: string; _helpful: boolean }
+        Returns: undefined
+      }
+      support_faq_search: {
+        Args: { lim?: number; q: string }
+        Returns: {
+          active: boolean
+          category: Database["public"]["Enums"]["support_faq_category"]
+          created_at: string
+          helpful_count: number
+          id: string
+          keywords: string[]
+          media: Json
+          not_helpful_count: number
+          ordem: number
+          pergunta: string
+          published: boolean
+          resposta: string
+          search_tsv: unknown
+          slug: string
+          source_ticket_id: string | null
+          updated_at: string
+          views_count: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_faq_articles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_is_admin: { Args: { _uid: string }; Returns: boolean }
       try_acquire_advisory_lock: {
         Args: { lock_key: string }
         Returns: boolean
@@ -5015,6 +5328,41 @@ export type Database = {
         | "gallery_reactivated"
       email_delivery_status: "enviado" | "erro" | "ignorado"
       gallery_density: "compact" | "comfortable" | "airy"
+      support_attachment_kind: "image" | "video"
+      support_faq_category:
+        | "conta"
+        | "galerias"
+        | "lunari_studio"
+        | "lunari_gallery"
+        | "financeiro"
+        | "assinatura"
+        | "configuracoes"
+        | "outros"
+      support_message_author_role: "user" | "admin" | "system"
+      support_suggestion_status:
+        | "recebida"
+        | "em_analise"
+        | "planejada"
+        | "em_desenvolvimento"
+        | "implementada"
+        | "recusada"
+      support_ticket_category:
+        | "problema_tecnico"
+        | "duvida"
+        | "sugestao"
+        | "financeiro"
+        | "conta"
+        | "galerias"
+        | "outro"
+      support_ticket_priority: "baixa" | "normal" | "alta" | "urgente"
+      support_ticket_status:
+        | "novo"
+        | "recebido"
+        | "em_analise"
+        | "aguardando_cliente"
+        | "resolvido"
+        | "resolvido_whatsapp"
+        | "fechado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5152,6 +5500,45 @@ export const Constants = {
       ],
       email_delivery_status: ["enviado", "erro", "ignorado"],
       gallery_density: ["compact", "comfortable", "airy"],
+      support_attachment_kind: ["image", "video"],
+      support_faq_category: [
+        "conta",
+        "galerias",
+        "lunari_studio",
+        "lunari_gallery",
+        "financeiro",
+        "assinatura",
+        "configuracoes",
+        "outros",
+      ],
+      support_message_author_role: ["user", "admin", "system"],
+      support_suggestion_status: [
+        "recebida",
+        "em_analise",
+        "planejada",
+        "em_desenvolvimento",
+        "implementada",
+        "recusada",
+      ],
+      support_ticket_category: [
+        "problema_tecnico",
+        "duvida",
+        "sugestao",
+        "financeiro",
+        "conta",
+        "galerias",
+        "outro",
+      ],
+      support_ticket_priority: ["baixa", "normal", "alta", "urgente"],
+      support_ticket_status: [
+        "novo",
+        "recebido",
+        "em_analise",
+        "aguardando_cliente",
+        "resolvido",
+        "resolvido_whatsapp",
+        "fechado",
+      ],
     },
   },
 } as const
