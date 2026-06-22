@@ -98,6 +98,7 @@ export interface Galeria {
   themeId?: string | null;
   useCustomTheme?: boolean;
   themeOverrides?: any;
+  coverId?: string | null;
 }
 
 export interface CreateGaleriaData {
@@ -122,6 +123,7 @@ export interface CreateGaleriaData {
   themeId?: string | null;
   useCustomTheme?: boolean;
   themeOverrides?: any;
+  coverId?: string | null;
   venda_modo?: string;
   venda_pagamento_provedor?: string;
   venda_tipo_cobranca?: string;
