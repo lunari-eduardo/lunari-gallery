@@ -5222,6 +5222,7 @@ export type Database = {
         Returns: undefined
       }
       reconcile_gallery_extras_counters: { Args: never; Returns: Json }
+      reconcile_orphan_paid_gallery_charges: { Args: never; Returns: Json }
       reconcile_session_extras: {
         Args: {
           p_destino_sobra?: string
