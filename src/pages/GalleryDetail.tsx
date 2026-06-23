@@ -515,7 +515,7 @@ export default function GalleryDetail() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/galleries')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
