@@ -273,6 +273,7 @@ Deno.serve(async (req) => {
         valor,
         descricao,
         tipo_cobranca: 'link',
+        finalidade: 'fotos_extras', // link InfinitePay sempre é fotos extras de galeria neste projeto
         provedor: 'infinitepay',
         status: 'pendente',
         ip_checkout_url: checkoutUrl,
