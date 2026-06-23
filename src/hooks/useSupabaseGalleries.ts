@@ -92,6 +92,7 @@ export interface Galeria {
   publicToken: string | null;
   galleryPassword: string | null;
   regrasCongeladas: RegrasCongeladas | null;
+  regrasOverride: boolean;
   tipo: 'selecao' | 'entrega';
   firstPhotoKey: string | null;
   coverPhotoKey: string | null;
