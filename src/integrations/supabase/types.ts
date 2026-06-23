@@ -2420,6 +2420,7 @@ export type Database = {
           public_token: string | null
           published_at: string | null
           regras_congeladas: Json | null
+          regras_override: boolean
           regras_selecao: Json | null
           session_id: string | null
           status: string
@@ -2466,6 +2467,7 @@ export type Database = {
           public_token?: string | null
           published_at?: string | null
           regras_congeladas?: Json | null
+          regras_override?: boolean
           regras_selecao?: Json | null
           session_id?: string | null
           status?: string
@@ -2512,6 +2514,7 @@ export type Database = {
           public_token?: string | null
           published_at?: string | null
           regras_congeladas?: Json | null
+          regras_override?: boolean
           regras_selecao?: Json | null
           session_id?: string | null
           status?: string

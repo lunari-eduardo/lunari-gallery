@@ -42,7 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
@@ -65,6 +65,13 @@ import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { supabase } from '@/integrations/supabase/client';
+import { PricingModelEditor } from '@/components/gallery/PricingModelEditor';
+import { DiscountPackage, PricingModel } from '@/types/gallery';
+import {
+  RegrasCongeladas,
+  buildRegrasFromDiscountPackages,
+  discountPackagesFromRegras,
+} from '@/lib/pricingUtils';
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -128,6 +135,13 @@ export default function GalleryEdit() {
   const [valorFotoExtra, setValorFotoExtra] = useState(0);
   const [prazoSelecao, setPrazoSelecao] = useState<Date | undefined>();
 
+  // Pricing model / progressive discounts (override por galeria).
+  const [pricingModel, setPricingModel] = useState<PricingModel>('fixed');
+  const [discountPackages, setDiscountPackages] = useState<DiscountPackage[]>([]);
+  const [regrasOverride, setRegrasOverride] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [pricingDirty, setPricingDirty] = useState(false);
+
   // Theme state for client gallery
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
@@ -168,6 +182,19 @@ export default function GalleryEdit() {
       setFotosIncluidas(gallery.fotosIncluidas);
       setValorFotoExtra(gallery.valorFotoExtra);
       setPrazoSelecao(gallery.prazoSelecao || undefined);
+
+      // Hydrate pricing model + faixas a partir das regras congeladas
+      const regras = gallery.regrasCongeladas;
+      const faixasFromRegras = discountPackagesFromRegras(regras);
+      if (faixasFromRegras.length >= 2) {
+        setPricingModel('packages');
+        setDiscountPackages(faixasFromRegras);
+      } else {
+        setPricingModel('fixed');
+        setDiscountPackages([]);
+      }
+      setRegrasOverride(gallery.regrasOverride ?? false);
+      setPricingDirty(false);
 
       // Hydrate theme settings from configuracoes
       const cfg = gallery.configuracoes || {};
@@ -345,6 +372,51 @@ export default function GalleryEdit() {
     && (gallery.totalFotosExtrasVendidas ?? 0) > 0
     && fotosIncluidas < minFotosIncluidasPermitido;
 
+  // Computa regras_congeladas final + override quando há mudança na precificação.
+  // Em galeria concluída (billing lock), mantém regras originais.
+  const computeFinalRegras = (): {
+    regras: RegrasCongeladas | null | undefined;
+    override: boolean | undefined;
+  } => {
+    if (isBillingLocked) return { regras: undefined, override: undefined };
+
+    const initialChanged =
+      pricingDirty ||
+      fotosIncluidas !== gallery.fotosIncluidas ||
+      valorFotoExtra !== gallery.valorFotoExtra;
+
+    if (!initialChanged) return { regras: undefined, override: undefined };
+
+    let finalRegras: RegrasCongeladas;
+    if (pricingModel === 'packages' && discountPackages.length >= 2) {
+      finalRegras = buildRegrasFromDiscountPackages(
+        discountPackages,
+        valorFotoExtra,
+        fotosIncluidas,
+        gallery.nomePacote || undefined,
+      );
+    } else {
+      // modelo fixo — preserva o resto do JSONB existente quando possível.
+      const base = gallery.regrasCongeladas || ({} as RegrasCongeladas);
+      finalRegras = {
+        ...base,
+        modelo: 'fixo',
+        dataCongelamento: new Date().toISOString(),
+        pacote: {
+          ...(base.pacote || {}),
+          nome: base.pacote?.nome || gallery.nomePacote || 'Pacote Manual',
+          fotosIncluidas,
+          valorFotoExtra,
+        },
+        precificacaoFotoExtra: { modelo: 'fixo', valorFixo: valorFotoExtra },
+      };
+    }
+
+    // Override só faz sentido quando há sessão vinculada.
+    const override = isLunariLinked ? true : regrasOverride;
+    return { regras: finalRegras, override };
+  };
+
   const persistGallery = async () => {
     try {
       const cleanPhone = clienteTelefone.replace(/\D/g, '');
@@ -359,6 +431,7 @@ export default function GalleryEdit() {
       };
 
       const saleSettings = existingConfig.saleSettings as any;
+      const { regras: finalRegras, override: finalOverride } = computeFinalRegras();
 
       await updateGallery({
         id: gallery.id,
@@ -376,6 +449,8 @@ export default function GalleryEdit() {
           venda_modo: saleSettings?.mode,
           venda_pagamento_provedor: saleSettings?.paymentMethod,
           venda_tipo_cobranca: saleSettings?.chargeType,
+          ...(finalRegras !== undefined ? { regrasCongeladas: finalRegras } : {}),
+          ...(finalOverride !== undefined ? ({ regrasOverride: finalOverride } as any) : {}),
           themeId: selectedThemeId || null,
           useCustomTheme: !!selectedThemeId,
           themeOverrides: {
@@ -393,6 +468,27 @@ export default function GalleryEdit() {
     }
   };
 
+  const handleRestoreSessionRules = async () => {
+    try {
+      // Limpa override e regras_congeladas — o trigger BEFORE UPDATE re-popula da sessão.
+      await updateGallery({
+        id: gallery.id,
+        data: {
+          regrasCongeladas: null,
+          regrasOverride: false,
+        } as any,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['galleries'] });
+      await queryClient.refetchQueries({ queryKey: ['galleries'] });
+      toast.success('Regras da sessão restauradas');
+      setRestoreDialogOpen(false);
+    } catch (error) {
+      console.error('Error restoring session rules:', error);
+      toast.error('Erro ao restaurar regras da sessão');
+    }
+  };
+
+
   const handleSave = async () => {
     if (fotosIncluidasAbaixoDoMinimo) {
       toast.error(
@@ -401,8 +497,14 @@ export default function GalleryEdit() {
       return;
     }
 
+    if (!isBillingLocked && pricingModel === 'packages' && discountPackages.length < 2) {
+      toast.error('Configure pelo menos 2 faixas para o modelo "Pacotes com descontos" ou troque para "Preço único".');
+      return;
+    }
+
     await persistGallery();
   };
+
 
   const handleExtendDeadline = (days: number) => {
     const newDeadline = addDays(prazoSelecao || new Date(), days);
@@ -676,12 +778,31 @@ export default function GalleryEdit() {
                 </div>
               </div>
 
-              {isLunariLinked && !isBillingLocked && (
+              {isLunariLinked && !isBillingLocked && !regrasOverride && (
                 <div className="glass rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
                   <p className="font-medium text-foreground">Galeria vinculada ao Lunari Studio</p>
                   <p className="text-muted-foreground">
-                    O valor da foto extra é compartilhado com a sessão. Alterações feitas aqui refletem imediatamente no Lunari Studio. Demais regras (pacote, faixas e descontos progressivos) permanecem inalteradas.
+                    Esta galeria segue as regras da sessão do Lunari Studio. Editar fotos incluídas, valor extra ou a tabela progressiva cria regras personalizadas só para esta galeria — a sessão original não é alterada.
                   </p>
+                </div>
+              )}
+
+              {isLunariLinked && !isBillingLocked && regrasOverride && (
+                <div className="glass rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm space-y-2">
+                  <p className="font-medium text-foreground">Regras personalizadas ativas</p>
+                  <p className="text-muted-foreground">
+                    Esta galeria não segue mais as regras da sessão do Lunari Studio. Alterações na sessão não afetam esta galeria.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRestoreDialogOpen(true)}
+                    className="gap-1"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Restaurar regras da sessão
+                  </Button>
                 </div>
               )}
 
@@ -693,15 +814,13 @@ export default function GalleryEdit() {
                     type="number"
                     min="0"
                     value={fotosIncluidas || ''}
-                    onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
+                    onChange={(e) => {
+                      setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0));
+                      setPricingDirty(true);
+                    }}
                     disabled={isBillingLocked}
                     aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
-                  {isLunariLinked && !isBillingLocked && (
-                    <p className="text-xs text-muted-foreground">
-                      Compartilhado com a sessão do Lunari Studio. Alterações refletem na sessão.
-                    </p>
-                  )}
                   {fotosIncluidasAbaixoDoMinimo && (
                     <p className="text-xs text-destructive">
                       Esta galeria já tem {gallery.totalFotosExtrasVendidas} foto{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} extra{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} paga{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''}. O mínimo permitido aqui é <span className="font-medium">{minFotosIncluidasPermitido}</span> para preservar o histórico de pagamentos.
@@ -717,44 +836,35 @@ export default function GalleryEdit() {
                     min="0"
                     step="0.01"
                     value={valorFotoExtra || ''}
-                    onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                    onChange={(e) => {
+                      setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0));
+                      setPricingDirty(true);
+                    }}
                     disabled={isBillingLocked}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {isLunariLinked
-                      ? 'Este valor é compartilhado com a sessão.'
-                      : 'Este valor vale apenas para esta galeria.'}
-                  </p>
                 </div>
               </div>
 
-              {/* Discount Presets - only for users without Gestão integration */}
-              {!hasGestaoIntegration && settings.discountPresets && settings.discountPresets.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Template de Desconto (opcional)</Label>
-                  <Select
-                    disabled={isBillingLocked}
-                    onValueChange={(presetId) => {
-                      const preset = settings.discountPresets.find(p => p.id === presetId);
-                      if (preset && preset.packages.length > 0) {
-                        // Use the first tier's price as the extra photo price
-                        setValorFotoExtra(preset.packages[0].pricePerPhoto);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar template de desconto..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {settings.discountPresets.map((preset) => (
-                        <SelectItem key={preset.id} value={preset.id}>
-                          {preset.name} ({preset.packages.length} faixa{preset.packages.length !== 1 ? 's' : ''})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Modelo de preço + tabela progressiva (mesma lógica da tela de criação) */}
+              <PricingModelEditor
+                pricingModel={pricingModel}
+                onPricingModelChange={(m) => {
+                  setPricingModel(m);
+                  setPricingDirty(true);
+                }}
+                fixedPrice={valorFotoExtra}
+                onFixedPriceChange={(v) => {
+                  setValorFotoExtra(v);
+                  setPricingDirty(true);
+                }}
+                discountPackages={discountPackages}
+                onDiscountPackagesChange={(pkgs) => {
+                  setDiscountPackages(pkgs);
+                  setPricingDirty(true);
+                }}
+                disabled={isBillingLocked}
+              />
+
 
               {/* Save button removed - now in header */}
             </CardContent>
@@ -1079,6 +1189,22 @@ export default function GalleryEdit() {
           daysGranted={reactivateDays}
         />
       )}
+
+      {/* Restore session rules confirmation */}
+      <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restaurar regras da sessão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              As regras personalizadas desta galeria serão descartadas e a galeria voltará a seguir os valores da sessão do Lunari Studio (fotos incluídas, valor da foto extra e descontos progressivos). Esta ação não afeta vendas já realizadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRestoreSessionRules}>Restaurar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Client Modal */}
       <ClientModal

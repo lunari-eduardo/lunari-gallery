@@ -92,6 +92,7 @@ export interface Galeria {
   publicToken: string | null;
   galleryPassword: string | null;
   regrasCongeladas: RegrasCongeladas | null;
+  regrasOverride: boolean;
   tipo: 'selecao' | 'entrega';
   firstPhotoKey: string | null;
   coverPhotoKey: string | null;
@@ -119,6 +120,7 @@ export interface CreateGaleriaData {
   sessionId?: string | null;
   origin?: 'manual' | 'gestao';
   regrasCongeladas?: RegrasCongeladas | null;
+  regrasOverride?: boolean;
   tipo?: 'selecao' | 'entrega';
   themeId?: string | null;
   useCustomTheme?: boolean;
@@ -175,6 +177,7 @@ function transformGaleria(row: any): Galeria {
     publicToken: row.public_token || null,
     galleryPassword: row.gallery_password || null,
     regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
+    regrasOverride: row.regras_override ?? false,
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
     firstPhotoKey: photos[0]?.storage_key || null,
     coverPhotoKey,
@@ -342,6 +345,9 @@ export function useSupabaseGalleries() {
       if ((data as any).venda_modo !== undefined) updateData.venda_modo = (data as any).venda_modo;
       if ((data as any).venda_pagamento_provedor !== undefined) updateData.venda_pagamento_provedor = (data as any).venda_pagamento_provedor;
       if ((data as any).venda_tipo_cobranca !== undefined) updateData.venda_tipo_cobranca = (data as any).venda_tipo_cobranca;
+      if (data.regrasCongeladas !== undefined) updateData.regras_congeladas = data.regrasCongeladas as any;
+      if ((data as any).regrasOverride !== undefined) updateData.regras_override = (data as any).regrasOverride;
+
 
 
       const { data: result, error } = await supabase
