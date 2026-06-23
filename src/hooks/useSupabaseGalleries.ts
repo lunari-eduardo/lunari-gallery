@@ -120,6 +120,7 @@ export interface CreateGaleriaData {
   sessionId?: string | null;
   origin?: 'manual' | 'gestao';
   regrasCongeladas?: RegrasCongeladas | null;
+  regrasOverride?: boolean;
   tipo?: 'selecao' | 'entrega';
   themeId?: string | null;
   useCustomTheme?: boolean;
