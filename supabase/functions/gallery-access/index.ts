@@ -208,12 +208,17 @@ serve(async (req) => {
         galleryId: gallery.id,
         gallery: {
           id: gallery.id,
+          sessionId: gallery.session_id || null,
           sessionName: gallery.nome_sessao,
           clientName: gallery.cliente_nome,
           clientEmail: gallery.cliente_email,
           packageName: gallery.nome_pacote,
           includedPhotos: gallery.fotos_incluidas,
           extraPhotoPrice: Number(gallery.valor_foto_extra || 0),
+          // regras_congeladas: fonte de verdade dos descontos progressivos.
+          // Para galerias do Studio, é preenchida pelo trigger
+          // `sync_galeria_regras_from_session` a partir de clientes_sessoes.
+          regrasCongeladas: gallery.regras_congeladas || null,
           selectionStatus: currentSelectionStatus,
           welcomeMessage: gallery.mensagem_boas_vindas,
           expirationDate: gallery.prazo_selecao,

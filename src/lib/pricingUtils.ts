@@ -1,6 +1,27 @@
 /**
  * Progressive Pricing Utilities
- * Handles discount tiers for extra photos based on frozen rules from Gestão
+ * Handles discount tiers for extra photos based on frozen rules from Gestão.
+ *
+ * ⚠️ CONTRATO CRÍTICO — leia antes de mexer aqui ou no projeto Gestão:
+ *
+ * `regras_congeladas` é a fonte ÚNICA de verdade para descontos progressivos.
+ * Em galerias vinculadas ao Studio, esta coluna pode estar populada APENAS em
+ * `clientes_sessoes` (não em `galerias`). Para garantir consistência existem:
+ *
+ *   1. Trigger DB `sync_galeria_regras_from_session` (BEFORE INSERT/UPDATE em
+ *      galerias) — copia da sessão quando a galeria não tem regras próprias.
+ *   2. Trigger DB `propagate_session_regras_to_galerias` (AFTER UPDATE em
+ *      clientes_sessoes) — propaga mudanças para galerias vinculadas.
+ *
+ * Surfaces que CONSOMEM regras_congeladas (todos confiam nos triggers acima):
+ *   - supabase/functions/gallery-access/index.ts        (cliente)
+ *   - supabase/functions/confirm-selection/index.ts     (já tem fallback)
+ *   - src/hooks/useSupabaseGalleries.ts                 (painel fotógrafo)
+ *   - src/pages/ClientGallery.tsx                       (seleção)
+ *   - src/pages/GalleryDetail.tsx                       (admin)
+ *
+ * Se os triggers forem removidos ou a coluna mudar de lugar, TODOS estes
+ * surfaces precisam ganhar fallback explícito buscando da sessão.
  */
 
 import { DiscountPackage } from '@/types/gallery';
