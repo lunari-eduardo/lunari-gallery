@@ -183,6 +183,19 @@ export default function GalleryEdit() {
       setValorFotoExtra(gallery.valorFotoExtra);
       setPrazoSelecao(gallery.prazoSelecao || undefined);
 
+      // Hydrate pricing model + faixas a partir das regras congeladas
+      const regras = gallery.regrasCongeladas;
+      const faixasFromRegras = discountPackagesFromRegras(regras);
+      if (faixasFromRegras.length >= 2) {
+        setPricingModel('packages');
+        setDiscountPackages(faixasFromRegras);
+      } else {
+        setPricingModel('fixed');
+        setDiscountPackages([]);
+      }
+      setRegrasOverride(gallery.regrasOverride ?? false);
+      setPricingDirty(false);
+
       // Hydrate theme settings from configuracoes
       const cfg = gallery.configuracoes || {};
       if (cfg.clientMode === 'dark' || cfg.clientMode === 'light') {
