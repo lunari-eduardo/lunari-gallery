@@ -42,7 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { DeleteGalleryDialog } from '@/components/DeleteGalleryDialog';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
