@@ -215,6 +215,7 @@ export default function GalleryDetail() {
         .from('cobrancas')
         .select('id, valor, qtd_fotos, provedor, metodo_manual, data_pagamento, ip_receipt_url, ip_checkout_url, status, created_at')
         .eq('galeria_id', id)
+        .eq('finalidade', 'fotos_extras') // não misturar com entrada da sessão (Studio)
         .in('status', ['pago', 'pago_manual'])
         .order('created_at', { ascending: false });
         
@@ -242,6 +243,7 @@ export default function GalleryDetail() {
         .from('cobrancas')
         .select('*')
         .eq('galeria_id', id)
+        .eq('finalidade', 'fotos_extras')
         .in('status', PENDING_STATUSES)
         .order('created_at', { ascending: false })
         .limit(1)

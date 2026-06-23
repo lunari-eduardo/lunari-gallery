@@ -145,6 +145,7 @@ Deno.serve(async (req) => {
           valor: body.valor,
           descricao: body.descricao,
           tipo_cobranca: 'link',
+          finalidade: 'fotos_extras', // link MP gerado para fotos extras de galeria
           qtd_fotos: qtdFotosFinal,
           status: 'pendente',
           provedor: 'mercadopago',

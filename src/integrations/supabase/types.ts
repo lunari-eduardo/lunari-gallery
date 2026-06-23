@@ -1123,6 +1123,7 @@ export type Database = {
           data_pagamento: string | null
           descricao: string | null
           extras_contabilizados: boolean
+          finalidade: string
           galeria_id: string | null
           id: string
           ip_checkout_url: string | null
@@ -1162,6 +1163,7 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           extras_contabilizados?: boolean
+          finalidade?: string
           galeria_id?: string | null
           id?: string
           ip_checkout_url?: string | null
@@ -1201,6 +1203,7 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           extras_contabilizados?: boolean
+          finalidade?: string
           galeria_id?: string | null
           id?: string
           ip_checkout_url?: string | null
