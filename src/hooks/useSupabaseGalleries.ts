@@ -345,6 +345,9 @@ export function useSupabaseGalleries() {
       if ((data as any).venda_modo !== undefined) updateData.venda_modo = (data as any).venda_modo;
       if ((data as any).venda_pagamento_provedor !== undefined) updateData.venda_pagamento_provedor = (data as any).venda_pagamento_provedor;
       if ((data as any).venda_tipo_cobranca !== undefined) updateData.venda_tipo_cobranca = (data as any).venda_tipo_cobranca;
+      if (data.regrasCongeladas !== undefined) updateData.regras_congeladas = data.regrasCongeladas as any;
+      if ((data as any).regrasOverride !== undefined) updateData.regras_override = (data as any).regrasOverride;
+
 
 
       const { data: result, error } = await supabase
