@@ -772,12 +772,31 @@ export default function GalleryEdit() {
                 </div>
               </div>
 
-              {isLunariLinked && !isBillingLocked && (
+              {isLunariLinked && !isBillingLocked && !regrasOverride && (
                 <div className="glass rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
                   <p className="font-medium text-foreground">Galeria vinculada ao Lunari Studio</p>
                   <p className="text-muted-foreground">
-                    O valor da foto extra é compartilhado com a sessão. Alterações feitas aqui refletem imediatamente no Lunari Studio. Demais regras (pacote, faixas e descontos progressivos) permanecem inalteradas.
+                    Esta galeria segue as regras da sessão do Lunari Studio. Editar fotos incluídas, valor extra ou a tabela progressiva cria regras personalizadas só para esta galeria — a sessão original não é alterada.
                   </p>
+                </div>
+              )}
+
+              {isLunariLinked && !isBillingLocked && regrasOverride && (
+                <div className="glass rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm space-y-2">
+                  <p className="font-medium text-foreground">Regras personalizadas ativas</p>
+                  <p className="text-muted-foreground">
+                    Esta galeria não segue mais as regras da sessão do Lunari Studio. Alterações na sessão não afetam esta galeria.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRestoreDialogOpen(true)}
+                    className="gap-1"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Restaurar regras da sessão
+                  </Button>
                 </div>
               )}
 
@@ -789,15 +808,13 @@ export default function GalleryEdit() {
                     type="number"
                     min="0"
                     value={fotosIncluidas || ''}
-                    onChange={(e) => setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))}
+                    onChange={(e) => {
+                      setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0));
+                      setPricingDirty(true);
+                    }}
                     disabled={isBillingLocked}
                     aria-invalid={fotosIncluidasAbaixoDoMinimo}
                   />
-                  {isLunariLinked && !isBillingLocked && (
-                    <p className="text-xs text-muted-foreground">
-                      Compartilhado com a sessão do Lunari Studio. Alterações refletem na sessão.
-                    </p>
-                  )}
                   {fotosIncluidasAbaixoDoMinimo && (
                     <p className="text-xs text-destructive">
                       Esta galeria já tem {gallery.totalFotosExtrasVendidas} foto{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} extra{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''} paga{gallery.totalFotosExtrasVendidas !== 1 ? 's' : ''}. O mínimo permitido aqui é <span className="font-medium">{minFotosIncluidasPermitido}</span> para preservar o histórico de pagamentos.
@@ -813,44 +830,35 @@ export default function GalleryEdit() {
                     min="0"
                     step="0.01"
                     value={valorFotoExtra || ''}
-                    onChange={(e) => setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                    onChange={(e) => {
+                      setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0));
+                      setPricingDirty(true);
+                    }}
                     disabled={isBillingLocked}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {isLunariLinked
-                      ? 'Este valor é compartilhado com a sessão.'
-                      : 'Este valor vale apenas para esta galeria.'}
-                  </p>
                 </div>
               </div>
 
-              {/* Discount Presets - only for users without Gestão integration */}
-              {!hasGestaoIntegration && settings.discountPresets && settings.discountPresets.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Template de Desconto (opcional)</Label>
-                  <Select
-                    disabled={isBillingLocked}
-                    onValueChange={(presetId) => {
-                      const preset = settings.discountPresets.find(p => p.id === presetId);
-                      if (preset && preset.packages.length > 0) {
-                        // Use the first tier's price as the extra photo price
-                        setValorFotoExtra(preset.packages[0].pricePerPhoto);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar template de desconto..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {settings.discountPresets.map((preset) => (
-                        <SelectItem key={preset.id} value={preset.id}>
-                          {preset.name} ({preset.packages.length} faixa{preset.packages.length !== 1 ? 's' : ''})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Modelo de preço + tabela progressiva (mesma lógica da tela de criação) */}
+              <PricingModelEditor
+                pricingModel={pricingModel}
+                onPricingModelChange={(m) => {
+                  setPricingModel(m);
+                  setPricingDirty(true);
+                }}
+                fixedPrice={valorFotoExtra}
+                onFixedPriceChange={(v) => {
+                  setValorFotoExtra(v);
+                  setPricingDirty(true);
+                }}
+                discountPackages={discountPackages}
+                onDiscountPackagesChange={(pkgs) => {
+                  setDiscountPackages(pkgs);
+                  setPricingDirty(true);
+                }}
+                disabled={isBillingLocked}
+              />
+
 
               {/* Save button removed - now in header */}
             </CardContent>
