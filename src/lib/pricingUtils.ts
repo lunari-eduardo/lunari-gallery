@@ -9,11 +9,20 @@
  * `clientes_sessoes` (não em `galerias`). Para garantir consistência existem:
  *
  *   1. Trigger DB `sync_galeria_regras_from_session` (BEFORE INSERT/UPDATE em
- *      galerias) — copia da sessão quando a galeria não tem regras próprias.
+ *      galerias) — copia da sessão quando a galeria não tem regras próprias E
+ *      `regras_override = false`.
  *   2. Trigger DB `propagate_session_regras_to_galerias` (AFTER UPDATE em
- *      clientes_sessoes) — propaga mudanças para galerias vinculadas.
+ *      clientes_sessoes) — propaga mudanças para galerias vinculadas APENAS
+ *      quando `regras_override = false`.
  *
- * Surfaces que CONSOMEM regras_congeladas (todos confiam nos triggers acima):
+ * OVERRIDE POR GALERIA (`galerias.regras_override`):
+ *   - GalleryEdit permite editar fotos_incluidas, valor_foto_extra e a tabela
+ *     progressiva mesmo em galerias vinculadas. Ao salvar com mudanças, o flag
+ *     `regras_override` vai para true e a galeria deixa de receber propagação
+ *     da sessão. Botão "Restaurar regras da sessão" volta override = false e
+ *     limpa `regras_congeladas` (o trigger re-popula).
+ *
+ * Surfaces que CONSOMEM regras_congeladas (todos confiam na coluna da galeria):
  *   - supabase/functions/gallery-access/index.ts        (cliente)
  *   - supabase/functions/confirm-selection/index.ts     (já tem fallback)
  *   - src/hooks/useSupabaseGalleries.ts                 (painel fotógrafo)
