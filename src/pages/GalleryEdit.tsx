@@ -65,6 +65,13 @@ import { cn } from '@/lib/utils';
 import { Client } from '@/types/gallery';
 import { getGalleryUrl } from '@/lib/galleryUrl';
 import { supabase } from '@/integrations/supabase/client';
+import { PricingModelEditor } from '@/components/gallery/PricingModelEditor';
+import { DiscountPackage, PricingModel } from '@/types/gallery';
+import {
+  RegrasCongeladas,
+  buildRegrasFromDiscountPackages,
+  discountPackagesFromRegras,
+} from '@/lib/pricingUtils';
 // Format phone to Brazilian format (XX) XXXXX-XXXX
 function formatPhoneBR(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 11);
