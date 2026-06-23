@@ -5321,6 +5321,7 @@ export type Database = {
         Args: { p_visitor_id: string }
         Returns: Json
       }
+      user_has_gallery_access: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       account_status: "active" | "suspended" | "canceled"
