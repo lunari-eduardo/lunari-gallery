@@ -1184,6 +1184,22 @@ export default function GalleryEdit() {
         />
       )}
 
+      {/* Restore session rules confirmation */}
+      <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restaurar regras da sessão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              As regras personalizadas desta galeria serão descartadas e a galeria voltará a seguir os valores da sessão do Lunari Studio (fotos incluídas, valor da foto extra e descontos progressivos). Esta ação não afeta vendas já realizadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRestoreSessionRules}>Restaurar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Client Modal */}
       <ClientModal
         open={isClientModalOpen}
