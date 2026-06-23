@@ -497,8 +497,14 @@ export default function GalleryEdit() {
       return;
     }
 
+    if (!isBillingLocked && pricingModel === 'packages' && discountPackages.length < 2) {
+      toast.error('Configure pelo menos 2 faixas para o modelo "Pacotes com descontos" ou troque para "Preço único".');
+      return;
+    }
+
     await persistGallery();
   };
+
 
   const handleExtendDeadline = (days: number) => {
     const newDeadline = addDays(prazoSelecao || new Date(), days);
