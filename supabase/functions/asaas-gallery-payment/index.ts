@@ -440,6 +440,7 @@ Deno.serve(async (req) => {
       status: 'pendente',
       provedor: 'asaas',
       tipo_cobranca: tipoCobranca,
+      finalidade: 'fotos_extras', // cobrança de fotos extras da galeria — separa de pagamentos de sessão (Studio)
       descricao: descricao || 'Pagamento galeria',
       qtd_fotos: qtdFotos || 0,
       mp_payment_id: paymentData.id,
