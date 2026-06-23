@@ -135,6 +135,13 @@ export default function GalleryEdit() {
   const [valorFotoExtra, setValorFotoExtra] = useState(0);
   const [prazoSelecao, setPrazoSelecao] = useState<Date | undefined>();
 
+  // Pricing model / progressive discounts (override por galeria).
+  const [pricingModel, setPricingModel] = useState<PricingModel>('fixed');
+  const [discountPackages, setDiscountPackages] = useState<DiscountPackage[]>([]);
+  const [regrasOverride, setRegrasOverride] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [pricingDirty, setPricingDirty] = useState(false);
+
   // Theme state for client gallery
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
