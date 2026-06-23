@@ -521,3 +521,26 @@ export function buildRegrasFromDiscountPackages(
     },
   };
 }
+
+/**
+ * Inverso de `buildRegrasFromDiscountPackages`: extrai a tabela de faixas
+ * (DiscountPackage[]) a partir de um `RegrasCongeladas` salvo. Usado pelo
+ * GalleryEdit para hidratar o editor de faixas a partir do JSONB existente.
+ *
+ * Retorna [] quando o modelo é fixo ou não há faixas definidas.
+ */
+export function discountPackagesFromRegras(
+  regras: RegrasCongeladas | null | undefined,
+): DiscountPackage[] {
+  const faixas = getFaixasFromRegras(regras);
+  if (!faixas.length) return [];
+  return [...faixas]
+    .sort((a, b) => a.min - b.min)
+    .map((f, idx) => ({
+      id: `faixa-${idx}-${f.min}`,
+      minPhotos: f.min,
+      maxPhotos: f.max,
+      pricePerPhoto: sanitizeExtraPrice(f.valor),
+    }));
+}
+
