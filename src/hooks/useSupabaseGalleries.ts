@@ -177,6 +177,7 @@ function transformGaleria(row: any): Galeria {
     publicToken: row.public_token || null,
     galleryPassword: row.gallery_password || null,
     regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
+    regrasOverride: row.regras_override ?? false,
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
     firstPhotoKey: photos[0]?.storage_key || null,
     coverPhotoKey,
