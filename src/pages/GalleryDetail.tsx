@@ -243,6 +243,7 @@ export default function GalleryDetail() {
         .from('cobrancas')
         .select('*')
         .eq('galeria_id', id)
+        .eq('finalidade', 'fotos_extras')
         .in('status', PENDING_STATUSES)
         .order('created_at', { ascending: false })
         .limit(1)
