@@ -200,6 +200,7 @@ Deno.serve(async (req: Request) => {
             cliente_id: resolvedClienteId || null,
             valor: resolvedValor,
             tipo_cobranca: 'foto_extra',
+            finalidade: 'fotos_extras', // recebimento manual de fotos extras da galeria
             provedor: 'manual',
             status: 'pendente',
             metodo_manual: metodoManual || 'dinheiro',
