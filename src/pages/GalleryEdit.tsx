@@ -372,6 +372,51 @@ export default function GalleryEdit() {
     && (gallery.totalFotosExtrasVendidas ?? 0) > 0
     && fotosIncluidas < minFotosIncluidasPermitido;
 
+  // Computa regras_congeladas final + override quando há mudança na precificação.
+  // Em galeria concluída (billing lock), mantém regras originais.
+  const computeFinalRegras = (): {
+    regras: RegrasCongeladas | null | undefined;
+    override: boolean | undefined;
+  } => {
+    if (isBillingLocked) return { regras: undefined, override: undefined };
+
+    const initialChanged =
+      pricingDirty ||
+      fotosIncluidas !== gallery.fotosIncluidas ||
+      valorFotoExtra !== gallery.valorFotoExtra;
+
+    if (!initialChanged) return { regras: undefined, override: undefined };
+
+    let finalRegras: RegrasCongeladas;
+    if (pricingModel === 'packages' && discountPackages.length >= 2) {
+      finalRegras = buildRegrasFromDiscountPackages(
+        discountPackages,
+        valorFotoExtra,
+        fotosIncluidas,
+        gallery.nomePacote || undefined,
+      );
+    } else {
+      // modelo fixo — preserva o resto do JSONB existente quando possível.
+      const base = gallery.regrasCongeladas || ({} as RegrasCongeladas);
+      finalRegras = {
+        ...base,
+        modelo: 'fixo',
+        dataCongelamento: new Date().toISOString(),
+        pacote: {
+          ...(base.pacote || {}),
+          nome: base.pacote?.nome || gallery.nomePacote || 'Pacote Manual',
+          fotosIncluidas,
+          valorFotoExtra,
+        },
+        precificacaoFotoExtra: { modelo: 'fixo', valorFixo: valorFotoExtra },
+      };
+    }
+
+    // Override só faz sentido quando há sessão vinculada.
+    const override = isLunariLinked ? true : regrasOverride;
+    return { regras: finalRegras, override };
+  };
+
   const persistGallery = async () => {
     try {
       const cleanPhone = clienteTelefone.replace(/\D/g, '');
@@ -386,6 +431,7 @@ export default function GalleryEdit() {
       };
 
       const saleSettings = existingConfig.saleSettings as any;
+      const { regras: finalRegras, override: finalOverride } = computeFinalRegras();
 
       await updateGallery({
         id: gallery.id,
@@ -403,6 +449,8 @@ export default function GalleryEdit() {
           venda_modo: saleSettings?.mode,
           venda_pagamento_provedor: saleSettings?.paymentMethod,
           venda_tipo_cobranca: saleSettings?.chargeType,
+          ...(finalRegras !== undefined ? { regrasCongeladas: finalRegras } : {}),
+          ...(finalOverride !== undefined ? ({ regrasOverride: finalOverride } as any) : {}),
           themeId: selectedThemeId || null,
           useCustomTheme: !!selectedThemeId,
           themeOverrides: {
@@ -419,6 +467,27 @@ export default function GalleryEdit() {
       console.error('Error updating gallery:', error);
     }
   };
+
+  const handleRestoreSessionRules = async () => {
+    try {
+      // Limpa override e regras_congeladas — o trigger BEFORE UPDATE re-popula da sessão.
+      await updateGallery({
+        id: gallery.id,
+        data: {
+          regrasCongeladas: null,
+          regrasOverride: false,
+        } as any,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['galleries'] });
+      await queryClient.refetchQueries({ queryKey: ['galleries'] });
+      toast.success('Regras da sessão restauradas');
+      setRestoreDialogOpen(false);
+    } catch (error) {
+      console.error('Error restoring session rules:', error);
+      toast.error('Erro ao restaurar regras da sessão');
+    }
+  };
+
 
   const handleSave = async () => {
     if (fotosIncluidasAbaixoDoMinimo) {
