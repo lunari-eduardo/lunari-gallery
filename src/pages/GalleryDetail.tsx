@@ -46,6 +46,7 @@ import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { PaymentStatusCard } from '@/components/PaymentStatusCard';
 import { PaymentHistoryCard } from '@/components/PaymentHistoryCard';
+import { OrphanPaymentsBanner } from '@/components/OrphanPaymentsBanner';
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
@@ -1115,6 +1116,15 @@ export default function GalleryDetail() {
                 </div>
               </div>
             </div>
+
+            {/* Banner de reconciliação: pagamentos órfãos da sessão sem vínculo de galeria */}
+            {supabaseGallery.userId && (
+              <OrphanPaymentsBanner
+                galleryId={supabaseGallery.id}
+                sessionId={supabaseGallery.sessionId}
+                userId={supabaseGallery.userId}
+              />
+            )}
 
             {/* Payment History Card - shows all transactions */}
             {cobrancasPagas.length > 0 && (
