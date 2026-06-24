@@ -279,6 +279,13 @@ export type Database = {
             referencedRelation: "galerias"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "audit_log_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
         ]
       }
       availability_slots: {
@@ -911,6 +918,13 @@ export type Database = {
             referencedRelation: "galerias"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "clientes_sessoes_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
         ]
       }
       clientes_sessoes_status_audit: {
@@ -1027,6 +1041,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["cobranca_id"]
+          },
+          {
             foreignKeyName: "fk_transacoes_session_id"
             columns: ["session_id"]
             isOneToOne: false
@@ -1110,6 +1131,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_infinitepay_latency"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_parcelas_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["cobranca_id"]
           },
         ]
       }
@@ -1248,6 +1276,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "galerias"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
           },
           {
             foreignKeyName: "cobrancas_visitor_id_fkey"
@@ -1481,6 +1516,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "credit_ledger_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
+          {
             foreignKeyName: "credit_ledger_photo_id_fkey"
             columns: ["photo_id"]
             isOneToOne: false
@@ -1658,6 +1700,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "email_delivery_logs_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
+          {
             foreignKeyName: "email_delivery_logs_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
@@ -1670,6 +1719,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_infinitepay_latency"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_delivery_logs_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["cobranca_id"]
           },
         ]
       }
@@ -2188,6 +2244,13 @@ export type Database = {
             referencedRelation: "galerias"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "galeria_acoes_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
         ]
       }
       galeria_fotos: {
@@ -2287,6 +2350,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "galeria_fotos_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
+          {
             foreignKeyName: "galeria_fotos_pasta_id_fkey"
             columns: ["pasta_id"]
             isOneToOne: false
@@ -2341,6 +2411,13 @@ export type Database = {
             referencedRelation: "galerias"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "galeria_pastas_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
         ]
       }
       galeria_visitantes: {
@@ -2393,6 +2470,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "galerias"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "galeria_visitantes_galeria_id_fkey"
+            columns: ["galeria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
           },
         ]
       }
@@ -2852,6 +2936,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "galerias"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_token_aliases_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
           },
         ]
       }
@@ -4292,6 +4383,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "system_audit_logs_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["galeria_id_candidata"]
+          },
+          {
             foreignKeyName: "system_audit_logs_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
@@ -5027,6 +5125,25 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_cobrancas_suspeitas: {
+        Row: {
+          cliente_nome: string | null
+          cobranca_id: string | null
+          created_at: string | null
+          descricao: string | null
+          finalidade: string | null
+          galeria_id_candidata: string | null
+          nome_sessao: string | null
+          provedor: string | null
+          session_id: string | null
+          status: string | null
+          status_selecao: string | null
+          user_id: string | null
+          valor: number | null
+          valor_foto_extra: number | null
+        }
+        Relationships: []
+      }
       vw_transacoes_orfas: {
         Row: {
           cliente_id: string | null
@@ -5061,6 +5178,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_infinitepay_latency"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_suspeitas"
+            referencedColumns: ["cobranca_id"]
           },
         ]
       }
@@ -5110,6 +5234,10 @@ export type Database = {
       check_photo_credits: {
         Args: { _photo_count: number; _user_id: string }
         Returns: boolean
+      }
+      claim_orphan_payment_for_gallery: {
+        Args: { p_cobranca_id: string; p_galeria_id: string }
+        Returns: Json
       }
       consume_photo_credits: {
         Args: { _gallery_id: string; _photo_count: number; _user_id: string }
