@@ -1117,6 +1117,15 @@ export default function GalleryDetail() {
               </div>
             </div>
 
+            {/* Banner de reconciliação: pagamentos órfãos da sessão sem vínculo de galeria */}
+            {supabaseGallery.userId && (
+              <OrphanPaymentsBanner
+                galleryId={supabaseGallery.id}
+                sessionId={supabaseGallery.sessionId}
+                userId={supabaseGallery.userId}
+              />
+            )}
+
             {/* Payment History Card - shows all transactions */}
             {cobrancasPagas.length > 0 && (
               <PaymentHistoryCard
