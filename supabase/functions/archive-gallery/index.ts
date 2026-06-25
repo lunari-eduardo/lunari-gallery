@@ -105,8 +105,10 @@ Deno.serve(async (req) => {
       console.error('[archive-gallery] RPC error:', rpcErr);
       const msg = rpcErr.message || 'archive_gallery failed';
       const status = msg.includes('FORBIDDEN') ? 403 : msg.includes('NOT_FOUND') ? 404 : 500;
-      return new Response(JSON.stringify({ success: false, error: msg, code: 'ARCHIVE_RPC_ERROR' }),
-        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({
+        success: false, error: msg, code: 'ARCHIVE_RPC_ERROR',
+        pg_code: (rpcErr as any).code, details: (rpcErr as any).details,
+      }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const result = archiveResult as {
