@@ -254,6 +254,7 @@ export function useSupabaseGalleries() {
       const { data, error } = await supabase
         .from('galerias')
         .select('*, galeria_fotos(id, storage_key)')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
