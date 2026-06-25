@@ -2489,6 +2489,9 @@ export type Database = {
           configuracoes: Json | null
           cover_id: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           density: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em: string | null
           finalized_at: string | null
@@ -2536,6 +2539,9 @@ export type Database = {
           configuracoes?: Json | null
           cover_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
           finalized_at?: string | null
@@ -2583,6 +2589,9 @@ export type Database = {
           configuracoes?: Json | null
           cover_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
           finalized_at?: string | null
@@ -5225,6 +5234,11 @@ export type Database = {
             Args: { p_date?: string; p_full_day?: boolean; p_slot_id?: string }
             Returns: undefined
           }
+      archive_gallery: { Args: { p_gallery_id: string }; Returns: Json }
+      assert_gallery_not_archived: {
+        Args: { p_gallery_id: string }
+        Returns: undefined
+      }
       atomic_update_session_extras: {
         Args: {
           p_extras_increment: number
