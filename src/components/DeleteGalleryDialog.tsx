@@ -46,12 +46,19 @@ export function DeleteGalleryDialog({ galleryName, onDelete, trigger }: DeleteGa
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir galeria?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tem certeza que deseja excluir <strong>"{galleryName}"</strong>?
-            <br /><br />
-            <span className="text-destructive font-medium">
-              Esta ação é irreversível. Todas as fotos serão removidas permanentemente.
-            </span>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              <p>
+                Tem certeza que deseja excluir <strong>"{galleryName}"</strong>?
+              </p>
+              <p className="text-destructive font-medium">
+                Esta ação é irreversível. Todas as fotos serão removidas permanentemente do armazenamento.
+              </p>
+              <p className="text-muted-foreground">
+                O histórico financeiro (pagamentos e cobranças) será preservado para sua contabilidade,
+                mas a galeria deixará de aparecer no painel.
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
