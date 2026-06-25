@@ -376,8 +376,15 @@ export function useSupabaseGalleries() {
       });
 
       if (error) {
-        // Tenta extrair detalhe do contexto (HTTP error retorna body em data, mas error.message tem o resumo).
-        const msg = (data as any)?.error || error.message || 'Falha ao arquivar galeria';
+        // FunctionsHttpError serializa o body em error.context
+        let msg = (data as any)?.error || error.message || 'Falha ao arquivar galeria';
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* ignore parse */ }
         throw new Error(msg);
       }
       if (data && (data as any).success === false) {

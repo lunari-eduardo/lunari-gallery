@@ -105,8 +105,10 @@ Deno.serve(async (req) => {
       console.error('[archive-gallery] RPC error:', rpcErr);
       const msg = rpcErr.message || 'archive_gallery failed';
       const status = msg.includes('FORBIDDEN') ? 403 : msg.includes('NOT_FOUND') ? 404 : 500;
-      return new Response(JSON.stringify({ success: false, error: msg, code: 'ARCHIVE_RPC_ERROR' }),
-        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({
+        success: false, error: msg, code: 'ARCHIVE_RPC_ERROR',
+        pg_code: (rpcErr as any).code, details: (rpcErr as any).details,
+      }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const result = archiveResult as {
@@ -169,11 +171,27 @@ Deno.serve(async (req) => {
       },
     }).then(({ error }) => { if (error) console.warn('[archive-gallery] audit insert error:', error.message); });
 
+    // 3b. Fila de retry para objetos R2 que falharam
+    if (failedPaths.length > 0) {
+      await supabaseAdmin.from('audit_log').insert({
+        action: 'gallery_archive_r2_retry_pending',
+        actor_type: 'user',
+        actor_id: user.id,
+        resource_type: 'gallery',
+        gallery_id: galleryId,
+        metadata: {
+          failed_paths: failedPaths.slice(0, 200),
+          failed_paths_total: failedPaths.length,
+        },
+      }).then(({ error }) => { if (error) console.warn('[archive-gallery] retry queue insert error:', error.message); });
+    }
+
     return new Response(JSON.stringify({
       success: true,
       galleryId,
       deletedFromStorage,
       r2Failed: failedPaths.length,
+      r2FailedSample: failedPaths.slice(0, 10),
       cobrancasPreservadas: result.cobrancas_preservadas ?? 0,
       storageBytesFreed: result.storage_bytes_freed ?? 0,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
