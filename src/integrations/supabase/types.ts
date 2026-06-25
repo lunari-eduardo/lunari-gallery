@@ -5190,6 +5190,14 @@ export type Database = {
       }
     }
     Functions: {
+      _extra_unit_price_for_quantity: {
+        Args: {
+          p_regras_congeladas: Json
+          p_total_extras: number
+          p_valor_fixo: number
+        }
+        Returns: number
+      }
       activate_referral_transfer_bonus: {
         Args: { _plan_storage_bytes: number; _referred_user_id: string }
         Returns: boolean
@@ -5225,6 +5233,10 @@ export type Database = {
           p_valor_increment: number
           p_valor_unitario: number
         }
+        Returns: Json
+      }
+      calculate_gallery_extra_payment: {
+        Args: { p_gallery_id: string }
         Returns: Json
       }
       calculate_manual_products_total: {
