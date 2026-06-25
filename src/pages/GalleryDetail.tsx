@@ -46,7 +46,7 @@ import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
 import { PaymentStatusCard } from '@/components/PaymentStatusCard';
 import { PaymentHistoryCard } from '@/components/PaymentHistoryCard';
-import { OrphanPaymentsBanner } from '@/components/OrphanPaymentsBanner';
+
 import { useSupabaseGalleries, GaleriaPhoto } from '@/hooks/useSupabaseGalleries';
 import { useSettings } from '@/hooks/useSettings';
 import { GalleryPhoto, GalleryAction, WatermarkSettings, Gallery } from '@/types/gallery';
