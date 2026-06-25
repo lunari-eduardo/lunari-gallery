@@ -370,12 +370,20 @@ export function useSupabaseGalleries() {
 
   const deleteGallery = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('galerias')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
+      // Arquivamento via edge function: apaga fotos do banco/R2 e preserva histórico financeiro.
+      const { data, error } = await supabase.functions.invoke('archive-gallery', {
+        body: { galleryId: id },
+      });
+
+      if (error) {
+        // Tenta extrair detalhe do contexto (HTTP error retorna body em data, mas error.message tem o resumo).
+        const msg = (data as any)?.error || error.message || 'Falha ao arquivar galeria';
+        throw new Error(msg);
+      }
+      if (data && (data as any).success === false) {
+        throw new Error((data as any).error || 'Falha ao arquivar galeria');
+      }
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleries'] });
