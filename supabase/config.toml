@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.send-email]
 verify_jwt = false
+
+[functions.archive-gallery]
+verify_jwt = true
