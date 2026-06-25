@@ -2,11 +2,14 @@
 
 import { RegrasCongeladas } from './types.ts';
 
-function normalizarValor(valor: number): number {
-  if (valor > 1000) {
-    return valor / 100;
-  }
-  return valor;
+// Sanitiza valor de "foto extra".
+// IMPORTANTE: NÃO assumir formato centavos vs reais por heurística de "> 1000".
+// A galeria pode ter, legitimamente, R$ 1.500 como valor unitário (pacotes premium).
+// Todos os pontos de leitura/escrita usam reais como número decimal.
+function normalizarValor(valor: number | null | undefined): number {
+  const v = Number(valor);
+  if (!isFinite(v) || v < 0) return 0;
+  return v;
 }
 
 export function calcularPrecoProgressivoComCredito(
