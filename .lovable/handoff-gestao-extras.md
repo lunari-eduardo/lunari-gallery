@@ -193,10 +193,11 @@ Para cada caso: `SELECT public.claim_orphan_payment_for_gallery(:cobranca_id, :g
 - [ ] ChargeModal: campo `finalidade` (Sessão / Fotos extras).
 - [ ] ChargeModal: campo galeria + qtd_fotos quando `fotos_extras`.
 - [ ] ChargeModal: pré-cálculo via RPC `calculate_gallery_extra_payment`.
+- [ ] ChargeModal: banner proativo quando sessão tem extras pendentes.
 - [ ] Edge functions Gestão: payload aceita e persiste `finalidade`, `galeria_id`, `qtd_fotos`, `snapshot_fotos_incluidas`, `correlation_id`.
 - [ ] Edge functions Gestão: validação anti-overcharge via RPC antes do INSERT.
+- [ ] Edge functions Gestão: bloqueio `AMBIGUOUS_PURPOSE_USE_FOTOS_EXTRAS` quando valor coincide com saldo de extras.
 - [ ] Edge functions Gestão: `clientes_transacoes.session_id = NULL` quando a cobrança é `fotos_extras`.
 - [ ] Workflow: bloco "receita da sessão" filtra `finalidade='sessao'`.
 - [ ] Workflow: bloco "fotos extras" usa RPC canônica.
-- [ ] Página de reconciliação para órfãos legados.
 - [ ] 5 casos de teste manuais passando.
