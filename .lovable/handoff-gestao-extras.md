@@ -147,32 +147,25 @@ Na página `Workflow` (e qualquer hook tipo `useSessionFinancials`):
    - Total ideal × total pago × saldo (`valor_a_cobrar`)
 3. **Nunca** somar `clientes_sessoes.valor_total_foto_extra` na "receita da sessão". Esse campo, no contrato novo, é considerado **derivado** e o Gallery o mantém em `0` quando a galeria foi paga.
 
-### 3.5 Backfill — reconciliar cobranças legadas
+### 3.5 Blindagem contra cobranças órfãs (sem painel manual)
 
-Use a view/audit para detectar cobranças que ainda estão marcadas como `sessao` mas que provavelmente eram extras:
+**Decisão de produto**: NÃO haverá painel admin de reconciliação. O sistema precisa impedir que cobranças órfãs sejam criadas — qualquer correção manual é sintoma de falha do contrato.
 
+Para isso, o Gestão deve garantir, no ChargeModal e em todas as edge functions de cobrança:
+
+1. **Bloqueio dura no servidor**: se a sessão tiver galeria associada COM extras pendentes (`fotos_selecionadas > fotos_incluidas` e `status_pagamento != 'pago'`), o backend deve **rejeitar** qualquer cobrança com `finalidade='sessao'` cujo valor coincida (±1%) com o saldo de extras. Mensagem: `AMBIGUOUS_PURPOSE_USE_FOTOS_EXTRAS`.
+2. **Sugestão proativa no ChargeModal**: ao abrir o modal para uma sessão com extras pendentes, mostrar banner "Esta sessão tem R$ X em fotos extras pendentes na galeria Y — deseja cobrar como fotos extras?" com CTA que já pré-seleciona `finalidade=fotos_extras` + galeria + qtd.
+3. **Healing legado**: o Gallery já corrigiu Clarissa via migration. Casos legados restantes devem ser tratados via SQL pontual pela equipe (não via UI). Query para listar candidatos:
 ```sql
 SELECT c.id, c.session_id, c.valor, c.data_pagamento, g.id as galeria_id
   FROM cobrancas c
-  JOIN clientes_sessoes s ON s.session_id = c.session_id
-  JOIN galerias g ON g.session_id = s.session_id
- WHERE c.finalidade = 'sessao'
-   AND c.galeria_id IS NULL
+  JOIN galerias g ON g.session_id = c.session_id
+ WHERE c.finalidade = 'sessao' AND c.galeria_id IS NULL
    AND c.status IN ('pago','pago_manual')
-   AND g.fotos_selecionadas > g.fotos_incluidas        -- galeria tinha extras
-   AND c.created_at >= g.created_at                    -- cobrança criada depois da galeria
- ORDER BY c.data_pagamento DESC;
+   AND g.fotos_selecionadas > g.fotos_incluidas
+   AND c.created_at >= g.created_at;
 ```
-
-Para cada caso confirmado, usar a RPC já existente:
-```sql
-SELECT public.claim_orphan_payment_for_gallery(
-  :cobranca_id, :galeria_id, :qtd_fotos
-);
-```
-Ela vincula a cobrança, dispara `finalize_gallery_payment` e marca a galeria como paga atomicamente.
-
-Recomendação UX: criar uma página interna "Reconciliação de extras" no Gestão listando candidatos e botão "Reclassificar como fotos extras desta galeria".
+Para cada caso: `SELECT public.claim_orphan_payment_for_gallery(:cobranca_id, :galeria_id, :qtd_fotos);`
 
 ---
 
@@ -200,10 +193,11 @@ Recomendação UX: criar uma página interna "Reconciliação de extras" no Gest
 - [ ] ChargeModal: campo `finalidade` (Sessão / Fotos extras).
 - [ ] ChargeModal: campo galeria + qtd_fotos quando `fotos_extras`.
 - [ ] ChargeModal: pré-cálculo via RPC `calculate_gallery_extra_payment`.
+- [ ] ChargeModal: banner proativo quando sessão tem extras pendentes.
 - [ ] Edge functions Gestão: payload aceita e persiste `finalidade`, `galeria_id`, `qtd_fotos`, `snapshot_fotos_incluidas`, `correlation_id`.
 - [ ] Edge functions Gestão: validação anti-overcharge via RPC antes do INSERT.
+- [ ] Edge functions Gestão: bloqueio `AMBIGUOUS_PURPOSE_USE_FOTOS_EXTRAS` quando valor coincide com saldo de extras.
 - [ ] Edge functions Gestão: `clientes_transacoes.session_id = NULL` quando a cobrança é `fotos_extras`.
 - [ ] Workflow: bloco "receita da sessão" filtra `finalidade='sessao'`.
 - [ ] Workflow: bloco "fotos extras" usa RPC canônica.
-- [ ] Página de reconciliação para órfãos legados.
 - [ ] 5 casos de teste manuais passando.
