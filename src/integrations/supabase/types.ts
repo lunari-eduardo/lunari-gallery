@@ -2217,7 +2217,9 @@ export type Database = {
           descricao: string | null
           galeria_id: string
           id: string
+          payload: Json | null
           tipo: string
+          updated_at: string | null
           user_id: string | null
         }
         Insert: {
@@ -2225,7 +2227,9 @@ export type Database = {
           descricao?: string | null
           galeria_id: string
           id?: string
+          payload?: Json | null
           tipo: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Update: {
@@ -2233,7 +2237,9 @@ export type Database = {
           descricao?: string | null
           galeria_id?: string
           id?: string
+          payload?: Json | null
           tipo?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Relationships: [
