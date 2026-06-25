@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button';
 
 interface DeleteGalleryDialogProps {
   galleryName: string;
-  onDelete: () => Promise<void>;
+  onDelete: () => Promise<any>;
   trigger?: React.ReactNode;
 }
 
@@ -26,8 +27,15 @@ export function DeleteGalleryDialog({ galleryName, onDelete, trigger }: DeleteGa
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await onDelete();
+      const result: any = await onDelete();
       setIsOpen(false);
+      if (result?.r2Failed && result.r2Failed > 0) {
+        toast.warning(`Galeria arquivada. ${result.r2Failed} arquivo(s) ficaram pendentes de remoção no storage e entrarão em fila de retry.`);
+      } else {
+        toast.success('Galeria arquivada com sucesso.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao arquivar galeria');
     } finally {
       setIsDeleting(false);
     }
