@@ -1,4 +1,5 @@
-// Arquiva uma galeria (soft-delete): apaga fotos do banco e do R2, mantém histórico financeiro.
+// Exclui definitivamente uma galeria: apaga fotos do banco e do R2.
+// O histórico financeiro (cobranças) permanece vinculado à sessão via session_id.
 // Chamada exclusiva pelo painel do fotógrafo autenticado.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
@@ -121,8 +122,9 @@ Deno.serve(async (req) => {
     };
 
     if (result?.already_archived) {
+      // Galeria já havia sido excluída em chamada anterior — idempotência
       return new Response(JSON.stringify({
-        success: true, alreadyArchived: true, deletedFromStorage: 0, r2Failed: 0,
+        success: true, alreadyDeleted: true, deletedFromStorage: 0, r2Failed: 0,
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -154,7 +156,7 @@ Deno.serve(async (req) => {
 
     // 3. Audit log
     await supabaseAdmin.from('audit_log').insert({
-      action: failedPaths.length > 0 ? 'gallery_archived_partial' : 'gallery_archived',
+      action: failedPaths.length > 0 ? 'gallery_deleted_partial' : 'gallery_deleted',
       actor_type: 'user',
       actor_id: user.id,
       resource_type: 'gallery',
@@ -174,7 +176,7 @@ Deno.serve(async (req) => {
     // 3b. Fila de retry para objetos R2 que falharam
     if (failedPaths.length > 0) {
       await supabaseAdmin.from('audit_log').insert({
-        action: 'gallery_archive_r2_retry_pending',
+        action: 'gallery_delete_r2_retry_pending',
         actor_type: 'user',
         actor_id: user.id,
         resource_type: 'gallery',
