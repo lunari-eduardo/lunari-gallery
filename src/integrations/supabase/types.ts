@@ -2500,6 +2500,7 @@ export type Database = {
           deleted_reason: string | null
           density: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em: string | null
+          expires_at: string | null
           finalized_at: string | null
           fotos_incluidas: number
           fotos_selecionadas: number | null
@@ -2550,6 +2551,7 @@ export type Database = {
           deleted_reason?: string | null
           density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
+          expires_at?: string | null
           finalized_at?: string | null
           fotos_incluidas?: number
           fotos_selecionadas?: number | null
@@ -2600,6 +2602,7 @@ export type Database = {
           deleted_reason?: string | null
           density?: Database["public"]["Enums"]["gallery_density"] | null
           enviado_em?: string | null
+          expires_at?: string | null
           finalized_at?: string | null
           fotos_incluidas?: number
           fotos_selecionadas?: number | null
@@ -2646,6 +2649,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      galerias_sessao_historico: {
+        Row: {
+          cliente_id: string | null
+          cobrancas_preservadas: number | null
+          created_at: string
+          deleted_at: string
+          deleted_by: string | null
+          gallery_id: string
+          id: string
+          motivo: string
+          nome_sessao: string | null
+          photo_count: number | null
+          session_id: string
+          storage_bytes_freed: number | null
+          tipo: string | null
+          user_id: string
+        }
+        Insert: {
+          cliente_id?: string | null
+          cobrancas_preservadas?: number | null
+          created_at?: string
+          deleted_at?: string
+          deleted_by?: string | null
+          gallery_id: string
+          id?: string
+          motivo?: string
+          nome_sessao?: string | null
+          photo_count?: number | null
+          session_id: string
+          storage_bytes_freed?: number | null
+          tipo?: string | null
+          user_id: string
+        }
+        Update: {
+          cliente_id?: string | null
+          cobrancas_preservadas?: number | null
+          created_at?: string
+          deleted_at?: string
+          deleted_by?: string | null
+          gallery_id?: string
+          id?: string
+          motivo?: string
+          nome_sessao?: string | null
+          photo_count?: number | null
+          session_id?: string
+          storage_bytes_freed?: number | null
+          tipo?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       gallery_credit_packages: {
         Row: {
@@ -5286,6 +5340,10 @@ export type Database = {
       deduct_gallery_credit: { Args: { _user_id: string }; Returns: boolean }
       delete_appointment_cascade: {
         Args: { p_appointment_id: string; p_keep_payments?: boolean }
+        Returns: Json
+      }
+      delete_gallery_complete: {
+        Args: { p_gallery_id: string; p_motivo?: string }
         Returns: Json
       }
       delete_workflow_session_cascade: {
