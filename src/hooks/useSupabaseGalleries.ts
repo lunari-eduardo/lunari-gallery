@@ -254,8 +254,8 @@ export function useSupabaseGalleries() {
       const { data, error } = await supabase
         .from('galerias')
         .select('*, galeria_fotos(id, storage_key)')
-        .is('deleted_at', null)
         .order('created_at', { ascending: false });
+      
       
       if (error) throw error;
       return (data || []).map(transformGaleria);
@@ -370,14 +370,14 @@ export function useSupabaseGalleries() {
 
   const deleteGallery = useMutation({
     mutationFn: async (id: string) => {
-      // Arquivamento via edge function: apaga fotos do banco/R2 e preserva histórico financeiro.
+      // Exclusão definitiva via edge function: apaga fotos do R2/BD e remove a galeria.
+      // Cobranças permanecem vinculadas à sessão (session_id) para preservar o extrato.
       const { data, error } = await supabase.functions.invoke('archive-gallery', {
         body: { galleryId: id },
       });
 
       if (error) {
-        // FunctionsHttpError serializa o body em error.context
-        let msg = (data as any)?.error || error.message || 'Falha ao arquivar galeria';
+        let msg = (data as any)?.error || error.message || 'Falha ao excluir galeria';
         try {
           const ctx: any = (error as any).context;
           if (ctx && typeof ctx.json === 'function') {
@@ -388,7 +388,7 @@ export function useSupabaseGalleries() {
         throw new Error(msg);
       }
       if (data && (data as any).success === false) {
-        throw new Error((data as any).error || 'Falha ao arquivar galeria');
+        throw new Error((data as any).error || 'Falha ao excluir galeria');
       }
       return data;
     },
