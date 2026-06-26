@@ -910,6 +910,11 @@ export default function GalleryCreate() {
         }
         // Gate por ref evita corrida entre cliques rápidos / StrictMode
         if (creatingGalleryRef.current) return;
+        // Se a sessão já teve uma galeria excluída antes, pede confirmação
+        if (priorDeletion && !recreateConfirmed) {
+          setShowRecreateDialog(true);
+          return;
+        }
         const ok = await createSupabaseGalleryForUploads();
         if (!ok) return; // não avança se falhou
       }
