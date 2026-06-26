@@ -566,6 +566,31 @@ export default function GalleryDetail() {
                   </button>
                 );
               })()}
+              {(() => {
+                const exp = (supabaseGallery as any).expiresAt as Date | null | undefined;
+                if (!exp) return null;
+                const diffDays = Math.ceil((exp.getTime() - Date.now()) / 86400000);
+                if (diffDays > 60) return null; // mostra só quando próximo
+                const isExpired = diffDays <= 0;
+                const isUrgent = diffDays <= 30;
+                const cls = isExpired
+                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
+                  : isUrgent
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                    : 'bg-muted text-muted-foreground border-border';
+                const label = isExpired
+                  ? 'Expira hoje (12m)'
+                  : `Expira em ${diffDays} dia${diffDays === 1 ? '' : 's'}`;
+                return (
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${cls}`}
+                    title={`Galerias são excluídas automaticamente após 12 meses. Expira em ${format(exp, "dd/MM/yyyy", { locale: ptBR })}.`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    {label}
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
