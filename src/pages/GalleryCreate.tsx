@@ -241,6 +241,15 @@ export default function GalleryCreate() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
+  // Aviso: sessão já teve uma galeria excluída (recriação)
+  const [priorDeletion, setPriorDeletion] = useState<{
+    nome_sessao: string | null;
+    deleted_at: string;
+    fotos_count: number | null;
+  } | null>(null);
+  const [showRecreateDialog, setShowRecreateDialog] = useState(false);
+  const [recreateConfirmed, setRecreateConfirmed] = useState(false);
+
   // Folder management
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   // Frozen pricing rules from Gestão session (for PRO+Gallery users)
@@ -518,6 +527,22 @@ export default function GalleryCreate() {
       }
     };
     fetchSessionData();
+  }, [gestaoParams?.session_id]);
+
+  // Checa se a sessão já teve uma galeria excluída anteriormente
+  useEffect(() => {
+    const sessionId = gestaoParams?.session_id;
+    if (!sessionId) return;
+    (async () => {
+      const { data, error } = await (supabase as any)
+        .from('galerias_sessao_historico')
+        .select('nome_sessao, deleted_at, fotos_count')
+        .eq('session_id', sessionId)
+        .order('deleted_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) setPriorDeletion(data);
+    })();
   }, [gestaoParams?.session_id]);
 
   // NEW: Sync includedPhotos, packageName, sessionName from regrasCongeladas
