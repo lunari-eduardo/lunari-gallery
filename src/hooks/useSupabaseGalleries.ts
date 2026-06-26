@@ -100,6 +100,7 @@ export interface Galeria {
   useCustomTheme?: boolean;
   themeOverrides?: any;
   coverId?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface CreateGaleriaData {
@@ -185,6 +186,7 @@ function transformGaleria(row: any): Galeria {
     useCustomTheme: row.use_custom_theme ?? false,
     themeOverrides: row.theme_overrides ?? {},
     coverId: row.cover_id ?? null,
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
   };
 }
 
