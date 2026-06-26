@@ -2461,6 +2461,49 @@ export default function GalleryCreate() {
             </Button>
           </div>
         </div>
+
+        {/* Aviso: sessão já teve uma galeria excluída anteriormente */}
+        <AlertDialog open={showRecreateDialog} onOpenChange={setShowRecreateDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Recriar galeria desta sessão?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  <p>
+                    Esta sessão já teve uma galeria{priorDeletion?.nome_sessao ? <> chamada <strong>"{priorDeletion.nome_sessao}"</strong></> : null} excluída
+                    {priorDeletion?.deleted_at ? <> em <strong>{new Date(priorDeletion.deleted_at).toLocaleDateString('pt-BR')}</strong></> : null}.
+                  </p>
+                  {priorDeletion?.fotos_count ? (
+                    <p className="text-muted-foreground">
+                      A galeria anterior continha {priorDeletion.fotos_count} foto{priorDeletion.fotos_count === 1 ? '' : 's'}, que foram removidas definitivamente.
+                    </p>
+                  ) : null}
+                  <p className="text-muted-foreground">
+                    O extrato financeiro da sessão (pagamentos e cobranças) foi preservado no Gestão.
+                    Você está prestes a criar uma <strong>nova galeria</strong> vinculada à mesma sessão.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async (e) => {
+                  e.preventDefault();
+                  setRecreateConfirmed(true);
+                  setShowRecreateDialog(false);
+                  // Reexecuta o avanço com a confirmação registrada
+                  setTimeout(() => handleNext(), 0);
+                }}
+              >
+                Recriar mesmo assim
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>;
 }
