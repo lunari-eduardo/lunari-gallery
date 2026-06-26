@@ -241,6 +241,15 @@ export default function GalleryCreate() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
+  // Aviso: sessão já teve uma galeria excluída (recriação)
+  const [priorDeletion, setPriorDeletion] = useState<{
+    nome_sessao: string | null;
+    deleted_at: string;
+    fotos_count: number | null;
+  } | null>(null);
+  const [showRecreateDialog, setShowRecreateDialog] = useState(false);
+  const [recreateConfirmed, setRecreateConfirmed] = useState(false);
+
   // Folder management
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   // Frozen pricing rules from Gestão session (for PRO+Gallery users)
@@ -518,6 +527,22 @@ export default function GalleryCreate() {
       }
     };
     fetchSessionData();
+  }, [gestaoParams?.session_id]);
+
+  // Checa se a sessão já teve uma galeria excluída anteriormente
+  useEffect(() => {
+    const sessionId = gestaoParams?.session_id;
+    if (!sessionId) return;
+    (async () => {
+      const { data, error } = await (supabase as any)
+        .from('galerias_sessao_historico')
+        .select('nome_sessao, deleted_at, fotos_count')
+        .eq('session_id', sessionId)
+        .order('deleted_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) setPriorDeletion(data);
+    })();
   }, [gestaoParams?.session_id]);
 
   // NEW: Sync includedPhotos, packageName, sessionName from regrasCongeladas
@@ -885,6 +910,11 @@ export default function GalleryCreate() {
         }
         // Gate por ref evita corrida entre cliques rápidos / StrictMode
         if (creatingGalleryRef.current) return;
+        // Se a sessão já teve uma galeria excluída antes, pede confirmação
+        if (priorDeletion && !recreateConfirmed) {
+          setShowRecreateDialog(true);
+          return;
+        }
         const ok = await createSupabaseGalleryForUploads();
         if (!ok) return; // não avança se falhou
       }
@@ -2431,6 +2461,49 @@ export default function GalleryCreate() {
             </Button>
           </div>
         </div>
+
+        {/* Aviso: sessão já teve uma galeria excluída anteriormente */}
+        <AlertDialog open={showRecreateDialog} onOpenChange={setShowRecreateDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Recriar galeria desta sessão?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  <p>
+                    Esta sessão já teve uma galeria{priorDeletion?.nome_sessao ? <> chamada <strong>"{priorDeletion.nome_sessao}"</strong></> : null} excluída
+                    {priorDeletion?.deleted_at ? <> em <strong>{new Date(priorDeletion.deleted_at).toLocaleDateString('pt-BR')}</strong></> : null}.
+                  </p>
+                  {priorDeletion?.fotos_count ? (
+                    <p className="text-muted-foreground">
+                      A galeria anterior continha {priorDeletion.fotos_count} foto{priorDeletion.fotos_count === 1 ? '' : 's'}, que foram removidas definitivamente.
+                    </p>
+                  ) : null}
+                  <p className="text-muted-foreground">
+                    O extrato financeiro da sessão (pagamentos e cobranças) foi preservado no Gestão.
+                    Você está prestes a criar uma <strong>nova galeria</strong> vinculada à mesma sessão.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async (e) => {
+                  e.preventDefault();
+                  setRecreateConfirmed(true);
+                  setShowRecreateDialog(false);
+                  // Reexecuta o avanço com a confirmação registrada
+                  setTimeout(() => handleNext(), 0);
+                }}
+              >
+                Recriar mesmo assim
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>;
 }

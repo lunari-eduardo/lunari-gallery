@@ -30,12 +30,12 @@ export function DeleteGalleryDialog({ galleryName, onDelete, trigger }: DeleteGa
       const result: any = await onDelete();
       setIsOpen(false);
       if (result?.r2Failed && result.r2Failed > 0) {
-        toast.warning(`Galeria arquivada. ${result.r2Failed} arquivo(s) ficaram pendentes de remoção no storage e entrarão em fila de retry.`);
+        toast.warning(`Galeria excluída. ${result.r2Failed} arquivo(s) ficaram pendentes de remoção no storage e entrarão em fila de retry.`);
       } else {
-        toast.success('Galeria arquivada com sucesso.');
+        toast.success('Galeria excluída com sucesso.');
       }
     } catch (e: any) {
-      toast.error(e?.message || 'Falha ao arquivar galeria');
+      toast.error(e?.message || 'Falha ao excluir galeria');
     } finally {
       setIsDeleting(false);
     }
@@ -53,18 +53,18 @@ export function DeleteGalleryDialog({ galleryName, onDelete, trigger }: DeleteGa
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir galeria?</AlertDialogTitle>
+          <AlertDialogTitle>Excluir galeria definitivamente?</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3 text-sm">
               <p>
                 Tem certeza que deseja excluir <strong>"{galleryName}"</strong>?
               </p>
               <p className="text-destructive font-medium">
-                Esta ação é irreversível. Todas as fotos serão removidas permanentemente do armazenamento.
+                Esta ação é irreversível. Fotos, configurações e dados de seleção serão removidos permanentemente.
               </p>
               <p className="text-muted-foreground">
-                O histórico financeiro (pagamentos e cobranças) será preservado para sua contabilidade,
-                mas a galeria deixará de aparecer no painel.
+                O extrato financeiro (pagamentos e cobranças) permanece registrado na sessão original do Gestão.
+                A sessão poderá receber uma nova galeria depois, se necessário.
               </p>
             </div>
           </AlertDialogDescription>
