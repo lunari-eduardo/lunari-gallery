@@ -375,6 +375,8 @@ serve(async (req) => {
         finalized: isFinalized,
         selectionLocked,
         hasPaid,
+        blockedReason,
+        finalizedAt: galleryFinalizedAt || visitorFinalizedAt || null,
         folders: folders || [],
 
         studioSettings: settings || null,
