@@ -24,7 +24,7 @@ function checkRateLimit(ip: string): boolean {
 interface RequestBody {
   galleryToken: string;
   photoId?: string;
-  action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment';
+  action: 'toggle' | 'select' | 'deselect' | 'comment' | 'favorite' | 'finalize_payment' | 'regenerate_charge';
   comment?: string;
   visitorId?: string;  // Required for public galleries
 }
