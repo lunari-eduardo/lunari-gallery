@@ -608,10 +608,18 @@ export default function ClientGallery() {
       });
       
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
+        // R1 (gallery-rules): galeria já finalizada => força refetch e mostra
+        // tela de pagamento pendente. Nunca mostra toast de erro genérico.
+        if (response.status === 409 || error?.code === 'ALREADY_PROCESSING' || error?.code === 'ALREADY_FINALIZED') {
+          await refetchGallery();
+          const err = new Error('ALREADY_FINALIZED') as Error & { silent?: boolean };
+          err.silent = true;
+          throw err;
+        }
         throw new Error(error.error || 'Erro ao confirmar seleção');
       }
-      
+
       return response.json();
     },
     onSuccess: (data) => {
@@ -660,9 +668,12 @@ export default function ClientGallery() {
       setIsConfirmed(true);
       setCurrentStep('confirmed');
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { silent?: boolean }) => {
+      // Silent errors (ex.: ALREADY_FINALIZED) já dispararam refetch — nada de toast.
+      if (error?.silent || error?.message === 'ALREADY_FINALIZED') return;
       // Parse error code from message if available
       const msg = error.message || 'Erro ao confirmar seleção';
+      
       
       // Show contextual error messages based on error codes from backend
       if (msg.includes('Nenhum método de pagamento configurado') || msg.includes('NO_PAYMENT_PROVIDER')) {
@@ -1087,17 +1098,26 @@ export default function ClientGallery() {
     return <ClientDeliverGallery data={galleryResponse} />;
   }
 
-  // 🔒 EARLY-RETURN DETERMINÍSTICO: uma vez travada a seleção,
-  // NUNCA mais renderizar UI de seleção. Só pagamento ou preview.
+  // 🔒 R2 (gallery-rules): selectionLocked decidido no SERVIDOR.
+  // Uma vez travada a seleção, o cliente NUNCA renderiza grid — só
+  // pagamento pendente ou preview finalizado. Os OR abaixo são apenas
+  // salvaguarda contra payload legado; a fonte real é galleryResponse.
   const selectionLocked = Boolean(
     galleryResponse?.selectionLocked
     || galleryResponse?.finalized
+    || (galleryResponse as any)?.finalizedAt
     || supabaseGallery?.finalized_at
     || supabaseGallery?.status_selecao === 'aguardando_pagamento'
     || supabaseGallery?.status_selecao === 'selecao_completa'
     || supabaseGallery?.status_selecao === 'processando_selecao'
   );
   const hasPaid = Boolean(galleryResponse?.hasPaid);
+  const blockedReason = (galleryResponse as any)?.blockedReason as
+    | 'awaiting_payment' | 'awaiting_charge_regeneration' | 'finalized_paid' | null | undefined;
+  if (selectionLocked && !hasPaid) {
+    // Log defensivo: se algum fluxo posterior tentar renderizar grid, saberemos.
+    console.debug('[ClientGallery] selectionLocked=true, blockedReason=', blockedReason);
+  }
 
   // Preview finalizada só se pago
   if (selectionLocked && hasPaid && galleryResponse?.finalized) {
