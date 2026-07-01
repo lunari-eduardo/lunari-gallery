@@ -194,7 +194,37 @@ export function PaymentPendingScreen({
           />
         )}
 
-        {status === 'polling' && (
+        {awaitingCharge && status === 'polling' && (
+          <>
+            <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">
+              <AlertCircle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-xl font-semibold">Sua seleção foi finalizada</h1>
+              <p className={cn("text-sm", isDark ? 'text-white/60' : 'text-[#8A8078]')}>
+                O link de pagamento precisa ser gerado novamente. Clique abaixo para continuar.
+              </p>
+            </div>
+            <div className={cn(
+              "rounded-lg p-4 border",
+              isDark ? 'border-white/10 bg-white/5' : 'border-[#E5E0D9] bg-white'
+            )}>
+              <p className={cn("text-xs mb-1", isDark ? 'text-white/40' : 'text-[#8A8078]')}>Valor a pagar</p>
+              <p className="text-2xl font-bold">R$ {valorTotal.toFixed(2)}</p>
+            </div>
+            {onRegenerate && (
+              <Button onClick={() => onRegenerate()} className="w-full" variant="terracotta">
+                Gerar novo link de pagamento
+              </Button>
+            )}
+            <p className={cn("text-xs", isDark ? 'text-white/40' : 'text-[#8A8078]')}>
+              Se o problema persistir, entre em contato com o fotógrafo.
+            </p>
+          </>
+        )}
+
+        {!awaitingCharge && status === 'polling' && (
+
           <>
             <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">
               <Clock className="h-8 w-8 text-amber-600 dark:text-amber-400 animate-pulse" />
