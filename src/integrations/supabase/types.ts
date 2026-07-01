@@ -1837,36 +1837,118 @@ export type Database = {
         }
         Relationships: []
       }
+      fin_groups: {
+        Row: {
+          code: string
+          created_at: string
+          icon: string | null
+          label: string
+          nature_code: string
+          ordering: number
+          requires_category: boolean
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          icon?: string | null
+          label: string
+          nature_code: string
+          ordering?: number
+          requires_category?: boolean
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          icon?: string | null
+          label?: string
+          nature_code?: string
+          ordering?: number
+          requires_category?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_groups_nature_code_fkey"
+            columns: ["nature_code"]
+            isOneToOne: false
+            referencedRelation: "fin_natures"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       fin_items_master: {
         Row: {
+          archived_at: string | null
           ativo: boolean | null
           created_at: string | null
+          group_code: string | null
           grupo_principal: string
           id: string
           is_default: boolean | null
+          is_system: boolean
           nome: string
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           ativo?: boolean | null
           created_at?: string | null
+          group_code?: string | null
           grupo_principal: string
           id?: string
           is_default?: boolean | null
+          is_system?: boolean
           nome: string
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           ativo?: boolean | null
           created_at?: string | null
+          group_code?: string | null
           grupo_principal?: string
           id?: string
           is_default?: boolean | null
+          is_system?: boolean
           nome?: string
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_items_master_group_code_fkey"
+            columns: ["group_code"]
+            isOneToOne: false
+            referencedRelation: "fin_groups"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      fin_natures: {
+        Row: {
+          affects_pnl: boolean
+          code: string
+          created_at: string
+          label: string
+          ordering: number
+          sign: string
+        }
+        Insert: {
+          affects_pnl?: boolean
+          code: string
+          created_at?: string
+          label: string
+          ordering?: number
+          sign: string
+        }
+        Update: {
+          affects_pnl?: boolean
+          code?: string
+          created_at?: string
+          label?: string
+          ordering?: number
+          sign?: string
         }
         Relationships: []
       }
@@ -4698,6 +4780,7 @@ export type Database = {
           source: string | null
           status: string | null
           tags: string[] | null
+          text_blocks: Json | null
           title: string
           type: string | null
           updated_at: string
@@ -4730,6 +4813,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           tags?: string[] | null
+          text_blocks?: Json | null
           title: string
           type?: string | null
           updated_at?: string
@@ -4762,6 +4846,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           tags?: string[] | null
+          text_blocks?: Json | null
           title?: string
           type?: string | null
           updated_at?: string
@@ -5134,6 +5219,7 @@ export type Database = {
           descricao: string | null
           id: string | null
           meio_pagamento: string | null
+          natureza: string | null
           observacoes: string | null
           origem: string | null
           parcela_atual: number | null
@@ -5284,6 +5370,19 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_egress_table_stats: {
+        Args: { _user_id: string }
+        Returns: {
+          live_rows: number
+          rows_deleted: number
+          rows_inserted: number
+          rows_read: number
+          rows_updated: number
+          table_name: string
+          total_size_bytes: number
+          total_size_pretty: string
+        }[]
+      }
       admin_grant_credits: {
         Args: { _amount: number; _reason?: string; _target_user_id: string }
         Returns: string
@@ -5364,6 +5463,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
+      fin_promote_overdue_to_faturado: { Args: never; Returns: number }
       finalize_gallery_payment: {
         Args: {
           p_cobranca_id: string
@@ -5543,6 +5643,10 @@ export type Database = {
         Returns: Json
       }
       user_has_gallery_access: { Args: { _user_id: string }; Returns: boolean }
+      workflow_a_receber: {
+        Args: { _end: string; _start: string }
+        Returns: number
+      }
     }
     Enums: {
       account_status: "active" | "suspended" | "canceled"
