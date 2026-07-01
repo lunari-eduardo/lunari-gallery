@@ -112,13 +112,32 @@ serve(async (req) => {
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
     let isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
 
+    // 🔒 selectionLocked: verdade única — uma vez travada NUNCA reverte.
+    // Baseado em finalized_at OU status_selecao pós-confirmação.
+    const galleryFinalizedAt = (gallery as any).finalized_at;
+    let visitorFinalizedAt: string | null = null;
+    if (visitorId) {
+      const { data: vRow } = await supabase
+        .from('galeria_visitantes')
+        .select('finalized_at')
+        .eq('id', visitorId)
+        .maybeSingle();
+      visitorFinalizedAt = (vRow as any)?.finalized_at || null;
+    }
+    const selectionLocked = Boolean(
+      galleryFinalizedAt ||
+      visitorFinalizedAt ||
+      ['aguardando_pagamento', 'selecao_completa', 'processando_selecao'].includes(currentSelectionStatus) ||
+      (visitorSelectionStatus && ['aguardando_pagamento', 'selecao_completa', 'processando_selecao'].includes(visitorSelectionStatus))
+    );
+
     // Auto-heal via RPC canônica: se há cobranças pagas não contabilizadas,
     // invocar finalize_gallery_payment (idempotente). NUNCA fazer UPDATE
     // direto em status_selecao aqui — a RPC é fonte única de verdade.
     let hasPending = false;
     let hasPaid = false;
 
-    if (isAwaitingPayment) {
+    if (selectionLocked) {
       const { data: charges } = await supabase
         .from('cobrancas')
         .select('id, status, extras_contabilizados')
@@ -168,13 +187,14 @@ serve(async (req) => {
       }
     }
 
-    // 🛡️ BLINDAGEM: Se ainda há cobrança pendente, NUNCA reportar como finalizada.
-    // Evita que o cliente veja galeria "concluída" sem ter pago (bug B1/B5).
-    if (hasPending) {
+    // 🛡️ BLINDAGEM: Se travada e não paga, NUNCA reportar como finalizada.
+    if (selectionLocked && !hasPaid) {
       isFinalized = false;
     }
 
-    if (isAwaitingPayment && !pendingPaymentData) {
+    // Pending payment sempre que selectionLocked && !hasPaid, mesmo sem cobrança viva.
+    if (selectionLocked && !hasPaid && !pendingPaymentData) {
+
       const { data: cobranca } = await supabase
         .from('cobrancas')
         .select('*')
@@ -235,12 +255,34 @@ serve(async (req) => {
           pixDados: (gallery.configuracoes as any)?.pixDados,
           asaasCheckoutData,
         };
+      } else {
+        // Sem cobrança viva mas travada: tela awaitingCharge com valor canônico.
+        let valorCanonico = 0;
+        try {
+          const { data: calc } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: gallery.id });
+          valorCanonico = Number((calc as any)?.valor_a_cobrar || 0);
+        } catch (e) {
+          console.error('[gallery-access] calc canônico falhou:', e);
+        }
+        pendingPaymentData = {
+          pendingPayment: true,
+          awaitingCharge: true,
+          paymentMethod: (gallery as any).venda_pagamento_provedor || null,
+          checkoutUrl: null,
+          cobrancaId: null,
+          valorTotal: valorCanonico,
+          pixDados: (gallery.configuracoes as any)?.pixDados,
+          asaasCheckoutData: null,
+          needsRegeneration: (gallery as any).payment_needs_regeneration === true,
+        };
       }
     }
 
-    // Filter photos if finalized
+
+
+    // Filter photos if finalized OR travada (não paga): cliente não vê grid de seleção.
     let filteredPhotos = photos || [];
-    if (isFinalized) {
+    if (isFinalized || (selectionLocked && !hasPaid)) {
       if (visitorId && gallery.permissao === 'public') {
         const { data: visitorSelections } = await supabase
           .from('visitante_selecoes')
@@ -254,6 +296,7 @@ serve(async (req) => {
         filteredPhotos = filteredPhotos.filter(p => p.is_selected);
       }
     }
+
 
     // 4. Resolve Theme (Centralized logic)
     const galleryConfig = gallery.configuracoes as any || {}
@@ -322,7 +365,10 @@ serve(async (req) => {
         },
         photos: filteredPhotos,
         finalized: isFinalized,
+        selectionLocked,
+        hasPaid,
         folders: folders || [],
+
         studioSettings: settings || null,
         theme: themeData,
         clientMode,
