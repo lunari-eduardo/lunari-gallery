@@ -160,13 +160,16 @@ Deno.serve(async (req) => {
       try {
         const { data, error } = await supabase.rpc('regenerate_pending_charge', { p_gallery_id: galleryId });
         if (error) throw error;
-        await supabase.from('galeria_acoes').insert({
-          galeria_id: galleryId,
-          tipo: 'pagamento_regenerado',
-          descricao: 'Cliente solicitou regeneração do link de pagamento',
-          user_id: null,
-          payload: { via: 'client-selection', result: data ?? null },
-        });
+        try {
+          await supabase.from('galeria_acoes').insert({
+            galeria_id: galleryId,
+            tipo: 'pagamento_regenerado',
+            descricao: 'Cliente solicitou regeneração do link de pagamento',
+            user_id: null,
+            payload: { via: 'client-selection', result: data ?? null },
+          });
+        } catch (_logErr) { /* tipo pode não estar na constraint — não crítico */ }
+
         return new Response(
           JSON.stringify({ success: true, data }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
