@@ -23,6 +23,8 @@ interface PaymentPendingScreenProps {
   studioLogoUrl?: string;
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
+  awaitingCharge?: boolean;
+  onRegenerate?: () => void | Promise<void>;
   onPaymentConfirmed: () => void;
 }
 
@@ -36,8 +38,11 @@ export function PaymentPendingScreen({
   studioLogoUrl,
   themeStyles = {},
   backgroundMode = 'light',
+  awaitingCharge = false,
+  onRegenerate,
   onPaymentConfirmed,
 }: PaymentPendingScreenProps) {
+
   const [status, setStatus] = useState<'polling' | 'confirmed' | 'timeout'>('polling');
   const [pollCount, setPollCount] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
