@@ -255,8 +255,30 @@ serve(async (req) => {
           pixDados: (gallery.configuracoes as any)?.pixDados,
           asaasCheckoutData,
         };
+      } else {
+        // Sem cobrança viva mas travada: tela awaitingCharge com valor canônico.
+        let valorCanonico = 0;
+        try {
+          const { data: calc } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: gallery.id });
+          valorCanonico = Number((calc as any)?.valor_a_cobrar || 0);
+        } catch (e) {
+          console.error('[gallery-access] calc canônico falhou:', e);
+        }
+        pendingPaymentData = {
+          pendingPayment: true,
+          awaitingCharge: true,
+          paymentMethod: (gallery as any).venda_pagamento_provedor || null,
+          checkoutUrl: null,
+          cobrancaId: null,
+          valorTotal: valorCanonico,
+          pixDados: (gallery.configuracoes as any)?.pixDados,
+          asaasCheckoutData: null,
+          needsRegeneration: (gallery as any).payment_needs_regeneration === true,
+        };
       }
     }
+
+
 
     // Filter photos if finalized
     let filteredPhotos = photos || [];
