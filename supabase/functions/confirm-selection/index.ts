@@ -180,15 +180,34 @@ Deno.serve(async (req) => {
 
 
     // ── ROLLBACK HELPER: Reset status on any failure after lock ──
+    // R6 (gallery-rules): NUNCA reseta se finalized_at já existir.
     const rollbackGalleryStatus = async () => {
       try {
         if (visitorId) {
+          const { data: v } = await supabase
+            .from('galeria_visitantes')
+            .select('finalized_at')
+            .eq('id', visitorId)
+            .maybeSingle();
+          if ((v as any)?.finalized_at) {
+            console.log(`🛡️ Rollback ignorado: visitor ${visitorId} já finalizado.`);
+            return;
+          }
           await supabase.from('galeria_visitantes').update({
             status_selecao: 'selecao_iniciada',
             updated_at: new Date().toISOString(),
           }).eq('id', visitorId);
           console.log(`🔓 Rollback: Visitor ${visitorId} status_selecao reset to selecao_iniciada`);
         } else {
+          const { data: g } = await supabase
+            .from('galerias')
+            .select('finalized_at')
+            .eq('id', galleryId)
+            .maybeSingle();
+          if ((g as any)?.finalized_at) {
+            console.log(`🛡️ Rollback ignorado: galeria ${galleryId} já finalizada.`);
+            return;
+          }
           await supabase.from('galerias').update({
             status_selecao: 'selecao_iniciada',
             updated_at: new Date().toISOString(),
