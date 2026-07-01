@@ -163,7 +163,7 @@ export function PaymentPendingScreen({
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
       if (pollTimeout) clearTimeout(pollTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
