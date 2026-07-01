@@ -2593,6 +2593,7 @@ export type Database = {
           nome_sessao: string | null
           orcamento_id: string | null
           origin: string | null
+          payment_needs_regeneration: boolean
           permissao: string | null
           prazo_selecao: string | null
           prazo_selecao_dias: number | null
@@ -2644,6 +2645,7 @@ export type Database = {
           nome_sessao?: string | null
           orcamento_id?: string | null
           origin?: string | null
+          payment_needs_regeneration?: boolean
           permissao?: string | null
           prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
@@ -2695,6 +2697,7 @@ export type Database = {
           nome_sessao?: string | null
           orcamento_id?: string | null
           origin?: string | null
+          payment_needs_regeneration?: boolean
           permissao?: string | null
           prazo_selecao?: string | null
           prazo_selecao_dias?: number | null
@@ -5572,6 +5575,10 @@ export type Database = {
         Returns: Json
       }
       refund_photo_credit: { Args: { _user_id: string }; Returns: undefined }
+      regenerate_pending_charge: {
+        Args: { p_gallery_id: string }
+        Returns: Json
+      }
       register_referral: { Args: { _referral_code: string }; Returns: boolean }
       release_advisory_lock: { Args: { lock_key: string }; Returns: boolean }
       renew_subscription_credits: {
