@@ -280,16 +280,24 @@ serve(async (req) => {
 
 
 
-    // Filter photos if finalized OR travada (não paga): cliente não vê grid de seleção.
+    // R3 (gallery-rules): Filtro de fotos e blockedReason canônico.
+    // - Travada e NÃO paga => photos:[] (nenhum grid de seleção possível no cliente).
+    // - Travada e paga => devolve apenas selecionadas (preview finalizado).
     let filteredPhotos = photos || [];
-    if (isFinalized || (selectionLocked && !hasPaid)) {
+    let blockedReason: 'awaiting_payment' | 'awaiting_charge_regeneration' | 'finalized_paid' | null = null;
+    if (selectionLocked && !hasPaid) {
+      filteredPhotos = [];
+      blockedReason = (pendingPaymentData as any)?.awaitingCharge
+        ? 'awaiting_charge_regeneration'
+        : 'awaiting_payment';
+    } else if (isFinalized) {
+      blockedReason = 'finalized_paid';
       if (visitorId && gallery.permissao === 'public') {
         const { data: visitorSelections } = await supabase
           .from('visitante_selecoes')
           .select('foto_id')
           .eq('visitante_id', visitorId)
           .eq('is_selected', true);
-        
         const selectedIds = new Set(visitorSelections?.map(s => s.foto_id) || []);
         filteredPhotos = filteredPhotos.filter(p => selectedIds.has(p.id));
       } else {
