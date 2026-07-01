@@ -118,34 +118,40 @@ export function PaymentPendingScreen({
     checkPayment();
     scheduleNextPoll();
 
-    // Set up Realtime subscription
-    const channelName = cobrancaId 
-      ? `payment-${cobrancaId}` 
-      : `payment-session-${sessionId}`;
-    
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'cobrancas',
-          ...(cobrancaId ? { filter: `id=eq.${cobrancaId}` } : {}),
-        },
-        (payload) => {
-          console.log('[PaymentPending] Realtime update:', payload.new);
-          if ((payload.new as any).status === 'pago') {
-            setStatus('confirmed');
-            if (pollTimeout) clearTimeout(pollTimeout);
-            setTimeout(() => onPaymentConfirmed(), 2000);
+    // Set up Realtime subscription — ONLY se tivermos cobrancaId específico.
+    // Sem filter por id, o canal receberia UPDATEs de qualquer cobrança
+    // (leak entre clientes), disparando falsos positivos de "confirmed".
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    if (cobrancaId) {
+      const channelName = `payment-${cobrancaId}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'cobrancas',
+            filter: `id=eq.${cobrancaId}`,
+          },
+          (payload) => {
+            console.log('[PaymentPending] Realtime update:', payload.new);
+            const newStatus = (payload.new as any).status;
+            if (newStatus === 'pago' || newStatus === 'pago_manual') {
+              setStatus('confirmed');
+              if (pollTimeout) clearTimeout(pollTimeout);
+              setTimeout(() => onPaymentConfirmed(), 2000);
+            }
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[PaymentPending] Realtime status:', status);
-        realtimeActive = status === 'SUBSCRIBED';
-      });
+        )
+        .subscribe((status) => {
+          console.log('[PaymentPending] Realtime status:', status);
+          realtimeActive = status === 'SUBSCRIBED';
+        });
+    } else {
+      console.warn('[PaymentPending] Sem cobrancaId — realtime desabilitado; usando apenas polling.');
+    }
+
 
     // Handle tab visibility (PWA/Mobile sleep)
     const handleVisibilityChange = () => {
@@ -157,7 +163,7 @@ export function PaymentPendingScreen({
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
       if (pollTimeout) clearTimeout(pollTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

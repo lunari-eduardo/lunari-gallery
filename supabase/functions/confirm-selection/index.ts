@@ -714,11 +714,21 @@ Deno.serve(async (req) => {
     }
 
     // 8. Sync with clientes_sessoes if gallery was created from Gestão
-    // Use ABSOLUTE values: gallery.total_fotos_extras_vendidas + current extras
-    // This prevents ghost accumulation when selections are abandoned and redone
+    // 🛡️ Relemos a galeria após o UPDATE acima para capturar valores
+    // pós-heal (triggers de reconciliação podem ter ajustado
+    // total_fotos_extras_vendidas / valor_total_vendido). Sem isso, o
+    // fallback usava valores stale e causava double-count na sessão.
     if (gallery.session_id) {
-      const totalExtrasAbsoluto = (gallery.total_fotos_extras_vendidas || 0) + extrasACobrar;
-      const totalValorAbsoluto = (gallery.valor_total_vendido || 0) + valorTotal;
+      const { data: refreshedGallery } = await supabase
+        .from('galerias')
+        .select('total_fotos_extras_vendidas, valor_total_vendido')
+        .eq('id', galleryId)
+        .maybeSingle();
+
+      const baseExtras = Number(refreshedGallery?.total_fotos_extras_vendidas ?? gallery.total_fotos_extras_vendidas ?? 0);
+      const baseValor = Number(refreshedGallery?.valor_total_vendido ?? gallery.valor_total_vendido ?? 0);
+      const totalExtrasAbsoluto = baseExtras + extrasACobrar;
+      const totalValorAbsoluto = baseValor + valorTotal;
 
       const { error: sessionError } = await supabase.rpc('set_session_extras', {
         p_session_id: gallery.session_id,
@@ -730,7 +740,6 @@ Deno.serve(async (req) => {
 
       if (sessionError) {
         console.error('Session set_session_extras error:', sessionError);
-        // Fallback: direct update with absolute values
         const { error: fallbackError } = await supabase
           .from('clientes_sessoes')
           .update({

@@ -110,26 +110,68 @@ serve(async (req) => {
     }
 
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
-    const isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
+    let isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
+
+    // Auto-heal via RPC canônica: se há cobranças pagas não contabilizadas,
+    // invocar finalize_gallery_payment (idempotente). NUNCA fazer UPDATE
+    // direto em status_selecao aqui — a RPC é fonte única de verdade.
+    let hasPending = false;
+    let hasPaid = false;
 
     if (isAwaitingPayment) {
       const { data: charges } = await supabase
         .from('cobrancas')
-        .select('status')
-        .eq('galeria_id', gallery.id);
-      
-      const hasPending = charges?.some(c => ['pendente', 'aguardando_confirmacao'].includes(c.status));
-      const hasPaid = charges?.some(c => ['pago', 'pago_manual'].includes(c.status));
+        .select('id, status, extras_contabilizados')
+        .eq('galeria_id', gallery.id)
+        .eq('finalidade', 'fotos_extras');
 
-      if (hasPaid && !hasPending) {
-         if (visitorId) {
-           await supabase.from('galeria_visitantes').update({ status_selecao: 'selecao_completa' }).eq('id', visitorId);
-           visitorSelectionStatus = 'selecao_completa';
-         } else {
-           await supabase.from('galerias').update({ status_selecao: 'selecao_completa' }).eq('id', gallery.id);
-           currentSelectionStatus = 'selecao_completa';
-         }
+      hasPending = charges?.some((c: any) => ['pendente', 'aguardando_confirmacao'].includes(c.status)) || false;
+      hasPaid = charges?.some((c: any) => ['pago', 'pago_manual'].includes(c.status)) || false;
+
+      if (hasPaid) {
+        const needsHeal = (charges || []).filter(
+          (c: any) => ['pago', 'pago_manual'].includes(c.status) && c.extras_contabilizados !== true
+        );
+        for (const c of needsHeal) {
+          try {
+            await supabase.rpc('finalize_gallery_payment', {
+              p_cobranca_id: c.id,
+              p_receipt_url: null,
+              p_paid_at: new Date().toISOString(),
+              p_manual_method: null,
+              p_manual_obs: null,
+            });
+          } catch (healErr) {
+            console.error(`[gallery-access] Auto-heal falhou para cobrança ${c.id}:`, healErr);
+          }
+        }
+
+        if (!hasPending) {
+          const { data: refreshed } = await supabase
+            .from('galerias')
+            .select('status_selecao')
+            .eq('id', gallery.id)
+            .maybeSingle();
+          if (refreshed?.status_selecao === 'selecao_completa') {
+            currentSelectionStatus = 'selecao_completa';
+            isFinalized = true;
+          }
+          if (visitorId) {
+            await supabase
+              .from('galeria_visitantes')
+              .update({ status_selecao: 'selecao_completa', updated_at: new Date().toISOString() })
+              .eq('id', visitorId);
+            visitorSelectionStatus = 'selecao_completa';
+            isFinalized = true;
+          }
+        }
       }
+    }
+
+    // 🛡️ BLINDAGEM: Se ainda há cobrança pendente, NUNCA reportar como finalizada.
+    // Evita que o cliente veja galeria "concluída" sem ter pago (bug B1/B5).
+    if (hasPending) {
+      isFinalized = false;
     }
 
     if (isAwaitingPayment && !pendingPaymentData) {
@@ -143,13 +185,55 @@ serve(async (req) => {
         .maybeSingle();
 
       if (cobranca) {
+        // Fallback multi-provedor para checkoutUrl (InfinitePay OU MercadoPago)
+        const checkoutUrl =
+          (cobranca as any).ip_checkout_url ||
+          (cobranca as any).mp_payment_link ||
+          null;
+
+        // Reconstitui asaasCheckoutData quando cliente retorna com cobrança
+        // Asaas pendente — o checkout transparente precisa desse payload.
+        let asaasCheckoutData: Record<string, unknown> | null = null;
+        if (cobranca.provedor === 'asaas' && cobranca.status === 'pendente') {
+          const { data: integracao } = await supabase
+            .from('usuarios_integracoes')
+            .select('dados_extras')
+            .eq('user_id', gallery.user_id)
+            .eq('provedor', 'asaas')
+            .eq('status', 'ativo')
+            .maybeSingle();
+          const s = (integracao?.dados_extras || {}) as Record<string, any>;
+          asaasCheckoutData = {
+            galeriaId: gallery.id,
+            userId: gallery.user_id,
+            valorTotal: Number(cobranca.valor || 0),
+            descricao: cobranca.descricao || `Fotos extras - ${gallery.nome_sessao || 'Galeria'}`,
+            qtdFotos: cobranca.qtd_fotos || 0,
+            clienteId: gallery.cliente_id,
+            sessionId: gallery.session_id,
+            galleryToken: gallery.public_token,
+            visitorId: visitorId || undefined,
+            cobrancaId: cobranca.id,
+            enabledMethods: {
+              pix: s.habilitarPix !== false,
+              creditCard: s.habilitarCartao !== false,
+              boleto: s.habilitarBoleto === true,
+            },
+            maxParcelas: s.maxParcelas || 12,
+            absorverTaxa: s.absorverTaxa || false,
+            snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
+            snapshotRegrasCongeladas: gallery.regras_congeladas,
+          };
+        }
+
         pendingPaymentData = {
           pendingPayment: true,
           paymentMethod: cobranca.provedor,
-          checkoutUrl: cobranca.ip_checkout_url,
+          checkoutUrl,
           cobrancaId: cobranca.id,
-          valorTotal: cobranca.valor,
+          valorTotal: Number(cobranca.valor || 0),
           pixDados: (gallery.configuracoes as any)?.pixDados,
+          asaasCheckoutData,
         };
       }
     }
