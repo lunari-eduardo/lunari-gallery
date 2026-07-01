@@ -155,6 +155,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Handle regenerate_charge: cliente pede novo link quando cobrança expirou/foi cancelada.
+    if (action === 'regenerate_charge') {
+      try {
+        const { data, error } = await supabase.rpc('regenerate_pending_charge', { p_gallery_id: galleryId });
+        if (error) throw error;
+        await supabase.from('galeria_acoes').insert({
+          galeria_id: galleryId,
+          tipo: 'pagamento_regenerado',
+          descricao: 'Cliente solicitou regeneração do link de pagamento',
+          user_id: null,
+          payload: { via: 'client-selection', result: data ?? null },
+        });
+        return new Response(
+          JSON.stringify({ success: true, data }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: e instanceof Error ? e.message : 'Falha ao regenerar cobrança' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+
     // For photo actions, photoId is required
     if (!photoId) {
       return new Response(
