@@ -1207,13 +1207,37 @@ export default function ClientGallery() {
 
   // Payment verification now runs silently — no blocking screen
 
-  // Pending payment screen - gallery awaiting payment (aguardando_pagamento)
-  if (galleryResponse?.pendingPayment && !isProcessingPaymentReturn) {
-    const pendingPaymentMethod = galleryResponse.paymentMethod;
-    const pendingPixDados = galleryResponse.pixDados;
-    const pendingCheckoutUrl = galleryResponse.checkoutUrl;
-    const pendingValorTotal = galleryResponse.valorTotal || 0;
+  // Pending payment screen - travada e não paga (fonte: selectionLocked + !hasPaid).
+  // Cobre também o caso awaitingCharge (sem cobrança viva → botão "gerar novo link").
+  if (selectionLocked && !hasPaid && !isProcessingPaymentReturn) {
+    const pendingPaymentMethod = galleryResponse?.paymentMethod;
+    const pendingPixDados = galleryResponse?.pixDados;
+    const pendingCheckoutUrl = galleryResponse?.checkoutUrl;
+    const pendingValorTotal = galleryResponse?.valorTotal || 0;
     const pendingBgMode = effectiveBackgroundMode;
+    const awaitingCharge = Boolean(galleryResponse?.awaitingCharge) || !galleryResponse?.cobrancaId;
+
+    const handleRegenerateCharge = async () => {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            galleryToken: identifier,
+            action: 'regenerate_charge',
+            visitorId: visitorId || undefined,
+          }),
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || 'Não foi possível gerar novo link agora.');
+        }
+        await refetchGallery();
+        toast.success('Link de pagamento gerado. Redirecionando…');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erro ao gerar novo link');
+      }
+    };
 
     const handlePixPaymentConfirmed = async () => {
       setIsConfirmingPixPayment(true);
@@ -1244,7 +1268,7 @@ export default function ClientGallery() {
     };
 
     // PIX Manual - show PIX payment screen
-    if (pendingPaymentMethod === 'pix_manual' && pendingPixDados) {
+    if (!awaitingCharge && pendingPaymentMethod === 'pix_manual' && pendingPixDados) {
       return (
         <PixPaymentScreen
           chavePix={pendingPixDados.chavePix || ''}
@@ -1261,8 +1285,8 @@ export default function ClientGallery() {
       );
     }
 
-    // Asaas transparent checkout - show inline payment form
-    if (pendingPaymentMethod === 'asaas' && galleryResponse.asaasCheckoutData) {
+    // Asaas transparent checkout
+    if (!awaitingCharge && pendingPaymentMethod === 'asaas' && galleryResponse?.asaasCheckoutData) {
       return (
         <AsaasCheckout
           data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
@@ -1279,28 +1303,29 @@ export default function ClientGallery() {
       );
     }
 
-    // InfinitePay/MercadoPago - show payment pending screen with auto-polling
-    if (pendingCheckoutUrl || pendingPaymentMethod === 'infinitepay' || pendingPaymentMethod === 'mercadopago') {
-      return (
-        <PaymentPendingScreen
-          cobrancaId={galleryResponse.cobrancaId}
-          sessionId={sessionId || undefined}
-          checkoutUrl={pendingCheckoutUrl}
-          valorTotal={pendingValorTotal}
-          provedor={pendingPaymentMethod || 'pagamento'}
-          studioName={galleryResponse.studioSettings?.studio_name}
-          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-          themeStyles={themeStyles}
-          backgroundMode={pendingBgMode}
-          onPaymentConfirmed={() => {
-            setCurrentStep('confirmed');
-            setIsConfirmed(true);
-            refetchGallery();
-          }}
-        />
-      );
-    }
+    // InfinitePay/MercadoPago + fallback awaitingCharge (sem cobrança viva)
+    return (
+      <PaymentPendingScreen
+        cobrancaId={galleryResponse?.cobrancaId}
+        sessionId={sessionId || undefined}
+        checkoutUrl={pendingCheckoutUrl}
+        valorTotal={pendingValorTotal}
+        provedor={pendingPaymentMethod || 'pagamento'}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+        themeStyles={themeStyles}
+        backgroundMode={pendingBgMode}
+        awaitingCharge={awaitingCharge}
+        onRegenerate={handleRegenerateCharge}
+        onPaymentConfirmed={() => {
+          setCurrentStep('confirmed');
+          setIsConfirmed(true);
+          refetchGallery();
+        }}
+      />
+    );
   }
+
 
   // If processing payment return and gallery is momentarily null, show loading instead of error
   if (isProcessingPaymentReturn && !gallery) {
