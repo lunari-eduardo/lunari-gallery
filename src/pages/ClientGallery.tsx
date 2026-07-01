@@ -1087,17 +1087,26 @@ export default function ClientGallery() {
     return <ClientDeliverGallery data={galleryResponse} />;
   }
 
-  // 🔒 EARLY-RETURN DETERMINÍSTICO: uma vez travada a seleção,
-  // NUNCA mais renderizar UI de seleção. Só pagamento ou preview.
+  // 🔒 R2 (gallery-rules): selectionLocked decidido no SERVIDOR.
+  // Uma vez travada a seleção, o cliente NUNCA renderiza grid — só
+  // pagamento pendente ou preview finalizado. Os OR abaixo são apenas
+  // salvaguarda contra payload legado; a fonte real é galleryResponse.
   const selectionLocked = Boolean(
     galleryResponse?.selectionLocked
     || galleryResponse?.finalized
+    || (galleryResponse as any)?.finalizedAt
     || supabaseGallery?.finalized_at
     || supabaseGallery?.status_selecao === 'aguardando_pagamento'
     || supabaseGallery?.status_selecao === 'selecao_completa'
     || supabaseGallery?.status_selecao === 'processando_selecao'
   );
   const hasPaid = Boolean(galleryResponse?.hasPaid);
+  const blockedReason = (galleryResponse as any)?.blockedReason as
+    | 'awaiting_payment' | 'awaiting_charge_regeneration' | 'finalized_paid' | null | undefined;
+  if (selectionLocked && !hasPaid) {
+    // Log defensivo: se algum fluxo posterior tentar renderizar grid, saberemos.
+    console.debug('[ClientGallery] selectionLocked=true, blockedReason=', blockedReason);
+  }
 
   // Preview finalizada só se pago
   if (selectionLocked && hasPaid && galleryResponse?.finalized) {
