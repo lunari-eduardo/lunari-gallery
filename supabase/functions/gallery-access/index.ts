@@ -112,13 +112,32 @@ serve(async (req) => {
     const isAwaitingPayment = currentSelectionStatus === 'aguardando_pagamento' || visitorSelectionStatus === 'aguardando_pagamento';
     let isFinalized = currentSelectionStatus === 'selecao_completa' || visitorSelectionStatus === 'selecao_completa';
 
+    // 🔒 selectionLocked: verdade única — uma vez travada NUNCA reverte.
+    // Baseado em finalized_at OU status_selecao pós-confirmação.
+    const galleryFinalizedAt = (gallery as any).finalized_at;
+    let visitorFinalizedAt: string | null = null;
+    if (visitorId) {
+      const { data: vRow } = await supabase
+        .from('galeria_visitantes')
+        .select('finalized_at')
+        .eq('id', visitorId)
+        .maybeSingle();
+      visitorFinalizedAt = (vRow as any)?.finalized_at || null;
+    }
+    const selectionLocked = Boolean(
+      galleryFinalizedAt ||
+      visitorFinalizedAt ||
+      ['aguardando_pagamento', 'selecao_completa', 'processando_selecao'].includes(currentSelectionStatus) ||
+      (visitorSelectionStatus && ['aguardando_pagamento', 'selecao_completa', 'processando_selecao'].includes(visitorSelectionStatus))
+    );
+
     // Auto-heal via RPC canônica: se há cobranças pagas não contabilizadas,
     // invocar finalize_gallery_payment (idempotente). NUNCA fazer UPDATE
     // direto em status_selecao aqui — a RPC é fonte única de verdade.
     let hasPending = false;
     let hasPaid = false;
 
-    if (isAwaitingPayment) {
+    if (selectionLocked) {
       const { data: charges } = await supabase
         .from('cobrancas')
         .select('id, status, extras_contabilizados')
@@ -168,13 +187,14 @@ serve(async (req) => {
       }
     }
 
-    // 🛡️ BLINDAGEM: Se ainda há cobrança pendente, NUNCA reportar como finalizada.
-    // Evita que o cliente veja galeria "concluída" sem ter pago (bug B1/B5).
-    if (hasPending) {
+    // 🛡️ BLINDAGEM: Se travada e não paga, NUNCA reportar como finalizada.
+    if (selectionLocked && !hasPaid) {
       isFinalized = false;
     }
 
-    if (isAwaitingPayment && !pendingPaymentData) {
+    // Pending payment sempre que selectionLocked && !hasPaid, mesmo sem cobrança viva.
+    if (selectionLocked && !hasPaid && !pendingPaymentData) {
+
       const { data: cobranca } = await supabase
         .from('cobrancas')
         .select('*')
