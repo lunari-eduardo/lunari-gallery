@@ -608,10 +608,18 @@ export default function ClientGallery() {
       });
       
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
+        // R1 (gallery-rules): galeria já finalizada => força refetch e mostra
+        // tela de pagamento pendente. Nunca mostra toast de erro genérico.
+        if (response.status === 409 || error?.code === 'ALREADY_PROCESSING' || error?.code === 'ALREADY_FINALIZED') {
+          await refetchGallery();
+          const err = new Error('ALREADY_FINALIZED') as Error & { silent?: boolean };
+          err.silent = true;
+          throw err;
+        }
         throw new Error(error.error || 'Erro ao confirmar seleção');
       }
-      
+
       return response.json();
     },
     onSuccess: (data) => {
