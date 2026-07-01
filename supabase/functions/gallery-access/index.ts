@@ -280,9 +280,9 @@ serve(async (req) => {
 
 
 
-    // Filter photos if finalized
+    // Filter photos if finalized OR travada (não paga): cliente não vê grid de seleção.
     let filteredPhotos = photos || [];
-    if (isFinalized) {
+    if (isFinalized || (selectionLocked && !hasPaid)) {
       if (visitorId && gallery.permissao === 'public') {
         const { data: visitorSelections } = await supabase
           .from('visitante_selecoes')
@@ -296,6 +296,7 @@ serve(async (req) => {
         filteredPhotos = filteredPhotos.filter(p => p.is_selected);
       }
     }
+
 
     // 4. Resolve Theme (Centralized logic)
     const galleryConfig = gallery.configuracoes as any || {}
