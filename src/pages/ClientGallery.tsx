@@ -668,9 +668,12 @@ export default function ClientGallery() {
       setIsConfirmed(true);
       setCurrentStep('confirmed');
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { silent?: boolean }) => {
+      // Silent errors (ex.: ALREADY_FINALIZED) já dispararam refetch — nada de toast.
+      if (error?.silent || error?.message === 'ALREADY_FINALIZED') return;
       // Parse error code from message if available
       const msg = error.message || 'Erro ao confirmar seleção';
+      
       
       // Show contextual error messages based on error codes from backend
       if (msg.includes('Nenhum método de pagamento configurado') || msg.includes('NO_PAYMENT_PROVIDER')) {
