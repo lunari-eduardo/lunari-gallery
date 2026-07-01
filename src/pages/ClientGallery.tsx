@@ -1087,10 +1087,20 @@ export default function ClientGallery() {
     return <ClientDeliverGallery data={galleryResponse} />;
   }
 
-  // Finalized gallery screen - show preview of selected photos
-  // 🛡️ Defesa em profundidade: se ainda houver pendingPayment, a tela de
-  // pagamento tem prioridade absoluta sobre a preview finalizada.
-  if (galleryResponse?.finalized && !galleryResponse?.pendingPayment) {
+  // 🔒 EARLY-RETURN DETERMINÍSTICO: uma vez travada a seleção,
+  // NUNCA mais renderizar UI de seleção. Só pagamento ou preview.
+  const selectionLocked = Boolean(
+    galleryResponse?.selectionLocked
+    || galleryResponse?.finalized
+    || supabaseGallery?.finalized_at
+    || supabaseGallery?.status_selecao === 'aguardando_pagamento'
+    || supabaseGallery?.status_selecao === 'selecao_completa'
+    || supabaseGallery?.status_selecao === 'processando_selecao'
+  );
+  const hasPaid = Boolean(galleryResponse?.hasPaid);
+
+  // Preview finalizada só se pago
+  if (selectionLocked && hasPaid && galleryResponse?.finalized) {
     return (
       <FinalizedPreviewScreen
         photos={galleryResponse.photos || []}
@@ -1106,6 +1116,7 @@ export default function ClientGallery() {
       />
     );
   }
+
 
 
   // Expired gallery screen - always light background
