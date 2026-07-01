@@ -364,7 +364,10 @@ serve(async (req) => {
         },
         photos: filteredPhotos,
         finalized: isFinalized,
+        selectionLocked,
+        hasPaid,
         folders: folders || [],
+
         studioSettings: settings || null,
         theme: themeData,
         clientMode,
