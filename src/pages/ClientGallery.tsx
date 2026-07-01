@@ -1088,7 +1088,9 @@ export default function ClientGallery() {
   }
 
   // Finalized gallery screen - show preview of selected photos
-  if (galleryResponse?.finalized) {
+  // 🛡️ Defesa em profundidade: se ainda houver pendingPayment, a tela de
+  // pagamento tem prioridade absoluta sobre a preview finalizada.
+  if (galleryResponse?.finalized && !galleryResponse?.pendingPayment) {
     return (
       <FinalizedPreviewScreen
         photos={galleryResponse.photos || []}
@@ -1104,6 +1106,7 @@ export default function ClientGallery() {
       />
     );
   }
+
 
   // Expired gallery screen - always light background
   if (galleryResponse?.expired) {
