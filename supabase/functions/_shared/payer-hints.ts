@@ -50,6 +50,7 @@ function firstNameOf(full?: string | null): string | undefined {
 function normalizeEmail(email?: string | null): string | undefined {
   if (!email) return undefined;
   const clean = email.trim().toLowerCase();
+  if (NON_ASCII_RE.test(clean)) return undefined;
   return EMAIL_RE.test(clean) ? clean : undefined;
 }
 
