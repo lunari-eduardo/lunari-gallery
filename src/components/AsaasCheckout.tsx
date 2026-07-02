@@ -765,7 +765,7 @@ export function AsaasCheckout({
                             onBlur={() => {
                               if (pixEmail && !/\S+@\S+\.\S+/.test(pixEmail)) setFieldError('pixEmail', 'Email inválido');
                             }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pixCpfRef.current?.focus() ?? pixPhoneRef.current?.focus(); } }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (needsCpf ? pixCpfRef : needsPhone ? pixPhoneRef : pixGenerateRef).current?.focus(); } }}
                             placeholder="voce@email.com"
                             autoComplete="email"
                             maxLength={160}
