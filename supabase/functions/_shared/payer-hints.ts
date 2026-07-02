@@ -112,10 +112,10 @@ export async function resolvePayerHints(
     }
   }
 
-  if ((!hints.firstName || !hints.email || !hints.phone) && opts.visitorId) {
+  if ((!hints.firstName || !hints.email || !hints.phone || !hints.cpfCnpj) && opts.visitorId) {
     const { data: v } = await supabase
       .from('galeria_visitantes')
-      .select('nome, contato, contato_tipo')
+      .select('nome, contato, contato_tipo, cpf_cnpj')
       .eq('id', opts.visitorId)
       .maybeSingle();
     if (v) {
@@ -128,6 +128,7 @@ export async function resolvePayerHints(
         hints.phone = p.phone;
         hints.phoneParts = p.phoneParts;
       }
+      if (!hints.cpfCnpj) hints.cpfCnpj = normalizeCpfCnpj(v.cpf_cnpj);
     }
   }
 
