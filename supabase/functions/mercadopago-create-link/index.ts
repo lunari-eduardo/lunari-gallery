@@ -15,6 +15,7 @@
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { resolvePayerHints, payerHintsFlags } from '../_shared/payer-hints.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -90,23 +91,18 @@ Deno.serve(async (req) => {
     
     console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId, 'clienteId:', body.clienteId || 'NULL');
     
-    // 2. Buscar email do cliente se não fornecido
-    let clienteEmail = body.cliente_email;
-    if (!clienteEmail && body.clienteId) {
-      const { data: cliente } = await supabase
-        .from('clientes')
-        .select('email')
-        .eq('id', body.clienteId)
-        .single();
-      
-      clienteEmail = cliente?.email || 'cliente@email.com';
-      console.log('Email do cliente obtido via clienteId:', clienteEmail);
-    }
-    
-    if (!clienteEmail) {
-      clienteEmail = 'cliente@email.com'; // Fallback para galerias públicas
-      console.log('Usando email fallback:', clienteEmail);
-    }
+    // 2. Buscar dados do pagador (nome + email + telefone) para pré-preencher o checkout.
+    //    Prioridade: cliente → visitante. NUNCA usar email placeholder inválido.
+    const payerHints = await resolvePayerHints(supabase, {
+      clienteId: body.clienteId,
+      visitorId: body.visitorId,
+    });
+    console.log(`[MP_PREFILL] ${payerHintsFlags(payerHints)}`);
+
+    // clienteEmail = email real do body (Gestão) OU hint validado. undefined é permitido para Preference.
+    let clienteEmail: string | undefined = body.cliente_email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.cliente_email)
+      ? body.cliente_email.trim().toLowerCase()
+      : payerHints.email;
     
     // 3. Criar cobrança se não fornecida (aceita cliente_id NULL agora)
     let cobrancaId = body.cobranca_id;
