@@ -162,9 +162,12 @@ Deno.serve(async (req) => {
     }
 
     // 🔒 GUARD: Asaas exige CPF/CNPJ do pagador para gerar QR PIX, boleto ou
-    // cobrança de cartão. Se o cliente não tem CPF salvo, retornamos 422 para
-    // o frontend abrir o modal de coleta e reencaminhar após persistência.
-    if (!payerHints.cpfCnpj) {
+    // cobrança de cartão. Se não temos CPF no CRM E o cliente também não
+    // enviou via `creditCardHolderInfo` (fluxo de cartão), retornamos 422
+    // para o frontend abrir o modal de coleta.
+    const cardHolderCpf = String(body.creditCardHolderInfo?.cpfCnpj || '').replace(/\D/g, '');
+    const hasCardHolderCpf = cardHolderCpf.length === 11 || cardHolderCpf.length === 14;
+    if (!payerHints.cpfCnpj && !hasCardHolderCpf) {
       console.warn('[ASAAS_GUARD] MISSING_CPF_CNPJ — abortando antes de chamar Asaas');
       return new Response(
         JSON.stringify({
