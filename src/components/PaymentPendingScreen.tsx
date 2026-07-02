@@ -373,10 +373,10 @@ export function PaymentPendingScreen({
                     className="text-2xl font-semibold text-foreground leading-tight"
                     style={{ fontFamily: 'ui-serif, Georgia, serif' }}
                   >
-                    {awaitingCharge ? 'Link de pagamento necessário' : 'Aguardando pagamento'}
+                    {effectiveAction.kind === 'regenerate' ? 'Link de pagamento necessário' : 'Aguardando pagamento'}
                   </h2>
                   <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    {awaitingCharge
+                    {effectiveAction.kind === 'regenerate'
                       ? 'Precisamos gerar um novo link para você concluir o pagamento.'
                       : 'Seu pedido está aguardando a conclusão do pagamento.'}
                   </p>
@@ -400,7 +400,7 @@ export function PaymentPendingScreen({
               )}
 
               <div className="mt-6 space-y-3">
-                {awaitingCharge ? (
+                {effectiveAction.kind === 'regenerate' && (
                   <Button
                     onClick={handleRegenerate}
                     disabled={isRegenerating}
@@ -414,20 +414,32 @@ export function PaymentPendingScreen({
                     )}
                     Gerar link de pagamento
                   </Button>
-                ) : (
-                  checkoutUrl && (
-                    <Button
-                      asChild
-                      className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
-                      style={{ height: 52 }}
-                    >
-                      <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
-                        <Wallet className="h-4 w-4" strokeWidth={1.75} />
-                        Ir para pagamento
-                      </a>
-                    </Button>
-                  )
                 )}
+
+                {effectiveAction.kind === 'external_redirect' && (
+                  <Button
+                    asChild
+                    className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
+                    style={{ height: 52 }}
+                  >
+                    <a href={effectiveAction.checkoutUrl} target="_blank" rel="noopener noreferrer">
+                      <Wallet className="h-4 w-4" strokeWidth={1.75} />
+                      Ir para pagamento
+                    </a>
+                  </Button>
+                )}
+
+                {effectiveAction.kind === 'resume_modal' && (
+                  <Button
+                    onClick={() => onResume?.()}
+                    className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
+                    style={{ height: 52 }}
+                  >
+                    <Wallet className="h-4 w-4" strokeWidth={1.75} />
+                    Ir para pagamento
+                  </Button>
+                )}
+
 
                 <Button
                   variant="outline"
