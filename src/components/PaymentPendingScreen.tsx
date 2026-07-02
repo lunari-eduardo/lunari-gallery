@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Check, Clock, Info, Loader2, RefreshCw, Shield, Wallet, Eye, ImageIcon, Hourglass } from 'lucide-react';
+import { Check, Clock, Info, Loader2, RefreshCw, Shield, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,7 +33,7 @@ function PendingIllustration() {
   return (
     <svg
       viewBox="0 0 240 180"
-      className="mx-auto h-32 sm:h-40 w-auto"
+      className="mx-auto h-28 sm:h-32 w-auto text-muted-foreground"
       fill="none"
       stroke="currentColor"
       strokeWidth={1.25}
@@ -41,27 +41,21 @@ function PendingIllustration() {
       strokeLinejoin="round"
       aria-hidden
     >
-      {/* folhagem sutil */}
-      <g className="text-[#D9D2C7]" opacity={0.9}>
+      <g opacity={0.55}>
         <path d="M40 70c8-14 20-18 30-14" />
         <path d="M52 62c-2-5-1-10 2-13" />
         <path d="M60 58c2-4 6-6 10-6" />
         <path d="M200 70c-8-14-20-18-30-14" />
         <path d="M188 62c2-5 1-10-2-13" />
         <path d="M180 58c-2-4-6-6-10-6" />
-        <circle cx="35" cy="110" r="1.2" fill="currentColor" />
-        <circle cx="210" cy="105" r="1.2" fill="currentColor" />
-        <circle cx="120" cy="30" r="1.2" fill="currentColor" />
       </g>
 
-      {/* janela / galeria */}
-      <g className="text-[#8A8078]">
+      <g>
         <rect x="70" y="55" width="115" height="80" rx="6" />
         <circle cx="80" cy="65" r="1.5" fill="currentColor" />
         <circle cx="86" cy="65" r="1.5" fill="currentColor" />
         <circle cx="92" cy="65" r="1.5" fill="currentColor" />
         <line x1="70" y1="74" x2="185" y2="74" />
-        {/* placeholders */}
         <rect x="80" y="84" width="45" height="42" rx="3" />
         <path d="M83 118l10-10 8 7 6-4 15 15" />
         <circle cx="93" cy="97" r="3" />
@@ -70,15 +64,13 @@ function PendingIllustration() {
         <circle cx="143" cy="97" r="3" />
       </g>
 
-      {/* selo check */}
-      <g className="text-[#8B6F4E]">
-        <circle cx="72" cy="52" r="10" fill="#F3EEE7" stroke="currentColor" />
+      <g className="text-primary">
+        <circle cx="72" cy="52" r="10" fill="hsl(var(--card))" stroke="currentColor" />
         <path d="M67 52l4 4 6-7" />
       </g>
 
-      {/* cadeado */}
-      <g className="text-[#8B6F4E]">
-        <rect x="170" y="118" width="22" height="18" rx="3" fill="#F3EEE7" stroke="currentColor" />
+      <g className="text-primary">
+        <rect x="170" y="118" width="22" height="18" rx="3" fill="hsl(var(--card))" stroke="currentColor" />
         <path d="M174 118v-4a7 7 0 0114 0v4" />
         <circle cx="181" cy="127" r="1.5" fill="currentColor" />
       </g>
@@ -96,46 +88,46 @@ interface Step {
 }
 
 function TimelineNode({ step }: { step: Step }) {
-  const base = 'flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium shrink-0';
+  const base = 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium shrink-0';
   const styles: Record<StepState, string> = {
-    done: 'bg-[#0F0F0F] text-white',
-    active: 'bg-[#8B6F4E] text-white',
-    upcoming: 'bg-white text-[#B0A89E] border border-[#E5E0D9]',
+    done: 'bg-foreground text-background',
+    active: 'bg-primary text-primary-foreground',
+    upcoming: 'bg-card text-muted-foreground border border-border',
   };
   return (
     <div className={cn(base, styles[step.state])}>
-      {step.state === 'done' ? <Check className="h-4 w-4" strokeWidth={2.2} /> : step.index}
+      {step.state === 'done' ? <Check className="h-3.5 w-3.5" strokeWidth={2.2} /> : step.index}
     </div>
   );
 }
 
 function Timeline({ steps }: { steps: Step[] }) {
   return (
-    <div className="rounded-3xl bg-white border border-[#EDE7DE] shadow-[0_8px_32px_-12px_rgba(20,15,10,0.06)] p-6 sm:p-8">
+    <div className="rounded-2xl bg-card border border-border shadow-[0_4px_20px_-12px_rgba(0,0,0,0.08)] p-4 sm:p-5">
       {/* Desktop */}
-      <div className="hidden sm:grid grid-cols-3 gap-4 relative">
-        <div className="absolute top-[18px] left-[16%] right-[16%] h-px bg-[#E5E0D9]" />
+      <div className="hidden sm:grid grid-cols-3 gap-3 relative">
+        <div className="absolute top-[14px] left-[16%] right-[16%] h-px bg-border" />
         {steps.map((s) => (
-          <div key={s.index} className="flex flex-col items-center text-center gap-3 relative z-10">
+          <div key={s.index} className="flex flex-col items-center text-center gap-2 relative z-10">
             <TimelineNode step={s} />
             <div>
-              <p className="text-sm font-semibold text-[#2C2C2C]">{s.title}</p>
-              <p className="text-xs text-[#8A8078] mt-1 leading-relaxed">{s.subtitle}</p>
+              <p className="text-[13px] font-semibold text-foreground leading-tight">{s.title}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{s.subtitle}</p>
             </div>
           </div>
         ))}
       </div>
       {/* Mobile */}
-      <div className="sm:hidden flex flex-col gap-5">
+      <div className="sm:hidden flex flex-col gap-2.5">
         {steps.map((s, i) => (
-          <div key={s.index} className="flex gap-4 items-start relative">
+          <div key={s.index} className="flex gap-3 items-start relative">
             <div className="flex flex-col items-center">
               <TimelineNode step={s} />
-              {i < steps.length - 1 && <div className="w-px flex-1 min-h-8 bg-[#E5E0D9] mt-2" />}
+              {i < steps.length - 1 && <div className="w-px flex-1 min-h-4 bg-border mt-1.5" />}
             </div>
-            <div className="pt-1">
-              <p className="text-sm font-semibold text-[#2C2C2C]">{s.title}</p>
-              <p className="text-xs text-[#8A8078] mt-0.5 leading-relaxed">{s.subtitle}</p>
+            <div className="pt-0.5 pb-1">
+              <p className="text-[13px] font-semibold text-foreground leading-tight">{s.title}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{s.subtitle}</p>
             </div>
           </div>
         ))}
@@ -270,33 +262,27 @@ export function PaymentPendingScreen({
           {
             index: 3,
             title: 'Continuação do pedido',
-            subtitle: 'A próxima etapa será iniciada após a confirmação',
+            subtitle: 'Após a confirmação',
             state: 'upcoming',
           },
         ];
 
   return (
     <div
-      className="min-h-screen w-full text-[#2C2C2C]"
-      style={{
-        background:
-          'radial-gradient(ellipse at top, #FAF6EF 0%, #F5F0E8 55%, #F0EAE0 100%)',
-        ...themeStyles,
-      }}
+      className="min-h-screen w-full bg-background text-foreground"
+      style={themeStyles}
     >
-      <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
-        {/* Header */}
-        <div className="flex flex-col items-center text-center mb-8 sm:mb-10">
+      <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-14">
+        {/* Header - Logo grande, sem borda */}
+        <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
           {studioLogoUrl ? (
-            <div className="h-16 w-16 rounded-full bg-white/80 border border-[#EDE7DE] flex items-center justify-center overflow-hidden shadow-[0_4px_20px_-8px_rgba(20,15,10,0.08)]">
-              <img
-                src={studioLogoUrl}
-                alt={studioName || 'Studio'}
-                className="max-h-12 max-w-12 object-contain"
-              />
-            </div>
+            <img
+              src={studioLogoUrl}
+              alt={studioName || 'Studio'}
+              className="h-32 sm:h-36 w-auto max-w-[220px] object-contain"
+            />
           ) : studioName ? (
-            <p className="text-sm tracking-[0.2em] uppercase text-[#8A8078]">{studioName}</p>
+            <p className="text-sm tracking-[0.2em] uppercase text-muted-foreground">{studioName}</p>
           ) : null}
         </div>
 
@@ -304,9 +290,9 @@ export function PaymentPendingScreen({
         <PendingIllustration />
 
         {/* Título */}
-        <div className="text-center mt-6 mb-10 space-y-3 px-2">
+        <div className="text-center mt-6 mb-8 space-y-3 px-2">
           <h1
-            className="text-2xl sm:text-3xl font-semibold text-[#0F0F0F] tracking-tight"
+            className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight"
             style={{ fontFamily: 'ui-serif, Georgia, "Times New Roman", serif' }}
           >
             {status === 'confirmed'
@@ -315,7 +301,7 @@ export function PaymentPendingScreen({
               ? 'Verificação em andamento'
               : 'Sua seleção foi salva!'}
           </h1>
-          <p className="text-[15px] leading-relaxed text-[#6B6259] max-w-md mx-auto">
+          <p className="text-[15px] leading-relaxed text-muted-foreground max-w-md mx-auto">
             {status === 'confirmed'
               ? 'Sua seleção foi finalizada com sucesso.'
               : status === 'timeout'
@@ -324,29 +310,29 @@ export function PaymentPendingScreen({
           </p>
         </div>
 
-        {/* Timeline */}
-        <div className="mb-6">
+        {/* Timeline compacta */}
+        <div className="mb-5">
           <Timeline steps={timelineSteps} />
         </div>
 
         {/* Card status */}
-        <div className="rounded-3xl bg-white border border-[#EDE7DE] shadow-[0_8px_32px_-12px_rgba(20,15,10,0.06)] p-6 sm:p-8 mb-6">
+        <div className="rounded-2xl bg-card border border-border shadow-[0_4px_20px_-12px_rgba(0,0,0,0.08)] p-6 sm:p-8">
           {status === 'confirmed' ? (
             <div className="flex flex-col items-center text-center gap-4 py-4">
-              <div className="h-14 w-14 rounded-full bg-[#F0EDE7] flex items-center justify-center">
-                <Check className="h-7 w-7 text-[#4A6B4A]" strokeWidth={1.75} />
+              <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
+                <Check className="h-7 w-7 text-primary" strokeWidth={1.75} />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-[#8A8078] mb-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2">
                   Status do pedido
                 </p>
                 <h2
-                  className="text-xl font-semibold text-[#0F0F0F]"
+                  className="text-xl font-semibold text-foreground"
                   style={{ fontFamily: 'ui-serif, Georgia, serif' }}
                 >
                   Pagamento confirmado
                 </h2>
-                <p className="text-sm text-[#6B6259] mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                   Você já pode fechar esta página com tranquilidade.
                 </p>
               </div>
@@ -354,20 +340,20 @@ export function PaymentPendingScreen({
           ) : (
             <>
               <div className="flex flex-col sm:flex-row items-start gap-5">
-                <div className="h-14 w-14 rounded-full bg-[#F3EEE7] flex items-center justify-center shrink-0 mx-auto sm:mx-0">
-                  <Clock className="h-6 w-6 text-[#8B6F4E]" strokeWidth={1.5} />
+                <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center shrink-0 mx-auto sm:mx-0">
+                  <Clock className="h-6 w-6 text-primary" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 text-center sm:text-left">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#8B6F4E] font-medium mb-2">
+                  <p className="text-xs uppercase tracking-[0.18em] text-primary font-medium mb-2">
                     Status do pedido
                   </p>
                   <h2
-                    className="text-2xl font-semibold text-[#0F0F0F] leading-tight"
+                    className="text-2xl font-semibold text-foreground leading-tight"
                     style={{ fontFamily: 'ui-serif, Georgia, serif' }}
                   >
                     {awaitingCharge ? 'Link de pagamento necessário' : 'Aguardando pagamento'}
                   </h2>
-                  <p className="text-sm text-[#6B6259] mt-2 leading-relaxed">
+                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                     {awaitingCharge
                       ? 'Precisamos gerar um novo link para você concluir o pagamento.'
                       : 'Seu pedido está aguardando a conclusão do pagamento.'}
@@ -375,31 +361,28 @@ export function PaymentPendingScreen({
                 </div>
               </div>
 
-              {/* Info neutra */}
-              <div className="mt-6 rounded-2xl bg-[#F7F2EA] border border-[#EDE7DE] px-4 py-3 flex items-start gap-3">
-                <Info className="h-4 w-4 text-[#8B6F4E] mt-0.5 shrink-0" strokeWidth={1.5} />
-                <p className="text-[13px] text-[#6B6259] leading-relaxed">
+              <div className="mt-6 rounded-xl bg-muted/50 border border-border px-4 py-3 flex items-start gap-3">
+                <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" strokeWidth={1.5} />
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                   Assim que o pagamento for identificado, o processo continuará automaticamente.
                 </p>
               </div>
 
-              {/* Valor */}
               {valorTotal > 0 && (
-                <div className="mt-6 flex items-center justify-between border-t border-[#EDE7DE] pt-5">
-                  <span className="text-sm text-[#8A8078]">Valor</span>
-                  <span className="text-xl font-semibold text-[#0F0F0F] tabular-nums">
+                <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
+                  <span className="text-sm text-muted-foreground">Valor</span>
+                  <span className="text-xl font-semibold text-foreground tabular-nums">
                     R$ {valorTotal.toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               )}
 
-              {/* Botões */}
               <div className="mt-6 space-y-3">
                 {awaitingCharge ? (
                   <Button
                     onClick={handleRegenerate}
                     disabled={isRegenerating}
-                    className="w-full h-13 bg-[#0F0F0F] hover:bg-[#1f1f1f] text-white rounded-xl text-[15px] font-medium gap-2 shadow-none"
+                    className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
                     style={{ height: 52 }}
                   >
                     {isRegenerating ? (
@@ -413,7 +396,7 @@ export function PaymentPendingScreen({
                   checkoutUrl && (
                     <Button
                       asChild
-                      className="w-full bg-[#0F0F0F] hover:bg-[#1f1f1f] text-white rounded-xl text-[15px] font-medium gap-2 shadow-none"
+                      className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
                       style={{ height: 52 }}
                     >
                       <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
@@ -428,7 +411,7 @@ export function PaymentPendingScreen({
                   variant="outline"
                   onClick={checkPayment}
                   disabled={isChecking}
-                  className="w-full rounded-xl text-[15px] font-medium gap-2 bg-white border-[#E5E0D9] text-[#2C2C2C] hover:bg-[#FAF6EF] hover:text-[#0F0F0F]"
+                  className="w-full rounded-xl text-[15px] font-medium gap-2 bg-card border-border text-foreground hover:bg-muted"
                   style={{ height: 52 }}
                 >
                   {isChecking ? (
@@ -440,11 +423,10 @@ export function PaymentPendingScreen({
                 </Button>
               </div>
 
-              {/* Indicador */}
-              <div className="mt-5 flex items-center justify-center gap-2 text-xs text-[#8A8078]">
+              <div className="mt-5 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8B6F4E] opacity-40" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#8B6F4E]" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-40" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
                 </span>
                 Verificação automática ativa
               </div>
@@ -452,49 +434,10 @@ export function PaymentPendingScreen({
           )}
         </div>
 
-        {/* Próximos passos */}
-        {status !== 'confirmed' && (
-          <div className="rounded-3xl bg-white border border-[#EDE7DE] shadow-[0_8px_32px_-12px_rgba(20,15,10,0.06)] p-6 sm:p-8 mb-6">
-            <h3 className="text-center text-[15px] font-semibold text-[#0F0F0F] mb-6">
-              Próximos passos
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {[
-                {
-                  icon: ImageIcon,
-                  title: 'Seleção salva',
-                  desc: 'Sua seleção foi registrada com sucesso.',
-                },
-                {
-                  icon: Eye,
-                  title: 'Fotógrafo notificado',
-                  desc: 'O fotógrafo já pode visualizar sua seleção.',
-                },
-                {
-                  icon: Hourglass,
-                  title: 'Pedido em andamento',
-                  desc:
-                    'Após a conclusão do pagamento (quando aplicável), seu pedido seguirá normalmente.',
-                },
-              ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex flex-col items-center text-center gap-3">
-                  <div className="h-11 w-11 rounded-full bg-[#F3EEE7] flex items-center justify-center">
-                    <Icon className="h-5 w-5 text-[#8B6F4E]" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[#2C2C2C]">{title}</p>
-                    <p className="text-xs text-[#8A8078] mt-1 leading-relaxed">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Rodapé */}
-        <div className="rounded-2xl bg-[#F3EEE7]/60 border border-[#EDE7DE] px-5 py-4 flex items-start gap-3">
-          <Shield className="h-4 w-4 text-[#8A8078] mt-0.5 shrink-0" strokeWidth={1.5} />
-          <p className="text-[12.5px] text-[#6B6259] leading-relaxed text-center sm:text-left flex-1">
+        <div className="mt-6 rounded-xl bg-muted/40 border border-border px-5 py-4 flex items-start gap-3">
+          <Shield className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" strokeWidth={1.5} />
+          <p className="text-[12.5px] text-muted-foreground leading-relaxed text-center sm:text-left flex-1">
             O andamento do seu pedido continuará sendo atualizado nesta página. Em caso de dúvidas,
             entre em contato diretamente com o fotógrafo.
           </p>
