@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
 import { processGalleryPayment, processCreditPurchase } from '../_shared/payment-processor.ts';
+import { enrichClienteIfMissing } from '../_shared/enrich-cliente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -225,6 +226,16 @@ Deno.serve(async (req) => {
             console.error('Erro ao processar pagamento de galeria:', result.error);
           } else {
             console.log('Pagamento de galeria processado com sucesso');
+            // Enriquecer cadastro do cliente (idempotente — só grava se coluna atual estiver vazia).
+            const payer = (mpPayment.payer || {}) as Record<string, any>;
+            const phoneParts = payer.phone as { area_code?: string; number?: string } | undefined;
+            const telefone = phoneParts?.area_code && phoneParts?.number
+              ? `${phoneParts.area_code}${phoneParts.number}`
+              : undefined;
+            await enrichClienteIfMissing(supabase, cobranca.cliente_id, {
+              email: payer.email,
+              telefone,
+            });
           }
         } else if (mpPayment.status === 'rejected' || mpPayment.status === 'cancelled') {
           await supabase
