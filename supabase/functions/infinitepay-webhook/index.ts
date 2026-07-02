@@ -121,6 +121,7 @@ async function processWebhookInBackground(
 
     console.log(`✅ [Background] Success for ${orderNsu}`);
     await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, cobranca.id);
+    await enrichFromInfinitePayInvoice(supabase, cobranca, payload.invoice_slug || null);
 
     await logWebhookEvent({
       provider: 'infinitepay',
