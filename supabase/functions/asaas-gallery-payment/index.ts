@@ -163,21 +163,34 @@ Deno.serve(async (req) => {
     if (clienteId) {
       const { data: cliente } = await supabase
         .from('clientes')
-        .select('nome, email, telefone, whatsapp')
+        .select('nome, email, telefone, whatsapp, cpf_cnpj, cep, endereco, endereco_numero, endereco_complemento, bairro, cidade, uf')
         .eq('id', clienteId)
         .maybeSingle();
 
       if (cliente) {
         const clienteName = cliente.nome || 'Cliente';
-        // Fallback de telefone: cliente.telefone → cliente.whatsapp → hint normalizado
         const bestPhone = cliente.telefone || cliente.whatsapp || payerHints.phone || undefined;
         const bestEmail = cliente.email || payerHints.email || undefined;
+        const bestCpfCnpj = payerHints.cpfCnpj || undefined; // já normalizado pelo hint
+        const addr = payerHints.address;
 
         // Helper: só preenche campos ausentes no Asaas — nunca sobrescreve.
+        // Inclui CPF/CNPJ e endereço (obrigatórios/recomendados para antecipação).
         const buildFillUpdates = (existing: Record<string, unknown>): Record<string, unknown> => {
           const u: Record<string, unknown> = {};
           if (bestEmail && !existing.email) u.email = bestEmail;
-          if (bestPhone && !existing.phone && !existing.mobilePhone) u.phone = bestPhone;
+          if (bestPhone && !existing.phone && !existing.mobilePhone) {
+            u.mobilePhone = bestPhone;
+            u.phone = bestPhone;
+          }
+          if (bestCpfCnpj && !existing.cpfCnpj) u.cpfCnpj = bestCpfCnpj;
+          if (addr?.postalCode && !existing.postalCode) u.postalCode = addr.postalCode;
+          if (addr?.street && !existing.address) u.address = addr.street;
+          if (addr?.number && !existing.addressNumber) u.addressNumber = addr.number;
+          if (addr?.complement && !existing.complement) u.complement = addr.complement;
+          if (addr?.province && !existing.province) u.province = addr.province;
+          if (addr?.city && !existing.city) u.cityName = addr.city;
+          if (addr?.state && !existing.state) u.state = addr.state;
           return u;
         };
 
@@ -238,16 +251,29 @@ Deno.serve(async (req) => {
 
         // Step 3: Create new customer if not found
         if (!asaasCustomerId) {
+          const createPayload: Record<string, unknown> = {
+            name: clienteName,
+            email: bestEmail,
+            phone: bestPhone,
+            mobilePhone: bestPhone,
+            cpfCnpj: bestCpfCnpj,
+            postalCode: addr?.postalCode,
+            address: addr?.street,
+            addressNumber: addr?.number,
+            complement: addr?.complement,
+            province: addr?.province,
+            cityName: addr?.city,
+            state: addr?.state,
+            externalReference: clienteId,
+            ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
+          };
+          // Remove chaves undefined para não poluir o payload.
+          Object.keys(createPayload).forEach((k) => createPayload[k] === undefined && delete createPayload[k]);
+
           const createResp = await fetch(`${asaasBaseUrl}/v3/customers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-            body: JSON.stringify({
-              name: clienteName,
-              email: bestEmail,
-              phone: bestPhone,
-              externalReference: clienteId,
-              ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
-            }),
+            body: JSON.stringify(createPayload),
           });
 
           if (createResp.ok) {
@@ -261,6 +287,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+
 
 
     // If no customer found/created, create a generic one
