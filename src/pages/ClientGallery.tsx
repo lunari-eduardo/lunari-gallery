@@ -1548,7 +1548,9 @@ export default function ClientGallery() {
     const saleMode = gallery.saleSettings?.mode;
     const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
     const missing = galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined;
-    if (shouldRequestPayment && missing && (missing.email || missing.name)) {
+    // Coleta local é a ÚNICA fonte confiável para telefone/email/nome:
+    // a InfinitePay não devolve dados do pagador no webhook/polling.
+    if (shouldRequestPayment && missing && (missing.email || missing.name || missing.phone)) {
       setPendingConfirmPayload(payload);
       setContactModalOpen(true);
       return;
@@ -2184,7 +2186,7 @@ export default function ClientGallery() {
       <ContactCollectionModal
         open={contactModalOpen}
         missing={(galleryResponse?.payerHintsMissing as ContactCollectionMissing) || { email: true, phone: true, name: true }}
-        requirePhone={false}
+        requirePhone={true}
         onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); }}
         onSubmit={handleContactCollected}
       />
