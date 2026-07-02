@@ -276,10 +276,11 @@ export function PaymentPendingScreen({
           { index: 1, title: 'Seleção enviada', subtitle: 'Recebida com sucesso', state: 'done' },
           {
             index: 2,
-            title: awaitingCharge ? 'Gerar link de pagamento' : 'Pagamento pendente',
+            title: effectiveAction.kind === 'regenerate' ? 'Gerar link de pagamento' : 'Pagamento pendente',
             subtitle: 'Aguardando conclusão',
             state: 'active',
           },
+
           {
             index: 3,
             title: 'Continuação do pedido',
