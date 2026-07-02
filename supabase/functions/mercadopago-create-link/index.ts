@@ -283,14 +283,22 @@ Deno.serve(async (req) => {
 
     // 6. Criar pagamento baseado no método (ou checkout genérico se não especificado)
     if (paymentMethod === 'pix') {
-      // Create PIX payment
+      // PIX direto exige email real — sem fallback placeholder.
+      if (!clienteEmail) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Email do pagador é obrigatório para PIX. Peça ao visitante que se identifique antes de finalizar.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const pixPayer: Record<string, unknown> = { email: clienteEmail };
+      if (payerHints.firstName) pixPayer.first_name = payerHints.firstName;
+      if (payerHints.phoneParts) pixPayer.phone = payerHints.phoneParts;
+
       const pixPayload = {
         transaction_amount: body.valor,
         description: body.descricao,
         payment_method_id: 'pix',
-        payer: {
-          email: clienteEmail,
-        },
+        payer: pixPayer,
         external_reference: cobrancaId,
       };
 
@@ -376,16 +384,19 @@ Deno.serve(async (req) => {
         console.log('💳 Checkout específico para cartão');
       }
       
-      const preferencePayload = {
+      // Payer do Preference: omite campos sem valor (MP aceita Preference sem email).
+      const preferencePayer: Record<string, unknown> = {};
+      if (clienteEmail) preferencePayer.email = clienteEmail;
+      if (payerHints.firstName) preferencePayer.name = payerHints.firstName;
+      if (payerHints.phoneParts) preferencePayer.phone = payerHints.phoneParts;
+
+      const preferencePayload: Record<string, unknown> = {
         items: [{
           title: body.descricao,
           quantity: 1,
           unit_price: body.valor,
           currency_id: 'BRL',
         }],
-        payer: {
-          email: clienteEmail,
-        },
         external_reference: cobrancaId,
         payment_methods: {
           excluded_payment_types: excludedTypes,
@@ -398,6 +409,9 @@ Deno.serve(async (req) => {
         },
         auto_return: 'approved',
       };
+      if (Object.keys(preferencePayer).length > 0) {
+        preferencePayload.payer = preferencePayer;
+      }
 
       console.log('Criando preferência de checkout com exclusões:', JSON.stringify(excludedTypes));
 
