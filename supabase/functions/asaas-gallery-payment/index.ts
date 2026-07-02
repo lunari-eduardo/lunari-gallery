@@ -419,14 +419,83 @@ Deno.serve(async (req) => {
 
     if (finalBillingType === 'CREDIT_CARD' && body.creditCard) {
       paymentBody.creditCard = body.creditCard;
-      // Fallback server-side: se o frontend enviou creditCardHolderInfo parcial,
-      // preencher name/email/phone com os hints (cpfCnpj/postalCode/addressNumber
-      // continuam obrigatórios pelo Asaas e devem vir do cliente).
+      // Fallback server-side: preencher creditCardHolderInfo com dados do CRM
+      // quando o frontend não enviou. Mantém elegibilidade de antecipação
+      // (nome + CPF obrigatórios; endereço recomendado pelo antifraude).
       const holderInfo: Record<string, unknown> = { ...(body.creditCardHolderInfo || {}) };
-      if (!holderInfo.name && payerHints.firstName) holderInfo.name = payerHints.firstName;
+      if (!holderInfo.name && (payerHints.fullName || payerHints.firstName)) {
+        holderInfo.name = payerHints.fullName || payerHints.firstName;
+      }
       if (!holderInfo.email && payerHints.email) holderInfo.email = payerHints.email;
       if (!holderInfo.phone && payerHints.phone) holderInfo.phone = payerHints.phone;
+      if (!holderInfo.cpfCnpj && payerHints.cpfCnpj) holderInfo.cpfCnpj = payerHints.cpfCnpj;
+      if (payerHints.address) {
+        const a = payerHints.address;
+        if (!holderInfo.postalCode && a.postalCode) holderInfo.postalCode = a.postalCode;
+        if (!holderInfo.address && a.street) holderInfo.address = a.street;
+        if (!holderInfo.addressNumber && a.number) holderInfo.addressNumber = a.number;
+        if (!holderInfo.complement && a.complement) holderInfo.complement = a.complement;
+        if (!holderInfo.province && a.province) holderInfo.province = a.province;
+        if (!holderInfo.city && a.city) holderInfo.city = a.city;
+        if (!holderInfo.state && a.state) holderInfo.state = a.state;
+      }
       paymentBody.creditCardHolderInfo = holderInfo;
+
+      // Sincroniza CPF/endereço do titular no cadastro do customer no Asaas
+      // (necessário para antecipação) — só preenche campos vazios.
+      if (asaasCustomerId && (holderInfo.cpfCnpj || holderInfo.postalCode)) {
+        try {
+          const custResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+            headers: { access_token: asaasApiKey },
+          });
+          if (custResp.ok) {
+            const cur = await custResp.json();
+            const custPatch: Record<string, unknown> = {};
+            if (holderInfo.cpfCnpj && !cur.cpfCnpj) custPatch.cpfCnpj = holderInfo.cpfCnpj;
+            if (holderInfo.postalCode && !cur.postalCode) custPatch.postalCode = holderInfo.postalCode;
+            if (holderInfo.address && !cur.address) custPatch.address = holderInfo.address;
+            if (holderInfo.addressNumber && !cur.addressNumber) custPatch.addressNumber = holderInfo.addressNumber;
+            if (holderInfo.complement && !cur.complement) custPatch.complement = holderInfo.complement;
+            if (holderInfo.province && !cur.province) custPatch.province = holderInfo.province;
+            if (holderInfo.city && !cur.city) custPatch.cityName = holderInfo.city;
+            if (holderInfo.state && !cur.state) custPatch.state = holderInfo.state;
+            if (holderInfo.phone && !cur.phone && !cur.mobilePhone) {
+              custPatch.phone = holderInfo.phone;
+              custPatch.mobilePhone = holderInfo.phone;
+            }
+            if (Object.keys(custPatch).length > 0) {
+              console.log(`🔄 Sync customer ${asaasCustomerId} from holderInfo:`, Object.keys(custPatch));
+              await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+                body: JSON.stringify(custPatch),
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('customer sync from holderInfo failed:', e instanceof Error ? e.message : e);
+        }
+      }
+
+      // Enriquece o CRM com CPF/endereço digitados no titular do cartão.
+      // Idempotente — não sobrescreve dados existentes.
+      if (clienteId && (holderInfo.cpfCnpj || holderInfo.postalCode)) {
+        try {
+          await enrichClienteIfMissing(supabase, clienteId, {
+            cpfCnpj: (holderInfo.cpfCnpj as string) || null,
+            cep: (holderInfo.postalCode as string) || null,
+            endereco: (holderInfo.address as string) || null,
+            enderecoNumero: (holderInfo.addressNumber as string) || null,
+            enderecoComplemento: (holderInfo.complement as string) || null,
+            bairro: (holderInfo.province as string) || null,
+            cidade: (holderInfo.city as string) || null,
+            uf: (holderInfo.state as string) || null,
+          });
+        } catch (e) {
+          console.warn('enrichClienteIfMissing (holderInfo) failed:', e instanceof Error ? e.message : e);
+        }
+      }
+
       if (body.remoteIp) {
         paymentBody.remoteIp = body.remoteIp;
       }
