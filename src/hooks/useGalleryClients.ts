@@ -3,12 +3,23 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Client, ClientGalleryStatus } from '@/types/gallery';
 
-interface CreateClientData {
+export interface CreateClientData {
   name: string;
   email: string;
   phone?: string;
   galleryPassword?: string;
+  whatsapp?: string;
+  dataNascimento?: string | null;
+  cpfCnpj?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  enderecoNumero?: string | null;
+  enderecoComplemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
 }
+
 
 interface UseGalleryClientsReturn {
   clients: Client[];
@@ -108,6 +119,17 @@ export function useGalleryClients(): UseGalleryClientsReturn {
     if (data.email !== undefined) updateData.email = data.email;
     if (data.phone !== undefined) updateData.telefone = data.phone;
     if (data.galleryPassword !== undefined) updateData.gallery_password = data.galleryPassword;
+    if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp;
+    if (data.dataNascimento !== undefined) updateData.data_nascimento = data.dataNascimento;
+    if (data.cpfCnpj !== undefined) updateData.cpf_cnpj = data.cpfCnpj;
+    if (data.cep !== undefined) updateData.cep = data.cep;
+    if (data.endereco !== undefined) updateData.endereco = data.endereco;
+    if (data.enderecoNumero !== undefined) updateData.endereco_numero = data.enderecoNumero;
+    if (data.enderecoComplemento !== undefined) updateData.endereco_complemento = data.enderecoComplemento;
+    if (data.bairro !== undefined) updateData.bairro = data.bairro;
+    if (data.cidade !== undefined) updateData.cidade = data.cidade;
+    if (data.uf !== undefined) updateData.uf = data.uf;
+
 
     const { data: updatedRow, error } = await supabase
       .from('clientes')

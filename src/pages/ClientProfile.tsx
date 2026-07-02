@@ -1,25 +1,24 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  ArrowLeft, 
-  User, 
-  Mail, 
-  Phone, 
-  Images, 
+import {
+  ArrowLeft,
+  User,
+  Mail,
+  Phone,
+  Images,
   Plus,
-  Pencil,
   DollarSign,
   Camera,
   CreditCard,
   ExternalLink,
   Loader2,
-  ImageIcon
+  ImageIcon,
+  Contact as ContactIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -30,10 +29,7 @@ import {
 } from '@/components/ui/table';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useClientProfile } from '@/hooks/useClientProfile';
-import { ClientModal, ClientFormData } from '@/components/ClientModal';
-import { useGalleryClients } from '@/hooks/useGalleryClients';
-import { useState } from 'react';
-import { toast } from 'sonner';
+import { ContactTab } from '@/components/client/ContactTab';
 import { GalleryStatus } from '@/types/gallery';
 
 import pixLogo from '@/assets/payment-logos/pix.png';
@@ -43,20 +39,7 @@ import mercadopagoLogo from '@/assets/payment-logos/mercadopago.png';
 export default function ClientProfile() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const { client, galleries, payments, stats, isLoading } = useClientProfile(clientId);
-  const { updateClient } = useGalleryClients();
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  const handleEditClient = async (data: ClientFormData) => {
-    if (!clientId) return;
-    try {
-      await updateClient(clientId, data);
-      setIsEditModalOpen(false);
-    } catch (error) {
-      console.error('Error updating client:', error);
-      toast.error('Erro ao atualizar cliente');
-    }
-  };
+  const { client, galleries, payments, stats, isLoading, refetch } = useClientProfile(clientId);
 
   const manualMethodLabels: Record<string, string> = {
     dinheiro: 'Dinheiro',
@@ -64,6 +47,7 @@ export default function ClientProfile() {
     transferencia: 'Transferência',
     outro: 'Outro',
   };
+
 
   const getProviderLogo = (provedor: string | null, metodoManual?: string | null) => {
     switch (provedor) {
@@ -151,16 +135,13 @@ export default function ClientProfile() {
           </div>
         </div>
         <div className="flex gap-2 ml-auto sm:ml-0">
-          <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
-            <Pencil className="h-4 w-4 mr-2" />
-            Editar
-          </Button>
           <Button onClick={() => navigate(`/gallery/new?clientId=${clientId}`)}>
             <Plus className="h-4 w-4 mr-2" />
             Nova Galeria
           </Button>
         </div>
       </div>
+
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -228,11 +209,16 @@ export default function ClientProfile() {
             <Images className="h-4 w-4" />
             Galerias ({galleries.length})
           </TabsTrigger>
+          <TabsTrigger value="contact" className="flex items-center gap-2">
+            <ContactIcon className="h-4 w-4" />
+            Contato
+          </TabsTrigger>
           <TabsTrigger value="payments" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
             Pagamentos ({payments.length})
           </TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="galleries">
           <Card>
@@ -308,6 +294,17 @@ export default function ClientProfile() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="contact">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Dados do Cliente</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ContactTab client={client} onSaved={refetch} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="payments">
           <Card>
             <CardHeader>
@@ -335,7 +332,7 @@ export default function ClientProfile() {
                     {payments.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell className="text-muted-foreground">
-                          {payment.data_pagamento 
+                          {payment.data_pagamento
                             ? format(new Date(payment.data_pagamento), 'dd/MM/yyyy', { locale: ptBR })
                             : format(new Date(payment.created_at), 'dd/MM/yyyy', { locale: ptBR })}
                         </TableCell>
@@ -353,7 +350,7 @@ export default function ClientProfile() {
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {payment.galeria_nome ? (
-                            <Link 
+                            <Link
                               to={`/gallery/${payment.galeria_id}`}
                               className="text-primary hover:underline"
                             >
@@ -365,8 +362,8 @@ export default function ClientProfile() {
                         </TableCell>
                         <TableCell>
                           {payment.ip_receipt_url && (
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               asChild
                             >
@@ -385,24 +382,7 @@ export default function ClientProfile() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Edit Modal */}
-      <ClientModal
-        open={isEditModalOpen}
-        onOpenChange={setIsEditModalOpen}
-        client={client ? {
-          id: client.id,
-          name: client.nome,
-          email: client.email || '',
-          phone: client.telefone || undefined,
-          galleryPassword: '',
-          status: (client.gallery_status as 'ativo' | 'sem_galeria') || 'sem_galeria',
-          totalGalleries: client.total_galerias || 0,
-          createdAt: client.created_at ? new Date(client.created_at) : new Date(),
-          updatedAt: new Date(),
-        } : null}
-        onSave={handleEditClient}
-      />
     </div>
+
   );
 }

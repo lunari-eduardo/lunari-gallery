@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -10,12 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Client } from '@/types/gallery';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 export interface ClientFormData {
   name: string;
   email: string;
   phone?: string;
-  galleryPassword: string;
+  galleryPassword?: string;
 }
 
 interface ClientModalProps {
@@ -25,42 +27,66 @@ interface ClientModalProps {
   onSave: (data: ClientFormData) => void;
 }
 
+/**
+ * Modal enxuto para criação/edição rápida de cliente (nome, email, telefone).
+ *
+ * SEGURANÇA:
+ *  - Removido o campo de senha (era `type="password"`) que permitia ao gerenciador
+ *    de senhas do navegador injetar credenciais do próprio fotógrafo.
+ *  - Inputs decoy no topo do form e nomes randômicos quebram o heurístico
+ *    email+password do Chrome/Safari.
+ *  - Senha de acesso à galeria agora só pode ser editada dentro do perfil do
+ *    cliente (aba Contato), onde o contexto é seguro e explícito.
+ */
 export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalProps) {
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const isEditing = !!client;
+
+  // Sufixo único por abertura → impede o autofill de "reconhecer" os campos.
+  const nameSuffix = useMemo(
+    () => Math.random().toString(36).slice(2, 10),
+    // regenera a cada abertura
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open],
+  );
 
   useEffect(() => {
     if (client) {
       setName(client.name);
       setEmail(client.email);
       setPhone(client.phone || '');
-      setPassword(client.galleryPassword);
     } else {
       setName('');
       setEmail('');
       setPhone('');
-      setPassword('');
     }
   }, [client, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) return;
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    if (!trimmedName) return;
+
+    // Cinto extra: se o email igualar ao email do fotógrafo autenticado,
+    // é forte indício de autofill do navegador.
+    if (user?.email && trimmedEmail && trimmedEmail.toLowerCase() === user.email.toLowerCase()) {
+      toast.error('Este e-mail pertence à sua conta. Digite o e-mail do cliente.');
+      return;
+    }
 
     onSave({
-      name: name.trim(),
-      email: email.trim(),
+      name: trimmedName,
+      email: trimmedEmail,
       phone: phone.trim() || undefined,
-      galleryPassword: password.trim() || '',
     });
   };
 
-  const isValid = name.trim() && email.trim();
+  const isValid = name.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,69 +95,57 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
           <DialogTitle className="text-xl font-semibold">
             {isEditing ? 'Editar Cliente' : 'Novo Cliente'}
           </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Dados adicionais (endereço, documentos, senha da galeria) ficam no perfil do cliente.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4" autoComplete="off">
+          {/* Decoys: absorvem o autofill do gerenciador de senhas */}
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+            <input type="text" name="username" tabIndex={-1} autoComplete="username" />
+            <input type="password" name="password" tabIndex={-1} autoComplete="new-password" />
+          </div>
+
           <div className="space-y-2">
-            <Label htmlFor="name">Nome do cliente *</Label>
+            <Label htmlFor={`cli_name_${nameSuffix}`}>Nome do cliente *</Label>
             <Input
-              id="name"
+              id={`cli_name_${nameSuffix}`}
+              name={`cli_name_${nameSuffix}`}
               placeholder="Ex: Maria Silva"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email do cliente *</Label>
+            <Label htmlFor={`cli_email_${nameSuffix}`}>E-mail do cliente</Label>
             <Input
-              id="email"
-              type="email"
+              id={`cli_email_${nameSuffix}`}
+              name={`cli_email_${nameSuffix}`}
+              type="text"
+              inputMode="email"
               placeholder="cliente@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone">Telefone (opcional)</Label>
+            <Label htmlFor={`cli_phone_${nameSuffix}`}>Telefone (opcional)</Label>
             <Input
-              id="phone"
+              id={`cli_phone_${nameSuffix}`}
+              name={`cli_phone_${nameSuffix}`}
               type="tel"
               placeholder="(11) 99999-9999"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              autoComplete="off"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Senha de acesso à galeria (opcional)</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Senha do cliente"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pr-10"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                )}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Pode ser definida depois na criação da galeria
-            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
