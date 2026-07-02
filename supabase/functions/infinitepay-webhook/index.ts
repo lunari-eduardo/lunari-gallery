@@ -15,6 +15,8 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
+import { fetchInfinitePayInvoice } from '../_shared/infinitepay-fetch-invoice.ts';
+import { enrichClienteIfMissing } from '../_shared/enrich-cliente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
