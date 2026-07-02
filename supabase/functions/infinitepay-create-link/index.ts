@@ -295,6 +295,7 @@ Deno.serve(async (req) => {
         status: 'pendente',
         ip_checkout_url: checkoutUrl,
         ip_order_nsu: orderNsu,
+        ip_invoice_slug: invoiceSlug || null,
         galeria_id: galeriaId || null,
         qtd_fotos: qtdFotos || 0,
         visitor_id: visitorId || null,

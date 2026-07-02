@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolvePayerHints } from '../_shared/payer-hints.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -335,6 +336,24 @@ serve(async (req) => {
       themeData = { id: 'system', name: 'Sistema', backgroundMode: clientMode, primaryColor: null, accentColor: null, emphasisColor: null }
     }
 
+    // Payer hints missing (booleans only — não expõe valores).
+    // Usado no ClientGallery para decidir se abre o modal de coleta de contato
+    // antes de redirecionar ao checkout externo.
+    let payerHintsMissing: { email: boolean; phone: boolean; name: boolean } | null = null;
+    try {
+      const hints = await resolvePayerHints(supabase, {
+        clienteId: gallery.cliente_id,
+        visitorId: visitorId || null,
+      });
+      payerHintsMissing = {
+        email: !hints.email,
+        phone: !hints.phone,
+        name: !hints.firstName,
+      };
+    } catch (e) {
+      console.warn('[gallery-access] payer hints resolve falhou:', e instanceof Error ? e.message : String(e));
+    }
+
     // 6. Response
     return new Response(
       JSON.stringify({
@@ -383,6 +402,7 @@ serve(async (req) => {
         theme: themeData,
         clientMode,
         accountTheme, // New field for account heritage info
+        payerHintsMissing,
         ...pendingPaymentData,
       }),
       {

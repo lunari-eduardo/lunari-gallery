@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchInfinitePayInvoice } from '../_shared/infinitepay-fetch-invoice.ts';
+import { enrichClienteIfMissing } from '../_shared/enrich-cliente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -510,6 +512,25 @@ Deno.serve(async (req: Request) => {
       }
       console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
       await notifyPaymentConfirmed(supabaseUrl, supabaseServiceKey, cobranca.id);
+      // Enriquecimento pós-pagamento InfinitePay (silencioso)
+      if (cobranca.provedor === 'infinitepay') {
+        try {
+          const slug = cobranca.ip_invoice_slug || null;
+          if (slug) {
+            const inv = await fetchInfinitePayInvoice(slug);
+            if (inv?.customer && cobranca.cliente_id) {
+              await enrichClienteIfMissing(supabase, cobranca.cliente_id, {
+                email: inv.customer.email,
+                telefone: inv.customer.phone_number,
+              });
+            }
+          } else {
+            console.log('[IP_ENRICH] check-payment-status sem invoice_slug — pulando');
+          }
+        } catch (e) {
+          console.warn('[IP_ENRICH] check-payment-status exceção:', e instanceof Error ? e.message : String(e));
+        }
+      }
       return { success: true, result: rpcResult };
     };
 
