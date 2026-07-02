@@ -209,11 +209,16 @@ export default function ClientProfile() {
             <Images className="h-4 w-4" />
             Galerias ({galleries.length})
           </TabsTrigger>
+          <TabsTrigger value="contact" className="flex items-center gap-2">
+            <ContactIcon className="h-4 w-4" />
+            Contato
+          </TabsTrigger>
           <TabsTrigger value="payments" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
             Pagamentos ({payments.length})
           </TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="galleries">
           <Card>
