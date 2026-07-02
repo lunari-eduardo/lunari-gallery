@@ -721,10 +721,131 @@ export function AsaasCheckout({
           {data.enabledMethods.pix && (
             <TabsContent value="pix" className="space-y-4 mt-6">
               {!pixQrCode && !pixLoading && (
-                <Button onClick={generatePix} className="w-full gap-2 h-12 rounded-lg active:scale-[0.98] transition-transform" variant="terracotta">
-                  <QrCode className="h-5 w-5" />
-                  Gerar QR Code PIX
-                </Button>
+                <div className="space-y-4">
+                  {showPixContactForm && (
+                    <section className="space-y-3 p-4 rounded-xl border border-border/60 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-primary" />
+                        <h3 className="text-sm font-semibold text-foreground">Seus dados para o PIX</h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Precisamos destes dados para gerar a cobrança e enviar o comprovante.
+                      </p>
+
+                      {needsName && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-name" className="text-xs font-medium text-muted-foreground">Nome completo</Label>
+                          <Input
+                            ref={pixNameRef}
+                            id="pix-name"
+                            autoFocus
+                            value={pixName}
+                            onChange={(e) => { setPixName(e.target.value); if (fieldErrors.pixName) setFieldError('pixName', null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pixEmailRef.current?.focus() ?? pixCpfRef.current?.focus() ?? pixPhoneRef.current?.focus(); } }}
+                            placeholder="Como você se chama"
+                            autoComplete="name"
+                            maxLength={80}
+                            className={checkoutInputClass('pixName')}
+                          />
+                          <FieldError name="pixName" />
+                        </div>
+                      )}
+
+                      {needsEmail && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-email" className="text-xs font-medium text-muted-foreground">Email</Label>
+                          <Input
+                            ref={pixEmailRef}
+                            id="pix-email"
+                            type="email"
+                            inputMode="email"
+                            autoFocus={!needsName}
+                            value={pixEmail}
+                            onChange={(e) => { setPixEmail(e.target.value); if (fieldErrors.pixEmail) setFieldError('pixEmail', null); }}
+                            onBlur={() => {
+                              if (pixEmail && !/\S+@\S+\.\S+/.test(pixEmail)) setFieldError('pixEmail', 'Email inválido');
+                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pixCpfRef.current?.focus() ?? pixPhoneRef.current?.focus(); } }}
+                            placeholder="voce@email.com"
+                            autoComplete="email"
+                            maxLength={160}
+                            className={checkoutInputClass('pixEmail')}
+                          />
+                          <FieldError name="pixEmail" />
+                        </div>
+                      )}
+
+                      {needsCpf && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-cpf" className="text-xs font-medium text-muted-foreground">CPF ou CNPJ</Label>
+                          <Input
+                            ref={pixCpfRef}
+                            id="pix-cpf"
+                            inputMode="numeric"
+                            autoFocus={!needsName && !needsEmail}
+                            value={pixCpfCnpj}
+                            onChange={(e) => {
+                              const masked = maskCpfCnpj(e.target.value);
+                              setPixCpfCnpj(masked);
+                              if (fieldErrors.pixCpf) setFieldError('pixCpf', null);
+                              const digits = masked.replace(/\D/g, '');
+                              if (digits.length === 11 || digits.length === 14) {
+                                if (needsPhone) pixPhoneRef.current?.focus();
+                                else pixGenerateRef.current?.focus();
+                              }
+                            }}
+                            onBlur={() => {
+                              if (pixCpfCnpj && !validateCpfCnpj(pixCpfCnpj)) setFieldError('pixCpf', 'CPF ou CNPJ inválido');
+                            }}
+                            placeholder="000.000.000-00"
+                            maxLength={18}
+                            className={checkoutInputClass('pixCpf')}
+                          />
+                          <FieldError name="pixCpf" />
+                        </div>
+                      )}
+
+                      {needsPhone && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-phone" className="text-xs font-medium text-muted-foreground">Telefone (WhatsApp)</Label>
+                          <Input
+                            ref={pixPhoneRef}
+                            id="pix-phone"
+                            type="tel"
+                            inputMode="tel"
+                            autoFocus={!needsName && !needsEmail && !needsCpf}
+                            value={pixPhone}
+                            onChange={(e) => {
+                              const masked = maskPhone(e.target.value);
+                              setPixPhone(masked);
+                              if (fieldErrors.pixPhone) setFieldError('pixPhone', null);
+                              if (masked.replace(/\D/g, '').length === 11) pixGenerateRef.current?.focus();
+                            }}
+                            placeholder="(11) 98765-4321"
+                            autoComplete="tel"
+                            maxLength={15}
+                            className={checkoutInputClass('pixPhone')}
+                          />
+                          <FieldError name="pixPhone" />
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  <Button
+                    ref={pixGenerateRef}
+                    onClick={handleGeneratePixClick}
+                    disabled={pixContactLoading || (showPixContactForm && !pixFormValid)}
+                    className="w-full gap-2 h-12 rounded-lg active:scale-[0.98] transition-transform"
+                    variant="terracotta"
+                  >
+                    {pixContactLoading ? (
+                      <><Loader2 className="h-5 w-5 animate-spin" /> Salvando dados...</>
+                    ) : (
+                      <><QrCode className="h-5 w-5" /> Gerar QR Code PIX</>
+                    )}
+                  </Button>
+                </div>
               )}
 
               {pixLoading && (
