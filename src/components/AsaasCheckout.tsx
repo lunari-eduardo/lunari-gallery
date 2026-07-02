@@ -741,7 +741,7 @@ export function AsaasCheckout({
                             autoFocus
                             value={pixName}
                             onChange={(e) => { setPixName(e.target.value); if (fieldErrors.pixName) setFieldError('pixName', null); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pixEmailRef.current?.focus() ?? pixCpfRef.current?.focus() ?? pixPhoneRef.current?.focus(); } }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (needsEmail ? pixEmailRef : needsCpf ? pixCpfRef : needsPhone ? pixPhoneRef : pixGenerateRef).current?.focus(); } }}
                             placeholder="Como você se chama"
                             autoComplete="name"
                             maxLength={80}
