@@ -1238,6 +1238,65 @@ export default function ClientGallery() {
 
   // Payment verification now runs silently — no blocking screen
 
+  // ── Contact-collection helpers ──────────────────────────────────────
+  // Declarados aqui (antes dos early returns de pagamento) porque
+  // são reutilizados dentro dos ramos que renderizam AsaasCheckout,
+  // PixPaymentScreen e no return final.
+  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
+    try {
+      const { error } = await supabase.rpc('upsert_visitor_contact', {
+        p_token: identifier as string,
+        p_visitor_id: visitorId || null,
+        p_email: data.email || null,
+        p_phone: data.phone || null,
+        p_nome: data.nome || null,
+        p_cpf_cnpj: data.cpfCnpj || null,
+      } as any);
+      if (error) throw error;
+
+      await refetchGallery();
+      setContactModalOpen(false);
+      setForcedMissing(null);
+      if (pendingConfirmPayload) {
+        confirmMutation.mutate(pendingConfirmPayload);
+        setPendingConfirmPayload(null);
+      } else {
+        toast.success('Dados salvos. Toque em "Gerar PIX" novamente para continuar.');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados. Tente novamente.');
+    }
+  };
+
+  // Handler compartilhado: backend Asaas respondeu 422 MISSING_CPF_CNPJ.
+  // Força o modal a exibir o campo CPF mesmo se o cache do gallery-access
+  // ainda dizia que estava tudo OK.
+  const openMissingCpfModal = () => {
+    setForcedMissing({ cpfCnpj: true, cpfRequired: true, provider: 'asaas' });
+    setContactModalOpen(true);
+  };
+
+  const effectiveMissing: ContactCollectionMissing = {
+    ...((galleryResponse?.payerHintsMissing as ContactCollectionMissing) || {
+      email: false, phone: false, name: false,
+    }),
+    ...(forcedMissing || {}),
+  };
+
+  // Modal reutilizável — montado ao lado de cada early return que
+  // renderiza AsaasCheckout/PixPaymentScreen, para garantir que
+  // setContactModalOpen(true) realmente exiba o modal na tela.
+  const contactModalNode = (
+    <ContactCollectionModal
+      open={contactModalOpen}
+      missing={effectiveMissing}
+      onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); setForcedMissing(null); }}
+      onSubmit={handleContactCollected}
+    />
+  );
+
+
+
   // Pending payment screen - travada e não paga (fonte: selectionLocked + !hasPaid).
   // Cobre também o caso awaitingCharge (sem cobrança viva → botão "gerar novo link").
   if (selectionLocked && !hasPaid && !isProcessingPaymentReturn) {
