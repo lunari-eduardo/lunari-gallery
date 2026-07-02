@@ -1378,19 +1378,22 @@ export default function ClientGallery() {
     // Asaas transparent checkout
     if (!awaitingCharge && pendingPaymentMethod === 'asaas' && galleryResponse?.asaasCheckoutData) {
       return (
-        <AsaasCheckout
-          data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
-          studioName={galleryResponse.studioSettings?.studio_name}
-          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-          onPaymentConfirmed={() => {
-            setCurrentStep('confirmed');
-            setIsConfirmed(true);
-            refetchGallery();
-          }}
-          onMissingCpf={() => setContactModalOpen(true)}
-          themeStyles={themeStyles}
-          backgroundMode={pendingBgMode}
-        />
+        <>
+          <AsaasCheckout
+            data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+            studioName={galleryResponse.studioSettings?.studio_name}
+            studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+            onPaymentConfirmed={() => {
+              setCurrentStep('confirmed');
+              setIsConfirmed(true);
+              refetchGallery();
+            }}
+            onMissingCpf={openMissingCpfModal}
+            themeStyles={themeStyles}
+            backgroundMode={pendingBgMode}
+          />
+          {contactModalNode}
+        </>
       );
     }
 
@@ -1403,21 +1406,25 @@ export default function ClientGallery() {
     // roteamos para o AsaasCheckout — nunca cair no "Gerar link" indevidamente.
     if (pendingAction?.kind === 'asaas_modal' && galleryResponse?.asaasCheckoutData) {
       return (
-        <AsaasCheckout
-          data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
-          studioName={galleryResponse.studioSettings?.studio_name}
-          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-          onPaymentConfirmed={() => {
-            setCurrentStep('confirmed');
-            setIsConfirmed(true);
-            refetchGallery();
-          }}
-          onMissingCpf={() => setContactModalOpen(true)}
-          themeStyles={themeStyles}
-          backgroundMode={pendingBgMode}
-        />
+        <>
+          <AsaasCheckout
+            data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+            studioName={galleryResponse.studioSettings?.studio_name}
+            studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+            onPaymentConfirmed={() => {
+              setCurrentStep('confirmed');
+              setIsConfirmed(true);
+              refetchGallery();
+            }}
+            onMissingCpf={openMissingCpfModal}
+            themeStyles={themeStyles}
+            backgroundMode={pendingBgMode}
+          />
+          {contactModalNode}
+        </>
       );
     }
+
 
     // Mapeia pendingAction do backend para o shape que o PaymentPendingScreen entende.
     const screenAction = pendingAction
