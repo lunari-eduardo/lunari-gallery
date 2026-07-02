@@ -1610,62 +1610,6 @@ export default function ClientGallery() {
     confirmMutation.mutate(payload);
   };
 
-  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
-    try {
-      const { error } = await supabase.rpc('upsert_visitor_contact', {
-        p_token: identifier as string,
-        p_visitor_id: visitorId || null,
-        p_email: data.email || null,
-        p_phone: data.phone || null,
-        p_nome: data.nome || null,
-        p_cpf_cnpj: data.cpfCnpj || null,
-      } as any);
-      if (error) throw error;
-
-      // Recarrega gallery-access para materializar novos hints antes do create-link
-      await refetchGallery();
-      setContactModalOpen(false);
-      setForcedMissing(null);
-      if (pendingConfirmPayload) {
-        confirmMutation.mutate(pendingConfirmPayload);
-        setPendingConfirmPayload(null);
-      } else {
-        // Modal foi aberto pelo AsaasCheckout (fluxo já em tela de pagamento).
-        // O usuário só precisa reclicar em "Gerar PIX".
-        toast.success('Dados salvos. Toque em "Gerar PIX" novamente para continuar.');
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados. Tente novamente.');
-    }
-  };
-
-  // Handler compartilhado: quando o backend Asaas responde 422 MISSING_CPF_CNPJ,
-  // força o modal a exibir o campo CPF mesmo se o cache do gallery-access
-  // ainda não sabia que estava faltando.
-  const openMissingCpfModal = () => {
-    setForcedMissing({ cpfCnpj: true, cpfRequired: true, provider: 'asaas' });
-    setContactModalOpen(true);
-  };
-
-  // Merge de payerHintsMissing do backend com forcedMissing (fallback local).
-  const effectiveMissing: ContactCollectionMissing = {
-    ...((galleryResponse?.payerHintsMissing as ContactCollectionMissing) || {
-      email: false, phone: false, name: false,
-    }),
-    ...(forcedMissing || {}),
-  };
-
-  // Node reutilizável do modal — montado ao lado de cada early return
-  // que renderiza AsaasCheckout/PixPaymentScreen para garantir que
-  // setContactModalOpen(true) realmente exiba o modal na tela.
-  const contactModalNode = (
-    <ContactCollectionModal
-      open={contactModalOpen}
-      missing={effectiveMissing}
-      onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); setForcedMissing(null); }}
-      onSubmit={handleContactCollected}
-    />
-  );
 
   // Parse welcome message
   const welcomeMessage = gallery.settings.welcomeMessage
