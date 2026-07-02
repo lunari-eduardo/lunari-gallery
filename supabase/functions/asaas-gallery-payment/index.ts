@@ -23,6 +23,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Asaas rejeita emails com caracteres não-ASCII (ex.: "joão@gmail.com").
+// Validamos localmente para evitar que o PUT/POST do customer seja invalidado
+// como um todo — o que também impediria a gravação de campos críticos como cpfCnpj.
+function isAsaasSafeEmail(e?: string | null): boolean {
+  if (!e) return false;
+  const s = String(e).trim();
+  if (!/^[\x21-\x7E]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(s)) return false;
+  return !/[^\x00-\x7F]/.test(s);
+}
+
+// PUT resiliente: se o Asaas responder invalid_email, retira o email e tenta
+// de novo — assim os demais campos (cpfCnpj, phone, endereço) são gravados.
+// Retorna { ok, invalidEmail } para o chamador decidir se propaga erro.
+async function putAsaasCustomer(
+  asaasBaseUrl: string,
+  asaasApiKey: string,
+  customerId: string,
+  updates: Record<string, unknown>,
+): Promise<{ ok: boolean; invalidEmail: boolean; body?: string }> {
+  const doPut = async (payload: Record<string, unknown>) =>
+    fetch(`${asaasBaseUrl}/v3/customers/${customerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+      body: JSON.stringify(payload),
+    });
+
+  let resp = await doPut(updates);
+  if (resp.ok) return { ok: true, invalidEmail: false };
+  const text = await resp.text();
+  const isInvalidEmail = /invalid_email/i.test(text);
+  if (isInvalidEmail && 'email' in updates) {
+    console.warn('Asaas rejeitou email — retrying customer PUT sem email.');
+    const { email: _drop, ...rest } = updates;
+    if (Object.keys(rest).length === 0) return { ok: false, invalidEmail: true, body: text };
+    const retry = await doPut(rest);
+    if (retry.ok) return { ok: true, invalidEmail: true };
+    return { ok: false, invalidEmail: true, body: await retry.text() };
+  }
+  return { ok: false, invalidEmail: isInvalidEmail, body: text };
+}
+
 
 async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
   try {
@@ -197,7 +238,9 @@ Deno.serve(async (req) => {
         // Inclui CPF/CNPJ e endereço (obrigatórios/recomendados para antecipação).
         const buildFillUpdates = (existing: Record<string, unknown>): Record<string, unknown> => {
           const u: Record<string, unknown> = {};
-          if (bestEmail && !existing.email) u.email = bestEmail;
+          // Só envia email para o Asaas se for ASCII válido — evita bloquear
+          // o PUT inteiro por causa de acento no email do CRM.
+          if (bestEmail && !existing.email && isAsaasSafeEmail(bestEmail)) u.email = bestEmail;
           if (bestPhone && !existing.phone && !existing.mobilePhone) {
             u.mobilePhone = bestPhone;
             u.phone = bestPhone;
@@ -229,12 +272,8 @@ Deno.serve(async (req) => {
             if (centralizarEmailsLunari) updates.notificationDisabled = true;
             if (Object.keys(updates).length > 0) {
               console.log(`📝 Updating Asaas customer:`, Object.keys(updates));
-              const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-                body: JSON.stringify(updates),
-              });
-              if (!updateResp.ok) console.warn('Failed to update Asaas customer:', await updateResp.text());
+              const putResult = await putAsaasCustomer(asaasBaseUrl, asaasApiKey, asaasCustomerId, updates);
+              if (!putResult.ok) console.warn('Failed to update Asaas customer:', putResult.body);
             }
           }
         }
@@ -257,12 +296,8 @@ Deno.serve(async (req) => {
               if (centralizarEmailsLunari) updates.notificationDisabled = true;
               if (Object.keys(updates).length > 0) {
                 console.log(`📝 Updating Asaas customer:`, Object.keys(updates));
-                const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-                  body: JSON.stringify(updates),
-                });
-                if (!updateResp.ok) console.warn('Failed to update Asaas customer:', await updateResp.text());
+                const putResult = await putAsaasCustomer(asaasBaseUrl, asaasApiKey, asaasCustomerId!, updates);
+                if (!putResult.ok) console.warn('Failed to update Asaas customer:', putResult.body);
               }
             }
           }
@@ -272,7 +307,8 @@ Deno.serve(async (req) => {
         if (!asaasCustomerId) {
           const createPayload: Record<string, unknown> = {
             name: clienteName,
-            email: bestEmail,
+            // Só envia email quando ASCII válido — Asaas rejeita com invalid_email caso contrário.
+            ...(isAsaasSafeEmail(bestEmail) ? { email: bestEmail } : {}),
             phone: bestPhone,
             mobilePhone: bestPhone,
             cpfCnpj: bestCpfCnpj,
@@ -289,19 +325,34 @@ Deno.serve(async (req) => {
           // Remove chaves undefined para não poluir o payload.
           Object.keys(createPayload).forEach((k) => createPayload[k] === undefined && delete createPayload[k]);
 
-          const createResp = await fetch(`${asaasBaseUrl}/v3/customers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-            body: JSON.stringify(createPayload),
-          });
+          const tryCreate = async (payload: Record<string, unknown>) =>
+            fetch(`${asaasBaseUrl}/v3/customers`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+              body: JSON.stringify(payload),
+            });
 
-          if (createResp.ok) {
+          let createResp = await tryCreate(createPayload);
+          if (!createResp.ok) {
+            const errText = await createResp.text();
+            if (/invalid_email/i.test(errText) && 'email' in createPayload) {
+              console.warn('Asaas rejeitou email na criação — retrying sem email.');
+              const { email: _drop, ...rest } = createPayload;
+              createResp = await tryCreate(rest);
+              if (createResp.ok) {
+                const createData = await createResp.json();
+                asaasCustomerId = createData.id;
+                console.log(`📋 Created Asaas customer (sem email): ${asaasCustomerId}`);
+              } else {
+                console.error('Failed to create Asaas customer (retry):', await createResp.text());
+              }
+            } else {
+              console.error('Failed to create Asaas customer:', errText);
+            }
+          } else {
             const createData = await createResp.json();
             asaasCustomerId = createData.id;
             console.log(`📋 Created Asaas customer: ${asaasCustomerId}`);
-          } else {
-            const errData = await createResp.json();
-            console.error('Failed to create Asaas customer:', errData);
           }
         }
       }
@@ -446,6 +497,12 @@ Deno.serve(async (req) => {
         holderInfo.name = payerHints.fullName || payerHints.firstName;
       }
       if (!holderInfo.email && payerHints.email) holderInfo.email = payerHints.email;
+      // Se o email do titular (vindo do frontend) não passar no filtro Asaas, remove
+      // para não invalidar o payment inteiro. O cartão não exige email obrigatoriamente.
+      if (holderInfo.email && !isAsaasSafeEmail(holderInfo.email as string)) {
+        console.warn('holderInfo.email removido — não é ASCII válido para Asaas.');
+        delete holderInfo.email;
+      }
       if (!holderInfo.phone && payerHints.phone) holderInfo.phone = payerHints.phone;
       if (!holderInfo.cpfCnpj && payerHints.cpfCnpj) holderInfo.cpfCnpj = payerHints.cpfCnpj;
       if (payerHints.address) {
@@ -522,6 +579,26 @@ Deno.serve(async (req) => {
 
     console.log(`💳 Creating Asaas payment: ${finalBillingType}, R$ ${valor}, customer: ${asaasCustomerId}`);
 
+    // 🛡️ Defesa em profundidade: para PIX/BOLETO o Asaas exige CPF/CNPJ no customer.
+    // Se por qualquer motivo o customer atual estiver sem cpfCnpj (ex.: PUT anterior
+    // falhou por email inválido), garantimos aqui um PUT dedicado só com o CPF.
+    if (asaasCustomerId && (finalBillingType === 'PIX' || finalBillingType === 'BOLETO') && payerHints.cpfCnpj) {
+      try {
+        const chk = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+          headers: { access_token: asaasApiKey },
+        });
+        if (chk.ok) {
+          const cur = await chk.json();
+          if (!cur.cpfCnpj) {
+            console.log(`🛡️ Forçando gravação de cpfCnpj no customer ${asaasCustomerId} antes de criar cobrança.`);
+            await putAsaasCustomer(asaasBaseUrl, asaasApiKey, asaasCustomerId, { cpfCnpj: payerHints.cpfCnpj });
+          }
+        }
+      } catch (e) {
+        console.warn('Defesa em profundidade (CPF) falhou:', e instanceof Error ? e.message : e);
+      }
+    }
+
     const paymentResp = await fetch(`${asaasBaseUrl}/v3/payments`, {
       method: 'POST',
       headers: {
@@ -534,10 +611,16 @@ Deno.serve(async (req) => {
     const paymentData = await paymentResp.json();
 
     if (!paymentResp.ok) {
-      const errorMsg = paymentData.errors?.[0]?.description || 'Erro ao criar pagamento no Asaas';
+      const firstErr = paymentData.errors?.[0] || {};
+      const errorMsg = firstErr.description || 'Erro ao criar pagamento no Asaas';
+      const asaasCode = String(firstErr.code || '').toLowerCase();
       console.error('Asaas payment creation error:', paymentData);
+      // Mapeamento fino: email inválido → INVALID_EMAIL (frontend destaca o campo).
+      let code = 'ASAAS_PAYMENT_ERROR';
+      if (asaasCode === 'invalid_email' || /email/i.test(errorMsg)) code = 'INVALID_EMAIL';
+      else if (/cpf|cnpj/i.test(errorMsg)) code = 'MISSING_CPF_CNPJ';
       return new Response(
-        JSON.stringify({ success: false, error: errorMsg, code: 'ASAAS_PAYMENT_ERROR' }),
+        JSON.stringify({ success: false, error: errorMsg, code }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

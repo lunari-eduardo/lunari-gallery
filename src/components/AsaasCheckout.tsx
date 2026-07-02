@@ -338,12 +338,20 @@ export function AsaasCheckout({
           setPixCopiaECola(null);
           setPixCobrancaId(null);
           if (showPixContactForm) {
-            // Formulário inline está montado — foca o CPF e sinaliza erro no campo.
             setFieldError('pixCpf', 'Confirme seu CPF ou CNPJ para gerar o PIX.');
             pixCpfRef.current?.focus();
           } else if (onMissingCpf) {
             onMissingCpf();
           }
+          return;
+        }
+        // Email inválido (Asaas rejeita acentos/caracteres não-ASCII).
+        if (result?.code === 'INVALID_EMAIL') {
+          setPixQrCode(null);
+          setPixCopiaECola(null);
+          setPixCobrancaId(null);
+          setFieldError('pixEmail', 'Este email não é aceito pelo Asaas. Use um email sem acentos ou caracteres especiais.');
+          pixEmailRef.current?.focus();
           return;
         }
         throw new Error(result.error || 'Erro ao gerar PIX');
