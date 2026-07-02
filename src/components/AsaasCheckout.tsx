@@ -75,6 +75,20 @@ export interface AsaasCheckoutData {
   taxaAntecipacaoCreditoParcelado?: number;
 }
 
+export interface PayerHintsPrefill {
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  cpfCnpj?: string | null;
+}
+
+export interface PayerHintsMissingFlags {
+  name?: boolean;
+  email?: boolean;
+  phone?: boolean;
+  cpfCnpj?: boolean;
+}
+
 interface AsaasCheckoutProps {
   data: AsaasCheckoutData;
   studioName?: string;
@@ -82,6 +96,12 @@ interface AsaasCheckoutProps {
   onPaymentConfirmed: () => void;
   onCancel?: () => void;
   onMissingCpf?: () => void;
+  /** Valores já conhecidos do pagador — pré-preenchem os campos do checkout. */
+  payerHints?: PayerHintsPrefill;
+  /** Quais campos faltam no cadastro (backend). Direciona quais aparecem inline no PIX. */
+  payerMissing?: PayerHintsMissingFlags;
+  /** Persiste os dados no cadastro do cliente antes de gerar a cobrança. */
+  onPersistContact?: (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => Promise<void>;
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
 }
