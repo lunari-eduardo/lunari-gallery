@@ -13,6 +13,11 @@ const GET_ADAPTIVE_POLL_INTERVAL = (elapsedMs: number) => {
   return 30000;
 };
 
+export type PendingAction =
+  | { kind: 'external_redirect'; checkoutUrl: string; provedor: string }
+  | { kind: 'regenerate'; provedor: string }
+  | { kind: 'resume_modal'; provedor: string }; // Asaas/PIX modais internos
+
 interface PaymentPendingScreenProps {
   cobrancaId?: string;
   sessionId?: string;
@@ -24,9 +29,14 @@ interface PaymentPendingScreenProps {
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
   awaitingCharge?: boolean;
+  /** Ação canônica devolvida pelo backend. Se ausente, cai no comportamento legado. */
+  pendingAction?: PendingAction;
+  /** Chamado para abrir modais internos (Asaas/PIX). */
+  onResume?: () => void;
   onRegenerate?: () => void | Promise<void>;
   onPaymentConfirmed: () => void;
 }
+
 
 /* ---------- Ilustração ---------- */
 function PendingIllustration() {
