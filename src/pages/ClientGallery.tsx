@@ -1292,8 +1292,24 @@ export default function ClientGallery() {
       missing={effectiveMissing}
       onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); setForcedMissing(null); }}
       onSubmit={handleContactCollected}
+      themeStyles={themeStyles}
+      backgroundMode={effectiveBackgroundMode}
     />
   );
+
+  // Props compartilhadas para todos os AsaasCheckout: pré-preenchem e persistem dados.
+  const payerHintsPrefill = (galleryResponse as any)?.payerHints || undefined;
+  const payerMissingFlags = (galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined)
+    ? {
+        name: !!galleryResponse?.payerHintsMissing?.name,
+        email: !!galleryResponse?.payerHintsMissing?.email,
+        phone: !!galleryResponse?.payerHintsMissing?.phone,
+        cpfCnpj: !!galleryResponse?.payerHintsMissing?.cpfCnpj,
+      }
+    : undefined;
+  const handlePersistContact = async (payload: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
+    await handleContactCollected(payload);
+  };
 
 
 
