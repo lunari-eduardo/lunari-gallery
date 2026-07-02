@@ -294,6 +294,17 @@ export default function ClientProfile() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="contact">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Dados do Cliente</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ContactTab client={client} onSaved={refetch} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="payments">
           <Card>
             <CardHeader>
@@ -321,7 +332,7 @@ export default function ClientProfile() {
                     {payments.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell className="text-muted-foreground">
-                          {payment.data_pagamento 
+                          {payment.data_pagamento
                             ? format(new Date(payment.data_pagamento), 'dd/MM/yyyy', { locale: ptBR })
                             : format(new Date(payment.created_at), 'dd/MM/yyyy', { locale: ptBR })}
                         </TableCell>
@@ -339,7 +350,7 @@ export default function ClientProfile() {
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {payment.galeria_nome ? (
-                            <Link 
+                            <Link
                               to={`/gallery/${payment.galeria_id}`}
                               className="text-primary hover:underline"
                             >
@@ -351,8 +362,8 @@ export default function ClientProfile() {
                         </TableCell>
                         <TableCell>
                           {payment.ip_receipt_url && (
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               asChild
                             >
@@ -371,24 +382,7 @@ export default function ClientProfile() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Edit Modal */}
-      <ClientModal
-        open={isEditModalOpen}
-        onOpenChange={setIsEditModalOpen}
-        client={client ? {
-          id: client.id,
-          name: client.nome,
-          email: client.email || '',
-          phone: client.telefone || undefined,
-          galleryPassword: '',
-          status: (client.gallery_status as 'ativo' | 'sem_galeria') || 'sem_galeria',
-          totalGalleries: client.total_galerias || 0,
-          createdAt: client.created_at ? new Date(client.created_at) : new Date(),
-          updatedAt: new Date(),
-        } : null}
-        onSave={handleEditClient}
-      />
     </div>
+
   );
 }
