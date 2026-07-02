@@ -1542,16 +1542,24 @@ export default function ClientGallery() {
       valorTotal: resultado.valorACobrar,
     };
 
-    // Se cobrança externa e faltam dados de contato → coletar antes do redirect.
+    // Se cobrança externa e faltam dados de contato/CPF → coletar antes do redirect.
     // Isso garante que o CRM seja enriquecido mesmo quando o provedor
-    // (InfinitePay) não devolve os dados do pagador no webhook.
+    // (InfinitePay) não devolve os dados do pagador no webhook, e evita
+    // 422 MISSING_CPF_CNPJ do Asaas por falta de CPF do pagador.
     const saleMode = gallery.saleSettings?.mode;
     const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
     const missing = galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined;
-    // Coleta local é a ÚNICA fonte confiável para telefone/email/nome:
-    // a InfinitePay não devolve dados do pagador no webhook/polling.
-    if (shouldRequestPayment && missing && (missing.email || missing.name || missing.phone)) {
-      setPendingConfirmPayload(payload);
+    const asaasPhoneRequired = !!missing?.cpfRequired && missing?.billingType !== 'CREDIT_CARD';
+    const needsCollection =
+      shouldRequestPayment && missing && (
+        missing.email ||
+        missing.name ||
+        (missing.phone && asaasPhoneRequired) ||
+        missing.cpfCnpj
+      );
+    // Guardar payload permite re-tentar após coleta (inclusive fallback 422).
+    setPendingConfirmPayload(payload);
+    if (needsCollection) {
       setContactModalOpen(true);
       return;
     }
@@ -1559,7 +1567,7 @@ export default function ClientGallery() {
     confirmMutation.mutate(payload);
   };
 
-  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string }) => {
+  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
     try {
       const { error } = await supabase.rpc('upsert_visitor_contact', {
         p_token: identifier as string,
@@ -1567,7 +1575,8 @@ export default function ClientGallery() {
         p_email: data.email || null,
         p_phone: data.phone || null,
         p_nome: data.nome || null,
-      });
+        p_cpf_cnpj: data.cpfCnpj || null,
+      } as any);
       if (error) throw error;
 
       // Recarrega gallery-access para materializar novos hints antes do create-link
