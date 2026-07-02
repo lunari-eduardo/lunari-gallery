@@ -213,9 +213,9 @@ serve(async (req) => {
           null;
 
         // Reconstitui asaasCheckoutData quando cliente retorna com cobrança
-        // Asaas pendente — o checkout transparente precisa desse payload.
+        // Asaas pendente OU aguardando_confirmacao — o checkout transparente precisa desse payload.
         let asaasCheckoutData: Record<string, unknown> | null = null;
-        if (cobranca.provedor === 'asaas' && cobranca.status === 'pendente') {
+        if (cobranca.provedor === 'asaas' && ['pendente','aguardando_confirmacao'].includes(cobranca.status)) {
           const { data: integracao } = await supabase
             .from('usuarios_integracoes')
             .select('dados_extras')
@@ -247,6 +247,26 @@ serve(async (req) => {
           };
         }
 
+        // pendingAction canônica — o frontend não precisa mais adivinhar.
+        // - external_redirect: InfinitePay/MP com URL salva (botão "Ir para pagamento")
+        // - asaas_modal:       provedor Asaas com dados reconstituídos (abre checkout transparente)
+        // - pix_modal:         PIX manual
+        // - regenerate:        cobrança morta/inexistente, precisa novo link
+        let pendingAction: {
+          kind: 'external_redirect' | 'asaas_modal' | 'pix_modal' | 'regenerate';
+          checkoutUrl?: string | null;
+          provedor: string;
+        };
+        if (cobranca.provedor === 'asaas' && asaasCheckoutData) {
+          pendingAction = { kind: 'asaas_modal', provedor: 'asaas' };
+        } else if (cobranca.provedor === 'pix_manual') {
+          pendingAction = { kind: 'pix_modal', provedor: 'pix_manual' };
+        } else if (checkoutUrl) {
+          pendingAction = { kind: 'external_redirect', checkoutUrl, provedor: cobranca.provedor };
+        } else {
+          pendingAction = { kind: 'regenerate', provedor: cobranca.provedor };
+        }
+
         pendingPaymentData = {
           pendingPayment: true,
           paymentMethod: cobranca.provedor,
@@ -255,6 +275,7 @@ serve(async (req) => {
           valorTotal: Number(cobranca.valor || 0),
           pixDados: (gallery.configuracoes as any)?.pixDados,
           asaasCheckoutData,
+          pendingAction,
         };
       } else {
         // Sem cobrança viva mas travada: tela awaitingCharge com valor canônico.
@@ -275,8 +296,10 @@ serve(async (req) => {
           pixDados: (gallery.configuracoes as any)?.pixDados,
           asaasCheckoutData: null,
           needsRegeneration: (gallery as any).payment_needs_regeneration === true,
+          pendingAction: { kind: 'regenerate', provedor: (gallery as any).venda_pagamento_provedor || 'desconhecido' },
         };
       }
+
     }
 
 
