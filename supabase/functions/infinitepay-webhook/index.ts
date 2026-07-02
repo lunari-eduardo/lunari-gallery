@@ -91,13 +91,9 @@ async function enrichFromInfinitePayInvoice(
 
     // Enriquecer visitante da galeria (contato vazio)
     if (cobranca.visitor_id) {
+      const contato = c.email || c.phone_number;
+      const contato_tipo = c.email ? 'email' : (c.phone_number ? 'whatsapp' : null);
       if (contato && contato_tipo) {
-        await supabase
-          .from('galeria_visitantes')
-          .update({ contato, contato_tipo, updated_at: new Date().toISOString() })
-          .eq('id', cobranca.visitor_id)
-          .or('contato.is.null,contato.eq.');
-      }
         await supabase
           .from('galeria_visitantes')
           .update({ contato, contato_tipo, updated_at: new Date().toISOString() })
