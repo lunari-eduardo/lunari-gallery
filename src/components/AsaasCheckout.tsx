@@ -183,6 +183,9 @@ export function AsaasCheckout({
   onPaymentConfirmed,
   onCancel,
   onMissingCpf,
+  payerHints,
+  payerMissing,
+  onPersistContact,
   themeStyles = {},
   backgroundMode = 'light',
 }: AsaasCheckoutProps) {
