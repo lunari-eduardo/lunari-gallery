@@ -382,7 +382,61 @@ export function AsaasCheckout({
     } finally {
       setPixLoading(false);
     }
-  }, [data, onPaymentConfirmed, onMissingCpf]);
+  }, [data, onPaymentConfirmed, onMissingCpf, showPixContactForm]);
+
+  // ——— Validação do formulário inline de PIX ———
+  const pixFormValid = (() => {
+    if (needsName && pixName.trim().length < 2) return false;
+    if (needsEmail && !/\S+@\S+\.\S+/.test(pixEmail)) return false;
+    if (needsCpf && !validateCpfCnpj(pixCpfCnpj)) return false;
+    if (needsPhone && pixPhone.replace(/\D/g, '').length < 10) return false;
+    return true;
+  })();
+
+  // Wrapper: persiste dados no cadastro (se necessário) e dispara generatePix.
+  const handleGeneratePixClick = async () => {
+    // Validação final antes de submeter
+    if (needsName && pixName.trim().length < 2) {
+      setFieldError('pixName', 'Informe seu nome');
+      pixNameRef.current?.focus();
+      return;
+    }
+    if (needsEmail && !/\S+@\S+\.\S+/.test(pixEmail)) {
+      setFieldError('pixEmail', 'Email inválido');
+      pixEmailRef.current?.focus();
+      return;
+    }
+    if (needsCpf && !validateCpfCnpj(pixCpfCnpj)) {
+      setFieldError('pixCpf', 'CPF ou CNPJ inválido');
+      pixCpfRef.current?.focus();
+      return;
+    }
+    if (needsPhone && pixPhone.replace(/\D/g, '').length < 10) {
+      setFieldError('pixPhone', 'Telefone inválido');
+      pixPhoneRef.current?.focus();
+      return;
+    }
+
+    // Persiste no cadastro do cliente (galeria_visitantes/clientes) — melhor esforço.
+    if (showPixContactForm && onPersistContact) {
+      setPixContactLoading(true);
+      try {
+        await onPersistContact({
+          nome: needsName ? pixName.trim() : undefined,
+          email: needsEmail ? pixEmail.trim() : undefined,
+          cpfCnpj: needsCpf ? pixCpfCnpj.replace(/\D/g, '') : undefined,
+          phone: needsPhone ? pixPhone.replace(/\D/g, '') : undefined,
+        });
+      } catch (e) {
+        setPixContactLoading(false);
+        toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados.');
+        return;
+      }
+      setPixContactLoading(false);
+    }
+
+    await generatePix();
+  };
 
   const handleCopyPix = async () => {
     if (!pixCopiaECola) return;
