@@ -326,7 +326,7 @@ export function AsaasCheckout({
     } finally {
       setPixLoading(false);
     }
-  }, [data, onPaymentConfirmed]);
+  }, [data, onPaymentConfirmed, onMissingCpf]);
 
   const handleCopyPix = async () => {
     if (!pixCopiaECola) return;
