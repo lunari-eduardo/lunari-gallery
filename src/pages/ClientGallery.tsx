@@ -1308,7 +1308,17 @@ export default function ClientGallery() {
       }
     : undefined;
   const handlePersistContact = async (payload: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
-    await handleContactCollected(payload);
+    const { error } = await supabase.rpc('upsert_visitor_contact', {
+      p_token: identifier as string,
+      p_visitor_id: visitorId || null,
+      p_email: payload.email || null,
+      p_phone: payload.phone || null,
+      p_nome: payload.nome || null,
+      p_cpf_cnpj: payload.cpfCnpj || null,
+    } as any);
+    if (error) throw error;
+    // Atualiza o cache local para que próximas cobranças usem os novos dados.
+    refetchGallery();
   };
 
 
