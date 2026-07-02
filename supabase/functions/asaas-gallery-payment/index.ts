@@ -272,12 +272,8 @@ Deno.serve(async (req) => {
             if (centralizarEmailsLunari) updates.notificationDisabled = true;
             if (Object.keys(updates).length > 0) {
               console.log(`📝 Updating Asaas customer:`, Object.keys(updates));
-              const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-                body: JSON.stringify(updates),
-              });
-              if (!updateResp.ok) console.warn('Failed to update Asaas customer:', await updateResp.text());
+              const putResult = await putAsaasCustomer(asaasBaseUrl, asaasApiKey, asaasCustomerId, updates);
+              if (!putResult.ok) console.warn('Failed to update Asaas customer:', putResult.body);
             }
           }
         }
