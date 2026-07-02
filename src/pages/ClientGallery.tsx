@@ -2186,7 +2186,7 @@ export default function ClientGallery() {
       <ContactCollectionModal
         open={contactModalOpen}
         missing={(galleryResponse?.payerHintsMissing as ContactCollectionMissing) || { email: true, phone: true, name: true }}
-        requirePhone={false}
+        requirePhone={true}
         onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); }}
         onSubmit={handleContactCollected}
       />
