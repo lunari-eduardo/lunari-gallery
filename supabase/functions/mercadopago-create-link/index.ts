@@ -15,6 +15,7 @@
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { resolvePayerHints, payerHintsFlags } from '../_shared/payer-hints.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -90,23 +91,18 @@ Deno.serve(async (req) => {
     
     console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId, 'clienteId:', body.clienteId || 'NULL');
     
-    // 2. Buscar email do cliente se não fornecido
-    let clienteEmail = body.cliente_email;
-    if (!clienteEmail && body.clienteId) {
-      const { data: cliente } = await supabase
-        .from('clientes')
-        .select('email')
-        .eq('id', body.clienteId)
-        .single();
-      
-      clienteEmail = cliente?.email || 'cliente@email.com';
-      console.log('Email do cliente obtido via clienteId:', clienteEmail);
-    }
-    
-    if (!clienteEmail) {
-      clienteEmail = 'cliente@email.com'; // Fallback para galerias públicas
-      console.log('Usando email fallback:', clienteEmail);
-    }
+    // 2. Buscar dados do pagador (nome + email + telefone) para pré-preencher o checkout.
+    //    Prioridade: cliente → visitante. NUNCA usar email placeholder inválido.
+    const payerHints = await resolvePayerHints(supabase, {
+      clienteId: body.clienteId,
+      visitorId: body.visitorId,
+    });
+    console.log(`[MP_PREFILL] ${payerHintsFlags(payerHints)}`);
+
+    // clienteEmail = email real do body (Gestão) OU hint validado. undefined é permitido para Preference.
+    let clienteEmail: string | undefined = body.cliente_email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.cliente_email)
+      ? body.cliente_email.trim().toLowerCase()
+      : payerHints.email;
     
     // 3. Criar cobrança se não fornecida (aceita cliente_id NULL agora)
     let cobrancaId = body.cobranca_id;
@@ -287,14 +283,22 @@ Deno.serve(async (req) => {
 
     // 6. Criar pagamento baseado no método (ou checkout genérico se não especificado)
     if (paymentMethod === 'pix') {
-      // Create PIX payment
+      // PIX direto exige email real — sem fallback placeholder.
+      if (!clienteEmail) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Email do pagador é obrigatório para PIX. Peça ao visitante que se identifique antes de finalizar.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const pixPayer: Record<string, unknown> = { email: clienteEmail };
+      if (payerHints.firstName) pixPayer.first_name = payerHints.firstName;
+      if (payerHints.phoneParts) pixPayer.phone = payerHints.phoneParts;
+
       const pixPayload = {
         transaction_amount: body.valor,
         description: body.descricao,
         payment_method_id: 'pix',
-        payer: {
-          email: clienteEmail,
-        },
+        payer: pixPayer,
         external_reference: cobrancaId,
       };
 
@@ -380,16 +384,19 @@ Deno.serve(async (req) => {
         console.log('💳 Checkout específico para cartão');
       }
       
-      const preferencePayload = {
+      // Payer do Preference: omite campos sem valor (MP aceita Preference sem email).
+      const preferencePayer: Record<string, unknown> = {};
+      if (clienteEmail) preferencePayer.email = clienteEmail;
+      if (payerHints.firstName) preferencePayer.name = payerHints.firstName;
+      if (payerHints.phoneParts) preferencePayer.phone = payerHints.phoneParts;
+
+      const preferencePayload: Record<string, unknown> = {
         items: [{
           title: body.descricao,
           quantity: 1,
           unit_price: body.valor,
           currency_id: 'BRL',
         }],
-        payer: {
-          email: clienteEmail,
-        },
         external_reference: cobrancaId,
         payment_methods: {
           excluded_payment_types: excludedTypes,
@@ -402,6 +409,9 @@ Deno.serve(async (req) => {
         },
         auto_return: 'approved',
       };
+      if (Object.keys(preferencePayer).length > 0) {
+        preferencePayload.payer = preferencePayer;
+      }
 
       console.log('Criando preferência de checkout com exclusões:', JSON.stringify(excludedTypes));
 

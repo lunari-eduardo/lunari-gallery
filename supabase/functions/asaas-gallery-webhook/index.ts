@@ -25,6 +25,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { logWebhookEvent, getCorrelationId, acquireWebhookLock } from '../_shared/audit.ts';
+import { enrichClienteIfMissing } from '../_shared/enrich-cliente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -314,6 +315,40 @@ async function processPayment(
   } else {
     console.log('✅ finalize_gallery_payment result:', JSON.stringify(rpcResult));
     await notifyPaymentConfirmed(cobrancaId);
+
+    // 5b. Enriquecer cadastro do cliente com dados validados pelo Asaas (idempotente).
+    //     Busca o customer no Asaas para obter email/phone/mobilePhone que o pagador digitou.
+    try {
+      const clienteIdCob = cobranca.cliente_id as string | null;
+      const asaasCustomerId = (payment as Record<string, unknown>).customer as string | undefined;
+      if (clienteIdCob && asaasCustomerId) {
+        const userIdCob = cobranca.user_id as string;
+        const { data: integ } = await supabase
+          .from('usuarios_integracoes')
+          .select('access_token, dados_extras')
+          .eq('user_id', userIdCob)
+          .eq('provedor', 'asaas')
+          .eq('status', 'ativo')
+          .maybeSingle();
+        if (integ?.access_token) {
+          const env = ((integ.dados_extras as Record<string, unknown>)?.environment ||
+            ((integ.dados_extras as Record<string, unknown>)?.gallery_settings as Record<string, unknown>)?.environment) === 'production'
+            ? 'https://api.asaas.com' : 'https://api-sandbox.asaas.com';
+          const custResp = await fetch(`${env}/v3/customers/${asaasCustomerId}`, {
+            headers: { access_token: integ.access_token as string },
+          });
+          if (custResp.ok) {
+            const cust = await custResp.json();
+            await enrichClienteIfMissing(supabase, clienteIdCob, {
+              email: cust.email,
+              telefone: cust.mobilePhone || cust.phone,
+            });
+          }
+        }
+      }
+    } catch (enrichErr) {
+      console.warn('[asaas-webhook] enrich failed:', enrichErr instanceof Error ? enrichErr.message : enrichErr);
+    }
   }
 
   // ============================================================

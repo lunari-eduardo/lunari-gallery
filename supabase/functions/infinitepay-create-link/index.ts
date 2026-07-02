@@ -17,6 +17,7 @@
  * ╚══════════════════════════════════════════════════════════════╝
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
+import { resolvePayerHints, payerHintsFlags } from '../_shared/payer-hints.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -196,6 +197,22 @@ Deno.serve(async (req) => {
       items: [{ quantity: 1, price: valorCentavos, description: descricao.substring(0, 100) }],
       order_nsu: orderNsu,
     };
+
+    // 🎯 Pré-preenchimento do checkout com dados do pagador (name, email, phone).
+    // Só envia campos que existem — InfinitePay rejeita email/phone vazio ou inválido.
+    try {
+      const hints = await resolvePayerHints(supabase, { clienteId, visitorId });
+      console.log(`[INFINITEPAY_PREFILL] ${payerHintsFlags(hints)}`);
+      if (hints.firstName || hints.email || hints.phone) {
+        infinitePayload.customer = {
+          ...(hints.firstName ? { name: hints.firstName } : {}),
+          ...(hints.email ? { email: hints.email } : {}),
+          ...(hints.phone ? { phone_number: hints.phone } : {}),
+        };
+      }
+    } catch (prefillErr) {
+      console.warn('[INFINITEPAY_PREFILL] falha ao resolver hints:', prefillErr instanceof Error ? prefillErr.message : prefillErr);
+    }
 
     // Redirect URL
     if (redirectUrl) {
