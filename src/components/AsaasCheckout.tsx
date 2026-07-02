@@ -191,6 +191,12 @@ export function AsaasCheckout({
 }: AsaasCheckoutProps) {
   const defaultTab = data.enabledMethods.pix ? 'pix' : 'card';
 
+  // ——— Pré-preenchimento dos dados do pagador ———
+  const initialFullName = payerHints?.fullName || '';
+  const initialEmail = payerHints?.email || '';
+  const initialPhone = payerHints?.phone ? maskPhone(payerHints.phone) : '';
+  const initialCpfCnpj = payerHints?.cpfCnpj ? maskCpfCnpj(payerHints.cpfCnpj) : '';
+
   // ——— PIX state ———
   const [pixLoading, setPixLoading] = useState(false);
   const [pixQrCode, setPixQrCode] = useState<string | null>(null);
@@ -201,15 +207,22 @@ export function AsaasCheckout({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
 
-  // ——— Card state ———
+  // ——— Pré-checkout PIX inline (dados do pagador coletados na própria tela) ———
+  const [pixName, setPixName] = useState(initialFullName);
+  const [pixEmail, setPixEmail] = useState(initialEmail);
+  const [pixCpfCnpj, setPixCpfCnpj] = useState(initialCpfCnpj);
+  const [pixPhone, setPixPhone] = useState(initialPhone);
+  const [pixContactLoading, setPixContactLoading] = useState(false);
+
+  // ——— Card state (pré-preenchido com dados conhecidos) ———
   const [cardLoading, setCardLoading] = useState(false);
-  const [cardName, setCardName] = useState('');
-  const [cardCpfCnpj, setCardCpfCnpj] = useState('');
+  const [cardName, setCardName] = useState(initialFullName.toUpperCase());
+  const [cardCpfCnpj, setCardCpfCnpj] = useState(initialCpfCnpj);
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
-  const [cardPhone, setCardPhone] = useState('');
-  const [cardEmail, setCardEmail] = useState('');
+  const [cardPhone, setCardPhone] = useState(initialPhone);
+  const [cardEmail, setCardEmail] = useState(initialEmail);
   const [cardCep, setCardCep] = useState('');
   const [cardInstallments, setCardInstallments] = useState('1');
   const [cardError, setCardError] = useState<string | null>(null);
@@ -234,6 +247,20 @@ export function AsaasCheckout({
   const cardCvvRef = useRef<HTMLInputElement>(null);
   const cardPhoneRef = useRef<HTMLInputElement>(null);
   const cardCepRef = useRef<HTMLInputElement>(null);
+  const pixNameRef = useRef<HTMLInputElement>(null);
+  const pixEmailRef = useRef<HTMLInputElement>(null);
+  const pixCpfRef = useRef<HTMLInputElement>(null);
+  const pixPhoneRef = useRef<HTMLInputElement>(null);
+  const pixGenerateRef = useRef<HTMLButtonElement>(null);
+
+  // ——— Flags: quais campos inline mostrar no PIX ———
+  // Se o backend disse que falta, ou se o valor pré-preenchido está vazio, exibimos.
+  const needsName = !!payerMissing?.name || !initialFullName;
+  const needsEmail = !!payerMissing?.email || !initialEmail;
+  const needsCpf = !!payerMissing?.cpfCnpj || !initialCpfCnpj;
+  const needsPhone = !!payerMissing?.phone || !initialPhone;
+  const showPixContactForm = needsName || needsEmail || needsCpf || needsPhone;
+
 
   // ——— Real-time fees from Asaas API ———
   const [accountFees, setAccountFees] = useState<AccountFees | null>(null);
