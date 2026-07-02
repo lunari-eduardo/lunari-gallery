@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 import { DownloadModal } from '@/components/DownloadModal';
+import { ContactCollectionModal, ContactCollectionMissing } from '@/components/ContactCollectionModal';
 import { getPhotoUrl, getOriginalPhotoUrl } from '@/lib/photoUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { WatermarkSettings, DiscountPackage, TitleCaseMode } from '@/types/gallery';
