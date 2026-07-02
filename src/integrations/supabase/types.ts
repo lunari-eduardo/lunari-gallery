@@ -1176,6 +1176,7 @@ export type Database = {
           galeria_id: string | null
           id: string
           ip_checkout_url: string | null
+          ip_invoice_slug: string | null
           ip_order_nsu: string | null
           ip_receipt_url: string | null
           ip_transaction_nsu: string | null
@@ -1216,6 +1217,7 @@ export type Database = {
           galeria_id?: string | null
           id?: string
           ip_checkout_url?: string | null
+          ip_invoice_slug?: string | null
           ip_order_nsu?: string | null
           ip_receipt_url?: string | null
           ip_transaction_nsu?: string | null
@@ -1256,6 +1258,7 @@ export type Database = {
           galeria_id?: string | null
           id?: string
           ip_checkout_url?: string | null
+          ip_invoice_slug?: string | null
           ip_order_nsu?: string | null
           ip_receipt_url?: string | null
           ip_transaction_nsu?: string | null
@@ -5668,6 +5671,16 @@ export type Database = {
       }
       try_lock_visitor_selection: {
         Args: { p_visitor_id: string }
+        Returns: Json
+      }
+      upsert_visitor_contact: {
+        Args: {
+          p_email: string
+          p_nome: string
+          p_phone: string
+          p_token: string
+          p_visitor_id: string
+        }
         Returns: Json
       }
       user_has_gallery_access: { Args: { _user_id: string }; Returns: boolean }
