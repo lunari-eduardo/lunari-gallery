@@ -106,7 +106,10 @@ export function ContactCollectionModal({ open, missing, requirePhone, onCancel, 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !submitting) onCancel(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className={`sm:max-w-md bg-background text-foreground ${backgroundMode === 'dark' ? 'dark' : ''}`}
+        style={themeStyles}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
