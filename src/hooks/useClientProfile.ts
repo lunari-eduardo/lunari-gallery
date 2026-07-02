@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -38,8 +39,18 @@ export interface ClientProfileData {
   telefone: string | null;
   whatsapp: string | null;
   gallery_status: string | null;
+  gallery_password: string | null;
   total_galerias: number | null;
   created_at: string | null;
+  data_nascimento: string | null;
+  cpf_cnpj: string | null;
+  cep: string | null;
+  endereco: string | null;
+  endereco_numero: string | null;
+  endereco_complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
 }
 
 export interface ClientStats {
@@ -52,24 +63,49 @@ export interface ClientStats {
 
 export function useClientProfile(clientId: string | undefined) {
   const { user } = useAuthContext();
+  const queryClient = useQueryClient();
 
   const clientQuery = useQuery({
     queryKey: ['client-profile', clientId],
     queryFn: async (): Promise<ClientProfileData | null> => {
       if (!clientId || !user) return null;
-      
+
       const { data, error } = await supabase
         .from('clientes')
-        .select('id, nome, email, telefone, whatsapp, gallery_status, total_galerias, created_at')
+        .select(`
+          id, nome, email, telefone, whatsapp, gallery_status, gallery_password,
+          total_galerias, created_at, data_nascimento, cpf_cnpj, cep,
+          endereco, endereco_numero, endereco_complemento, bairro, cidade, uf
+        `)
         .eq('id', clientId)
         .eq('user_id', user.id)
         .single();
-      
+
       if (error) throw error;
-      return data;
+      return data as ClientProfileData;
     },
     enabled: !!clientId && !!user,
   });
+
+  // Realtime: reflete edições feitas em outro projeto (Gestão) ou outra aba.
+  useEffect(() => {
+    if (!clientId || !user) return;
+    const channel = supabase
+      .channel(`client-profile-${clientId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'clientes', filter: `id=eq.${clientId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['client-profile', clientId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [clientId, user?.id, queryClient]);
+
+
 
   const galleriesQuery = useQuery({
     queryKey: ['client-galleries', clientId],
