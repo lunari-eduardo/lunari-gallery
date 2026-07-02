@@ -238,7 +238,9 @@ Deno.serve(async (req) => {
         // Inclui CPF/CNPJ e endereço (obrigatórios/recomendados para antecipação).
         const buildFillUpdates = (existing: Record<string, unknown>): Record<string, unknown> => {
           const u: Record<string, unknown> = {};
-          if (bestEmail && !existing.email) u.email = bestEmail;
+          // Só envia email para o Asaas se for ASCII válido — evita bloquear
+          // o PUT inteiro por causa de acento no email do CRM.
+          if (bestEmail && !existing.email && isAsaasSafeEmail(bestEmail)) u.email = bestEmail;
           if (bestPhone && !existing.phone && !existing.mobilePhone) {
             u.mobilePhone = bestPhone;
             u.phone = bestPhone;
