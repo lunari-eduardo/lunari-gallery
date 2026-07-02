@@ -677,11 +677,15 @@ export default function ClientGallery() {
     onError: (error: Error & { silent?: boolean }) => {
       // Silent errors (ex.: ALREADY_FINALIZED) já dispararam refetch — nada de toast.
       if (error?.silent || error?.message === 'ALREADY_FINALIZED') return;
-      // Parse error code from message if available
       const msg = error.message || 'Erro ao confirmar seleção';
-      
-      
-      // Show contextual error messages based on error codes from backend
+
+      // Fallback: Asaas exigiu CPF que o cache do gallery-access ainda não sabia
+      // que estava faltando. Reabrir modal de coleta (agora sabemos que precisa).
+      if (msg.includes('MISSING_CPF_CNPJ')) {
+        refetchGallery().finally(() => setContactModalOpen(true));
+        return;
+      }
+
       if (msg.includes('Nenhum método de pagamento configurado') || msg.includes('NO_PAYMENT_PROVIDER')) {
         toast.error('Pagamento não disponível', {
           description: 'O fotógrafo ainda não configurou o método de pagamento. Entre em contato com ele.',
