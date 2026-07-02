@@ -307,7 +307,8 @@ Deno.serve(async (req) => {
         if (!asaasCustomerId) {
           const createPayload: Record<string, unknown> = {
             name: clienteName,
-            email: bestEmail,
+            // Só envia email quando ASCII válido — Asaas rejeita com invalid_email caso contrário.
+            ...(isAsaasSafeEmail(bestEmail) ? { email: bestEmail } : {}),
             phone: bestPhone,
             mobilePhone: bestPhone,
             cpfCnpj: bestCpfCnpj,
@@ -324,19 +325,34 @@ Deno.serve(async (req) => {
           // Remove chaves undefined para não poluir o payload.
           Object.keys(createPayload).forEach((k) => createPayload[k] === undefined && delete createPayload[k]);
 
-          const createResp = await fetch(`${asaasBaseUrl}/v3/customers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
-            body: JSON.stringify(createPayload),
-          });
+          const tryCreate = async (payload: Record<string, unknown>) =>
+            fetch(`${asaasBaseUrl}/v3/customers`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+              body: JSON.stringify(payload),
+            });
 
-          if (createResp.ok) {
+          let createResp = await tryCreate(createPayload);
+          if (!createResp.ok) {
+            const errText = await createResp.text();
+            if (/invalid_email/i.test(errText) && 'email' in createPayload) {
+              console.warn('Asaas rejeitou email na criação — retrying sem email.');
+              const { email: _drop, ...rest } = createPayload;
+              createResp = await tryCreate(rest);
+              if (createResp.ok) {
+                const createData = await createResp.json();
+                asaasCustomerId = createData.id;
+                console.log(`📋 Created Asaas customer (sem email): ${asaasCustomerId}`);
+              } else {
+                console.error('Failed to create Asaas customer (retry):', await createResp.text());
+              }
+            } else {
+              console.error('Failed to create Asaas customer:', errText);
+            }
+          } else {
             const createData = await createResp.json();
             asaasCustomerId = createData.id;
             console.log(`📋 Created Asaas customer: ${asaasCustomerId}`);
-          } else {
-            const errData = await createResp.json();
-            console.error('Failed to create Asaas customer:', errData);
           }
         }
       }
