@@ -16,7 +16,10 @@
  * NÃO grava nada. Somente leitura.
  */
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Asaas exige email 100% ASCII (rejeita acentos, cirílico, etc.). Aplicamos o
+// mesmo filtro aqui para não devolver hints que quebrariam o customer no Asaas.
+const EMAIL_RE = /^[\x21-\x7E]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const NON_ASCII_RE = /[^\x00-\x7F]/;
 
 export interface PayerAddress {
   postalCode?: string;   // só dígitos, 8
