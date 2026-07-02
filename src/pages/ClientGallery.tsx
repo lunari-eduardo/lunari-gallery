@@ -1956,26 +1956,30 @@ export default function ClientGallery() {
   // Render Asaas Transparent Checkout
   if (currentStep === 'payment' && asaasCheckoutData) {
     return (
-      <AsaasCheckout
-        data={asaasCheckoutData}
-        studioName={galleryResponse?.studioSettings?.studio_name}
-        studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
-        onPaymentConfirmed={() => {
-          setAsaasCheckoutData(null);
-          setCurrentStep('confirmed');
-          setIsConfirmed(true);
-          refetchGallery();
-        }}
-        onCancel={() => {
-          setAsaasCheckoutData(null);
-          setCurrentStep('confirmation');
-        }}
-        onMissingCpf={() => setContactModalOpen(true)}
-        themeStyles={themeStyles}
-        backgroundMode={effectiveBackgroundMode}
-      />
+      <>
+        <AsaasCheckout
+          data={asaasCheckoutData}
+          studioName={galleryResponse?.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse?.studioSettings?.studio_logo_url}
+          onPaymentConfirmed={() => {
+            setAsaasCheckoutData(null);
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
+          }}
+          onCancel={() => {
+            setAsaasCheckoutData(null);
+            setCurrentStep('confirmation');
+          }}
+          onMissingCpf={openMissingCpfModal}
+          themeStyles={themeStyles}
+          backgroundMode={effectiveBackgroundMode}
+        />
+        {contactModalNode}
+      </>
     );
   }
+
 
   // Render Payment Redirect Step - Checkout externo (InfinitePay/MercadoPago)
   if (currentStep === 'payment' && paymentInfo) {
