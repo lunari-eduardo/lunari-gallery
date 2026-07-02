@@ -497,6 +497,12 @@ Deno.serve(async (req) => {
         holderInfo.name = payerHints.fullName || payerHints.firstName;
       }
       if (!holderInfo.email && payerHints.email) holderInfo.email = payerHints.email;
+      // Se o email do titular (vindo do frontend) não passar no filtro Asaas, remove
+      // para não invalidar o payment inteiro. O cartão não exige email obrigatoriamente.
+      if (holderInfo.email && !isAsaasSafeEmail(holderInfo.email as string)) {
+        console.warn('holderInfo.email removido — não é ASCII válido para Asaas.');
+        delete holderInfo.email;
+      }
       if (!holderInfo.phone && payerHints.phone) holderInfo.phone = payerHints.phone;
       if (!holderInfo.cpfCnpj && payerHints.cpfCnpj) holderInfo.cpfCnpj = payerHints.cpfCnpj;
       if (payerHints.address) {
