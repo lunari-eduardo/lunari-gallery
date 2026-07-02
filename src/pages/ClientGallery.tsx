@@ -2004,6 +2004,9 @@ export default function ClientGallery() {
             setCurrentStep('confirmation');
           }}
           onMissingCpf={openMissingCpfModal}
+          payerHints={payerHintsPrefill}
+          payerMissing={payerMissingFlags}
+          onPersistContact={handlePersistContact}
           themeStyles={themeStyles}
           backgroundMode={effectiveBackgroundMode}
         />
