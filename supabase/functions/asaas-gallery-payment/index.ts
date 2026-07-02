@@ -23,6 +23,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Asaas rejeita emails com caracteres não-ASCII (ex.: "joão@gmail.com").
+// Validamos localmente para evitar que o PUT/POST do customer seja invalidado
+// como um todo — o que também impediria a gravação de campos críticos como cpfCnpj.
+function isAsaasSafeEmail(e?: string | null): boolean {
+  if (!e) return false;
+  const s = String(e).trim();
+  if (!/^[\x21-\x7E]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(s)) return false;
+  return !/[^\x00-\x7F]/.test(s);
+}
+
+// PUT resiliente: se o Asaas responder invalid_email, retira o email e tenta
+// de novo — assim os demais campos (cpfCnpj, phone, endereço) são gravados.
+// Retorna { ok, invalidEmail } para o chamador decidir se propaga erro.
+async function putAsaasCustomer(
+  asaasBaseUrl: string,
+  asaasApiKey: string,
+  customerId: string,
+  updates: Record<string, unknown>,
+): Promise<{ ok: boolean; invalidEmail: boolean; body?: string }> {
+  const doPut = async (payload: Record<string, unknown>) =>
+    fetch(`${asaasBaseUrl}/v3/customers/${customerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
+      body: JSON.stringify(payload),
+    });
+
+  let resp = await doPut(updates);
+  if (resp.ok) return { ok: true, invalidEmail: false };
+  const text = await resp.text();
+  const isInvalidEmail = /invalid_email/i.test(text);
+  if (isInvalidEmail && 'email' in updates) {
+    console.warn('Asaas rejeitou email — retrying customer PUT sem email.');
+    const { email: _drop, ...rest } = updates;
+    if (Object.keys(rest).length === 0) return { ok: false, invalidEmail: true, body: text };
+    const retry = await doPut(rest);
+    if (retry.ok) return { ok: true, invalidEmail: true };
+    return { ok: false, invalidEmail: true, body: await retry.text() };
+  }
+  return { ok: false, invalidEmail: isInvalidEmail, body: text };
+}
+
 
 async function notifyPaymentConfirmed(supabaseUrl: string, serviceKey: string, paymentId: string) {
   try {
