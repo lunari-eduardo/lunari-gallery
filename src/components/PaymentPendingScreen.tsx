@@ -156,9 +156,20 @@ export function PaymentPendingScreen({
   studioLogoUrl,
   themeStyles = {},
   awaitingCharge = false,
+  pendingAction,
+  onResume,
   onRegenerate,
   onPaymentConfirmed,
 }: PaymentPendingScreenProps) {
+  // Fonte da verdade: pendingAction quando fornecido; senão inferimos do legado.
+  const effectiveAction: PendingAction =
+    pendingAction ??
+    (awaitingCharge
+      ? { kind: 'regenerate', provedor: 'desconhecido' }
+      : checkoutUrl
+        ? { kind: 'external_redirect', checkoutUrl, provedor: 'externo' }
+        : { kind: 'regenerate', provedor: 'desconhecido' });
+
   const [status, setStatus] = useState<'polling' | 'confirmed' | 'timeout'>('polling');
   const [isChecking, setIsChecking] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
