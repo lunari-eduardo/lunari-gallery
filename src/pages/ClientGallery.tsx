@@ -1535,12 +1535,49 @@ export default function ClientGallery() {
       gallery.extraPhotoPrice
     );
     
-    confirmMutation.mutate({
+    const payload = {
       selectedCount: currentSelectedCount,
-      extraCount: currentExtrasACobrar, // Pass extras to charge
+      extraCount: currentExtrasACobrar,
       valorUnitario: resultado.valorUnitario,
-      valorTotal: resultado.valorACobrar, // Use credit-adjusted amount
-    });
+      valorTotal: resultado.valorACobrar,
+    };
+
+    // Se cobrança externa e faltam dados de contato → coletar antes do redirect.
+    // Isso garante que o CRM seja enriquecido mesmo quando o provedor
+    // (InfinitePay) não devolve os dados do pagador no webhook.
+    const saleMode = gallery.saleSettings?.mode;
+    const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
+    const missing = galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined;
+    if (shouldRequestPayment && missing && (missing.email || missing.name)) {
+      setPendingConfirmPayload(payload);
+      setContactModalOpen(true);
+      return;
+    }
+
+    confirmMutation.mutate(payload);
+  };
+
+  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string }) => {
+    try {
+      const { error } = await supabase.rpc('upsert_visitor_contact', {
+        p_token: identifier as string,
+        p_visitor_id: visitorId || null,
+        p_email: data.email || null,
+        p_phone: data.phone || null,
+        p_nome: data.nome || null,
+      });
+      if (error) throw error;
+
+      // Recarrega gallery-access para materializar novos hints antes do create-link
+      await refetchGallery();
+      setContactModalOpen(false);
+      if (pendingConfirmPayload) {
+        confirmMutation.mutate(pendingConfirmPayload);
+        setPendingConfirmPayload(null);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados. Tente novamente.');
+    }
   };
 
   // Parse welcome message
