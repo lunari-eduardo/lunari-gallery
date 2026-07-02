@@ -1,25 +1,24 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  ArrowLeft, 
-  User, 
-  Mail, 
-  Phone, 
-  Images, 
+import {
+  ArrowLeft,
+  User,
+  Mail,
+  Phone,
+  Images,
   Plus,
-  Pencil,
   DollarSign,
   Camera,
   CreditCard,
   ExternalLink,
   Loader2,
-  ImageIcon
+  ImageIcon,
+  Contact as ContactIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -30,10 +29,7 @@ import {
 } from '@/components/ui/table';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useClientProfile } from '@/hooks/useClientProfile';
-import { ClientModal, ClientFormData } from '@/components/ClientModal';
-import { useGalleryClients } from '@/hooks/useGalleryClients';
-import { useState } from 'react';
-import { toast } from 'sonner';
+import { ContactTab } from '@/components/client/ContactTab';
 import { GalleryStatus } from '@/types/gallery';
 
 import pixLogo from '@/assets/payment-logos/pix.png';
@@ -43,20 +39,7 @@ import mercadopagoLogo from '@/assets/payment-logos/mercadopago.png';
 export default function ClientProfile() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const { client, galleries, payments, stats, isLoading } = useClientProfile(clientId);
-  const { updateClient } = useGalleryClients();
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  const handleEditClient = async (data: ClientFormData) => {
-    if (!clientId) return;
-    try {
-      await updateClient(clientId, data);
-      setIsEditModalOpen(false);
-    } catch (error) {
-      console.error('Error updating client:', error);
-      toast.error('Erro ao atualizar cliente');
-    }
-  };
+  const { client, galleries, payments, stats, isLoading, refetch } = useClientProfile(clientId);
 
   const manualMethodLabels: Record<string, string> = {
     dinheiro: 'Dinheiro',
@@ -64,6 +47,7 @@ export default function ClientProfile() {
     transferencia: 'Transferência',
     outro: 'Outro',
   };
+
 
   const getProviderLogo = (provedor: string | null, metodoManual?: string | null) => {
     switch (provedor) {
