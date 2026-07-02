@@ -30,6 +30,8 @@ interface Props {
   requirePhone?: boolean;
   onCancel: () => void;
   onSubmit: (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => Promise<void>;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 
 const emailSchema = z.string().trim().toLowerCase().email({ message: 'Email inválido' }).max(160);
