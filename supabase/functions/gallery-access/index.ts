@@ -402,6 +402,7 @@ serve(async (req) => {
         theme: themeData,
         clientMode,
         accountTheme, // New field for account heritage info
+        payerHintsMissing,
         ...pendingPaymentData,
       }),
       {
