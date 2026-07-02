@@ -1334,6 +1334,40 @@ export default function ClientGallery() {
       );
     }
 
+    // pendingAction canônica (backend). Fallback deriva de awaitingCharge/checkoutUrl.
+    const pendingAction = (galleryResponse as any)?.pendingAction as
+      | { kind: 'external_redirect' | 'asaas_modal' | 'pix_modal' | 'regenerate'; checkoutUrl?: string; provedor: string }
+      | undefined;
+
+    // Se backend confirma que devemos abrir o modal Asaas (mesmo em aguardando_confirmacao),
+    // roteamos para o AsaasCheckout — nunca cair no "Gerar link" indevidamente.
+    if (pendingAction?.kind === 'asaas_modal' && galleryResponse?.asaasCheckoutData) {
+      return (
+        <AsaasCheckout
+          data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+          studioName={galleryResponse.studioSettings?.studio_name}
+          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+          onPaymentConfirmed={() => {
+            setCurrentStep('confirmed');
+            setIsConfirmed(true);
+            refetchGallery();
+          }}
+          onMissingCpf={() => setContactModalOpen(true)}
+          themeStyles={themeStyles}
+          backgroundMode={pendingBgMode}
+        />
+      );
+    }
+
+    // Mapeia pendingAction do backend para o shape que o PaymentPendingScreen entende.
+    const screenAction = pendingAction
+      ? pendingAction.kind === 'external_redirect'
+        ? { kind: 'external_redirect' as const, checkoutUrl: pendingAction.checkoutUrl || '', provedor: pendingAction.provedor }
+        : pendingAction.kind === 'regenerate'
+          ? { kind: 'regenerate' as const, provedor: pendingAction.provedor }
+          : { kind: 'resume_modal' as const, provedor: pendingAction.provedor }
+      : undefined;
+
     // InfinitePay/MercadoPago + fallback awaitingCharge (sem cobrança viva)
     return (
       <PaymentPendingScreen
@@ -1347,6 +1381,8 @@ export default function ClientGallery() {
         themeStyles={themeStyles}
         backgroundMode={pendingBgMode}
         awaitingCharge={awaitingCharge}
+        pendingAction={screenAction}
+        onResume={() => refetchGallery()}
         onRegenerate={handleRegenerateCharge}
         onPaymentConfirmed={() => {
           setCurrentStep('confirmed');
@@ -1355,6 +1391,7 @@ export default function ClientGallery() {
         }}
       />
     );
+
   }
 
 

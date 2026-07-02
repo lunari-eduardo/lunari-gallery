@@ -13,6 +13,11 @@ const GET_ADAPTIVE_POLL_INTERVAL = (elapsedMs: number) => {
   return 30000;
 };
 
+export type PendingAction =
+  | { kind: 'external_redirect'; checkoutUrl: string; provedor: string }
+  | { kind: 'regenerate'; provedor: string }
+  | { kind: 'resume_modal'; provedor: string }; // Asaas/PIX modais internos
+
 interface PaymentPendingScreenProps {
   cobrancaId?: string;
   sessionId?: string;
@@ -24,9 +29,14 @@ interface PaymentPendingScreenProps {
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
   awaitingCharge?: boolean;
+  /** Ação canônica devolvida pelo backend. Se ausente, cai no comportamento legado. */
+  pendingAction?: PendingAction;
+  /** Chamado para abrir modais internos (Asaas/PIX). */
+  onResume?: () => void;
   onRegenerate?: () => void | Promise<void>;
   onPaymentConfirmed: () => void;
 }
+
 
 /* ---------- Ilustração ---------- */
 function PendingIllustration() {
@@ -146,9 +156,20 @@ export function PaymentPendingScreen({
   studioLogoUrl,
   themeStyles = {},
   awaitingCharge = false,
+  pendingAction,
+  onResume,
   onRegenerate,
   onPaymentConfirmed,
 }: PaymentPendingScreenProps) {
+  // Fonte da verdade: pendingAction quando fornecido; senão inferimos do legado.
+  const effectiveAction: PendingAction =
+    pendingAction ??
+    (awaitingCharge
+      ? { kind: 'regenerate', provedor: 'desconhecido' }
+      : checkoutUrl
+        ? { kind: 'external_redirect', checkoutUrl, provedor: 'externo' }
+        : { kind: 'regenerate', provedor: 'desconhecido' });
+
   const [status, setStatus] = useState<'polling' | 'confirmed' | 'timeout'>('polling');
   const [isChecking, setIsChecking] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -255,10 +276,11 @@ export function PaymentPendingScreen({
           { index: 1, title: 'Seleção enviada', subtitle: 'Recebida com sucesso', state: 'done' },
           {
             index: 2,
-            title: awaitingCharge ? 'Gerar link de pagamento' : 'Pagamento pendente',
+            title: effectiveAction.kind === 'regenerate' ? 'Gerar link de pagamento' : 'Pagamento pendente',
             subtitle: 'Aguardando conclusão',
             state: 'active',
           },
+
           {
             index: 3,
             title: 'Continuação do pedido',
@@ -351,10 +373,10 @@ export function PaymentPendingScreen({
                     className="text-2xl font-semibold text-foreground leading-tight"
                     style={{ fontFamily: 'ui-serif, Georgia, serif' }}
                   >
-                    {awaitingCharge ? 'Link de pagamento necessário' : 'Aguardando pagamento'}
+                    {effectiveAction.kind === 'regenerate' ? 'Link de pagamento necessário' : 'Aguardando pagamento'}
                   </h2>
                   <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    {awaitingCharge
+                    {effectiveAction.kind === 'regenerate'
                       ? 'Precisamos gerar um novo link para você concluir o pagamento.'
                       : 'Seu pedido está aguardando a conclusão do pagamento.'}
                   </p>
@@ -378,7 +400,7 @@ export function PaymentPendingScreen({
               )}
 
               <div className="mt-6 space-y-3">
-                {awaitingCharge ? (
+                {effectiveAction.kind === 'regenerate' && (
                   <Button
                     onClick={handleRegenerate}
                     disabled={isRegenerating}
@@ -392,20 +414,32 @@ export function PaymentPendingScreen({
                     )}
                     Gerar link de pagamento
                   </Button>
-                ) : (
-                  checkoutUrl && (
-                    <Button
-                      asChild
-                      className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
-                      style={{ height: 52 }}
-                    >
-                      <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
-                        <Wallet className="h-4 w-4" strokeWidth={1.75} />
-                        Ir para pagamento
-                      </a>
-                    </Button>
-                  )
                 )}
+
+                {effectiveAction.kind === 'external_redirect' && (
+                  <Button
+                    asChild
+                    className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
+                    style={{ height: 52 }}
+                  >
+                    <a href={effectiveAction.checkoutUrl} target="_blank" rel="noopener noreferrer">
+                      <Wallet className="h-4 w-4" strokeWidth={1.75} />
+                      Ir para pagamento
+                    </a>
+                  </Button>
+                )}
+
+                {effectiveAction.kind === 'resume_modal' && (
+                  <Button
+                    onClick={() => onResume?.()}
+                    className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-xl text-[15px] font-medium gap-2 shadow-none"
+                    style={{ height: 52 }}
+                  >
+                    <Wallet className="h-4 w-4" strokeWidth={1.75} />
+                    Ir para pagamento
+                  </Button>
+                )}
+
 
                 <Button
                   variant="outline"
