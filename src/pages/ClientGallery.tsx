@@ -1590,6 +1590,10 @@ export default function ClientGallery() {
       if (pendingConfirmPayload) {
         confirmMutation.mutate(pendingConfirmPayload);
         setPendingConfirmPayload(null);
+      } else {
+        // Modal foi aberto pelo AsaasCheckout (fluxo já em tela de pagamento).
+        // O usuário só precisa reclicar em "Gerar PIX".
+        toast.success('Dados salvos. Toque em "Gerar PIX" novamente para continuar.');
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados. Tente novamente.');
