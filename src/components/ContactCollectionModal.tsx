@@ -46,7 +46,7 @@ const nomeSchema = z.string().trim().min(2, { message: 'Informe seu nome' }).max
  * (email, telefone, nome ou CPF/CNPJ). CPF é obrigatório quando o provedor
  * ativo é o Asaas (exige `cpfCnpj` para gerar PIX/boleto/cartão).
  */
-export function ContactCollectionModal({ open, missing, requirePhone, onCancel, onSubmit }: Props) {
+export function ContactCollectionModal({ open, missing, requirePhone, onCancel, onSubmit, themeStyles, backgroundMode }: Props) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [nome, setNome] = useState('');
