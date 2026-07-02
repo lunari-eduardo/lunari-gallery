@@ -159,6 +159,7 @@ async function processWebhookInBackground(
         p_receipt_url: cobranca.ip_receipt_url || payload.receipt_url || null,
         p_paid_at: cobranca.data_pagamento || new Date().toISOString(),
       });
+      await enrichFromInfinitePayInvoice(supabase, cobranca, payload.invoice_slug || null);
       await supabase.from('webhook_logs').update({ 
         status: 'already_processed', 
         processed_at: new Date().toISOString()
