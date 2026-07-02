@@ -53,6 +53,66 @@ interface InfinitePayWebhookPayload {
   status?: string;
 }
 
+/**
+ * Após confirmar o pagamento, tenta buscar customer.email/phone no invoice
+ * da InfinitePay para enriquecer o cadastro do cliente e/ou visitante.
+ * Silencioso em erro. Nunca sobrescreve dado existente (respeita enrichClienteIfMissing).
+ */
+async function enrichFromInfinitePayInvoice(
+  supabase: any,
+  cobranca: { id: string; cliente_id: string | null; visitor_id: string | null; galeria_id: string | null; ip_invoice_slug?: string | null },
+  slugFromPayload: string | null,
+) {
+  try {
+    const slug = slugFromPayload || cobranca.ip_invoice_slug || null;
+    if (!slug) {
+      console.log('[IP_ENRICH] sem invoice_slug — pulando');
+      return;
+    }
+    // Persiste slug (se veio apenas do payload) para retentativas futuras
+    if (slugFromPayload && !cobranca.ip_invoice_slug) {
+      await supabase.from('cobrancas').update({ ip_invoice_slug: slugFromPayload }).eq('id', cobranca.id);
+    }
+    const inv = await fetchInfinitePayInvoice(slug);
+    const c = inv?.customer;
+    if (!c) {
+      console.log('[IP_ENRICH] invoice não retornou customer');
+      return;
+    }
+    console.log(`[IP_ENRICH] customer recebido: email=${c.email ? 'Y' : 'N'} phone=${c.phone_number ? 'Y' : 'N'}`);
+
+    // Enriquecer cliente vinculado (só grava colunas vazias)
+    if (cobranca.cliente_id) {
+      await enrichClienteIfMissing(supabase, cobranca.cliente_id, {
+        email: c.email,
+        telefone: c.phone_number,
+      });
+    }
+
+    // Enriquecer visitante da galeria (contato vazio)
+    if (cobranca.visitor_id) {
+      const contato = c.email || c.phone_number;
+      const contato_tipo = c.email ? 'email' : (c.phone_number ? 'telefone' : null);
+      if (contato && contato_tipo) {
+        await supabase
+          .from('galeria_visitantes')
+          .update({ contato, contato_tipo, updated_at: new Date().toISOString() })
+          .eq('id', cobranca.visitor_id)
+          .or('contato.is.null,contato.eq.');
+      }
+      if (c.name) {
+        await supabase
+          .from('galeria_visitantes')
+          .update({ nome: c.name, updated_at: new Date().toISOString() })
+          .eq('id', cobranca.visitor_id)
+          .or('nome.is.null,nome.eq.');
+      }
+    }
+  } catch (e) {
+    console.warn('[IP_ENRICH] exceção:', e instanceof Error ? e.message : String(e));
+  }
+}
+
 // Handler principal de processamento em background
 async function processWebhookInBackground(
   supabase: any,
