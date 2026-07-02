@@ -81,6 +81,7 @@ interface AsaasCheckoutProps {
   studioLogoUrl?: string;
   onPaymentConfirmed: () => void;
   onCancel?: () => void;
+  onMissingCpf?: () => void;
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
 }
