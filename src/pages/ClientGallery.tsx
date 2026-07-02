@@ -1292,8 +1292,34 @@ export default function ClientGallery() {
       missing={effectiveMissing}
       onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); setForcedMissing(null); }}
       onSubmit={handleContactCollected}
+      themeStyles={themeStyles}
+      backgroundMode={effectiveBackgroundMode}
     />
   );
+
+  // Props compartilhadas para todos os AsaasCheckout: pré-preenchem e persistem dados.
+  const payerHintsPrefill = (galleryResponse as any)?.payerHints || undefined;
+  const payerMissingFlags = (galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined)
+    ? {
+        name: !!galleryResponse?.payerHintsMissing?.name,
+        email: !!galleryResponse?.payerHintsMissing?.email,
+        phone: !!galleryResponse?.payerHintsMissing?.phone,
+        cpfCnpj: !!galleryResponse?.payerHintsMissing?.cpfCnpj,
+      }
+    : undefined;
+  const handlePersistContact = async (payload: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
+    const { error } = await supabase.rpc('upsert_visitor_contact', {
+      p_token: identifier as string,
+      p_visitor_id: visitorId || null,
+      p_email: payload.email || null,
+      p_phone: payload.phone || null,
+      p_nome: payload.nome || null,
+      p_cpf_cnpj: payload.cpfCnpj || null,
+    } as any);
+    if (error) throw error;
+    // Atualiza o cache local para que próximas cobranças usem os novos dados.
+    refetchGallery();
+  };
 
 
 
@@ -1389,6 +1415,9 @@ export default function ClientGallery() {
               refetchGallery();
             }}
             onMissingCpf={openMissingCpfModal}
+            payerHints={payerHintsPrefill}
+            payerMissing={payerMissingFlags}
+            onPersistContact={handlePersistContact}
             themeStyles={themeStyles}
             backgroundMode={pendingBgMode}
           />
@@ -1417,6 +1446,9 @@ export default function ClientGallery() {
               refetchGallery();
             }}
             onMissingCpf={openMissingCpfModal}
+            payerHints={payerHintsPrefill}
+            payerMissing={payerMissingFlags}
+            onPersistContact={handlePersistContact}
             themeStyles={themeStyles}
             backgroundMode={pendingBgMode}
           />
@@ -1972,6 +2004,9 @@ export default function ClientGallery() {
             setCurrentStep('confirmation');
           }}
           onMissingCpf={openMissingCpfModal}
+          payerHints={payerHintsPrefill}
+          payerMissing={payerMissingFlags}
+          onPersistContact={handlePersistContact}
           themeStyles={themeStyles}
           backgroundMode={effectiveBackgroundMode}
         />

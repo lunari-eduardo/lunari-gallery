@@ -425,6 +425,14 @@ serve(async (req) => {
       billingType: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | null;
       cpfRequired: boolean;
     } | null = null;
+    // Valores seguros já conhecidos do pagador — usados para pré-preencher o checkout
+    // (evita reabrir modal e economiza digitação do cliente na mesma galeria).
+    let payerHintsValues: {
+      fullName: string | null;
+      email: string | null;
+      phone: string | null;
+      cpfCnpj: string | null;
+    } | null = null;
     try {
       const hints = await resolvePayerHints(supabase, {
         clienteId: gallery.cliente_id,
@@ -459,6 +467,12 @@ serve(async (req) => {
         provider,
         billingType,
         cpfRequired,
+      };
+      payerHintsValues = {
+        fullName: hints.fullName || null,
+        email: hints.email || null,
+        phone: hints.phone || null,
+        cpfCnpj: hints.cpfCnpj || null,
       };
     } catch (e) {
       console.warn('[gallery-access] payer hints resolve falhou:', e instanceof Error ? e.message : String(e));
@@ -513,6 +527,7 @@ serve(async (req) => {
         clientMode,
         accountTheme, // New field for account heritage info
         payerHintsMissing,
+        payerHints: payerHintsValues,
         ...pendingPaymentData,
       }),
       {

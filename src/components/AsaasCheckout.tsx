@@ -75,6 +75,20 @@ export interface AsaasCheckoutData {
   taxaAntecipacaoCreditoParcelado?: number;
 }
 
+export interface PayerHintsPrefill {
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  cpfCnpj?: string | null;
+}
+
+export interface PayerHintsMissingFlags {
+  name?: boolean;
+  email?: boolean;
+  phone?: boolean;
+  cpfCnpj?: boolean;
+}
+
 interface AsaasCheckoutProps {
   data: AsaasCheckoutData;
   studioName?: string;
@@ -82,6 +96,12 @@ interface AsaasCheckoutProps {
   onPaymentConfirmed: () => void;
   onCancel?: () => void;
   onMissingCpf?: () => void;
+  /** Valores já conhecidos do pagador — pré-preenchem os campos do checkout. */
+  payerHints?: PayerHintsPrefill;
+  /** Quais campos faltam no cadastro (backend). Direciona quais aparecem inline no PIX. */
+  payerMissing?: PayerHintsMissingFlags;
+  /** Persiste os dados no cadastro do cliente antes de gerar a cobrança. */
+  onPersistContact?: (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => Promise<void>;
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
 }
@@ -163,10 +183,19 @@ export function AsaasCheckout({
   onPaymentConfirmed,
   onCancel,
   onMissingCpf,
+  payerHints,
+  payerMissing,
+  onPersistContact,
   themeStyles = {},
   backgroundMode = 'light',
 }: AsaasCheckoutProps) {
   const defaultTab = data.enabledMethods.pix ? 'pix' : 'card';
+
+  // ——— Pré-preenchimento dos dados do pagador ———
+  const initialFullName = payerHints?.fullName || '';
+  const initialEmail = payerHints?.email || '';
+  const initialPhone = payerHints?.phone ? maskPhone(payerHints.phone) : '';
+  const initialCpfCnpj = payerHints?.cpfCnpj ? maskCpfCnpj(payerHints.cpfCnpj) : '';
 
   // ——— PIX state ———
   const [pixLoading, setPixLoading] = useState(false);
@@ -178,15 +207,22 @@ export function AsaasCheckout({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
 
-  // ——— Card state ———
+  // ——— Pré-checkout PIX inline (dados do pagador coletados na própria tela) ———
+  const [pixName, setPixName] = useState(initialFullName);
+  const [pixEmail, setPixEmail] = useState(initialEmail);
+  const [pixCpfCnpj, setPixCpfCnpj] = useState(initialCpfCnpj);
+  const [pixPhone, setPixPhone] = useState(initialPhone);
+  const [pixContactLoading, setPixContactLoading] = useState(false);
+
+  // ——— Card state (pré-preenchido com dados conhecidos) ———
   const [cardLoading, setCardLoading] = useState(false);
-  const [cardName, setCardName] = useState('');
-  const [cardCpfCnpj, setCardCpfCnpj] = useState('');
+  const [cardName, setCardName] = useState(initialFullName.toUpperCase());
+  const [cardCpfCnpj, setCardCpfCnpj] = useState(initialCpfCnpj);
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
-  const [cardPhone, setCardPhone] = useState('');
-  const [cardEmail, setCardEmail] = useState('');
+  const [cardPhone, setCardPhone] = useState(initialPhone);
+  const [cardEmail, setCardEmail] = useState(initialEmail);
   const [cardCep, setCardCep] = useState('');
   const [cardInstallments, setCardInstallments] = useState('1');
   const [cardError, setCardError] = useState<string | null>(null);
@@ -211,6 +247,20 @@ export function AsaasCheckout({
   const cardCvvRef = useRef<HTMLInputElement>(null);
   const cardPhoneRef = useRef<HTMLInputElement>(null);
   const cardCepRef = useRef<HTMLInputElement>(null);
+  const pixNameRef = useRef<HTMLInputElement>(null);
+  const pixEmailRef = useRef<HTMLInputElement>(null);
+  const pixCpfRef = useRef<HTMLInputElement>(null);
+  const pixPhoneRef = useRef<HTMLInputElement>(null);
+  const pixGenerateRef = useRef<HTMLButtonElement>(null);
+
+  // ——— Flags: quais campos inline mostrar no PIX ———
+  // Se o backend disse que falta, ou se o valor pré-preenchido está vazio, exibimos.
+  const needsName = !!payerMissing?.name || !initialFullName;
+  const needsEmail = !!payerMissing?.email || !initialEmail;
+  const needsCpf = !!payerMissing?.cpfCnpj || !initialCpfCnpj;
+  const needsPhone = !!payerMissing?.phone || !initialPhone;
+  const showPixContactForm = needsName || needsEmail || needsCpf || needsPhone;
+
 
   // ——— Real-time fees from Asaas API ———
   const [accountFees, setAccountFees] = useState<AccountFees | null>(null);
@@ -282,12 +332,18 @@ export function AsaasCheckout({
       });
       const result = await res.json();
       if (!res.ok || !result.success) {
-        // Backend exigiu CPF do pagador — abre modal de coleta no pai.
-        if (result?.code === 'MISSING_CPF_CNPJ' && onMissingCpf) {
+        // Backend exigiu CPF do pagador.
+        if (result?.code === 'MISSING_CPF_CNPJ') {
           setPixQrCode(null);
           setPixCopiaECola(null);
           setPixCobrancaId(null);
-          onMissingCpf();
+          if (showPixContactForm) {
+            // Formulário inline está montado — foca o CPF e sinaliza erro no campo.
+            setFieldError('pixCpf', 'Confirme seu CPF ou CNPJ para gerar o PIX.');
+            pixCpfRef.current?.focus();
+          } else if (onMissingCpf) {
+            onMissingCpf();
+          }
           return;
         }
         throw new Error(result.error || 'Erro ao gerar PIX');
@@ -326,7 +382,61 @@ export function AsaasCheckout({
     } finally {
       setPixLoading(false);
     }
-  }, [data, onPaymentConfirmed, onMissingCpf]);
+  }, [data, onPaymentConfirmed, onMissingCpf, showPixContactForm]);
+
+  // ——— Validação do formulário inline de PIX ———
+  const pixFormValid = (() => {
+    if (needsName && pixName.trim().length < 2) return false;
+    if (needsEmail && !/\S+@\S+\.\S+/.test(pixEmail)) return false;
+    if (needsCpf && !validateCpfCnpj(pixCpfCnpj)) return false;
+    if (needsPhone && pixPhone.replace(/\D/g, '').length < 10) return false;
+    return true;
+  })();
+
+  // Wrapper: persiste dados no cadastro (se necessário) e dispara generatePix.
+  const handleGeneratePixClick = async () => {
+    // Validação final antes de submeter
+    if (needsName && pixName.trim().length < 2) {
+      setFieldError('pixName', 'Informe seu nome');
+      pixNameRef.current?.focus();
+      return;
+    }
+    if (needsEmail && !/\S+@\S+\.\S+/.test(pixEmail)) {
+      setFieldError('pixEmail', 'Email inválido');
+      pixEmailRef.current?.focus();
+      return;
+    }
+    if (needsCpf && !validateCpfCnpj(pixCpfCnpj)) {
+      setFieldError('pixCpf', 'CPF ou CNPJ inválido');
+      pixCpfRef.current?.focus();
+      return;
+    }
+    if (needsPhone && pixPhone.replace(/\D/g, '').length < 10) {
+      setFieldError('pixPhone', 'Telefone inválido');
+      pixPhoneRef.current?.focus();
+      return;
+    }
+
+    // Persiste no cadastro do cliente (galeria_visitantes/clientes) — melhor esforço.
+    if (showPixContactForm && onPersistContact) {
+      setPixContactLoading(true);
+      try {
+        await onPersistContact({
+          nome: needsName ? pixName.trim() : undefined,
+          email: needsEmail ? pixEmail.trim() : undefined,
+          cpfCnpj: needsCpf ? pixCpfCnpj.replace(/\D/g, '') : undefined,
+          phone: needsPhone ? pixPhone.replace(/\D/g, '') : undefined,
+        });
+      } catch (e) {
+        setPixContactLoading(false);
+        toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados.');
+        return;
+      }
+      setPixContactLoading(false);
+    }
+
+    await generatePix();
+  };
 
   const handleCopyPix = async () => {
     if (!pixCopiaECola) return;
@@ -611,10 +721,131 @@ export function AsaasCheckout({
           {data.enabledMethods.pix && (
             <TabsContent value="pix" className="space-y-4 mt-6">
               {!pixQrCode && !pixLoading && (
-                <Button onClick={generatePix} className="w-full gap-2 h-12 rounded-lg active:scale-[0.98] transition-transform" variant="terracotta">
-                  <QrCode className="h-5 w-5" />
-                  Gerar QR Code PIX
-                </Button>
+                <div className="space-y-4">
+                  {showPixContactForm && (
+                    <section className="space-y-3 p-4 rounded-xl border border-border/60 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-primary" />
+                        <h3 className="text-sm font-semibold text-foreground">Seus dados para o PIX</h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Precisamos destes dados para gerar a cobrança e enviar o comprovante.
+                      </p>
+
+                      {needsName && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-name" className="text-xs font-medium text-muted-foreground">Nome completo</Label>
+                          <Input
+                            ref={pixNameRef}
+                            id="pix-name"
+                            autoFocus
+                            value={pixName}
+                            onChange={(e) => { setPixName(e.target.value); if (fieldErrors.pixName) setFieldError('pixName', null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (needsEmail ? pixEmailRef : needsCpf ? pixCpfRef : needsPhone ? pixPhoneRef : pixGenerateRef).current?.focus(); } }}
+                            placeholder="Como você se chama"
+                            autoComplete="name"
+                            maxLength={80}
+                            className={checkoutInputClass('pixName')}
+                          />
+                          <FieldError name="pixName" />
+                        </div>
+                      )}
+
+                      {needsEmail && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-email" className="text-xs font-medium text-muted-foreground">Email</Label>
+                          <Input
+                            ref={pixEmailRef}
+                            id="pix-email"
+                            type="email"
+                            inputMode="email"
+                            autoFocus={!needsName}
+                            value={pixEmail}
+                            onChange={(e) => { setPixEmail(e.target.value); if (fieldErrors.pixEmail) setFieldError('pixEmail', null); }}
+                            onBlur={() => {
+                              if (pixEmail && !/\S+@\S+\.\S+/.test(pixEmail)) setFieldError('pixEmail', 'Email inválido');
+                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (needsCpf ? pixCpfRef : needsPhone ? pixPhoneRef : pixGenerateRef).current?.focus(); } }}
+                            placeholder="voce@email.com"
+                            autoComplete="email"
+                            maxLength={160}
+                            className={checkoutInputClass('pixEmail')}
+                          />
+                          <FieldError name="pixEmail" />
+                        </div>
+                      )}
+
+                      {needsCpf && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-cpf" className="text-xs font-medium text-muted-foreground">CPF ou CNPJ</Label>
+                          <Input
+                            ref={pixCpfRef}
+                            id="pix-cpf"
+                            inputMode="numeric"
+                            autoFocus={!needsName && !needsEmail}
+                            value={pixCpfCnpj}
+                            onChange={(e) => {
+                              const masked = maskCpfCnpj(e.target.value);
+                              setPixCpfCnpj(masked);
+                              if (fieldErrors.pixCpf) setFieldError('pixCpf', null);
+                              const digits = masked.replace(/\D/g, '');
+                              if (digits.length === 11 || digits.length === 14) {
+                                if (needsPhone) pixPhoneRef.current?.focus();
+                                else pixGenerateRef.current?.focus();
+                              }
+                            }}
+                            onBlur={() => {
+                              if (pixCpfCnpj && !validateCpfCnpj(pixCpfCnpj)) setFieldError('pixCpf', 'CPF ou CNPJ inválido');
+                            }}
+                            placeholder="000.000.000-00"
+                            maxLength={18}
+                            className={checkoutInputClass('pixCpf')}
+                          />
+                          <FieldError name="pixCpf" />
+                        </div>
+                      )}
+
+                      {needsPhone && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pix-phone" className="text-xs font-medium text-muted-foreground">Telefone (WhatsApp)</Label>
+                          <Input
+                            ref={pixPhoneRef}
+                            id="pix-phone"
+                            type="tel"
+                            inputMode="tel"
+                            autoFocus={!needsName && !needsEmail && !needsCpf}
+                            value={pixPhone}
+                            onChange={(e) => {
+                              const masked = maskPhone(e.target.value);
+                              setPixPhone(masked);
+                              if (fieldErrors.pixPhone) setFieldError('pixPhone', null);
+                              if (masked.replace(/\D/g, '').length === 11) pixGenerateRef.current?.focus();
+                            }}
+                            placeholder="(11) 98765-4321"
+                            autoComplete="tel"
+                            maxLength={15}
+                            className={checkoutInputClass('pixPhone')}
+                          />
+                          <FieldError name="pixPhone" />
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  <Button
+                    ref={pixGenerateRef}
+                    onClick={handleGeneratePixClick}
+                    disabled={pixContactLoading || (showPixContactForm && !pixFormValid)}
+                    className="w-full gap-2 h-12 rounded-lg active:scale-[0.98] transition-transform"
+                    variant="terracotta"
+                  >
+                    {pixContactLoading ? (
+                      <><Loader2 className="h-5 w-5 animate-spin" /> Salvando dados...</>
+                    ) : (
+                      <><QrCode className="h-5 w-5" /> Gerar QR Code PIX</>
+                    )}
+                  </Button>
+                </div>
               )}
 
               {pixLoading && (

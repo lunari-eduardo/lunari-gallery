@@ -30,6 +30,8 @@ interface Props {
   requirePhone?: boolean;
   onCancel: () => void;
   onSubmit: (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => Promise<void>;
+  themeStyles?: React.CSSProperties;
+  backgroundMode?: 'light' | 'dark';
 }
 
 const emailSchema = z.string().trim().toLowerCase().email({ message: 'Email inválido' }).max(160);
@@ -44,7 +46,7 @@ const nomeSchema = z.string().trim().min(2, { message: 'Informe seu nome' }).max
  * (email, telefone, nome ou CPF/CNPJ). CPF é obrigatório quando o provedor
  * ativo é o Asaas (exige `cpfCnpj` para gerar PIX/boleto/cartão).
  */
-export function ContactCollectionModal({ open, missing, requirePhone, onCancel, onSubmit }: Props) {
+export function ContactCollectionModal({ open, missing, requirePhone, onCancel, onSubmit, themeStyles, backgroundMode }: Props) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [nome, setNome] = useState('');
@@ -104,7 +106,10 @@ export function ContactCollectionModal({ open, missing, requirePhone, onCancel, 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !submitting) onCancel(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className={`sm:max-w-md bg-background text-foreground ${backgroundMode === 'dark' ? 'dark' : ''}`}
+        style={themeStyles}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
