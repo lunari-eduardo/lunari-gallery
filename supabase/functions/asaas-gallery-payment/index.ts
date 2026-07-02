@@ -16,6 +16,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { resolvePayerHints, payerHintsFlags } from '../_shared/payer-hints.ts';
+import { enrichClienteIfMissing } from '../_shared/enrich-cliente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
