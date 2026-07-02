@@ -150,15 +150,36 @@ Deno.serve(async (req) => {
     // 2. Find or create Asaas customer (prioritize externalReference over email)
     let asaasCustomerId: string | null = null;
 
+    // 🎯 Resolve payer hints (nome, email, telefone) para prefill do checkout Asaas.
+    //    Ordem: cliente → visitante. Falha silenciosa nunca bloqueia o fluxo.
+    let payerHints: Awaited<ReturnType<typeof resolvePayerHints>> = {};
+    try {
+      payerHints = await resolvePayerHints(supabase, { clienteId, visitorId: body.visitorId });
+      console.log(`[ASAAS_PREFILL] ${payerHintsFlags(payerHints)}`);
+    } catch (e) {
+      console.warn('[ASAAS_PREFILL] falha:', e instanceof Error ? e.message : e);
+    }
+
     if (clienteId) {
       const { data: cliente } = await supabase
         .from('clientes')
-        .select('nome, email, telefone')
+        .select('nome, email, telefone, whatsapp')
         .eq('id', clienteId)
         .maybeSingle();
 
       if (cliente) {
         const clienteName = cliente.nome || 'Cliente';
+        // Fallback de telefone: cliente.telefone → cliente.whatsapp → hint normalizado
+        const bestPhone = cliente.telefone || cliente.whatsapp || payerHints.phone || undefined;
+        const bestEmail = cliente.email || payerHints.email || undefined;
+
+        // Helper: só preenche campos ausentes no Asaas — nunca sobrescreve.
+        const buildFillUpdates = (existing: Record<string, unknown>): Record<string, unknown> => {
+          const u: Record<string, unknown> = {};
+          if (bestEmail && !existing.email) u.email = bestEmail;
+          if (bestPhone && !existing.phone && !existing.mobilePhone) u.phone = bestPhone;
+          return u;
+        };
 
         // Step 1: Search by externalReference (clienteId) — most precise
         const refResp = await fetch(`${asaasBaseUrl}/v3/customers?externalReference=${encodeURIComponent(clienteId)}`, {
@@ -167,28 +188,28 @@ Deno.serve(async (req) => {
         if (refResp.ok) {
           const refData = await refResp.json();
           if (refData.data && refData.data.length > 0) {
-            asaasCustomerId = refData.data[0].id;
-            const existingName = refData.data[0].name;
-            console.log(`📋 Found Asaas customer by externalReference: ${asaasCustomerId} (name: ${existingName})`);
+            const existing = refData.data[0];
+            asaasCustomerId = existing.id;
+            console.log(`📋 Found Asaas customer by externalReference: ${asaasCustomerId} (name: ${existing.name})`);
 
-            const updates: Record<string, unknown> = {};
-            if (existingName !== clienteName) updates.name = clienteName;
+            const updates: Record<string, unknown> = { ...buildFillUpdates(existing) };
+            if (existing.name !== clienteName) updates.name = clienteName;
             if (centralizarEmailsLunari) updates.notificationDisabled = true;
             if (Object.keys(updates).length > 0) {
-              console.log(`📝 Updating Asaas customer:`, updates);
+              console.log(`📝 Updating Asaas customer:`, Object.keys(updates));
               const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
                 body: JSON.stringify(updates),
               });
-              if (!updateResp.ok) console.warn('Failed to update Asaas customer notification settings:', await updateResp.text());
+              if (!updateResp.ok) console.warn('Failed to update Asaas customer:', await updateResp.text());
             }
           }
         }
 
         // Step 2: Fallback — search by email
-        if (!asaasCustomerId && cliente.email) {
-          const searchResp = await fetch(`${asaasBaseUrl}/v3/customers?email=${encodeURIComponent(cliente.email)}`, {
+        if (!asaasCustomerId && bestEmail) {
+          const searchResp = await fetch(`${asaasBaseUrl}/v3/customers?email=${encodeURIComponent(bestEmail)}`, {
             headers: { access_token: asaasApiKey },
           });
           if (searchResp.ok) {
@@ -196,21 +217,20 @@ Deno.serve(async (req) => {
             if (searchData.data && searchData.data.length > 0) {
               const match = searchData.data.find((c: Record<string, unknown>) => c.externalReference === clienteId) || searchData.data[0];
               asaasCustomerId = match.id;
-              const existingName = match.name;
-              console.log(`📋 Found Asaas customer by email: ${asaasCustomerId} (name: ${existingName})`);
+              console.log(`📋 Found Asaas customer by email: ${asaasCustomerId} (name: ${match.name})`);
 
-              const updates: Record<string, unknown> = {};
-              if (existingName !== clienteName) updates.name = clienteName;
+              const updates: Record<string, unknown> = { ...buildFillUpdates(match) };
+              if (match.name !== clienteName) updates.name = clienteName;
               if (match.externalReference !== clienteId) updates.externalReference = clienteId;
               if (centralizarEmailsLunari) updates.notificationDisabled = true;
               if (Object.keys(updates).length > 0) {
-                console.log(`📝 Updating Asaas customer:`, updates);
+                console.log(`📝 Updating Asaas customer:`, Object.keys(updates));
                 const updateResp = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
                   body: JSON.stringify(updates),
                 });
-                if (!updateResp.ok) console.warn('Failed to update Asaas customer notification settings:', await updateResp.text());
+                if (!updateResp.ok) console.warn('Failed to update Asaas customer:', await updateResp.text());
               }
             }
           }
@@ -223,8 +243,8 @@ Deno.serve(async (req) => {
             headers: { 'Content-Type': 'application/json', access_token: asaasApiKey },
             body: JSON.stringify({
               name: clienteName,
-              email: cliente.email || undefined,
-              phone: cliente.telefone || undefined,
+              email: bestEmail,
+              phone: bestPhone,
               externalReference: clienteId,
               ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
             }),
@@ -241,6 +261,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+
 
     // If no customer found/created, create a generic one
     if (!asaasCustomerId) {
