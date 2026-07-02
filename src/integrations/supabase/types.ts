@@ -650,10 +650,16 @@ export type Database = {
       }
       clientes: {
         Row: {
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          cpf_cnpj: string | null
           created_at: string | null
           data_nascimento: string | null
           email: string | null
           endereco: string | null
+          endereco_complemento: string | null
+          endereco_numero: string | null
           gallery_password: string | null
           gallery_status: string | null
           id: string
@@ -662,15 +668,22 @@ export type Database = {
           origem: string | null
           telefone: string | null
           total_galerias: number | null
+          uf: string | null
           updated_at: string | null
           user_id: string
           whatsapp: string | null
         }
         Insert: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cpf_cnpj?: string | null
           created_at?: string | null
           data_nascimento?: string | null
           email?: string | null
           endereco?: string | null
+          endereco_complemento?: string | null
+          endereco_numero?: string | null
           gallery_password?: string | null
           gallery_status?: string | null
           id?: string
@@ -679,15 +692,22 @@ export type Database = {
           origem?: string | null
           telefone?: string | null
           total_galerias?: number | null
+          uf?: string | null
           updated_at?: string | null
           user_id: string
           whatsapp?: string | null
         }
         Update: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cpf_cnpj?: string | null
           created_at?: string | null
           data_nascimento?: string | null
           email?: string | null
           endereco?: string | null
+          endereco_complemento?: string | null
+          endereco_numero?: string | null
           gallery_password?: string | null
           gallery_status?: string | null
           id?: string
@@ -696,6 +716,7 @@ export type Database = {
           origem?: string | null
           telefone?: string | null
           total_galerias?: number | null
+          uf?: string | null
           updated_at?: string | null
           user_id?: string
           whatsapp?: string | null

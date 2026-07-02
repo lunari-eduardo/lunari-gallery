@@ -342,6 +342,14 @@ async function processPayment(
             await enrichClienteIfMissing(supabase, clienteIdCob, {
               email: cust.email,
               telefone: cust.mobilePhone || cust.phone,
+              cpfCnpj: cust.cpfCnpj,
+              cep: cust.postalCode,
+              endereco: cust.address,
+              enderecoNumero: cust.addressNumber,
+              enderecoComplemento: cust.complement,
+              bairro: cust.province,
+              cidade: cust.city || cust.cityName,
+              uf: cust.state,
             });
           }
         }
