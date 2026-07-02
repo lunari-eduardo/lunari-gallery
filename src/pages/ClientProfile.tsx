@@ -135,16 +135,13 @@ export default function ClientProfile() {
           </div>
         </div>
         <div className="flex gap-2 ml-auto sm:ml-0">
-          <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
-            <Pencil className="h-4 w-4 mr-2" />
-            Editar
-          </Button>
           <Button onClick={() => navigate(`/gallery/new?clientId=${clientId}`)}>
             <Plus className="h-4 w-4 mr-2" />
             Nova Galeria
           </Button>
         </div>
       </div>
+
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
