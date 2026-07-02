@@ -1889,6 +1889,7 @@ export default function ClientGallery() {
           setAsaasCheckoutData(null);
           setCurrentStep('confirmation');
         }}
+        onMissingCpf={() => setContactModalOpen(true)}
         themeStyles={themeStyles}
         backgroundMode={effectiveBackgroundMode}
       />
