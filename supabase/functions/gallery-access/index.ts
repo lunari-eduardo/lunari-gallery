@@ -278,25 +278,78 @@ serve(async (req) => {
           pendingAction,
         };
       } else {
-        // Sem cobrança viva mas travada: tela awaitingCharge com valor canônico.
+        // Sem cobrança viva mas travada: reconstituir dados canônicos.
         let valorCanonico = 0;
+        let qtdExtras = 0;
         try {
           const { data: calc } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: gallery.id });
           valorCanonico = Number((calc as any)?.valor_a_cobrar || 0);
+          qtdExtras = Number((calc as any)?.extras_necessarias || 0);
         } catch (e) {
           console.error('[gallery-access] calc canônico falhou:', e);
         }
+
+        const provedor = (gallery as any).venda_pagamento_provedor || null;
+
+        // 🔧 Provedor Asaas: reconstituímos asaasCheckoutData a partir do snapshot da galeria.
+        // Evita botão "Gerar link" quebrado — o frontend abre direto o AsaasCheckout,
+        // que cria a cobrança conforme a forma de pagamento escolhida pelo cliente.
+        let asaasCheckoutData: Record<string, unknown> | null = null;
+        let pendingAction: any = { kind: 'regenerate', provedor: provedor || 'desconhecido' };
+
+        if (provedor === 'asaas' && valorCanonico > 0) {
+          const { data: integracao } = await supabase
+            .from('usuarios_integracoes')
+            .select('dados_extras')
+            .eq('user_id', gallery.user_id)
+            .eq('provedor', 'asaas')
+            .eq('status', 'ativo')
+            .maybeSingle();
+          const s = (integracao?.dados_extras || {}) as Record<string, any>;
+          const descricao = `${qtdExtras} foto${qtdExtras !== 1 ? 's' : ''} extra${qtdExtras !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
+          asaasCheckoutData = {
+            galeriaId: gallery.id,
+            userId: gallery.user_id,
+            valorTotal: valorCanonico,
+            descricao,
+            qtdFotos: qtdExtras,
+            clienteId: gallery.cliente_id,
+            sessionId: gallery.session_id,
+            galleryToken: gallery.public_token,
+            visitorId: visitorId || undefined,
+            enabledMethods: {
+              pix: s.habilitarPix !== false,
+              creditCard: s.habilitarCartao !== false,
+              boleto: s.habilitarBoleto === true,
+            },
+            maxParcelas: s.maxParcelas || 12,
+            absorverTaxa: s.absorverTaxa || false,
+            ireiAntecipar: s.ireiAntecipar ?? s.incluirTaxaAntecipacao ?? false,
+            repassarTaxaAntecipacao: s.repassarTaxaAntecipacao ?? s.incluirTaxaAntecipacao ?? false,
+            taxaAntecipacao: s.taxaAntecipacao || false,
+            taxaAntecipacaoPercentual: s.taxaAntecipacaoPercentual,
+            taxaAntecipacaoCreditoAvista: s.taxaAntecipacaoCreditoAvista,
+            taxaAntecipacaoCreditoParcelado: s.taxaAntecipacaoCreditoParcelado,
+            incluirTaxaAntecipacao: s.incluirTaxaAntecipacao ?? true,
+            snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
+            snapshotRegrasCongeladas: gallery.regras_congeladas,
+          };
+          pendingAction = { kind: 'asaas_modal', provedor: 'asaas' };
+        } else if (provedor === 'pix_manual') {
+          pendingAction = { kind: 'pix_modal', provedor: 'pix_manual' };
+        }
+
         pendingPaymentData = {
           pendingPayment: true,
-          awaitingCharge: true,
-          paymentMethod: (gallery as any).venda_pagamento_provedor || null,
+          awaitingCharge: asaasCheckoutData ? false : true,
+          paymentMethod: provedor,
           checkoutUrl: null,
           cobrancaId: null,
           valorTotal: valorCanonico,
           pixDados: (gallery.configuracoes as any)?.pixDados,
-          asaasCheckoutData: null,
+          asaasCheckoutData,
           needsRegeneration: (gallery as any).payment_needs_regeneration === true,
-          pendingAction: { kind: 'regenerate', provedor: (gallery as any).venda_pagamento_provedor || 'desconhecido' },
+          pendingAction,
         };
       }
 
