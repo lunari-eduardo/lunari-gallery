@@ -2536,6 +2536,7 @@ export type Database = {
         Row: {
           contato: string
           contato_tipo: string
+          cpf_cnpj: string | null
           created_at: string
           device_hash: string | null
           finalized_at: string | null
@@ -2550,6 +2551,7 @@ export type Database = {
         Insert: {
           contato: string
           contato_tipo: string
+          cpf_cnpj?: string | null
           created_at?: string
           device_hash?: string | null
           finalized_at?: string | null
@@ -2564,6 +2566,7 @@ export type Database = {
         Update: {
           contato?: string
           contato_tipo?: string
+          cpf_cnpj?: string | null
           created_at?: string
           device_hash?: string | null
           finalized_at?: string | null

@@ -284,6 +284,9 @@ export function AsaasCheckout({
       if (!res.ok || !result.success) {
         // Backend exigiu CPF do pagador — abre modal de coleta no pai.
         if (result?.code === 'MISSING_CPF_CNPJ' && onMissingCpf) {
+          setPixQrCode(null);
+          setPixCopiaECola(null);
+          setPixCobrancaId(null);
           onMissingCpf();
           return;
         }
@@ -323,7 +326,7 @@ export function AsaasCheckout({
     } finally {
       setPixLoading(false);
     }
-  }, [data, onPaymentConfirmed]);
+  }, [data, onPaymentConfirmed, onMissingCpf]);
 
   const handleCopyPix = async () => {
     if (!pixCopiaECola) return;
