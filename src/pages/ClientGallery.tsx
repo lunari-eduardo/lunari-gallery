@@ -123,6 +123,7 @@ export default function ClientGallery() {
   const [folderViewMode, setFolderViewMode] = useState<'albums' | 'grid'>('albums');
   const [showPartialSelectionDialog, setShowPartialSelectionDialog] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [forcedMissing, setForcedMissing] = useState<Partial<ContactCollectionMissing> | null>(null);
   const [pendingConfirmPayload, setPendingConfirmPayload] = useState<null | {
     selectedCount: number; extraCount: number; valorUnitario: number; valorTotal: number;
   }>(null);
