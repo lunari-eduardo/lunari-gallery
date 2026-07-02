@@ -1,25 +1,41 @@
 /**
- * Resolve dados do pagador para pré-preencher checkouts (InfinitePay, Asaas, MP).
+ * Resolve dados do pagador para pré-preencher checkouts (InfinitePay, Asaas, MP)
+ * e viabilizar antecipação de recebíveis no Asaas (requer CPF/CNPJ + telefone).
  *
  * Ordem de prioridade:
- *   1) clientes (via cliente_id da cobrança/galeria)     → nome + email + telefone/whatsapp
- *   2) galeria_visitantes (via visitor_id)               → nome + contato + contato_tipo
+ *   1) clientes (via cliente_id)         → nome, email, telefone/whatsapp, cpf_cnpj, endereço
+ *   2) galeria_visitantes (via visitor_id) → nome + contato (fallback)
  *
  * Regras:
- *   - "nome" = apenas primeiro nome (split por espaço).
- *   - "email" = validado por regex; se inválido → undefined.
- *   - "telefone" = normalizado para dígitos; se 10-11 dígitos, quebrado em area_code (2) + number.
+ *   - "firstName" = apenas primeiro nome (split por espaço).
+ *   - "email" validado por regex; se inválido → undefined.
+ *   - "phone" normalizado (só dígitos); phoneParts para MP (area_code + number).
+ *   - "cpfCnpj" só dígitos, 11 (CPF) ou 14 (CNPJ), senão undefined.
+ *   - Endereço só é devolvido quando existe algum campo preenchido.
  *
  * NÃO grava nada. Somente leitura.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export interface PayerAddress {
+  postalCode?: string;   // só dígitos, 8
+  street?: string;
+  number?: string;
+  complement?: string;
+  province?: string;     // bairro
+  city?: string;
+  state?: string;        // UF (2 letras)
+}
+
 export interface PayerHints {
   firstName?: string;
+  fullName?: string;
   email?: string;
-  phone?: string;               // ex: "11987654321" (só dígitos)
+  phone?: string;
   phoneParts?: { area_code: string; number: string };
+  cpfCnpj?: string;
+  address?: PayerAddress;
 }
 
 function firstNameOf(full?: string | null): string | undefined {
@@ -38,7 +54,6 @@ function normalizePhone(raw?: string | null): { phone?: string; phoneParts?: Pay
   if (!raw) return {};
   const digits = String(raw).replace(/\D/g, '');
   if (digits.length < 10 || digits.length > 13) return {};
-  // Se vier com 12 ou 13 dígitos (DDI 55), remove DDI Brasil
   const local = digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits;
   if (local.length !== 10 && local.length !== 11) return { phone: digits };
   return {
@@ -47,32 +62,56 @@ function normalizePhone(raw?: string | null): { phone?: string; phoneParts?: Pay
   };
 }
 
-/**
- * Resolve os hints a partir do banco. Passe supabase (service role client).
- */
+function normalizeCpfCnpj(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const digits = String(raw).replace(/\D/g, '');
+  return digits.length === 11 || digits.length === 14 ? digits : undefined;
+}
+
+function normalizeCep(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const digits = String(raw).replace(/\D/g, '');
+  return digits.length === 8 ? digits : undefined;
+}
+
+function buildAddress(row: Record<string, unknown>): PayerAddress | undefined {
+  const cep = normalizeCep(row.cep as string | null);
+  const street = (row.endereco as string | null)?.trim() || undefined;
+  const number = (row.endereco_numero as string | null)?.trim() || undefined;
+  const complement = (row.endereco_complemento as string | null)?.trim() || undefined;
+  const province = (row.bairro as string | null)?.trim() || undefined;
+  const city = (row.cidade as string | null)?.trim() || undefined;
+  const uf = (row.uf as string | null)?.trim().toUpperCase();
+  const state = uf && /^[A-Z]{2}$/.test(uf) ? uf : undefined;
+
+  if (!cep && !street && !number && !complement && !province && !city && !state) return undefined;
+  return { postalCode: cep, street, number, complement, province, city, state };
+}
+
 export async function resolvePayerHints(
   supabase: any,
   opts: { clienteId?: string | null; visitorId?: string | null },
 ): Promise<PayerHints> {
   const hints: PayerHints = {};
 
-  // 1) cliente
   if (opts.clienteId) {
     const { data: c } = await supabase
       .from('clientes')
-      .select('nome, email, telefone, whatsapp')
+      .select('nome, email, telefone, whatsapp, cpf_cnpj, cep, endereco, endereco_numero, endereco_complemento, bairro, cidade, uf')
       .eq('id', opts.clienteId)
       .maybeSingle();
     if (c) {
       hints.firstName = firstNameOf(c.nome);
+      hints.fullName = c.nome?.trim() || undefined;
       hints.email = normalizeEmail(c.email);
       const p = normalizePhone(c.telefone || c.whatsapp);
       hints.phone = p.phone;
       hints.phoneParts = p.phoneParts;
+      hints.cpfCnpj = normalizeCpfCnpj(c.cpf_cnpj);
+      hints.address = buildAddress(c);
     }
   }
 
-  // 2) fallback: visitor (para galerias públicas)
   if ((!hints.firstName || !hints.email || !hints.phone) && opts.visitorId) {
     const { data: v } = await supabase
       .from('galeria_visitantes')
@@ -81,6 +120,7 @@ export async function resolvePayerHints(
       .maybeSingle();
     if (v) {
       if (!hints.firstName) hints.firstName = firstNameOf(v.nome);
+      if (!hints.fullName) hints.fullName = v.nome?.trim() || undefined;
       if (v.contato_tipo === 'email' && !hints.email) {
         hints.email = normalizeEmail(v.contato);
       } else if (v.contato_tipo === 'telefone' && !hints.phone) {
@@ -98,5 +138,18 @@ export async function resolvePayerHints(
  * Log seguro dos hints (apenas booleans — nunca valores).
  */
 export function payerHintsFlags(h: PayerHints): string {
-  return `name=${h.firstName ? 'Y' : 'N'} email=${h.email ? 'Y' : 'N'} phone=${h.phone ? 'Y' : 'N'}`;
+  const addr = h.address
+    ? `Y(cep=${h.address.postalCode ? 'Y' : 'N'} num=${h.address.number ? 'Y' : 'N'} city=${h.address.city ? 'Y' : 'N'})`
+    : 'N';
+  return `name=${h.firstName ? 'Y' : 'N'} email=${h.email ? 'Y' : 'N'} phone=${h.phone ? 'Y' : 'N'} cpf=${h.cpfCnpj ? 'Y' : 'N'} addr=${addr}`;
+}
+
+/**
+ * Indica se o customer tem tudo para uma cobrança ser antecipável no Asaas.
+ * PIX/Boleto exige nome + cpfCnpj + telefone. Cartão exige nome + cpfCnpj.
+ */
+export function isAnticipationEligible(h: PayerHints, billingType: 'PIX' | 'CREDIT_CARD' | 'BOLETO'): boolean {
+  if (!h.firstName || !h.cpfCnpj) return false;
+  if (billingType !== 'CREDIT_CARD' && !h.phone) return false;
+  return true;
 }
