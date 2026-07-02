@@ -162,6 +162,7 @@ export function AsaasCheckout({
   studioLogoUrl,
   onPaymentConfirmed,
   onCancel,
+  onMissingCpf,
   themeStyles = {},
   backgroundMode = 'light',
 }: AsaasCheckoutProps) {
