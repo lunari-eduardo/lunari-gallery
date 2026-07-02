@@ -1327,6 +1327,7 @@ export default function ClientGallery() {
             setIsConfirmed(true);
             refetchGallery();
           }}
+          onMissingCpf={() => setContactModalOpen(true)}
           themeStyles={themeStyles}
           backgroundMode={pendingBgMode}
         />
