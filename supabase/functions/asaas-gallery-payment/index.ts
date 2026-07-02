@@ -579,6 +579,26 @@ Deno.serve(async (req) => {
 
     console.log(`💳 Creating Asaas payment: ${finalBillingType}, R$ ${valor}, customer: ${asaasCustomerId}`);
 
+    // 🛡️ Defesa em profundidade: para PIX/BOLETO o Asaas exige CPF/CNPJ no customer.
+    // Se por qualquer motivo o customer atual estiver sem cpfCnpj (ex.: PUT anterior
+    // falhou por email inválido), garantimos aqui um PUT dedicado só com o CPF.
+    if (asaasCustomerId && (finalBillingType === 'PIX' || finalBillingType === 'BOLETO') && payerHints.cpfCnpj) {
+      try {
+        const chk = await fetch(`${asaasBaseUrl}/v3/customers/${asaasCustomerId}`, {
+          headers: { access_token: asaasApiKey },
+        });
+        if (chk.ok) {
+          const cur = await chk.json();
+          if (!cur.cpfCnpj) {
+            console.log(`🛡️ Forçando gravação de cpfCnpj no customer ${asaasCustomerId} antes de criar cobrança.`);
+            await putAsaasCustomer(asaasBaseUrl, asaasApiKey, asaasCustomerId, { cpfCnpj: payerHints.cpfCnpj });
+          }
+        }
+      } catch (e) {
+        console.warn('Defesa em profundidade (CPF) falhou:', e instanceof Error ? e.message : e);
+      }
+    }
+
     const paymentResp = await fetch(`${asaasBaseUrl}/v3/payments`, {
       method: 'POST',
       headers: {
@@ -591,10 +611,16 @@ Deno.serve(async (req) => {
     const paymentData = await paymentResp.json();
 
     if (!paymentResp.ok) {
-      const errorMsg = paymentData.errors?.[0]?.description || 'Erro ao criar pagamento no Asaas';
+      const firstErr = paymentData.errors?.[0] || {};
+      const errorMsg = firstErr.description || 'Erro ao criar pagamento no Asaas';
+      const asaasCode = String(firstErr.code || '').toLowerCase();
       console.error('Asaas payment creation error:', paymentData);
+      // Mapeamento fino: email inválido → INVALID_EMAIL (frontend destaca o campo).
+      let code = 'ASAAS_PAYMENT_ERROR';
+      if (asaasCode === 'invalid_email' || /email/i.test(errorMsg)) code = 'INVALID_EMAIL';
+      else if (/cpf|cnpj/i.test(errorMsg)) code = 'MISSING_CPF_CNPJ';
       return new Response(
-        JSON.stringify({ success: false, error: errorMsg, code: 'ASAAS_PAYMENT_ERROR' }),
+        JSON.stringify({ success: false, error: errorMsg, code }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
