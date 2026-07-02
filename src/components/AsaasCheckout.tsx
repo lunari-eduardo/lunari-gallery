@@ -81,6 +81,7 @@ interface AsaasCheckoutProps {
   studioLogoUrl?: string;
   onPaymentConfirmed: () => void;
   onCancel?: () => void;
+  onMissingCpf?: () => void;
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
 }
@@ -161,6 +162,7 @@ export function AsaasCheckout({
   studioLogoUrl,
   onPaymentConfirmed,
   onCancel,
+  onMissingCpf,
   themeStyles = {},
   backgroundMode = 'light',
 }: AsaasCheckoutProps) {
@@ -280,6 +282,11 @@ export function AsaasCheckout({
       });
       const result = await res.json();
       if (!res.ok || !result.success) {
+        // Backend exigiu CPF do pagador — abre modal de coleta no pai.
+        if (result?.code === 'MISSING_CPF_CNPJ' && onMissingCpf) {
+          onMissingCpf();
+          return;
+        }
         throw new Error(result.error || 'Erro ao gerar PIX');
       }
       setPixQrCode(result.pixQrCode ? `data:image/png;base64,${result.pixQrCode}` : null);

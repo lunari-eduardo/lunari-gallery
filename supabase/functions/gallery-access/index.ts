@@ -337,18 +337,52 @@ serve(async (req) => {
     }
 
     // Payer hints missing (booleans only — não expõe valores).
-    // Usado no ClientGallery para decidir se abre o modal de coleta de contato
-    // antes de redirecionar ao checkout externo.
-    let payerHintsMissing: { email: boolean; phone: boolean; name: boolean } | null = null;
+    // Usado no ClientGallery para decidir se abre o modal de coleta antes do
+    // redirect ao checkout. Inclui `cpfCnpj` + provedor ativo para que o
+    // frontend saiba quando o Asaas exige CPF (regra do BC / PIX).
+    let payerHintsMissing: {
+      email: boolean;
+      phone: boolean;
+      name: boolean;
+      cpfCnpj: boolean;
+      provider: 'asaas' | 'infinitepay' | 'mercadopago' | null;
+      billingType: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | null;
+      cpfRequired: boolean;
+    } | null = null;
     try {
       const hints = await resolvePayerHints(supabase, {
         clienteId: gallery.cliente_id,
         visitorId: visitorId || null,
       });
+
+      // Descobre provider ativo (default) para decidir requisitos.
+      let provider: 'asaas' | 'infinitepay' | 'mercadopago' | null = null;
+      let billingType: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | null = null;
+      const { data: integracoes } = await supabase
+        .from('usuarios_integracoes')
+        .select('provedor, dados_extras, is_default')
+        .eq('user_id', gallery.user_id)
+        .eq('status', 'ativo')
+        .in('provedor', ['asaas', 'infinitepay', 'mercadopago']);
+      if (integracoes && integracoes.length > 0) {
+        const chosen = integracoes.find((i: any) => i.is_default) || integracoes[0];
+        provider = chosen.provedor as any;
+        if (provider === 'asaas') {
+          const raw = (chosen.dados_extras || {}) as Record<string, any>;
+          const s = { ...raw, ...(raw.gallery_settings || {}) };
+          billingType = s.habilitarPix ? 'PIX' : s.habilitarCartao ? 'CREDIT_CARD' : s.habilitarBoleto ? 'BOLETO' : 'PIX';
+        }
+      }
+
+      const cpfRequired = provider === 'asaas';
       payerHintsMissing = {
         email: !hints.email,
         phone: !hints.phone,
         name: !hints.firstName,
+        cpfCnpj: cpfRequired && !hints.cpfCnpj,
+        provider,
+        billingType,
+        cpfRequired,
       };
     } catch (e) {
       console.warn('[gallery-access] payer hints resolve falhou:', e instanceof Error ? e.message : String(e));

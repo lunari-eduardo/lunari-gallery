@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import {
   Dialog,
@@ -12,19 +12,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { isValidCpfCnpj, maskCpfCnpj, onlyDigits } from '@/lib/validateCpfCnpj';
 
 export interface ContactCollectionMissing {
   email: boolean;
   phone: boolean;
   name: boolean;
+  cpfCnpj?: boolean;
+  provider?: 'asaas' | 'infinitepay' | 'mercadopago' | null;
+  billingType?: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | null;
+  cpfRequired?: boolean;
 }
 
 interface Props {
   open: boolean;
   missing: ContactCollectionMissing;
-  requirePhone?: boolean; // provedor PIX direto exige telefone
+  requirePhone?: boolean;
   onCancel: () => void;
-  onSubmit: (data: { email?: string; phone?: string; nome?: string }) => Promise<void>;
+  onSubmit: (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => Promise<void>;
 }
 
 const emailSchema = z.string().trim().toLowerCase().email({ message: 'Email inválido' }).max(160);
@@ -36,22 +41,35 @@ const nomeSchema = z.string().trim().min(2, { message: 'Informe seu nome' }).max
 
 /**
  * Modal que aparece antes do redirect ao checkout quando faltam dados
- * (email, telefone ou nome) para pré-preencher o pagamento e enriquecer o CRM.
- * Todos os campos coletados são gravados via RPC `upsert_visitor_contact`.
+ * (email, telefone, nome ou CPF/CNPJ). CPF é obrigatório quando o provedor
+ * ativo é o Asaas (exige `cpfCnpj` para gerar PIX/boleto/cartão).
  */
 export function ContactCollectionModal({ open, missing, requirePhone, onCancel, onSubmit }: Props) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [nome, setNome] = useState('');
+  const [cpfCnpj, setCpfCnpj] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Telefone é sempre obrigatório quando o provedor Asaas exige (PIX/Boleto).
+  const asaasNeedsPhone = missing.cpfRequired && missing.billingType !== 'CREDIT_CARD';
   const needsEmail = missing.email;
-  const needsPhone = missing.phone && requirePhone;
+  const needsPhone = missing.phone && (requirePhone || asaasNeedsPhone);
   const needsName = missing.name;
+  const needsCpf = !!missing.cpfCnpj;
+
+  const cpfValid = useMemo(() => (needsCpf ? isValidCpfCnpj(cpfCnpj) : true), [cpfCnpj, needsCpf]);
+
+  const onlyCpfMissing = needsCpf && !needsEmail && !needsPhone && !needsName;
+
+  const title = onlyCpfMissing ? 'Falta um dado para o pagamento' : 'Antes de continuar…';
+  const description = onlyCpfMissing
+    ? 'Precisamos do seu CPF ou CNPJ para emitir a cobrança. Exigido pelo Banco Central para gerar o PIX.'
+    : 'Precisamos de alguns dados para gerar o pagamento e enviar o comprovante.';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload: { email?: string; phone?: string; nome?: string } = {};
+    const payload: { email?: string; phone?: string; nome?: string; cpfCnpj?: string } = {};
 
     if (needsEmail) {
       const r = emailSchema.safeParse(email);
@@ -71,6 +89,10 @@ export function ContactCollectionModal({ open, missing, requirePhone, onCancel, 
       if (!r.success) return toast.error(r.error.issues[0].message);
       payload.nome = r.data;
     }
+    if (needsCpf) {
+      if (!isValidCpfCnpj(cpfCnpj)) return toast.error('CPF ou CNPJ inválido');
+      payload.cpfCnpj = onlyDigits(cpfCnpj);
+    }
 
     setSubmitting(true);
     try {
@@ -84,10 +106,8 @@ export function ContactCollectionModal({ open, missing, requirePhone, onCancel, 
     <Dialog open={open} onOpenChange={(v) => { if (!v && !submitting) onCancel(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Antes de continuar…</DialogTitle>
-          <DialogDescription>
-            Precisamos de um contato para enviar o comprovante e agilizar o pagamento.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -141,11 +161,37 @@ export function ContactCollectionModal({ open, missing, requirePhone, onCancel, 
             </div>
           )}
 
+          {needsCpf && (
+            <div className="space-y-1.5">
+              <Label htmlFor="cc-cpf">CPF ou CNPJ</Label>
+              <Input
+                id="cc-cpf"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus={!needsName && !needsEmail}
+                value={cpfCnpj}
+                onChange={(e) => setCpfCnpj(maskCpfCnpj(e.target.value))}
+                placeholder="000.000.000-00"
+                maxLength={18}
+                aria-invalid={cpfCnpj.length > 0 && !cpfValid}
+              />
+              <p className="text-xs text-muted-foreground">
+                Usado apenas na cobrança e no recibo. Seus dados não são compartilhados.
+              </p>
+              {cpfCnpj.length > 0 && !cpfValid && (
+                <p className="text-xs text-destructive">Documento inválido.</p>
+              )}
+            </div>
+          )}
+
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button
+              type="submit"
+              disabled={submitting || (needsCpf && !cpfValid)}
+            >
               {submitting ? 'Salvando…' : 'Continuar para pagamento'}
             </Button>
           </DialogFooter>

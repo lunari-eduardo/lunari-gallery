@@ -5673,16 +5673,28 @@ export type Database = {
         Args: { p_visitor_id: string }
         Returns: Json
       }
-      upsert_visitor_contact: {
-        Args: {
-          p_email: string
-          p_nome: string
-          p_phone: string
-          p_token: string
-          p_visitor_id: string
-        }
-        Returns: Json
-      }
+      upsert_visitor_contact:
+        | {
+            Args: {
+              p_email: string
+              p_nome: string
+              p_phone: string
+              p_token: string
+              p_visitor_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_cpf_cnpj?: string
+              p_email: string
+              p_nome: string
+              p_phone: string
+              p_token: string
+              p_visitor_id: string
+            }
+            Returns: Json
+          }
       user_has_gallery_access: { Args: { _user_id: string }; Returns: boolean }
       workflow_a_receber: {
         Args: { _end: string; _start: string }

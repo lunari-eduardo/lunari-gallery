@@ -677,11 +677,15 @@ export default function ClientGallery() {
     onError: (error: Error & { silent?: boolean }) => {
       // Silent errors (ex.: ALREADY_FINALIZED) já dispararam refetch — nada de toast.
       if (error?.silent || error?.message === 'ALREADY_FINALIZED') return;
-      // Parse error code from message if available
       const msg = error.message || 'Erro ao confirmar seleção';
-      
-      
-      // Show contextual error messages based on error codes from backend
+
+      // Fallback: Asaas exigiu CPF que o cache do gallery-access ainda não sabia
+      // que estava faltando. Reabrir modal de coleta (agora sabemos que precisa).
+      if (msg.includes('MISSING_CPF_CNPJ')) {
+        refetchGallery().finally(() => setContactModalOpen(true));
+        return;
+      }
+
       if (msg.includes('Nenhum método de pagamento configurado') || msg.includes('NO_PAYMENT_PROVIDER')) {
         toast.error('Pagamento não disponível', {
           description: 'O fotógrafo ainda não configurou o método de pagamento. Entre em contato com ele.',
@@ -1323,6 +1327,7 @@ export default function ClientGallery() {
             setIsConfirmed(true);
             refetchGallery();
           }}
+          onMissingCpf={() => setContactModalOpen(true)}
           themeStyles={themeStyles}
           backgroundMode={pendingBgMode}
         />
@@ -1542,16 +1547,24 @@ export default function ClientGallery() {
       valorTotal: resultado.valorACobrar,
     };
 
-    // Se cobrança externa e faltam dados de contato → coletar antes do redirect.
+    // Se cobrança externa e faltam dados de contato/CPF → coletar antes do redirect.
     // Isso garante que o CRM seja enriquecido mesmo quando o provedor
-    // (InfinitePay) não devolve os dados do pagador no webhook.
+    // (InfinitePay) não devolve os dados do pagador no webhook, e evita
+    // 422 MISSING_CPF_CNPJ do Asaas por falta de CPF do pagador.
     const saleMode = gallery.saleSettings?.mode;
     const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
     const missing = galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined;
-    // Coleta local é a ÚNICA fonte confiável para telefone/email/nome:
-    // a InfinitePay não devolve dados do pagador no webhook/polling.
-    if (shouldRequestPayment && missing && (missing.email || missing.name || missing.phone)) {
-      setPendingConfirmPayload(payload);
+    const asaasPhoneRequired = !!missing?.cpfRequired && missing?.billingType !== 'CREDIT_CARD';
+    const needsCollection =
+      shouldRequestPayment && missing && (
+        missing.email ||
+        missing.name ||
+        (missing.phone && asaasPhoneRequired) ||
+        missing.cpfCnpj
+      );
+    // Guardar payload permite re-tentar após coleta (inclusive fallback 422).
+    setPendingConfirmPayload(payload);
+    if (needsCollection) {
       setContactModalOpen(true);
       return;
     }
@@ -1559,7 +1572,7 @@ export default function ClientGallery() {
     confirmMutation.mutate(payload);
   };
 
-  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string }) => {
+  const handleContactCollected = async (data: { email?: string; phone?: string; nome?: string; cpfCnpj?: string }) => {
     try {
       const { error } = await supabase.rpc('upsert_visitor_contact', {
         p_token: identifier as string,
@@ -1567,7 +1580,8 @@ export default function ClientGallery() {
         p_email: data.email || null,
         p_phone: data.phone || null,
         p_nome: data.nome || null,
-      });
+        p_cpf_cnpj: data.cpfCnpj || null,
+      } as any);
       if (error) throw error;
 
       // Recarrega gallery-access para materializar novos hints antes do create-link
@@ -1576,6 +1590,10 @@ export default function ClientGallery() {
       if (pendingConfirmPayload) {
         confirmMutation.mutate(pendingConfirmPayload);
         setPendingConfirmPayload(null);
+      } else {
+        // Modal foi aberto pelo AsaasCheckout (fluxo já em tela de pagamento).
+        // O usuário só precisa reclicar em "Gerar PIX".
+        toast.success('Dados salvos. Toque em "Gerar PIX" novamente para continuar.');
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Não foi possível salvar seus dados. Tente novamente.');
@@ -1875,6 +1893,7 @@ export default function ClientGallery() {
           setAsaasCheckoutData(null);
           setCurrentStep('confirmation');
         }}
+        onMissingCpf={() => setContactModalOpen(true)}
         themeStyles={themeStyles}
         backgroundMode={effectiveBackgroundMode}
       />
@@ -2182,11 +2201,10 @@ export default function ClientGallery() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Contact collection modal — coleta email/telefone/nome antes do redirect ao checkout */}
+      {/* Contact collection modal — coleta email/telefone/nome/CPF antes do redirect ao checkout */}
       <ContactCollectionModal
         open={contactModalOpen}
         missing={(galleryResponse?.payerHintsMissing as ContactCollectionMissing) || { email: true, phone: true, name: true }}
-        requirePhone={true}
         onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); }}
         onSubmit={handleContactCollected}
       />
