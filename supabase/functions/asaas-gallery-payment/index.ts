@@ -392,7 +392,14 @@ Deno.serve(async (req) => {
 
     if (finalBillingType === 'CREDIT_CARD' && body.creditCard) {
       paymentBody.creditCard = body.creditCard;
-      paymentBody.creditCardHolderInfo = body.creditCardHolderInfo;
+      // Fallback server-side: se o frontend enviou creditCardHolderInfo parcial,
+      // preencher name/email/phone com os hints (cpfCnpj/postalCode/addressNumber
+      // continuam obrigatórios pelo Asaas e devem vir do cliente).
+      const holderInfo: Record<string, unknown> = { ...(body.creditCardHolderInfo || {}) };
+      if (!holderInfo.name && payerHints.firstName) holderInfo.name = payerHints.firstName;
+      if (!holderInfo.email && payerHints.email) holderInfo.email = payerHints.email;
+      if (!holderInfo.phone && payerHints.phone) holderInfo.phone = payerHints.phone;
+      paymentBody.creditCardHolderInfo = holderInfo;
       if (body.remoteIp) {
         paymentBody.remoteIp = body.remoteIp;
       }
