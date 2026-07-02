@@ -122,6 +122,11 @@ export default function ClientGallery() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [folderViewMode, setFolderViewMode] = useState<'albums' | 'grid'>('albums');
   const [showPartialSelectionDialog, setShowPartialSelectionDialog] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [pendingConfirmPayload, setPendingConfirmPayload] = useState<null | {
+    selectedCount: number; extraCount: number; valorUnitario: number; valorTotal: number;
+  }>(null);
+  
   
   
   // Payment state
