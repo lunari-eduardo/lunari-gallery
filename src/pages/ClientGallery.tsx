@@ -2283,12 +2283,7 @@ export default function ClientGallery() {
       </AlertDialog>
 
       {/* Contact collection modal — coleta email/telefone/nome/CPF antes do redirect ao checkout */}
-      <ContactCollectionModal
-        open={contactModalOpen}
-        missing={(galleryResponse?.payerHintsMissing as ContactCollectionMissing) || { email: true, phone: true, name: true }}
-        onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); }}
-        onSubmit={handleContactCollected}
-      />
+      {contactModalNode}
     </div>
   );
 }
