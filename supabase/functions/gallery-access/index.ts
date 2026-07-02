@@ -527,6 +527,7 @@ serve(async (req) => {
         clientMode,
         accountTheme, // New field for account heritage info
         payerHintsMissing,
+        payerHints: payerHintsValues,
         ...pendingPaymentData,
       }),
       {
