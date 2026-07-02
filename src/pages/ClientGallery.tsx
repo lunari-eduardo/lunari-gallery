@@ -1639,6 +1639,34 @@ export default function ClientGallery() {
     }
   };
 
+  // Handler compartilhado: quando o backend Asaas responde 422 MISSING_CPF_CNPJ,
+  // força o modal a exibir o campo CPF mesmo se o cache do gallery-access
+  // ainda não sabia que estava faltando.
+  const openMissingCpfModal = () => {
+    setForcedMissing({ cpfCnpj: true, cpfRequired: true, provider: 'asaas' });
+    setContactModalOpen(true);
+  };
+
+  // Merge de payerHintsMissing do backend com forcedMissing (fallback local).
+  const effectiveMissing: ContactCollectionMissing = {
+    ...((galleryResponse?.payerHintsMissing as ContactCollectionMissing) || {
+      email: false, phone: false, name: false,
+    }),
+    ...(forcedMissing || {}),
+  };
+
+  // Node reutilizável do modal — montado ao lado de cada early return
+  // que renderiza AsaasCheckout/PixPaymentScreen para garantir que
+  // setContactModalOpen(true) realmente exiba o modal na tela.
+  const contactModalNode = (
+    <ContactCollectionModal
+      open={contactModalOpen}
+      missing={effectiveMissing}
+      onCancel={() => { setContactModalOpen(false); setPendingConfirmPayload(null); setForcedMissing(null); }}
+      onSubmit={handleContactCollected}
+    />
+  );
+
   // Parse welcome message
   const welcomeMessage = gallery.settings.welcomeMessage
     .replace('{cliente}', (gallery.clientName || 'Cliente').split(' ')[0])
