@@ -1415,6 +1415,9 @@ export default function ClientGallery() {
               refetchGallery();
             }}
             onMissingCpf={openMissingCpfModal}
+            payerHints={payerHintsPrefill}
+            payerMissing={payerMissingFlags}
+            onPersistContact={handlePersistContact}
             themeStyles={themeStyles}
             backgroundMode={pendingBgMode}
           />
