@@ -1625,6 +1625,7 @@ export default function ClientGallery() {
       // Recarrega gallery-access para materializar novos hints antes do create-link
       await refetchGallery();
       setContactModalOpen(false);
+      setForcedMissing(null);
       if (pendingConfirmPayload) {
         confirmMutation.mutate(pendingConfirmPayload);
         setPendingConfirmPayload(null);
