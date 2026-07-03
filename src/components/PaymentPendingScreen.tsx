@@ -277,7 +277,7 @@ export function PaymentPendingScreen({
           { index: 1, title: 'Seleção enviada', subtitle: 'Recebida com sucesso', state: 'done' },
           {
             index: 2,
-            title: effectiveAction.kind === 'regenerate' ? 'Gerar link de pagamento' : 'Pagamento pendente',
+            title: 'Aguardando pagamento',
             subtitle: 'Aguardando conclusão',
             state: 'active',
           },
@@ -374,12 +374,10 @@ export function PaymentPendingScreen({
                     className="text-2xl font-semibold text-foreground leading-tight"
                     style={{ fontFamily: 'ui-serif, Georgia, serif' }}
                   >
-                    {effectiveAction.kind === 'regenerate' ? 'Link de pagamento necessário' : 'Aguardando pagamento'}
+                    Aguardando pagamento
                   </h2>
                   <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    {effectiveAction.kind === 'regenerate'
-                      ? 'Precisamos gerar um novo link para você concluir o pagamento.'
-                      : 'Seu pedido está aguardando a conclusão do pagamento.'}
+                    Clique abaixo para concluir seu pagamento com segurança.
                   </p>
                 </div>
               </div>
@@ -413,7 +411,7 @@ export function PaymentPendingScreen({
                     ) : (
                       <Wallet className="h-4 w-4" strokeWidth={1.75} />
                     )}
-                    Gerar link de pagamento
+                    Ir para pagamento
                   </Button>
                 )}
 
