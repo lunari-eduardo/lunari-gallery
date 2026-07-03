@@ -6,11 +6,12 @@ import { supabase } from '@/integrations/supabase/client';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 const POLL_MAX_DURATION = 10 * 60 * 1000;
+// Polling é apenas fallback: a via primária é Realtime em `cobrancas`.
+// Intervalos altos para minimizar egress no plano free.
 const GET_ADAPTIVE_POLL_INTERVAL = (elapsedMs: number) => {
-  if (elapsedMs < 15_000) return 2500;
-  if (elapsedMs < 60_000) return 5000;
-  if (elapsedMs < 180_000) return 15000;
-  return 30000;
+  if (elapsedMs < 30_000) return 15000;
+  if (elapsedMs < 120_000) return 30000;
+  return 60000;
 };
 
 export type PendingAction =
