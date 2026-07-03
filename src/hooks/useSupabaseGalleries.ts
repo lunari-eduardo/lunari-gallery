@@ -134,53 +134,16 @@ export interface CreateGaleriaData {
 
 function transformGaleria(row: any): Galeria {
   const configuracoes = (row.configuracoes as GaleriaConfiguracoes) || {};
-  const coverPhotoId = configuracoes.coverPhotoId;
-  const photos = row.galeria_fotos || [];
-  
-  let coverPhotoKey: string | null = null;
-  if (coverPhotoId && photos.length > 0) {
-    const coverPhoto = photos.find((p: any) => p.id === coverPhotoId);
-    coverPhotoKey = coverPhoto?.storage_key || null;
-  }
+
+  // Chaves de foto vêm de colunas denormalizadas em `galerias`
+  // (mantidas por trigger em galeria_fotos). Isso elimina o join pesado
+  // que puxava toda `galeria_fotos` só para descobrir a capa/primeira foto.
+  const coverPhotoKey: string | null = row.cover_storage_key || null;
+  const firstPhotoKey: string | null = row.first_photo_storage_key || null;
 
   return {
-    id: row.id,
-    userId: row.user_id,
-    clienteId: row.cliente_id,
-    status: row.status,
-    statusPagamento: row.status_pagamento,
-    fotosIncluidas: row.fotos_incluidas,
-    valorFotoExtra: row.valor_foto_extra,
-    regrasSelecao: row.regras_selecao,
-    prazoSelecaoDias: row.prazo_selecao_dias,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
-    publishedAt: row.published_at ? new Date(row.published_at) : null,
-    finalizedAt: row.finalized_at ? new Date(row.finalized_at) : null,
-    sessionId: row.session_id,
-    orcamentoId: row.orcamento_id,
-    permissao: row.permissao || 'private',
-    nomeSessao: row.nome_sessao,
-    nomePacote: row.nome_pacote,
-    mensagemBoasVindas: row.mensagem_boas_vindas,
-    configuracoes,
-    totalFotos: row.total_fotos || 0,
-    fotosSelecionadas: row.fotos_selecionadas || 0,
-    valorExtras: row.valor_extras || 0,
-    valorTotalVendido: row.valor_total_vendido || 0,
-    totalFotosExtrasVendidas: row.total_fotos_extras_vendidas || 0,
-    statusSelecao: row.status_selecao || 'em_andamento',
-    prazoSelecao: row.prazo_selecao ? new Date(row.prazo_selecao) : null,
-    enviadoEm: row.enviado_em ? new Date(row.enviado_em) : null,
-    clienteNome: row.cliente_nome,
-    clienteEmail: row.cliente_email,
-    clienteTelefone: row.cliente_telefone || null,
-    publicToken: row.public_token || null,
-    galleryPassword: row.gallery_password || null,
-    regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
-    regrasOverride: row.regras_override ?? false,
-    tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
-    firstPhotoKey: photos[0]?.storage_key || null,
+...
+    firstPhotoKey,
     coverPhotoKey,
     themeId: row.theme_id,
     useCustomTheme: row.use_custom_theme ?? false,
