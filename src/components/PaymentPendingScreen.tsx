@@ -411,7 +411,7 @@ export function PaymentPendingScreen({
                     ) : (
                       <Wallet className="h-4 w-4" strokeWidth={1.75} />
                     )}
-                    Gerar link de pagamento
+                    Ir para pagamento
                   </Button>
                 )}
 
