@@ -1,13 +1,3 @@
-# Handoff Gallery → Gestão: cobrar extras da galeria a partir do Workflow/CRM
-
-> Cole este arquivo no chat do projeto **Lunari_Gestão** (Lovable) como
-> prompt de implementação. Ele descreve **exatamente** como o Gestão
-> deve gerar cobranças de fotos extras usando o **mesmo motor** que o
-> botão "Ir para pagamento" do Gallery utiliza — sem duplicar lógica,
-> sem recalcular valores, sem quebrar a sincronização da galeria.
-
----
-
 ## 0. Contexto e princípio inegociável
 
 O Gallery já possui um pipeline canônico e blindado para gerar cobrança
@@ -125,15 +115,15 @@ projeto Supabase compartilhado).
 `gallery-create-payment` retorna um destes formatos. O Gestão precisa
 tratar cada um:
 
-| Retorno | Ação no Gestão |
-|---|---|
-| `{ code: 'NO_AMOUNT_DUE', alreadyPaid: true }` | Toast "Galeria já quitada". Fechar modal, recarregar card. |
-| `{ checkoutUrl }` (InfinitePay/MercadoPago) | Abrir `checkoutUrl` em nova aba. Toast "Link gerado — cliente pode pagar". Copiar link para clipboard e mostrar botão "Copiar link" + "Enviar por WhatsApp". |
-| `{ transparentCheckout: true, provedor: 'asaas', galleryUrl }` | Não há checkout no Gestão. Mostrar mensagem: "Cobrança Asaas criada. Envie o link da galeria ao cliente — o checkout abre automaticamente." + botão "Copiar link da galeria" (`galleryUrl`) + "Enviar por WhatsApp". |
-| `{ provedor: 'pix_manual', pixDados }` | Mesma UX do PIX Manual do Workflow atual — mostrar QR + copia-e-cola. |
-| `{ code: 'NO_PROVIDER' }` (400) | Toast erro "Configure um meio de pagamento em Configurações". |
-| `{ code: 'GATEWAY_TIMEOUT' \| 'GATEWAY_UNREACHABLE' \| 'PAYMENT_CREATE_ERROR' }` | Toast erro com `data.error`. Botão "Tentar novamente" no modal. |
-| Qualquer outro `success:false` | Toast erro genérico com `data.error`. |
+| Retorno                                                                          | Ação no Gestão                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ code: 'NO_AMOUNT_DUE', alreadyPaid: true }`                                   | Toast "Galeria já quitada". Fechar modal, recarregar card.                                                                                                                                                           |
+| `{ checkoutUrl }` (InfinitePay/MercadoPago)                                      | Abrir `checkoutUrl` em nova aba. Toast "Link gerado — cliente pode pagar". Copiar link para clipboard e mostrar botão "Copiar link" + "Enviar por WhatsApp".                                                         |
+| `{ transparentCheckout: true, provedor: 'asaas', galleryUrl }`                   | Não há checkout no Gestão. Mostrar mensagem: "Cobrança Asaas criada. Envie o link da galeria ao cliente — o checkout abre automaticamente." + botão "Copiar link da galeria" (`galleryUrl`) + "Enviar por WhatsApp". |
+| `{ provedor: 'pix_manual', pixDados }`                                           | Mesma UX do PIX Manual do Workflow atual — mostrar QR + copia-e-cola.                                                                                                                                                |
+| `{ code: 'NO_PROVIDER' }` (400)                                                  | Toast erro "Configure um meio de pagamento em Configurações".                                                                                                                                                        |
+| `{ code: 'GATEWAY_TIMEOUT' \| 'GATEWAY_UNREACHABLE' \| 'PAYMENT_CREATE_ERROR' }` | Toast erro com `data.error`. Botão "Tentar novamente" no modal.                                                                                                                                                      |
+| Qualquer outro `success:false`                                                   | Toast erro genérico com `data.error`.                                                                                                                                                                                |
 
 **Importante**: para Asaas, o Gestão **não** exibe o formulário
 transparente. O contrato é: cliente sempre paga Asaas dentro da
@@ -156,7 +146,7 @@ compartilha o `galleryUrl`.
 - **Não** criar cobrança em `cobrancas` diretamente do Gestão para
   extras. Todo INSERT com `finalidade='fotos_extras'` deve passar por
   `gallery-create-payment` para respeitar R4 (finalidade + galeria_id
-  + snapshot + qtd_fotos + validação de sobrecobrança).
+  - snapshot + qtd_fotos + validação de sobrecobrança).
 - **Não** chamar `infinitepay-create-link`, `mercadopago-create-link`
   ou `asaas-gallery-payment` diretamente. Esses são chamados pela
   `gallery-create-payment` — chamá-los diretamente vai bypassar o
@@ -204,11 +194,11 @@ Isso já é suportado pelo contrato atual porque:
 Após esta implementação, o card deve refletir 3 estados independentes,
 cada um lido de fonte própria:
 
-| Bloco | Fonte |
-|---|---|
+| Bloco                              | Fonte                                                                                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | **Sessão — valor pago / pendente** | `SUM(cobrancas.valor)` onde `session_id=? AND finalidade='sessao' AND status IN ('pago','pago_manual')` vs `clientes_sessoes.valor_total` |
-| **Extras — valor pago / pendente** | RPC `calculate_gallery_extra_payment(galeria_id)` — usar `valor_pago`, `valor_a_cobrar`, `extras_a_cobrar` |
-| **Status geral da galeria** | `galerias.status_selecao` + `galerias.status_pagamento` (informativo) |
+| **Extras — valor pago / pendente** | RPC `calculate_gallery_extra_payment(galeria_id)` — usar `valor_pago`, `valor_a_cobrar`, `extras_a_cobrar`                                |
+| **Status geral da galeria**        | `galerias.status_selecao` + `galerias.status_pagamento` (informativo)                                                                     |
 
 Nunca misturar "sessão + extras" no mesmo total. Isso é o que causou o
 bug da Clarissa (vide handoff-gestao-extras.md).
