@@ -261,6 +261,12 @@ export function useSupabaseGalleries() {
       return (data || []).map(transformGaleria);
     },
     enabled: isReady,
+    // Egress guard (Bloco B3): evita refetch a cada foco de aba.
+    // Realtime + invalidação explícita cobrem os casos em que a lista precisa
+    // ser atualizada; sem isso, cada foco de janela disparava um SELECT * em galerias.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const getGallery = useCallback((id: string, galleriesList: Galeria[] = galleries) => {
