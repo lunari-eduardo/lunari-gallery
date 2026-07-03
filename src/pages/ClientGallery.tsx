@@ -151,6 +151,9 @@ export default function ClientGallery() {
   // Payment return detection state (silent — no blocking UI)
   const [isProcessingPaymentReturn, setIsProcessingPaymentReturn] = useState(false);
   const [isConfirmingPixPayment, setIsConfirmingPixPayment] = useState(false);
+  // Controla se o cliente já clicou em "Ir para pagamento" e queremos mostrar
+  // o checkout inline (Asaas) ou tela de PIX, em vez da PaymentPendingScreen.
+  const [showInlineCheckout, setShowInlineCheckout] = useState(false);
   const paymentRetryRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Password state
