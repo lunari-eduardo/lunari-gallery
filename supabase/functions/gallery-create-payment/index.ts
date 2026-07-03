@@ -7,10 +7,11 @@ const corsHeaders = {
 
 interface RequestBody {
   galleryId: string;
-  valorTotal: number;
-  extraCount: number;
+  // Todos opcionais — valor/qtd/descricao são recalculados via RPC canônica.
+  valorTotal?: number;
+  extraCount?: number;
   descricao?: string;
-  provider?: string; // optional: force specific provider
+  provider?: string;
 }
 
 interface PaymentResponse {
@@ -19,8 +20,15 @@ interface PaymentResponse {
   galleryUrl?: string;
   cobrancaId?: string;
   provedor?: string;
+  valorTotal?: number;
+  extraCount?: number;
+  transparentCheckout?: boolean;
+  code?: string;
   error?: string;
+  message?: string;
 }
+
+const BASE_GALLERY_URL = 'https://gallery.lunarihub.com';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -33,81 +41,136 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { galleryId, valorTotal, extraCount, descricao, provider } = body;
+    const { galleryId, provider } = body;
+
+    console.log(`[gallery-create-payment] Request:`, JSON.stringify({ galleryId, provider }));
 
     if (!galleryId) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'galleryId é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ success: false, error: 'galleryId é obrigatório' }, 400);
     }
 
-    if (!valorTotal || valorTotal <= 0) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'valorTotal deve ser maior que zero' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 1. Fetch gallery data
+    // 1. Fetch gallery
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, user_id, cliente_id, session_id, nome_sessao, public_token')
+      .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at')
       .eq('id', galleryId)
       .single();
 
     if (galleryError || !gallery) {
-      console.error('Gallery fetch error:', galleryError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Galeria não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('[gallery-create-payment] Gallery fetch error:', galleryError);
+      return jsonResponse({ success: false, error: 'Galeria não encontrada', code: 'GALLERY_NOT_FOUND' }, 404);
     }
 
-    // 2. Discover active payment provider
-    let provedor = provider;
-    
+    // 2. CANONICAL CALCULATION — fonte única de valor/qtd (R8 gallery-rules)
+    let calc: any = null;
+    try {
+      const { data } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: galleryId });
+      calc = data || null;
+    } catch (e) {
+      console.error('[gallery-create-payment] calculate_gallery_extra_payment falhou:', e);
+      return jsonResponse({ success: false, error: 'Erro ao calcular valor canônico', code: 'CALC_ERROR' }, 500);
+    }
+
+    if (!calc?.success) {
+      return jsonResponse({ success: false, error: 'Erro ao calcular valor da galeria', code: 'CALC_INVALID' }, 500);
+    }
+
+    const valorCanonico = Number(calc.valor_a_cobrar || 0);
+    const extrasACobrar = Number(calc.extras_a_cobrar || 0);
+    const isFullyPaid = calc.is_fully_paid === true;
+
+    console.log(`[gallery-create-payment] Canonical calc: valor=${valorCanonico}, extras=${extrasACobrar}, fullyPaid=${isFullyPaid}`);
+
+    // 2a. Se não há saldo, retorna sucesso sem criar cobrança
+    if (valorCanonico <= 0 || isFullyPaid) {
+      return jsonResponse({
+        success: true,
+        code: 'NO_AMOUNT_DUE',
+        message: 'Não há saldo a cobrar para esta galeria',
+        galleryUrl: gallery.public_token ? `${BASE_GALLERY_URL}/g/${gallery.public_token}` : undefined,
+        valorTotal: 0,
+        extraCount: 0,
+      }, 200);
+    }
+
+    // 3. Discover active payment provider
+    let provedor = provider || (gallery as any).venda_pagamento_provedor || null;
+
     if (provedor) {
-      // Verify the requested provider is active
       const { data: integracao } = await supabase
         .from('usuarios_integracoes')
-        .select('provedor, dados_extras, access_token')
+        .select('provedor')
         .eq('user_id', gallery.user_id)
         .eq('status', 'ativo')
         .eq('provedor', provedor)
         .maybeSingle();
-      
+
       if (!integracao) {
-        return new Response(
-          JSON.stringify({ success: false, error: `Provedor ${provedor} não está ativo`, code: 'PROVIDER_INACTIVE' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({ success: false, error: `Provedor ${provedor} não está ativo`, code: 'PROVIDER_INACTIVE' }, 400);
       }
     } else {
-      // Auto-detect active provider (prefer default)
+      // Auto-detect provider (prefer default)
       const { data: integracoes } = await supabase
         .from('usuarios_integracoes')
-        .select('provedor, dados_extras, access_token, is_default')
+        .select('provedor, is_default')
         .eq('user_id', gallery.user_id)
         .eq('status', 'ativo')
         .in('provedor', ['mercadopago', 'infinitepay', 'asaas']);
 
       if (!integracoes || integracoes.length === 0) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Nenhum provedor de pagamento configurado', code: 'NO_PROVIDER' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({ success: false, error: 'Nenhum provedor de pagamento configurado', code: 'NO_PROVIDER' }, 400);
       }
 
-      const defaultInteg = integracoes.find(i => i.is_default) || integracoes[0];
+      const defaultInteg = integracoes.find((i: any) => i.is_default) || integracoes[0];
       provedor = defaultInteg.provedor;
     }
 
-    console.log(`📱 Payment provider: ${provedor} for gallery ${galleryId}`);
+    console.log(`[gallery-create-payment] Provider: ${provedor}`);
 
-    // 3. Normalize session_id to TEXT format
+    const galleryUrl = gallery.public_token ? `${BASE_GALLERY_URL}/g/${gallery.public_token}` : undefined;
+    const descricao = `${extrasACobrar} foto${extrasACobrar !== 1 ? 's' : ''} extra${extrasACobrar !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
+
+    // 3a. Cancel stale pending charges (evita duplicatas + valor errado)
+    try {
+      await supabase
+        .from('cobrancas')
+        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+        .eq('galeria_id', galleryId)
+        .eq('finalidade', 'fotos_extras')
+        .in('status', ['pendente', 'aguardando_confirmacao']);
+    } catch (e) {
+      console.warn('[gallery-create-payment] Falha ao cancelar cobranças antigas:', e);
+    }
+
+    // 4. Asaas → NÃO cria cobrança aqui; deixa AsaasCheckout no cliente criar via asaas-gallery-payment.
+    //    Retorna apenas galleryUrl para o fotógrafo enviar ao cliente.
+    if (provedor === 'asaas') {
+      // Garante estado pendente/finalized da galeria (finalized_at preservado)
+      await supabase
+        .from('galerias')
+        .update({
+          status_pagamento: 'pendente',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', galleryId);
+
+      return jsonResponse({
+        success: true,
+        provedor: 'asaas',
+        galleryUrl,
+        transparentCheckout: true,
+        valorTotal: valorCanonico,
+        extraCount: extrasACobrar,
+        message: 'Envie o link da galeria ao cliente. O checkout Asaas abrirá automaticamente.',
+      }, 200);
+    }
+
+    // 5. InfinitePay / Mercado Pago → chama create-link internamente com valor canônico
+    const functionName = provedor === 'infinitepay' ? 'infinitepay-create-link' : 'mercadopago-create-link';
+    const redirectUrl = galleryUrl ? `${galleryUrl}?payment=success` : undefined;
+
+    // Normalize session_id to text format
     let sessionIdTexto: string | null = null;
-    
     if (gallery.session_id) {
       if (gallery.session_id.startsWith('workflow-') || gallery.session_id.startsWith('session_')) {
         sessionIdTexto = gallery.session_id;
@@ -117,48 +180,25 @@ Deno.serve(async (req) => {
           .select('session_id')
           .or(`id.eq.${gallery.session_id},session_id.eq.${gallery.session_id}`)
           .maybeSingle();
-        
         sessionIdTexto = sessao?.session_id || gallery.session_id;
       }
     }
 
-    // 4. Build description
-    const cobrancaDescricao = descricao || 
-      `${extraCount} foto${extraCount !== 1 ? 's' : ''} extra${extraCount !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
-
-    // 5. Build the complete payload for the create-link function
-    let functionName: string;
-    if (provedor === 'infinitepay') {
-      functionName = 'infinitepay-create-link';
-    } else if (provedor === 'asaas') {
-      functionName = 'asaas-gallery-payment';
-    } else {
-      functionName = 'mercadopago-create-link';
-    }
-
-    // Build redirect URL for payment return
-    const redirectUrl = gallery.public_token 
-      ? `https://gallery.lunarihub.com/g/${gallery.public_token}?payment=success`
-      : undefined;
-
     const payloadBody: Record<string, unknown> = {
       clienteId: gallery.cliente_id,
       sessionId: sessionIdTexto,
-      valor: valorTotal,
-      descricao: cobrancaDescricao,
+      valor: valorCanonico,
+      descricao,
       userId: gallery.user_id,
       galeriaId: gallery.id,
-      qtdFotos: extraCount,
+      qtdFotos: extrasACobrar,
       galleryToken: gallery.public_token,
     };
 
-    if (redirectUrl) {
-      payloadBody.redirectUrl = redirectUrl;
-    }
+    if (redirectUrl) payloadBody.redirectUrl = redirectUrl;
 
-    console.log(`📞 Calling ${functionName} with:`, payloadBody);
+    console.log(`[gallery-create-payment] Calling ${functionName} with valor=${valorCanonico}, qtd=${extrasACobrar}`);
 
-    // Use direct fetch for internal function call (per contract)
     const fnUrl = `${supabaseUrl}/functions/v1/${functionName}`;
     const fnResponse = await fetch(fnUrl, {
       method: 'POST',
@@ -169,36 +209,21 @@ Deno.serve(async (req) => {
       body: JSON.stringify(payloadBody),
     });
 
-    const paymentData = await fnResponse.json();
+    const paymentData = await fnResponse.json().catch(() => ({}));
 
     if (!fnResponse.ok || !paymentData?.success) {
-      console.error(`${functionName} error:`, paymentData);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: paymentData?.error || 'Erro ao criar link de pagamento',
-          code: 'PAYMENT_CREATE_ERROR'
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error(`[gallery-create-payment] ${functionName} error:`, paymentData);
+      return jsonResponse({
+        success: false,
+        error: paymentData?.error || 'Erro ao criar link de pagamento',
+        code: paymentData?.code || 'PAYMENT_CREATE_ERROR',
+      }, 500);
     }
 
-    // 6. Extract checkout URL
-    let checkoutUrl: string | undefined;
-    let cobrancaId: string | undefined;
+    const checkoutUrl = paymentData.checkoutUrl || paymentData.paymentLink;
+    const cobrancaId = paymentData.cobrancaId || paymentData.cobranca?.id;
 
-    if (provedor === 'infinitepay') {
-      checkoutUrl = paymentData.checkoutUrl;
-      cobrancaId = paymentData.cobrancaId;
-    } else if (provedor === 'asaas') {
-      checkoutUrl = paymentData.checkoutUrl;
-      cobrancaId = paymentData.cobrancaId || paymentData.asaasPaymentId;
-    } else {
-      checkoutUrl = paymentData.paymentLink;
-      cobrancaId = paymentData.cobranca?.id;
-    }
-
-    // 7. Update gallery with payment info
+    // Update gallery status to pending
     await supabase
       .from('galerias')
       .update({
@@ -207,31 +232,25 @@ Deno.serve(async (req) => {
       })
       .eq('id', galleryId);
 
-    console.log(`✅ Payment created: ${cobrancaId} via ${provedor}`);
-
-    // 8. Build gallery URL for sharing (client sees internal checkout)
-    const galleryUrl = gallery.public_token 
-      ? `https://gallery.lunarihub.com/g/${gallery.public_token}`
-      : undefined;
-
-    const response: PaymentResponse = {
+    return jsonResponse({
       success: true,
       checkoutUrl,
       galleryUrl,
       cobrancaId,
       provedor,
-    };
-
-    return new Response(
-      JSON.stringify(response),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+      valorTotal: valorCanonico,
+      extraCount: extrasACobrar,
+    }, 200);
 
   } catch (error) {
-    console.error('Gallery payment error:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: 'Erro interno do servidor' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('[gallery-create-payment] Fatal error:', error);
+    return jsonResponse({ success: false, error: 'Erro interno do servidor', code: 'INTERNAL_ERROR' }, 500);
   }
 });
+
+function jsonResponse(body: PaymentResponse, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}

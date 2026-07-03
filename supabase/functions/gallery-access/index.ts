@@ -65,9 +65,10 @@ serve(async (req) => {
     // Resolve owner settings (account theme)
     const accountTheme = settings;
 
-    // 3. Check password if private
-    if (gallery.permissao === 'private' && gallery.gallery_password !== password) {
-      return new Response(JSON.stringify({ 
+    // 3. Check password if private (só exige senha se realmente houver uma cadastrada)
+    const hasPassword = typeof gallery.gallery_password === 'string' && gallery.gallery_password.length > 0;
+    if (gallery.permissao === 'private' && hasPassword && gallery.gallery_password !== password) {
+      return new Response(JSON.stringify({
         success: true,
         requiresPassword: true,
         sessionName: gallery.nome_sessao,
@@ -79,6 +80,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
 
     // 4. Fetch related data
     const [
@@ -136,7 +138,9 @@ serve(async (req) => {
     // invocar finalize_gallery_payment (idempotente). NUNCA fazer UPDATE
     // direto em status_selecao aqui — a RPC é fonte única de verdade.
     let hasPending = false;
-    let hasPaid = false;
+    let hasAnyPaidCharge = false; // Existe QUALQUER cobrança paga no histórico
+    let hasPaid = false;           // Seleção atual está TOTALMENTE quitada (canônico)
+    let canonicalCalc: any = null; // Resultado de calculate_gallery_extra_payment
 
     if (selectionLocked) {
       const { data: charges } = await supabase
@@ -146,9 +150,9 @@ serve(async (req) => {
         .eq('finalidade', 'fotos_extras');
 
       hasPending = charges?.some((c: any) => ['pendente', 'aguardando_confirmacao'].includes(c.status)) || false;
-      hasPaid = charges?.some((c: any) => ['pago', 'pago_manual'].includes(c.status)) || false;
+      hasAnyPaidCharge = charges?.some((c: any) => ['pago', 'pago_manual'].includes(c.status)) || false;
 
-      if (hasPaid) {
+      if (hasAnyPaidCharge) {
         const needsHeal = (charges || []).filter(
           (c: any) => ['pago', 'pago_manual'].includes(c.status) && c.extras_contabilizados !== true
         );
@@ -165,45 +169,70 @@ serve(async (req) => {
             console.error(`[gallery-access] Auto-heal falhou para cobrança ${c.id}:`, healErr);
           }
         }
+      }
 
-        if (!hasPending) {
-          const { data: refreshed } = await supabase
-            .from('galerias')
-            .select('status_selecao')
-            .eq('id', gallery.id)
-            .maybeSingle();
-          if (refreshed?.status_selecao === 'selecao_completa') {
-            currentSelectionStatus = 'selecao_completa';
-            isFinalized = true;
-          }
-          if (visitorId) {
-            await supabase
-              .from('galeria_visitantes')
-              .update({ status_selecao: 'selecao_completa', updated_at: new Date().toISOString() })
-              .eq('id', visitorId);
-            visitorSelectionStatus = 'selecao_completa';
-            isFinalized = true;
-          }
+      // 🎯 Cálculo canônico — fonte única para decidir hasPaid/valorACobrar.
+      // Roda DEPOIS do auto-heal para refletir agregados atualizados.
+      try {
+        const { data: calc } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: gallery.id });
+        canonicalCalc = calc || null;
+      } catch (e) {
+        console.error('[gallery-access] calculate_gallery_extra_payment falhou:', e);
+      }
+
+      // hasPaid canônico: seleção atual está totalmente quitada.
+      // Só é `true` quando a RPC confirma is_fully_paid=true E existe pelo menos
+      // uma cobrança paga (evita hasPaid=true em galeria travada sem nenhum pagamento).
+      // Fecha o bug em que galerias reativadas com crédito parcial marcavam
+      // hasPaid=true por causa do histórico e reabriam o grid indevidamente.
+      hasPaid = Boolean(
+        (canonicalCalc as any)?.is_fully_paid === true &&
+        hasAnyPaidCharge
+      );
+
+      if (hasPaid && !hasPending) {
+        const { data: refreshed } = await supabase
+          .from('galerias')
+          .select('status_selecao')
+          .eq('id', gallery.id)
+          .maybeSingle();
+        if (refreshed?.status_selecao === 'selecao_completa') {
+          currentSelectionStatus = 'selecao_completa';
+          isFinalized = true;
+        }
+        if (visitorId) {
+          await supabase
+            .from('galeria_visitantes')
+            .update({ status_selecao: 'selecao_completa', updated_at: new Date().toISOString() })
+            .eq('id', visitorId);
+          visitorSelectionStatus = 'selecao_completa';
+          isFinalized = true;
         }
       }
     }
 
-    // 🛡️ BLINDAGEM: Se travada e não paga, NUNCA reportar como finalizada.
+    // 🛡️ BLINDAGEM: Se travada e não totalmente paga, NUNCA reportar como finalizada.
     if (selectionLocked && !hasPaid) {
       isFinalized = false;
     }
 
     // Pending payment sempre que selectionLocked && !hasPaid, mesmo sem cobrança viva.
+    // (Inclui casos parciais: existe cobrança paga antiga mas ainda há saldo devedor.)
     if (selectionLocked && !hasPaid && !pendingPaymentData) {
 
       const { data: cobranca } = await supabase
         .from('cobrancas')
         .select('*')
         .eq('galeria_id', gallery.id)
+        .eq('finalidade', 'fotos_extras')
         .in('status', ['pendente', 'aguardando_confirmacao'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      // Valor a cobrar canônico — sempre prioriza RPC sobre cobranca.valor
+      const valorCanonico = Number((canonicalCalc as any)?.valor_a_cobrar ?? 0);
+      const qtdExtrasCanonico = Number((canonicalCalc as any)?.extras_a_cobrar ?? 0);
 
       if (cobranca) {
         // Fallback multi-provedor para checkoutUrl (InfinitePay OU MercadoPago)
@@ -224,12 +253,16 @@ serve(async (req) => {
             .eq('status', 'ativo')
             .maybeSingle();
           const s = (integracao?.dados_extras || {}) as Record<string, any>;
+          // Priorizar valor canônico: se saldo real (canônico) diverge da cobrança viva,
+          // significa que a cobrança está defasada — usar canônico para não cobrar valor errado.
+          const valorEfetivo = valorCanonico > 0 ? valorCanonico : Number(cobranca.valor || 0);
+          const qtdEfetiva = qtdExtrasCanonico > 0 ? qtdExtrasCanonico : (cobranca.qtd_fotos || 0);
           asaasCheckoutData = {
             galeriaId: gallery.id,
             userId: gallery.user_id,
-            valorTotal: Number(cobranca.valor || 0),
+            valorTotal: valorEfetivo,
             descricao: cobranca.descricao || `Fotos extras - ${gallery.nome_sessao || 'Galeria'}`,
-            qtdFotos: cobranca.qtd_fotos || 0,
+            qtdFotos: qtdEfetiva,
             clienteId: gallery.cliente_id,
             sessionId: gallery.session_id,
             galleryToken: gallery.public_token,
@@ -247,11 +280,6 @@ serve(async (req) => {
           };
         }
 
-        // pendingAction canônica — o frontend não precisa mais adivinhar.
-        // - external_redirect: InfinitePay/MP com URL salva (botão "Ir para pagamento")
-        // - asaas_modal:       provedor Asaas com dados reconstituídos (abre checkout transparente)
-        // - pix_modal:         PIX manual
-        // - regenerate:        cobrança morta/inexistente, precisa novo link
         let pendingAction: {
           kind: 'external_redirect' | 'asaas_modal' | 'pix_modal' | 'regenerate';
           checkoutUrl?: string | null;
@@ -272,28 +300,15 @@ serve(async (req) => {
           paymentMethod: cobranca.provedor,
           checkoutUrl,
           cobrancaId: cobranca.id,
-          valorTotal: Number(cobranca.valor || 0),
+          valorTotal: valorCanonico > 0 ? valorCanonico : Number(cobranca.valor || 0),
           pixDados: (gallery.configuracoes as any)?.pixDados,
           asaasCheckoutData,
           pendingAction,
         };
       } else {
         // Sem cobrança viva mas travada: reconstituir dados canônicos.
-        let valorCanonico = 0;
-        let qtdExtras = 0;
-        try {
-          const { data: calc } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: gallery.id });
-          valorCanonico = Number((calc as any)?.valor_a_cobrar || 0);
-          qtdExtras = Number((calc as any)?.extras_necessarias || 0);
-        } catch (e) {
-          console.error('[gallery-access] calc canônico falhou:', e);
-        }
-
         const provedor = (gallery as any).venda_pagamento_provedor || null;
 
-        // 🔧 Provedor Asaas: reconstituímos asaasCheckoutData a partir do snapshot da galeria.
-        // Evita botão "Gerar link" quebrado — o frontend abre direto o AsaasCheckout,
-        // que cria a cobrança conforme a forma de pagamento escolhida pelo cliente.
         let asaasCheckoutData: Record<string, unknown> | null = null;
         let pendingAction: any = { kind: 'regenerate', provedor: provedor || 'desconhecido' };
 
@@ -306,13 +321,13 @@ serve(async (req) => {
             .eq('status', 'ativo')
             .maybeSingle();
           const s = (integracao?.dados_extras || {}) as Record<string, any>;
-          const descricao = `${qtdExtras} foto${qtdExtras !== 1 ? 's' : ''} extra${qtdExtras !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
+          const descricao = `${qtdExtrasCanonico} foto${qtdExtrasCanonico !== 1 ? 's' : ''} extra${qtdExtrasCanonico !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
           asaasCheckoutData = {
             galeriaId: gallery.id,
             userId: gallery.user_id,
             valorTotal: valorCanonico,
             descricao,
-            qtdFotos: qtdExtras,
+            qtdFotos: qtdExtrasCanonico,
             clienteId: gallery.cliente_id,
             sessionId: gallery.session_id,
             galleryToken: gallery.public_token,
@@ -354,6 +369,8 @@ serve(async (req) => {
       }
 
     }
+
+
 
 
 
@@ -501,6 +518,12 @@ serve(async (req) => {
           welcomeMessage: gallery.mensagem_boas_vindas,
           expirationDate: gallery.prazo_selecao,
           publicToken: gallery.public_token,
+          // Agregados de créditos (fonte única: DB + RPC canônica)
+          extrasPagasTotal: Number((canonicalCalc as any)?.extras_pagas ?? gallery.total_fotos_extras_vendidas ?? 0),
+          totalFotosExtrasVendidas: Number(gallery.total_fotos_extras_vendidas ?? 0),
+          valorTotalVendido: Number((canonicalCalc as any)?.valor_pago ?? gallery.valor_total_vendido ?? 0),
+          // Cálculo canônico para a rodada atual — evita frontend recalcular errado
+          canonicalCalc: canonicalCalc || null,
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
@@ -514,6 +537,7 @@ serve(async (req) => {
             defaultCoverId: (settings as any)?.default_cover_id ?? 'fullscreen',
           },
         },
+
         photos: filteredPhotos,
         finalized: isFinalized,
         selectionLocked,
