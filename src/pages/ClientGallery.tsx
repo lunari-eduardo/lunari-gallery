@@ -1336,6 +1336,36 @@ export default function ClientGallery() {
     const pendingBgMode = effectiveBackgroundMode;
     const awaitingCharge = Boolean(galleryResponse?.awaitingCharge) || !galleryResponse?.cobrancaId;
 
+    // pendingAction canônica (backend). Fallback deriva de awaitingCharge/checkoutUrl.
+    const pendingAction = (galleryResponse as any)?.pendingAction as
+      | { kind: 'external_redirect' | 'asaas_modal' | 'pix_modal' | 'regenerate'; checkoutUrl?: string; provedor: string }
+      | undefined;
+
+    // Após regenerar, tenta redirecionar/abrir checkout com o payload novo.
+    const routeFromFreshData = (fresh: any) => {
+      const freshAction = fresh?.pendingAction;
+      const freshCheckoutUrl =
+        freshAction?.checkoutUrl || fresh?.checkoutUrl || null;
+      if (freshAction?.kind === 'external_redirect' && freshCheckoutUrl) {
+        window.location.assign(freshCheckoutUrl);
+        return true;
+      }
+      if (
+        (freshAction?.kind === 'asaas_modal' && fresh?.asaasCheckoutData) ||
+        (freshAction?.kind === 'pix_modal' && fresh?.pixDados) ||
+        (fresh?.paymentMethod === 'asaas' && fresh?.asaasCheckoutData) ||
+        (fresh?.paymentMethod === 'pix_manual' && fresh?.pixDados)
+      ) {
+        setShowInlineCheckout(true);
+        return true;
+      }
+      if (freshCheckoutUrl) {
+        window.location.assign(freshCheckoutUrl);
+        return true;
+      }
+      return false;
+    };
+
     const handleRegenerateCharge = async () => {
       try {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/client-selection`, {
@@ -1351,11 +1381,43 @@ export default function ClientGallery() {
           const err = await response.json().catch(() => ({}));
           throw new Error(err.error || 'Não foi possível gerar novo link agora.');
         }
-        await refetchGallery();
-        toast.success('Link de pagamento gerado. Redirecionando…');
+        const result = await refetchGallery();
+        toast.success('Redirecionando…');
+        routeFromFreshData(result?.data);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Erro ao gerar novo link');
       }
+    };
+
+    // Handler unificado do botão "Ir para pagamento" na PaymentPendingScreen.
+    const handleResume = () => {
+      // Se já temos dados de checkout inline (Asaas/PIX), apenas revela o componente.
+      if (pendingAction?.kind === 'asaas_modal' && galleryResponse?.asaasCheckoutData) {
+        toast.success('Redirecionando…');
+        setShowInlineCheckout(true);
+        return;
+      }
+      if (pendingAction?.kind === 'pix_modal' && pendingPixDados) {
+        toast.success('Redirecionando…');
+        setShowInlineCheckout(true);
+        return;
+      }
+      if (pendingPaymentMethod === 'asaas' && galleryResponse?.asaasCheckoutData) {
+        toast.success('Redirecionando…');
+        setShowInlineCheckout(true);
+        return;
+      }
+      if (pendingPaymentMethod === 'pix_manual' && pendingPixDados) {
+        toast.success('Redirecionando…');
+        setShowInlineCheckout(true);
+        return;
+      }
+      // Fallback: refetch para tentar obter dados frescos e roteia.
+      refetchGallery().then((r) => {
+        if (!routeFromFreshData(r?.data)) {
+          toast.info('Aguardando dados do pagamento…');
+        }
+      });
     };
 
     const handlePixPaymentConfirmed = async () => {
@@ -1376,7 +1438,6 @@ export default function ClientGallery() {
           throw new Error(err.error || 'Erro ao confirmar pagamento');
         }
         
-        
         // Refetch gallery to show finalized state
         await refetchGallery();
       } catch (error) {
@@ -1386,91 +1447,75 @@ export default function ClientGallery() {
       }
     };
 
-    // PIX Manual - show PIX payment screen
-    if (!awaitingCharge && pendingPaymentMethod === 'pix_manual' && pendingPixDados) {
-      return (
-        <PixPaymentScreen
-          chavePix={pendingPixDados.chavePix || ''}
-          nomeTitular={pendingPixDados.nomeTitular || ''}
-          tipoChave={pendingPixDados.tipoChave}
-          valorTotal={pendingValorTotal}
-          studioName={galleryResponse.studioSettings?.studio_name}
-          studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-          onPaymentConfirmed={handlePixPaymentConfirmed}
-          themeStyles={themeStyles}
-          backgroundMode={pendingBgMode}
-          isConfirming={isConfirmingPixPayment}
-        />
-      );
-    }
-
-    // Asaas transparent checkout
-    if (!awaitingCharge && pendingPaymentMethod === 'asaas' && galleryResponse?.asaasCheckoutData) {
-      return (
-        <>
-          <AsaasCheckout
-            data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+    // === Checkout inline: só renderiza depois que o cliente clica "Ir para pagamento" ===
+    if (showInlineCheckout) {
+      // Asaas transparente
+      if (
+        (pendingAction?.kind === 'asaas_modal' || pendingPaymentMethod === 'asaas') &&
+        galleryResponse?.asaasCheckoutData
+      ) {
+        return (
+          <>
+            <AsaasCheckout
+              data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
+              studioName={galleryResponse.studioSettings?.studio_name}
+              studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
+              onPaymentConfirmed={() => {
+                setCurrentStep('confirmed');
+                setIsConfirmed(true);
+                refetchGallery();
+              }}
+              onMissingCpf={openMissingCpfModal}
+              payerHints={payerHintsPrefill}
+              payerMissing={payerMissingFlags}
+              onPersistContact={handlePersistContact}
+              themeStyles={themeStyles}
+              backgroundMode={pendingBgMode}
+            />
+            {contactModalNode}
+          </>
+        );
+      }
+      // PIX manual
+      if (
+        (pendingAction?.kind === 'pix_modal' || pendingPaymentMethod === 'pix_manual') &&
+        pendingPixDados
+      ) {
+        return (
+          <PixPaymentScreen
+            chavePix={pendingPixDados.chavePix || ''}
+            nomeTitular={pendingPixDados.nomeTitular || ''}
+            tipoChave={pendingPixDados.tipoChave}
+            valorTotal={pendingValorTotal}
             studioName={galleryResponse.studioSettings?.studio_name}
             studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-            onPaymentConfirmed={() => {
-              setCurrentStep('confirmed');
-              setIsConfirmed(true);
-              refetchGallery();
-            }}
-            onMissingCpf={openMissingCpfModal}
-            payerHints={payerHintsPrefill}
-            payerMissing={payerMissingFlags}
-            onPersistContact={handlePersistContact}
+            onPaymentConfirmed={handlePixPaymentConfirmed}
             themeStyles={themeStyles}
             backgroundMode={pendingBgMode}
+            isConfirming={isConfirmingPixPayment}
           />
-          {contactModalNode}
-        </>
-      );
+        );
+      }
+      // Se caiu aqui sem dados, reseta o flag e mostra a PaymentPendingScreen.
     }
 
-    // pendingAction canônica (backend). Fallback deriva de awaitingCharge/checkoutUrl.
-    const pendingAction = (galleryResponse as any)?.pendingAction as
-      | { kind: 'external_redirect' | 'asaas_modal' | 'pix_modal' | 'regenerate'; checkoutUrl?: string; provedor: string }
-      | undefined;
-
-    // Se backend confirma que devemos abrir o modal Asaas (mesmo em aguardando_confirmacao),
-    // roteamos para o AsaasCheckout — nunca cair no "Gerar link" indevidamente.
-    if (pendingAction?.kind === 'asaas_modal' && galleryResponse?.asaasCheckoutData) {
-      return (
-        <>
-          <AsaasCheckout
-            data={galleryResponse.asaasCheckoutData as AsaasCheckoutData}
-            studioName={galleryResponse.studioSettings?.studio_name}
-            studioLogoUrl={galleryResponse.studioSettings?.studio_logo_url}
-            onPaymentConfirmed={() => {
-              setCurrentStep('confirmed');
-              setIsConfirmed(true);
-              refetchGallery();
-            }}
-            onMissingCpf={openMissingCpfModal}
-            payerHints={payerHintsPrefill}
-            payerMissing={payerMissingFlags}
-            onPersistContact={handlePersistContact}
-            themeStyles={themeStyles}
-            backgroundMode={pendingBgMode}
-          />
-          {contactModalNode}
-        </>
-      );
-    }
-
-
-    // Mapeia pendingAction do backend para o shape que o PaymentPendingScreen entende.
+    // === Mapeia todas as ações para "resume_modal" (Asaas/PIX) ou externo/regenerate ===
+    // Isso força TODOS os provedores a passarem pela PaymentPendingScreen primeiro.
     const screenAction = pendingAction
       ? pendingAction.kind === 'external_redirect'
         ? { kind: 'external_redirect' as const, checkoutUrl: pendingAction.checkoutUrl || '', provedor: pendingAction.provedor }
         : pendingAction.kind === 'regenerate'
           ? { kind: 'regenerate' as const, provedor: pendingAction.provedor }
           : { kind: 'resume_modal' as const, provedor: pendingAction.provedor }
-      : undefined;
+      : awaitingCharge
+        ? { kind: 'regenerate' as const, provedor: pendingPaymentMethod || 'desconhecido' }
+        : pendingCheckoutUrl
+          ? { kind: 'external_redirect' as const, checkoutUrl: pendingCheckoutUrl, provedor: pendingPaymentMethod || 'externo' }
+          : (pendingPaymentMethod === 'asaas' && galleryResponse?.asaasCheckoutData) ||
+            (pendingPaymentMethod === 'pix_manual' && pendingPixDados)
+            ? { kind: 'resume_modal' as const, provedor: pendingPaymentMethod }
+            : { kind: 'regenerate' as const, provedor: pendingPaymentMethod || 'desconhecido' };
 
-    // InfinitePay/MercadoPago + fallback awaitingCharge (sem cobrança viva)
     return (
       <PaymentPendingScreen
         cobrancaId={galleryResponse?.cobrancaId}
@@ -1484,7 +1529,7 @@ export default function ClientGallery() {
         backgroundMode={pendingBgMode}
         awaitingCharge={awaitingCharge}
         pendingAction={screenAction}
-        onResume={() => refetchGallery()}
+        onResume={handleResume}
         onRegenerate={handleRegenerateCharge}
         onPaymentConfirmed={() => {
           setCurrentStep('confirmed');
