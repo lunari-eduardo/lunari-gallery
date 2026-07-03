@@ -580,7 +580,7 @@ export function AsaasCheckout({
         const cobrancaId = result.cobrancaId;
         const pollStart = Date.now();
         const maxPollTime = 2 * 60 * 1000; // 2 minutes
-        const pollInterval = 5000; // 5 seconds
+        const pollInterval = 12000; // 12s (Realtime cobre confirmação instantânea; polling é fallback)
 
         const poll = async () => {
           try {
