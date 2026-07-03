@@ -212,23 +212,44 @@ export function PaymentStatusCard({
           provider,
         },
       });
-      
+
+      // supabase-js retorna { error } para status >= 400. O body JSON real fica em error.context.
+      let data: any = response.data;
       if (response.error) {
-        throw new Error(response.error.message);
+        const ctx: any = (response.error as any).context;
+        try {
+          if (ctx && typeof ctx.json === 'function') {
+            data = await ctx.json();
+          } else if (ctx && typeof ctx.text === 'function') {
+            data = JSON.parse(await ctx.text());
+          }
+        } catch { /* ignore parse */ }
+        console.error('[rebill] edge error:', response.error, 'body:', data);
       }
-      
-      const data = response.data;
-      
-      if (data.success && (data.checkoutUrl || data.galleryUrl)) {
+
+      if (data?.success && data.code === 'NO_AMOUNT_DUE') {
+        toast.success('Galeria já quitada — não há saldo a cobrar');
+        if (data.galleryUrl) setNewCheckoutUrl(data.galleryUrl);
+        onStatusUpdated?.();
+        return;
+      }
+
+      if (data?.success && (data.checkoutUrl || data.galleryUrl)) {
         const urlToShow = (provider === 'asaas' && data.galleryUrl) ? data.galleryUrl : data.checkoutUrl;
         setNewCheckoutUrl(urlToShow || data.checkoutUrl);
+        if (data.providerFallback) {
+          toast.warning(`Provedor solicitado indisponível. Usando ${data.providerFallback}.`);
+        }
         onStatusUpdated?.();
-      } else {
-        toast.error(data.error || 'Erro ao gerar cobrança');
+        return;
       }
-    } catch (error) {
+
+      const msg = data?.error || 'Erro ao gerar cobrança';
+      const code = data?.code ? ` (${data.code})` : '';
+      toast.error(`${msg}${code}`);
+    } catch (error: any) {
       console.error('Erro ao gerar cobrança:', error);
-      toast.error('Erro ao gerar nova cobrança');
+      toast.error(error?.message || 'Erro ao gerar nova cobrança');
     } finally {
       setIsRebilling(false);
     }
