@@ -518,6 +518,12 @@ serve(async (req) => {
           welcomeMessage: gallery.mensagem_boas_vindas,
           expirationDate: gallery.prazo_selecao,
           publicToken: gallery.public_token,
+          // Agregados de créditos (fonte única: DB + RPC canônica)
+          extrasPagasTotal: Number((canonicalCalc as any)?.extras_pagas ?? gallery.total_fotos_extras_vendidas ?? 0),
+          totalFotosExtrasVendidas: Number(gallery.total_fotos_extras_vendidas ?? 0),
+          valorTotalVendido: Number((canonicalCalc as any)?.valor_pago ?? gallery.valor_total_vendido ?? 0),
+          // Cálculo canônico para a rodada atual — evita frontend recalcular errado
+          canonicalCalc: canonicalCalc || null,
           settings: {
             sessionFont: galleryConfig?.sessionFont || undefined,
             titleCaseMode: galleryConfig?.titleCaseMode || 'normal',
@@ -531,6 +537,7 @@ serve(async (req) => {
             defaultCoverId: (settings as any)?.default_cover_id ?? 'fullscreen',
           },
         },
+
         photos: filteredPhotos,
         finalized: isFinalized,
         selectionLocked,
