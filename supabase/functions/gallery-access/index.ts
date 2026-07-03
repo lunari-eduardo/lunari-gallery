@@ -65,9 +65,10 @@ serve(async (req) => {
     // Resolve owner settings (account theme)
     const accountTheme = settings;
 
-    // 3. Check password if private
-    if (gallery.permissao === 'private' && gallery.gallery_password !== password) {
-      return new Response(JSON.stringify({ 
+    // 3. Check password if private (só exige senha se realmente houver uma cadastrada)
+    const hasPassword = typeof gallery.gallery_password === 'string' && gallery.gallery_password.length > 0;
+    if (gallery.permissao === 'private' && hasPassword && gallery.gallery_password !== password) {
+      return new Response(JSON.stringify({
         success: true,
         requiresPassword: true,
         sessionName: gallery.nome_sessao,
@@ -79,6 +80,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
 
     // 4. Fetch related data
     const [
