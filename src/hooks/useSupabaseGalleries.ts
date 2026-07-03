@@ -253,7 +253,7 @@ export function useSupabaseGalleries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('galerias')
-        .select('*, galeria_fotos(id, storage_key)')
+        .select('*')
         .order('created_at', { ascending: false });
       
       
