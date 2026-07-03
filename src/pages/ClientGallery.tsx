@@ -1377,47 +1377,83 @@ export default function ClientGallery() {
             visitorId: visitorId || undefined,
           }),
         });
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.error || 'Não foi possível gerar novo link agora.');
+        const result = await response.json().catch(() => ({} as any));
+        if (!response.ok || !result?.success) {
+          const msg = result?.error || 'Não foi possível gerar o link agora.';
+          const code = result?.code ? ` (${result.code})` : '';
+          throw new Error(`${msg}${code}`);
         }
-        const result = await refetchGallery();
-        toast.success('Redirecionando…');
-        routeFromFreshData(result?.data);
+
+        const charge = result?.data?.charge || {};
+        console.log('[handleRegenerateCharge] charge payload:', charge);
+
+        // 1) Nada a cobrar → apenas atualiza estado
+        if (charge?.code === 'NO_AMOUNT_DUE' || charge?.alreadyPaid) {
+          toast.success('Pagamento já concluído');
+          await refetchGallery();
+          return;
+        }
+
+        // 2) Redirect externo (InfinitePay / Mercado Pago)
+        if (charge?.checkoutUrl) {
+          toast.success('Redirecionando…');
+          window.location.assign(charge.checkoutUrl);
+          return;
+        }
+
+        // 3) Checkout inline (Asaas transparente / PIX)
+        if (charge?.transparentCheckout || charge?.provedor === 'asaas' || charge?.provedor === 'pix_manual') {
+          toast.success('Abrindo pagamento…');
+          const fresh = await refetchGallery();
+          if (routeFromFreshData(fresh?.data)) return;
+          // Se por algum motivo os dados frescos não bateram, força inline mesmo assim.
+          setShowInlineCheckout(true);
+          return;
+        }
+
+        // 4) Fallback: tenta usar o que veio na galeria atualizada
+        const fresh = await refetchGallery();
+        if (!routeFromFreshData(fresh?.data)) {
+          toast.error('Não foi possível abrir o pagamento. Tente novamente.');
+          console.error('[handleRegenerateCharge] sem rota resolvida', { charge, fresh: fresh?.data });
+        }
       } catch (e) {
+        console.error('[handleRegenerateCharge] erro:', e);
         toast.error(e instanceof Error ? e.message : 'Erro ao gerar novo link');
       }
     };
 
     // Handler unificado do botão "Ir para pagamento" na PaymentPendingScreen.
-    const handleResume = () => {
+    const handleResume = async () => {
       // Se já temos dados de checkout inline (Asaas/PIX), apenas revela o componente.
       if (pendingAction?.kind === 'asaas_modal' && galleryResponse?.asaasCheckoutData) {
-        toast.success('Redirecionando…');
+        toast.success('Abrindo pagamento…');
         setShowInlineCheckout(true);
         return;
       }
       if (pendingAction?.kind === 'pix_modal' && pendingPixDados) {
-        toast.success('Redirecionando…');
+        toast.success('Abrindo pagamento…');
         setShowInlineCheckout(true);
         return;
       }
       if (pendingPaymentMethod === 'asaas' && galleryResponse?.asaasCheckoutData) {
-        toast.success('Redirecionando…');
+        toast.success('Abrindo pagamento…');
         setShowInlineCheckout(true);
         return;
       }
       if (pendingPaymentMethod === 'pix_manual' && pendingPixDados) {
-        toast.success('Redirecionando…');
+        toast.success('Abrindo pagamento…');
         setShowInlineCheckout(true);
         return;
       }
-      // Fallback: refetch para tentar obter dados frescos e roteia.
-      refetchGallery().then((r) => {
-        if (!routeFromFreshData(r?.data)) {
-          toast.info('Aguardando dados do pagamento…');
-        }
-      });
+      // Fallback: se temos checkoutUrl externo, redireciona direto.
+      if (pendingCheckoutUrl) {
+        toast.success('Redirecionando…');
+        window.location.assign(pendingCheckoutUrl);
+        return;
+      }
+      // Caso a cobrança viva não exista, aciona regeneração (mesmo fluxo do botão regenerate).
+      await handleRegenerateCharge();
     };
 
     const handlePixPaymentConfirmed = async () => {

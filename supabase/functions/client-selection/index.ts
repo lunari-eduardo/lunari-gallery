@@ -156,25 +156,109 @@ Deno.serve(async (req) => {
     }
 
     // Handle regenerate_charge: cliente pede novo link quando cobrança expirou/foi cancelada.
+    // Fluxo: RPC prepara o estado → chama gallery-create-payment para criar cobrança real
+    // e devolver checkoutUrl/asaasCheckoutData/pixDados para o front rotear.
     if (action === 'regenerate_charge') {
       try {
-        const { data, error } = await supabase.rpc('regenerate_pending_charge', { p_gallery_id: galleryId });
-        if (error) throw error;
+        console.log('[regenerate_charge][step:1] rpc regenerate_pending_charge', { galleryId });
+        const { data: rpcData, error: rpcError } = await supabase.rpc('regenerate_pending_charge', { p_gallery_id: galleryId });
+        if (rpcError) throw rpcError;
+
+        const provedor = (rpcData as any)?.provedor || null;
+        const valorACobrar = Number((rpcData as any)?.calc?.valor_a_cobrar || 0);
+        const isFullyPaid = (rpcData as any)?.calc?.is_fully_paid === true;
+
+        console.log('[regenerate_charge][step:2] rpc-ok', { provedor, valorACobrar, isFullyPaid });
+
+        // Sem saldo → devolve NO_AMOUNT_DUE (front trata como pagamento já concluído)
+        if (valorACobrar <= 0 || isFullyPaid) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              code: 'NO_AMOUNT_DUE',
+              data: { ...rpcData, charge: { success: true, code: 'NO_AMOUNT_DUE', alreadyPaid: true } },
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Chama gallery-create-payment via fetch com service role (padrão do projeto)
+        const supabaseUrlEnv = Deno.env.get('SUPABASE_URL')!;
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const gcpUrl = `${supabaseUrlEnv}/functions/v1/gallery-create-payment`;
+
+        console.log('[regenerate_charge][step:3] calling gallery-create-payment', { provedor });
+
+        const gcpAc = new AbortController();
+        const gcpTimer = setTimeout(() => gcpAc.abort(), 25_000);
+        let gcpResp: Response;
+        try {
+          gcpResp = await fetch(gcpUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceKey}`,
+              'apikey': serviceKey,
+            },
+            body: JSON.stringify({
+              galleryId,
+              provider: provedor || undefined,
+              descricao: 'Regeneração via cliente',
+            }),
+            signal: gcpAc.signal,
+          });
+        } catch (fetchErr: any) {
+          clearTimeout(gcpTimer);
+          const aborted = fetchErr?.name === 'AbortError';
+          console.error('[regenerate_charge][step:3 fetch-error]', fetchErr?.message || fetchErr);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: aborted ? 'Gateway não respondeu a tempo' : 'Falha ao contatar o gateway de pagamento',
+              code: aborted ? 'GATEWAY_TIMEOUT' : 'GATEWAY_UNREACHABLE',
+            }),
+            { status: aborted ? 504 : 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        } finally {
+          clearTimeout(gcpTimer);
+        }
+
+        const charge = await gcpResp.json().catch(() => ({} as any));
+
+        if (!gcpResp.ok || !charge?.success) {
+          console.error('[regenerate_charge][step:4 upstream-error]', gcpResp.status, charge);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: charge?.error || 'Não foi possível gerar o link de pagamento',
+              code: charge?.code || 'PAYMENT_CREATE_ERROR',
+            }),
+            { status: gcpResp.status || 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('[regenerate_charge][step:5] charge-ok', {
+          provedor: charge.provedor,
+          hasCheckoutUrl: !!charge.checkoutUrl,
+          transparentCheckout: !!charge.transparentCheckout,
+        });
+
         try {
           await supabase.from('galeria_acoes').insert({
             galeria_id: galleryId,
             tipo: 'pagamento_regenerado',
             descricao: 'Cliente solicitou regeneração do link de pagamento',
             user_id: null,
-            payload: { via: 'client-selection', result: data ?? null },
+            payload: { via: 'client-selection', provedor: charge.provedor, cobrancaId: charge.cobrancaId ?? null },
           });
-        } catch (_logErr) { /* tipo pode não estar na constraint — não crítico */ }
+        } catch (_logErr) { /* não crítico */ }
 
         return new Response(
-          JSON.stringify({ success: true, data }),
+          JSON.stringify({ success: true, data: { ...rpcData, charge } }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       } catch (e) {
+        console.error('[regenerate_charge][fatal]', e);
         return new Response(
           JSON.stringify({ error: e instanceof Error ? e.message : 'Falha ao regenerar cobrança' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
