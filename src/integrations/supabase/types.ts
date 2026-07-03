@@ -2603,6 +2603,7 @@ export type Database = {
           cliente_telefone: string | null
           configuracoes: Json | null
           cover_id: string | null
+          cover_storage_key: string | null
           created_at: string
           deleted_at: string | null
           deleted_by: string | null
@@ -2611,6 +2612,7 @@ export type Database = {
           enviado_em: string | null
           expires_at: string | null
           finalized_at: string | null
+          first_photo_storage_key: string | null
           fotos_incluidas: number
           fotos_selecionadas: number | null
           gallery_password: string | null
@@ -2655,6 +2657,7 @@ export type Database = {
           cliente_telefone?: string | null
           configuracoes?: Json | null
           cover_id?: string | null
+          cover_storage_key?: string | null
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2663,6 +2666,7 @@ export type Database = {
           enviado_em?: string | null
           expires_at?: string | null
           finalized_at?: string | null
+          first_photo_storage_key?: string | null
           fotos_incluidas?: number
           fotos_selecionadas?: number | null
           gallery_password?: string | null
@@ -2707,6 +2711,7 @@ export type Database = {
           cliente_telefone?: string | null
           configuracoes?: Json | null
           cover_id?: string | null
+          cover_storage_key?: string | null
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2715,6 +2720,7 @@ export type Database = {
           enviado_em?: string | null
           expires_at?: string | null
           finalized_at?: string | null
+          first_photo_storage_key?: string | null
           fotos_incluidas?: number
           fotos_selecionadas?: number | null
           gallery_password?: string | null
@@ -5600,6 +5606,10 @@ export type Database = {
           _user_id: string
         }
         Returns: Json
+      }
+      refresh_gallery_photo_keys: {
+        Args: { p_gallery_id: string }
+        Returns: undefined
       }
       refund_photo_credit: { Args: { _user_id: string }; Returns: undefined }
       regenerate_pending_charge: {

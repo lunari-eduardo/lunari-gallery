@@ -134,14 +134,12 @@ export interface CreateGaleriaData {
 
 function transformGaleria(row: any): Galeria {
   const configuracoes = (row.configuracoes as GaleriaConfiguracoes) || {};
-  const coverPhotoId = configuracoes.coverPhotoId;
-  const photos = row.galeria_fotos || [];
-  
-  let coverPhotoKey: string | null = null;
-  if (coverPhotoId && photos.length > 0) {
-    const coverPhoto = photos.find((p: any) => p.id === coverPhotoId);
-    coverPhotoKey = coverPhoto?.storage_key || null;
-  }
+
+  // Chaves de foto vêm de colunas denormalizadas em `galerias`
+  // (mantidas por trigger em galeria_fotos). Isso elimina o join pesado
+  // que puxava toda `galeria_fotos` só para descobrir a capa/primeira foto.
+  const coverPhotoKey: string | null = row.cover_storage_key || null;
+  const firstPhotoKey: string | null = row.first_photo_storage_key || null;
 
   return {
     id: row.id,
@@ -180,7 +178,7 @@ function transformGaleria(row: any): Galeria {
     regrasCongeladas: row.regras_congeladas as RegrasCongeladas | null,
     regrasOverride: row.regras_override ?? false,
     tipo: row.tipo === 'entrega' ? 'entrega' : 'selecao',
-    firstPhotoKey: photos[0]?.storage_key || null,
+    firstPhotoKey,
     coverPhotoKey,
     themeId: row.theme_id,
     useCustomTheme: row.use_custom_theme ?? false,
@@ -255,7 +253,7 @@ export function useSupabaseGalleries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('galerias')
-        .select('*, galeria_fotos(id, storage_key)')
+        .select('*')
         .order('created_at', { ascending: false });
       
       
