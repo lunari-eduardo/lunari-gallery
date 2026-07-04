@@ -1031,6 +1031,10 @@ export default function GalleryCreate() {
   // Save draft function - can be called at any step
   const handleSaveDraft = async () => {
     if (isAdvancing || isSavingDraft || isGoingBack) return;
+    if (!sessionName.trim()) {
+      toast.error('Informe o nome da sessão para salvar o rascunho.');
+      return;
+    }
     setIsSavingDraft(true);
     try {
       // Persist last used font
