@@ -374,6 +374,8 @@ export default function GalleryCreate() {
   const userTouchedAllowExtraPhotosRef = useRef(false);
   const userTouchedWatermarkDisplayRef = useRef(false);
   const userTouchedClientModeRef = useRef(false);
+  const userTouchedSessionNameRef = useRef(false);
+  const userTouchedPackageNameRef = useRef(false);
   const userTouchedTypographyRef = useRef(false);
 
   // Initialize from settings
