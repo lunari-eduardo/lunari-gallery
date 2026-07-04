@@ -751,6 +751,10 @@ export default function GalleryCreate() {
       toast.error('Selecione um cliente para galeria privada');
       return false;
     }
+    if (!sessionName.trim()) {
+      toast.error('Informe o nome da sessão para continuar.');
+      return false;
+    }
     if (supabaseGalleryId) return true;
     if (creatingGalleryRef.current) return false;
     creatingGalleryRef.current = true;
