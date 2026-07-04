@@ -811,7 +811,7 @@ export default function GalleryCreate() {
         clienteId: selectedClient?.id || null,
         clienteNome: clientName,
         clienteEmail: clientEmail,
-        nomeSessao: sessionName || 'Nova Sessão',
+        nomeSessao: sessionName.trim(),
         nomePacote: packageName,
         fotosIncluidas: includedPhotos,
         valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
