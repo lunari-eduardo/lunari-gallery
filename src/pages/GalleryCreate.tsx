@@ -563,17 +563,16 @@ export default function GalleryCreate() {
       setIncludedPhotos(pacote.fotosIncluidas);
     }
 
-    // Package name from frozen rules (if not already set by URL params)
-    if (pacote?.nome && !packageName) {
+    // Package name from frozen rules — só preenche se o usuário ainda não tocou no campo.
+    // Evita loop de re-preenchimento ao apagar o valor.
+    if (pacote?.nome && !userTouchedPackageNameRef.current && !packageName) {
       console.log('🔗 Syncing packageName from regrasCongeladas:', pacote.nome);
       setPackageName(pacote.nome);
     }
 
-    // Session name from category (if not already set by URL params)
-    if (pacote?.categoria && !sessionName) {
-      console.log('🔗 Syncing sessionName from regrasCongeladas:', pacote.categoria);
-      setSessionName(pacote.categoria);
-    }
+    // Nome da sessão NÃO é auto-preenchido em modo assistido (decisão de UX).
+    // O fotógrafo deve nomear a sessão manualmente. `pacote.categoria` fica só
+    // como sugestão textual no hint do input.
 
     // valorFotoExtra from frozen rules - URL vence JSONB quando divergir (mais fresca)
     if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
