@@ -648,6 +648,90 @@ export type Database = {
         }
         Relationships: []
       }
+      cliente_creditos_ledger: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          data: string
+          descricao: string | null
+          expira_em: string | null
+          id: string
+          origem: string
+          session_id_consumo: string | null
+          session_id_origem: string | null
+          transacao_id: string | null
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          descricao?: string | null
+          expira_em?: string | null
+          id?: string
+          origem: string
+          session_id_consumo?: string | null
+          session_id_origem?: string | null
+          transacao_id?: string | null
+          user_id: string
+          valor: number
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          descricao?: string | null
+          expira_em?: string | null
+          id?: string
+          origem?: string
+          session_id_consumo?: string | null
+          session_id_origem?: string | null
+          transacao_id?: string | null
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_creditos_ledger_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_creditos_ledger_session_id_consumo_fkey"
+            columns: ["session_id_consumo"]
+            isOneToOne: false
+            referencedRelation: "clientes_sessoes"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "cliente_creditos_ledger_session_id_origem_fkey"
+            columns: ["session_id_origem"]
+            isOneToOne: false
+            referencedRelation: "clientes_sessoes"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "cliente_creditos_ledger_transacao_id_fkey"
+            columns: ["transacao_id"]
+            isOneToOne: false
+            referencedRelation: "clientes_transacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_creditos_ledger_transacao_id_fkey"
+            columns: ["transacao_id"]
+            isOneToOne: false
+            referencedRelation: "vw_transacoes_orfas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           bairro: string | null
@@ -814,6 +898,7 @@ export type Database = {
           categoria: string
           cliente_id: string
           created_at: string | null
+          credito_aplicado: number
           data_sessao: string
           desconto: number | null
           descricao: string | null
@@ -850,6 +935,7 @@ export type Database = {
           categoria: string
           cliente_id: string
           created_at?: string | null
+          credito_aplicado?: number
           data_sessao: string
           desconto?: number | null
           descricao?: string | null
@@ -886,6 +972,7 @@ export type Database = {
           categoria?: string
           cliente_id?: string
           created_at?: string | null
+          credito_aplicado?: number
           data_sessao?: string
           desconto?: number | null
           descricao?: string | null
@@ -5301,6 +5388,24 @@ export type Database = {
         }
         Relationships: []
       }
+      v_cliente_saldo: {
+        Row: {
+          cliente_id: string | null
+          proxima_expiracao: string | null
+          saldo: number | null
+          ultima_movimentacao: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_creditos_ledger_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_infinitepay_latency: {
         Row: {
           cobranca_created: string | null
@@ -5429,6 +5534,10 @@ export type Database = {
             Args: { p_date?: string; p_full_day?: boolean; p_slot_id?: string }
             Returns: undefined
           }
+      apply_client_credit: {
+        Args: { p_cliente_id: string; p_session_id: string; p_valor: number }
+        Returns: Json
+      }
       archive_gallery: { Args: { p_gallery_id: string }; Returns: Json }
       assert_gallery_not_archived: {
         Args: { p_gallery_id: string }
@@ -5459,6 +5568,10 @@ export type Database = {
       claim_orphan_payment_for_gallery: {
         Args: { p_cobranca_id: string; p_galeria_id: string }
         Returns: Json
+      }
+      compute_valor_pago_externo: {
+        Args: { p_session_id: string }
+        Returns: number
       }
       consume_photo_credits: {
         Args: { _gallery_id: string; _photo_count: number; _user_id: string }
@@ -5538,6 +5651,18 @@ export type Database = {
       get_transfer_storage_bytes: {
         Args: { _user_id: string }
         Returns: number
+      }
+      grant_client_credit: {
+        Args: {
+          p_cliente_id: string
+          p_descricao?: string
+          p_expira_em?: string
+          p_origem: string
+          p_session_origem?: string
+          p_transacao_id?: string
+          p_valor: number
+        }
+        Returns: string
       }
       grant_referral_select_bonus: {
         Args: { _referred_user_id: string }
@@ -5625,6 +5750,10 @@ export type Database = {
       reopen_gallery_selection: {
         Args: { p_days: number; p_gallery_id: string }
         Returns: Json
+      }
+      revoke_client_credit: {
+        Args: { p_ledger_id: string; p_motivo?: string }
+        Returns: string
       }
       set_session_extras: {
         Args: {
