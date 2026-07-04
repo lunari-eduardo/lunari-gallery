@@ -594,7 +594,7 @@ export default function GalleryCreate() {
         setFixedPrice(valorJsonb);
       }
     }
-  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra, packageName, sessionName]);
+  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra]);
 
   // Modo Assistido (Studio → Gallery)
   //   Stage A — pacote/sessão/preço/sale (depende dos params da URL + plano).
