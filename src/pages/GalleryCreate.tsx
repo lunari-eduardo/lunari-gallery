@@ -1461,12 +1461,26 @@ export default function GalleryCreate() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="sessionName">Nome da Sessão *</Label>
-                <Input id="sessionName" placeholder="Ex: Ensaio Gestante" value={sessionName} onChange={(e) => setSessionName(e.target.value)} />
+                <Input
+                  id="sessionName"
+                  placeholder="Ex: Ensaio Gestante"
+                  value={sessionName}
+                  onChange={(e) => {
+                    userTouchedSessionNameRef.current = true;
+                    setSessionName(e.target.value);
+                  }}
+                />
+                {hasGestaoSession && (
+                  <p className="text-xs text-muted-foreground">
+                    Defina um nome para esta sessão{gestaoParams?.pacote_categoria ? ` (sugestão: ${gestaoParams.pacote_categoria}${selectedClient?.name ? ` — ${selectedClient.name}` : ''})` : ''}.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="packageName">Pacote</Label>
                 {/* PRO + Gallery: Searchable dropdown for packages */}
                 {hasGestaoIntegration && gestaoPackages.length > 0 ? <PackageSelect packages={gestaoPackages} selectedPackage={packageName} onSelect={(name, pkg) => {
+                userTouchedPackageNameRef.current = true;
                 setPackageName(name);
                 // Auto-fill included photos and price if available
                 if (pkg?.fotosIncluidas) {
@@ -1476,7 +1490,10 @@ export default function GalleryCreate() {
                   setFixedPrice(pkg.valorFotoExtra);
                 }
               }} disabled={isLoadingPackages} /> : (/* Other plans or no packages: Simple text input */
-              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={(e) => setPackageName(e.target.value)} />)}
+              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={(e) => {
+                userTouchedPackageNameRef.current = true;
+                setPackageName(e.target.value);
+              }} />)}
               </div>
             </div>
 
