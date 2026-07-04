@@ -374,6 +374,8 @@ export default function GalleryCreate() {
   const userTouchedAllowExtraPhotosRef = useRef(false);
   const userTouchedWatermarkDisplayRef = useRef(false);
   const userTouchedClientModeRef = useRef(false);
+  const userTouchedSessionNameRef = useRef(false);
+  const userTouchedPackageNameRef = useRef(false);
   const userTouchedTypographyRef = useRef(false);
 
   // Initialize from settings
@@ -561,17 +563,16 @@ export default function GalleryCreate() {
       setIncludedPhotos(pacote.fotosIncluidas);
     }
 
-    // Package name from frozen rules (if not already set by URL params)
-    if (pacote?.nome && !packageName) {
+    // Package name from frozen rules — só preenche se o usuário ainda não tocou no campo.
+    // Evita loop de re-preenchimento ao apagar o valor.
+    if (pacote?.nome && !userTouchedPackageNameRef.current && !packageName) {
       console.log('🔗 Syncing packageName from regrasCongeladas:', pacote.nome);
       setPackageName(pacote.nome);
     }
 
-    // Session name from category (if not already set by URL params)
-    if (pacote?.categoria && !sessionName) {
-      console.log('🔗 Syncing sessionName from regrasCongeladas:', pacote.categoria);
-      setSessionName(pacote.categoria);
-    }
+    // Nome da sessão NÃO é auto-preenchido em modo assistido (decisão de UX).
+    // O fotógrafo deve nomear a sessão manualmente. `pacote.categoria` fica só
+    // como sugestão textual no hint do input.
 
     // valorFotoExtra from frozen rules - URL vence JSONB quando divergir (mais fresca)
     if (pacote?.valorFotoExtra !== undefined && pacote.valorFotoExtra > 0) {
@@ -593,7 +594,7 @@ export default function GalleryCreate() {
         setFixedPrice(valorJsonb);
       }
     }
-  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra, packageName, sessionName]);
+  }, [regrasLoaded, regrasCongeladas, gestaoParams?.session_id, gestaoParams?.preco_da_foto_extra]);
 
   // Modo Assistido (Studio → Gallery)
   //   Stage A — pacote/sessão/preço/sale (depende dos params da URL + plano).
@@ -618,11 +619,10 @@ export default function GalleryCreate() {
 
     // ─── Stage A: pacote/sessão/preço/sale (somente com integração ativa) ───
     if (isAssistedMode) {
-      if (gestaoParams.pacote_categoria) {
-        setSessionName(gestaoParams.pacote_categoria);
-      }
+      // Nome da sessão: NÃO auto-preencher em modo assistido.
+      // `pacote_categoria` fica disponível apenas como hint textual no input.
 
-      if (gestaoParams.pacote_nome) {
+      if (gestaoParams.pacote_nome && !userTouchedPackageNameRef.current) {
         setPackageName(gestaoParams.pacote_nome);
         const packageFromGestao = gestaoPackages.find((pkg) => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
         if (packageFromGestao) {
@@ -751,6 +751,10 @@ export default function GalleryCreate() {
       toast.error('Selecione um cliente para galeria privada');
       return false;
     }
+    if (!sessionName.trim()) {
+      toast.error('Informe o nome da sessão para continuar.');
+      return false;
+    }
     if (supabaseGalleryId) return true;
     if (creatingGalleryRef.current) return false;
     creatingGalleryRef.current = true;
@@ -807,7 +811,7 @@ export default function GalleryCreate() {
         clienteId: selectedClient?.id || null,
         clienteNome: clientName,
         clienteEmail: clientEmail,
-        nomeSessao: sessionName || 'Nova Sessão',
+        nomeSessao: sessionName.trim(),
         nomePacote: packageName,
         fotosIncluidas: includedPhotos,
         valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
@@ -1027,6 +1031,10 @@ export default function GalleryCreate() {
   // Save draft function - can be called at any step
   const handleSaveDraft = async () => {
     if (isAdvancing || isSavingDraft || isGoingBack) return;
+    if (!sessionName.trim()) {
+      toast.error('Informe o nome da sessão para salvar o rascunho.');
+      return;
+    }
     setIsSavingDraft(true);
     try {
       // Persist last used font
@@ -1062,7 +1070,7 @@ export default function GalleryCreate() {
         await updateGallery({
           id: supabaseGalleryId,
           data: {
-            nomeSessao: sessionName || 'Rascunho',
+            nomeSessao: sessionName.trim(),
             nomePacote: packageName || undefined,
             clienteNome: selectedClient?.name,
             clienteEmail: selectedClient?.email,
@@ -1119,7 +1127,7 @@ export default function GalleryCreate() {
           clienteId: selectedClient?.id || null,
           clienteNome: selectedClient?.name || undefined,
           clienteEmail: selectedClient?.email || undefined,
-          nomeSessao: sessionName || 'Rascunho',
+          nomeSessao: sessionName.trim(),
           nomePacote: packageName || undefined,
           fotosIncluidas: includedPhotos,
           valorFotoExtra: saleMode !== 'no_sale' ? valorFotoExtraFinal : 0,
@@ -1461,12 +1469,26 @@ export default function GalleryCreate() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="sessionName">Nome da Sessão *</Label>
-                <Input id="sessionName" placeholder="Ex: Ensaio Gestante" value={sessionName} onChange={(e) => setSessionName(e.target.value)} />
+                <Input
+                  id="sessionName"
+                  placeholder="Ex: Ensaio Gestante"
+                  value={sessionName}
+                  onChange={(e) => {
+                    userTouchedSessionNameRef.current = true;
+                    setSessionName(e.target.value);
+                  }}
+                />
+                {hasGestaoSession && (
+                  <p className="text-xs text-muted-foreground">
+                    Defina um nome para esta sessão{gestaoParams?.pacote_categoria ? ` (sugestão: ${gestaoParams.pacote_categoria}${selectedClient?.name ? ` — ${selectedClient.name}` : ''})` : ''}.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="packageName">Pacote</Label>
                 {/* PRO + Gallery: Searchable dropdown for packages */}
                 {hasGestaoIntegration && gestaoPackages.length > 0 ? <PackageSelect packages={gestaoPackages} selectedPackage={packageName} onSelect={(name, pkg) => {
+                userTouchedPackageNameRef.current = true;
                 setPackageName(name);
                 // Auto-fill included photos and price if available
                 if (pkg?.fotosIncluidas) {
@@ -1476,7 +1498,10 @@ export default function GalleryCreate() {
                   setFixedPrice(pkg.valorFotoExtra);
                 }
               }} disabled={isLoadingPackages} /> : (/* Other plans or no packages: Simple text input */
-              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={(e) => setPackageName(e.target.value)} />)}
+              <Input id="packageName" placeholder="Ex: Pacote Premium" value={packageName} onChange={(e) => {
+                userTouchedPackageNameRef.current = true;
+                setPackageName(e.target.value);
+              }} />)}
               </div>
             </div>
 
