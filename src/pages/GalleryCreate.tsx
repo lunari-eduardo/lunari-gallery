@@ -619,11 +619,10 @@ export default function GalleryCreate() {
 
     // ─── Stage A: pacote/sessão/preço/sale (somente com integração ativa) ───
     if (isAssistedMode) {
-      if (gestaoParams.pacote_categoria) {
-        setSessionName(gestaoParams.pacote_categoria);
-      }
+      // Nome da sessão: NÃO auto-preencher em modo assistido.
+      // `pacote_categoria` fica disponível apenas como hint textual no input.
 
-      if (gestaoParams.pacote_nome) {
+      if (gestaoParams.pacote_nome && !userTouchedPackageNameRef.current) {
         setPackageName(gestaoParams.pacote_nome);
         const packageFromGestao = gestaoPackages.find((pkg) => pkg.nome.toLowerCase() === gestaoParams.pacote_nome?.toLowerCase());
         if (packageFromGestao) {
