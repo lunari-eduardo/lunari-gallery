@@ -1070,7 +1070,7 @@ export default function GalleryCreate() {
         await updateGallery({
           id: supabaseGalleryId,
           data: {
-            nomeSessao: sessionName || 'Rascunho',
+            nomeSessao: sessionName.trim(),
             nomePacote: packageName || undefined,
             clienteNome: selectedClient?.name,
             clienteEmail: selectedClient?.email,
