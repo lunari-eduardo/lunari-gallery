@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeCatalog } from '@/components/dashboard/themes/ThemeCatalog';
 import { DEFAULT_THEME_ID } from '@/components/gallery/themes/registry';
 import { CoverCatalog } from '@/components/deliver/CoverCatalog';
+import { COVER_REGISTRY } from '@/components/deliver/covers/registry';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const steps = [
@@ -514,7 +515,13 @@ export default function DeliverCreate() {
                 <CoverCatalog
                   selectedCoverId={coverId}
                   onSelect={setCoverId}
-                  inheritLabel="Usar capa padrão do meu estúdio"
+                  inheritLabel={
+                    settings?.defaultCoverId
+                      ? `Usar capa padrão do meu estúdio (${
+                          COVER_REGISTRY[settings.defaultCoverId]?.name ?? settings.defaultCoverId
+                        })`
+                      : 'Usar capa padrão do meu estúdio'
+                  }
                 />
               </div>
 
