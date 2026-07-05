@@ -119,5 +119,12 @@ export const THEME_REGISTRY: Record<string, GalleryTheme> = {
   'editorial-magazine': EDITORIAL_THEME,
 };
 
+/**
+ * Fonte única de verdade dos temas que aparecem na UI (catálogo, seletores).
+ * Aliases retrocompat continuam no THEME_REGISTRY para resolver galerias antigas,
+ * mas NÃO devem ser renderizados como cards duplicados.
+ */
+export const CANONICAL_THEME_IDS = ['lunari', 'clean', 'editorial'] as const;
+
 export const DEFAULT_THEME_ID = 'lunari';
 
