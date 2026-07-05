@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { THEME_REGISTRY } from '@/components/gallery/themes/registry';
+import { THEME_REGISTRY, CANONICAL_THEME_IDS } from '@/components/gallery/themes/registry';
 import { cn } from '@/lib/utils';
 import { Check, Eye } from 'lucide-react';
 import { ThemePreviewModal } from './ThemePreviewModal';
@@ -19,7 +19,10 @@ export function ThemeCatalog({
   onThemeOverridesChange,
   initialOverrides 
 }: ThemeCatalogProps) {
-  const themes = Object.values(THEME_REGISTRY);
+  // Renderiza apenas os temas canônicos — aliases retrocompat ficam ocultos.
+  const themes = CANONICAL_THEME_IDS
+    .map((id) => THEME_REGISTRY[id])
+    .filter(Boolean);
   const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
 
   return (
