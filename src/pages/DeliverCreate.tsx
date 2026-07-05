@@ -514,7 +514,13 @@ export default function DeliverCreate() {
                 <CoverCatalog
                   selectedCoverId={coverId}
                   onSelect={setCoverId}
-                  inheritLabel="Usar capa padrão do meu estúdio"
+                  inheritLabel={
+                    settings?.defaultCoverId
+                      ? `Usar capa padrão do meu estúdio (${
+                          COVER_REGISTRY[settings.defaultCoverId]?.name ?? settings.defaultCoverId
+                        })`
+                      : 'Usar capa padrão do meu estúdio'
+                  }
                 />
               </div>
 
