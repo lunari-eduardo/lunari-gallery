@@ -1,5 +1,5 @@
 import { Gallery, DiscountPackage } from '@/types/gallery';
-import { Check, AlertCircle, BadgeCheck, Clock, ArrowRight, Wallet } from 'lucide-react';
+import { Check, AlertCircle, BadgeCheck, Clock, ArrowRight, Wallet, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
