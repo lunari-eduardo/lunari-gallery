@@ -357,8 +357,12 @@ export function SelectionSummary({
             borderRadius: 'var(--gallery-radius)',
           }}
         >
-          <Check className="h-5 w-5 mr-2" />
-          Confirmar Seleção
+          {hasPayment ? (
+            <CreditCard className="h-5 w-5 mr-2" />
+          ) : (
+            <Check className="h-5 w-5 mr-2" />
+          )}
+          {hasPayment ? 'Confirmar e Pagar' : 'Confirmar Seleção'}
         </Button>
       )}
 
