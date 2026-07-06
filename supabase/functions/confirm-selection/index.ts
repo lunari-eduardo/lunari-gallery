@@ -601,17 +601,24 @@ Deno.serve(async (req) => {
             console.log(`💳 Payment created successfully: ${cobrancaId} via ${integracao.provedor}`);
           } else {
             const errorMsg = (paymentData?.error as string) || 'Falha na criação do link de pagamento';
-            const errorCode = (paymentData?.code as string) || 'PAYMENT_FAILED';
+            let errorCode = (paymentData?.code as string) || 'PAYMENT_FAILED';
             const errorDetails = (paymentData?.details as string) || '';
+
+            // Mapeia rejeição do trigger tg_protect_no_overcharge para código próprio,
+            // com mensagem amigável (o cliente costuma ver isso após reativação).
+            const isOverchargeReject =
+              errorCode === 'CHARGE_DB_ERROR' &&
+              /excederia o saldo|maior que o valor/i.test(errorDetails);
+            const outMsg = isOverchargeReject
+              ? 'O valor calculado ficou acima do saldo devido. Atualize a página e tente novamente — se persistir, contate o fotógrafo.'
+              : errorMsg;
+            if (isOverchargeReject) errorCode = 'CHARGE_OVERCHARGE';
+
             console.error(`❌ CRITICAL: Payment creation failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
-            
+
             await rollbackGalleryStatus();
             return new Response(
-              JSON.stringify({
-                error: errorMsg,
-                code: errorCode,
-                details: errorDetails,
-              }),
+              JSON.stringify({ error: outMsg, code: errorCode, details: errorDetails }),
               { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
