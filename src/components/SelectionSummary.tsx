@@ -40,6 +40,7 @@ interface SelectionSummaryProps {
     fixedPrice?: number;
   } | null;
   billingInfo?: BillingInfo;
+  hasPayment?: boolean;
 }
 
 function resolveBillingState(b: BillingInfo): {
