@@ -5838,9 +5838,22 @@ export type Database = {
             Returns: Json
           }
       user_has_gallery_access: { Args: { _user_id: string }; Returns: boolean }
+      wallet_available_balance: { Args: { p_user_id: string }; Returns: number }
       workflow_a_receber: {
         Args: { _end: string; _start: string }
         Returns: number
+      }
+      workflow_month_metrics: {
+        Args: { p_end: string; p_start: string; p_user_id: string }
+        Returns: {
+          caixa_recebido: number
+          creditos_gerados: number
+          creditos_utilizados: number
+          pendente: number
+          previsto: number
+          receita: number
+          sessoes: number
+        }[]
       }
     }
     Enums: {
