@@ -2341,6 +2341,7 @@ export default function ClientGallery() {
         extrasACobrar={extrasACobrar}
         valorJaPago={valorJaPago}
         saleSettings={gallery.saleSettings}
+        hasPayment={gallery.saleSettings?.mode === 'sale_with_payment' && (extrasACobrar ?? 0) > 0}
       />
 
       {lightboxIndex !== null && (() => {

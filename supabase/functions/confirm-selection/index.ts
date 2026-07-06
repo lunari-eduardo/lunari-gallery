@@ -297,67 +297,71 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Calculate only the extras that need to be charged (quantity not yet paid)
-    const extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
-
-    // For response/display, use extrasNecessarias
+    // ── SOURCE OF TRUTH FOR PRICE ──
+    // R8 (gallery-rules): valor é calculado EXCLUSIVAMENTE pela RPC canônica
+    // `calculate_gallery_extra_payment`. Nem front nem edge functions podem recalcular.
+    // Isso elimina divergências vs `tg_protect_no_overcharge` (que usa a mesma RPC).
+    let extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
     const extrasCount = extraCount ?? extrasNecessarias;
 
-    console.log(`📊 Extras calculation: necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}`);
+    try {
+      const { data: canon, error: canonErr } = await supabase.rpc('calculate_gallery_extra_payment', {
+        p_gallery_id: galleryId,
+      });
 
-    // ── SOURCE OF TRUTH FOR PRICE ──
-    // Order:
-    // 1. Column `valor_foto_extra` from `galerias` (explicit user override)
-    // 2. Session `regras_congeladas.pacote.valorFotoExtra`
-    // 3. Gallery `regras_congeladas.pacote.valorFotoExtra`
-    
-    let regrasCongeladasSource: RegrasCongeladas | null = null;
-    let fallbackPrice = Number(gallery.valor_foto_extra || 0);
+      if (canonErr) throw canonErr;
+      if (!canon || (canon as any).success !== true) {
+        throw new Error(`RPC retornou success=false: ${JSON.stringify(canon)}`);
+      }
 
-    if (fallbackPrice <= 0) {
-      if (gallery.session_id) {
-        const { data: sessao, error: sessaoError } = await supabase
-          .from('clientes_sessoes')
-          .select('id, regras_congeladas')
-          .eq('session_id', gallery.session_id)
-          .single();
+      const c = canon as Record<string, any>;
+      valorUnitario = Number(c.valor_unitario) || 0;
+      valorTotal = Number(c.valor_a_cobrar) || 0;
+      extrasACobrar = Number(c.extras_a_cobrar) || 0;
+      extrasPagasTotal = Number(c.extras_pagas) || extrasPagasTotal;
+      valorJaPago = Number(c.valor_pago) || valorJaPago;
 
-        if (sessaoError) {
-          console.warn('Session fetch error:', sessaoError.message);
+      console.log(`📊 [RPC canônica] rules_source=${c.rules_source}, extras_necess=${c.extras_necessarias}, extras_pagas=${c.extras_pagas}, extras_a_cobrar=${c.extras_a_cobrar}, valor_unitario=R$${c.valor_unitario}, valor_total_ideal=R$${c.valor_total_ideal}, valor_pago=R$${c.valor_pago}, valor_a_cobrar=R$${c.valor_a_cobrar}`);
+    } catch (rpcErr) {
+      // Fallback defensivo: se a RPC canônica falhar, cai no cálculo local.
+      // Loga como ERRO porque isso NÃO deve acontecer em produção — trigger
+      // tg_protect_no_overcharge pode rejeitar se houver divergência.
+      console.error('❌ [FALLBACK] calculate_gallery_extra_payment falhou, usando cálculo local:', rpcErr);
+
+      let regrasCongeladasSource: RegrasCongeladas | null = null;
+      let fallbackPrice = Number(gallery.valor_foto_extra || 0);
+
+      if (fallbackPrice <= 0) {
+        if (gallery.session_id) {
+          const { data: sessao } = await supabase
+            .from('clientes_sessoes')
+            .select('regras_congeladas')
+            .eq('session_id', gallery.session_id)
+            .single();
+          if (sessao?.regras_congeladas) {
+            regrasCongeladasSource = sessao.regras_congeladas as RegrasCongeladas;
+          }
         }
-
-        if (sessao?.regras_congeladas) {
-          console.log('📊 Using regrasCongeladas from session (Lunari Studio mode)');
-          regrasCongeladasSource = sessao.regras_congeladas as RegrasCongeladas;
+        if (!regrasCongeladasSource && gallery.regras_congeladas) {
+          regrasCongeladasSource = gallery.regras_congeladas as RegrasCongeladas;
+        }
+        if (regrasCongeladasSource) {
+          fallbackPrice = Number((regrasCongeladasSource as any)?.pacote?.valorFotoExtra ?? 0);
         }
       }
 
-      // Standalone: usa regras_congeladas da própria galeria, se houver.
-      if (!regrasCongeladasSource && gallery.regras_congeladas) {
-        console.log('📊 Using regrasCongeladas from gallery (standalone mode)');
-        regrasCongeladasSource = gallery.regras_congeladas as RegrasCongeladas;
-      }
-
-      if (regrasCongeladasSource) {
-        fallbackPrice = Number((regrasCongeladasSource as any)?.pacote?.valorFotoExtra ?? 0);
-      }
-    } else {
-      console.log(`📊 Using explicit override from gallery column: R$ ${fallbackPrice}`);
+      const resultado = calcularPrecoProgressivoComCredito(
+        extrasACobrar,
+        extrasPagasTotal,
+        valorJaPago,
+        regrasCongeladasSource,
+        fallbackPrice
+      );
+      valorUnitario = resultado.valorUnitario;
+      valorTotal = resultado.valorACobrar;
     }
 
-
-    // Calculate using credit system with whatever regras we found (or null)
-    const resultado = calcularPrecoProgressivoComCredito(
-      extrasACobrar,
-      extrasPagasTotal,
-      valorJaPago,
-      regrasCongeladasSource,
-      fallbackPrice
-    );
-    valorUnitario = resultado.valorUnitario;
-    valorTotal = resultado.valorACobrar;
-
-    console.log(`📊 Credit-based pricing: modelo=${regrasCongeladasSource ? 'progressivo' : 'fixo'}, valorTotalIdeal=R$${resultado.valorTotalIdeal}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
+    console.log(`📊 Extras (final): necessarias=${extrasNecessarias}, pagas=${extrasPagasTotal}, a_cobrar=${extrasACobrar}, valorJaPago=R$${valorJaPago}, valorACobrar=R$${valorTotal}`);
 
     // 4. Parse sale settings to determine if payment is required
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
@@ -597,17 +601,24 @@ Deno.serve(async (req) => {
             console.log(`💳 Payment created successfully: ${cobrancaId} via ${integracao.provedor}`);
           } else {
             const errorMsg = (paymentData?.error as string) || 'Falha na criação do link de pagamento';
-            const errorCode = (paymentData?.code as string) || 'PAYMENT_FAILED';
+            let errorCode = (paymentData?.code as string) || 'PAYMENT_FAILED';
             const errorDetails = (paymentData?.details as string) || '';
+
+            // Mapeia rejeição do trigger tg_protect_no_overcharge para código próprio,
+            // com mensagem amigável (o cliente costuma ver isso após reativação).
+            const isOverchargeReject =
+              errorCode === 'CHARGE_DB_ERROR' &&
+              /excederia o saldo|maior que o valor/i.test(errorDetails);
+            const outMsg = isOverchargeReject
+              ? 'O valor calculado ficou acima do saldo devido. Atualize a página e tente novamente — se persistir, contate o fotógrafo.'
+              : errorMsg;
+            if (isOverchargeReject) errorCode = 'CHARGE_OVERCHARGE';
+
             console.error(`❌ CRITICAL: Payment creation failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
-            
+
             await rollbackGalleryStatus();
             return new Response(
-              JSON.stringify({
-                error: errorMsg,
-                code: errorCode,
-                details: errorDetails,
-              }),
+              JSON.stringify({ error: outMsg, code: errorCode, details: errorDetails }),
               { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }

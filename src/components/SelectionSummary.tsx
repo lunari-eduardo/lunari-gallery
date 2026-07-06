@@ -1,5 +1,5 @@
 import { Gallery, DiscountPackage } from '@/types/gallery';
-import { Check, AlertCircle, BadgeCheck, Clock, ArrowRight, Wallet } from 'lucide-react';
+import { Check, AlertCircle, BadgeCheck, Clock, ArrowRight, Wallet, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
@@ -40,6 +40,7 @@ interface SelectionSummaryProps {
     fixedPrice?: number;
   } | null;
   billingInfo?: BillingInfo;
+  hasPayment?: boolean;
 }
 
 function resolveBillingState(b: BillingInfo): {
@@ -90,6 +91,7 @@ export function SelectionSummary({
   valorJaPago = 0,
   saleSettings,
   billingInfo,
+  hasPayment = false,
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
@@ -355,8 +357,12 @@ export function SelectionSummary({
             borderRadius: 'var(--gallery-radius)',
           }}
         >
-          <Check className="h-5 w-5 mr-2" />
-          Confirmar Seleção
+          {hasPayment ? (
+            <CreditCard className="h-5 w-5 mr-2" />
+          ) : (
+            <Check className="h-5 w-5 mr-2" />
+          )}
+          {hasPayment ? 'Confirmar e Pagar' : 'Confirmar Seleção'}
         </Button>
       )}
 
