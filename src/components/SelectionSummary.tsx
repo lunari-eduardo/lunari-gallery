@@ -91,6 +91,7 @@ export function SelectionSummary({
   valorJaPago = 0,
   saleSettings,
   billingInfo,
+  hasPayment = false,
 }: SelectionSummaryProps) {
   const { includedPhotos, selectedCount, extraPhotoPrice, selectionStatus } = gallery;
   const extraCount = Math.max(0, selectedCount - includedPhotos);
