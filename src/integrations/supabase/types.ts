@@ -1288,7 +1288,9 @@ export type Database = {
           updated_at: string | null
           user_id: string
           valor: number
+          valor_extras_componente: number | null
           valor_liquido: number | null
+          valor_sessao_componente: number | null
           visitor_id: string | null
         }
         Insert: {
@@ -1329,7 +1331,9 @@ export type Database = {
           updated_at?: string | null
           user_id: string
           valor: number
+          valor_extras_componente?: number | null
           valor_liquido?: number | null
+          valor_sessao_componente?: number | null
           visitor_id?: string | null
         }
         Update: {
@@ -1370,7 +1374,9 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
           valor?: number
+          valor_extras_componente?: number | null
           valor_liquido?: number | null
+          valor_sessao_componente?: number | null
           visitor_id?: string | null
         }
         Relationships: [
@@ -5853,6 +5859,49 @@ export type Database = {
           previsto: number
           receita: number
           sessoes: number
+        }[]
+      }
+      workflow_month_session_financials: {
+        Args: { p_end: string; p_start: string; p_user_id: string }
+        Returns: {
+          credito_gerado: number
+          credito_utilizado: number
+          desconto_manual: number
+          desconto_progressivo: number
+          qtd_extras_galeria: number
+          qtd_fotos_extra: number
+          session_id: string
+          valor_adicional: number
+          valor_base_pacote: number
+          valor_extras_bruto: number
+          valor_extras_com_desconto: number
+          valor_pago: number
+          valor_pendente: number
+          valor_produtos: number
+          valor_total: number
+        }[]
+      }
+      workflow_session_financials: {
+        Args: { p_session_id: string }
+        Returns: {
+          credito_gerado: number
+          credito_liquido: number
+          credito_utilizado: number
+          desconto_manual: number
+          desconto_progressivo: number
+          extras_pago: number
+          extras_pendente: number
+          qtd_extras_galeria: number
+          qtd_fotos_extra: number
+          session_id: string
+          valor_adicional: number
+          valor_base_pacote: number
+          valor_extras_bruto: number
+          valor_extras_com_desconto: number
+          valor_pago: number
+          valor_pendente: number
+          valor_produtos: number
+          valor_total: number
         }[]
       }
     }
