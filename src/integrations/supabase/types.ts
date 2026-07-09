@@ -5887,8 +5887,10 @@ export type Database = {
           credito_gerado: number
           credito_liquido: number
           credito_utilizado: number
+          desconto_aplicado_extras: number
           desconto_manual: number
           desconto_progressivo: number
+          extras_liquido: number
           extras_pago: number
           extras_pendente: number
           qtd_extras_galeria: number
