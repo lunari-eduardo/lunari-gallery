@@ -18,6 +18,8 @@ import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
+import { PreCheckoutContactStep } from '@/components/gallery/PreCheckoutContactStep';
+
 import { UnifiedAccessScreen } from '@/components/UnifiedAccessScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
@@ -79,7 +81,7 @@ function hexToHsl(hex: string): string | null {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-type SelectionStep = 'gallery' | 'confirmation' | 'payment' | 'confirmed';
+type SelectionStep = 'gallery' | 'confirmation' | 'pre_checkout_contact' | 'payment' | 'confirmed';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsbmpzcHN5d3ljYnVkaGV3c2Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0NjU1MDEsImV4cCI6MjA3MzA0MTUwMX0.LR_nMBh8cVY1SQS1TsB7RrGQ1zmCRm_bDvyfI5Dn1QI';
@@ -448,7 +450,9 @@ export default function ClientGallery() {
         const precoExtraFromRegras = Number(regras?.pacote?.valorFotoExtra ?? 0);
 
         return {
-          mode: (rawSettings?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment') || 'sale_without_payment',
+          // Fonte de verdade: gallery-access já projeta colunas > JSON > default.
+          // Se ainda cair no fallback aqui, é apenas para o formato legado (UUID/direct).
+          mode: (rawSettings?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment') || 'no_sale',
           pricingModel: (rawSettings?.pricingModel as 'fixed' | 'packages') || 'fixed',
           chargeType: (rawSettings?.chargeType as 'all_selected' | 'only_extras') || 'only_extras',
           fixedPrice: (rawSettings?.fixedPrice as number)
@@ -456,8 +460,9 @@ export default function ClientGallery() {
             || (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra)
             || 25,
           discountPackages: (rawSettings?.discountPackages as DiscountPackage[]) || [],
-          paymentMethod: (rawSettings?.paymentMethod as 'pix_manual' | 'infinitepay' | 'mercadopago' | undefined),
+          paymentMethod: (rawSettings?.paymentMethod as 'pix_manual' | 'infinitepay' | 'mercadopago' | 'asaas' | undefined),
         };
+
       })(),
       settings: {
         welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || '',
@@ -632,7 +637,8 @@ export default function ClientGallery() {
 
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+
       // PIX Manual - show internal payment screen
       if (data.requiresPayment && data.paymentMethod === 'pix_manual' && data.pixData) {
         // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
@@ -674,9 +680,27 @@ export default function ClientGallery() {
         return;
       }
       
+      // 🛡️ CONTRACT GUARD: se a galeria exige pagamento (sale_with_payment + extras > 0)
+      // e o backend voltou requiresPayment=false, NUNCA finalize localmente.
+      // Isso impede a tela "Seleção Confirmada" de aparecer indevidamente e força
+      // refetch para cair na PaymentPendingScreen — nunca perder rastreamento de pagamento.
+      const expectsPayment = gallery.saleSettings?.mode === 'sale_with_payment' && (extrasACobrar ?? 0) > 0;
+      if (expectsPayment && !data.requiresPayment) {
+        console.error('[CONTRACT VIOLATION] Gallery requires payment but backend returned requiresPayment=false', {
+          galleryId, mode: gallery.saleSettings?.mode, extrasACobrar, response: data,
+        });
+        toast.error('Falha na criação do pagamento', {
+          description: 'Reabrindo a galeria para retomar a cobrança. Se persistir, contate o fotógrafo.',
+          duration: 8000,
+        });
+        await refetchGallery();
+        return;
+      }
+
       // No payment required - go directly to confirmed
       setIsConfirmed(true);
       setCurrentStep('confirmed');
+
     },
     onError: (error: Error & { silent?: boolean }) => {
       // Silent errors (ex.: ALREADY_FINALIZED) já dispararam refetch — nada de toast.
@@ -1767,30 +1791,57 @@ export default function ClientGallery() {
       valorTotal: resultado.valorACobrar,
     };
 
-    // Se cobrança externa e faltam dados de contato/CPF → coletar antes do redirect.
-    // Isso garante que o CRM seja enriquecido mesmo quando o provedor
-    // (InfinitePay) não devolve os dados do pagador no webhook, e evita
-    // 422 MISSING_CPF_CNPJ do Asaas por falta de CPF do pagador.
+    // 🧭 Etapa intermediária "Dados de cobrança": SEMPRE que houver pagamento
+    // pendente e qualquer dado (nome/email/whatsapp/CPF) estiver faltando,
+    // roteia para PreCheckoutContactStep — regardless of provider.
+    // Persiste no CRM (via upsert_visitor_contact) para pré-preencher próximas cobranças.
     const saleMode = gallery.saleSettings?.mode;
     const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
-    const missing = galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined;
-    const asaasPhoneRequired = !!missing?.cpfRequired && missing?.billingType !== 'CREDIT_CARD';
-    const needsCollection =
-      shouldRequestPayment && missing && (
-        missing.email ||
-        missing.name ||
-        (missing.phone && asaasPhoneRequired) ||
-        missing.cpfCnpj
+    const hints = (galleryResponse as any)?.payerHints as
+      | { fullName?: string | null; email?: string | null; phone?: string | null; cpfCnpj?: string | null }
+      | undefined;
+    const needsAny =
+      shouldRequestPayment && (
+        !hints?.fullName ||
+        !hints?.email ||
+        !hints?.phone ||
+        !hints?.cpfCnpj
       );
-    // Guardar payload permite re-tentar após coleta (inclusive fallback 422).
+    // Guardar payload permite retomar após coleta.
     setPendingConfirmPayload(payload);
-    if (needsCollection) {
-      setContactModalOpen(true);
+    if (needsAny) {
+      setCurrentStep('pre_checkout_contact');
       return;
     }
 
     confirmMutation.mutate(payload);
   };
+
+  // Submit da etapa "Dados de cobrança": persiste via RPC e dispara confirm-selection.
+  const handlePreCheckoutSubmit = async (values: {
+    nome: string; email: string; phone: string; cpfCnpj: string;
+  }) => {
+    try {
+      const { error } = await supabase.rpc('upsert_visitor_contact', {
+        p_token: identifier as string,
+        p_visitor_id: visitorId || null,
+        p_email: values.email,
+        p_phone: values.phone,
+        p_nome: values.nome,
+        p_cpf_cnpj: values.cpfCnpj,
+      } as any);
+      if (error) throw error;
+      // Reidrata payerHints antes de submeter — evita loop de "faltando dado".
+      await refetchGallery();
+      if (pendingConfirmPayload) {
+        confirmMutation.mutate(pendingConfirmPayload);
+      }
+    } catch (e) {
+      console.error('[handlePreCheckoutSubmit] falhou:', e);
+      toast.error('Não foi possível salvar seus dados. Tente novamente.');
+    }
+  };
+
 
 
   // Parse welcome message
@@ -1998,12 +2049,46 @@ export default function ClientGallery() {
     setShowWelcome(false);
   }
 
+  // Pre-checkout contact step — universal para todos provedores
+  if (currentStep === 'pre_checkout_contact' && pendingConfirmPayload) {
+    const hints = (galleryResponse as any)?.payerHints as
+      | { fullName?: string | null; email?: string | null; phone?: string | null; cpfCnpj?: string | null }
+      | undefined;
+    return (
+      <PreCheckoutContactStep
+        valorTotal={pendingConfirmPayload.valorTotal}
+        provider={(gallery.saleSettings?.paymentMethod as any) || null}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        prefill={{
+          fullName: hints?.fullName,
+          email: hints?.email,
+          phone: hints?.phone,
+          cpfCnpj: hints?.cpfCnpj,
+        }}
+        missing={{
+          name: !hints?.fullName,
+          email: !hints?.email,
+          phone: !hints?.phone,
+          cpfCnpj: !hints?.cpfCnpj,
+        }}
+        isSubmitting={confirmMutation.isPending}
+        onBack={() => setCurrentStep('confirmation')}
+        onSubmit={handlePreCheckoutSubmit}
+        themeStyles={themeStyles}
+        backgroundMode={effectiveBackgroundMode}
+      />
+    );
+  }
+
   // Render Unified Confirmation Step (combines Review + Checkout)
   if (currentStep === 'confirmation') {
+
     // Check if payment provider is configured (for sale_with_payment mode)
     const isWithPayment = gallery.saleSettings?.mode === 'sale_with_payment';
-    const hasPaymentProvider = isWithPayment;
-    
+    // hasPaymentProvider reflete se REALMENTE existe provider configurado
+    // (evita mostrar "Confirmar e Pagar" sem provider, evita "cobrado depois" com provider).
+    const hasPaymentProvider = isWithPayment && !!gallery.saleSettings?.paymentMethod;
+
     return (
       <SelectionConfirmation
         gallery={gallery}
@@ -2023,6 +2108,7 @@ export default function ClientGallery() {
       />
     );
   }
+
 
   // Render Payment Step - PIX Manual (internal)
   if (currentStep === 'payment' && pixPaymentData) {

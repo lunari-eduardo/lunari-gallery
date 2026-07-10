@@ -406,6 +406,36 @@ serve(async (req) => {
     const clientMode = (galleryConfig?.clientMode as 'light' | 'dark') || 'light'
     const themeOverrides = (gallery.use_custom_theme ? gallery.theme_overrides : accountTheme?.theme_overrides) || galleryConfig?.themeOverrides || {};
 
+    // 4.1. Normalize saleSettings — canonical columns > JSON > default.
+    // Frontend NEVER derives sale mode from any other source. This is the single
+    // source of truth exposed to the client (see .lovable/pipeline-galeria-pagamento.md).
+    const rawSaleSettings = (galleryConfig?.saleSettings || {}) as Record<string, unknown>;
+    const canonicalSaleMode = (gallery as any).venda_modo
+      || (rawSaleSettings.mode as string | undefined)
+      || 'no_sale';
+    const canonicalPaymentMethod = (gallery as any).venda_pagamento_provedor
+      || (rawSaleSettings.paymentMethod as string | undefined)
+      || null;
+    const canonicalChargeType = (gallery as any).venda_tipo_cobranca
+      || (rawSaleSettings.chargeType as string | undefined)
+      || 'only_extras';
+    const normalizedSaleSettings = {
+      mode: canonicalSaleMode,
+      paymentMethod: canonicalPaymentMethod,
+      chargeType: canonicalChargeType,
+      pricingModel: (rawSaleSettings.pricingModel as string | undefined) || 'fixed',
+      fixedPrice: rawSaleSettings.fixedPrice as number | undefined,
+      discountPackages: (rawSaleSettings.discountPackages as unknown[]) || [],
+    };
+    const saleModeSource: 'column' | 'json' | 'default' =
+      (gallery as any).venda_modo ? 'column'
+      : (rawSaleSettings.mode ? 'json' : 'default');
+    if ((rawSaleSettings.mode as string | undefined) && (gallery as any).venda_modo
+        && rawSaleSettings.mode !== (gallery as any).venda_modo) {
+      console.warn(`[gallery-access] SALE_MODE_DIVERGENCE gallery=${gallery.id} column=${(gallery as any).venda_modo} json=${rawSaleSettings.mode}`);
+    }
+
+
     let themeData = null
     if (themeId) {
       const { data: theme } = await supabase
@@ -536,6 +566,10 @@ serve(async (req) => {
             coverId: (gallery as any).cover_id ?? null,
             defaultCoverId: (settings as any)?.default_cover_id ?? 'fullscreen',
           },
+          // Sale settings canônicos (colunas > JSON). Frontend consome exclusivamente daqui.
+          saleSettings: normalizedSaleSettings,
+          saleModeSource,
+
         },
 
         photos: filteredPhotos,
