@@ -2047,8 +2047,40 @@ export default function ClientGallery() {
     setShowWelcome(false);
   }
 
+  // Pre-checkout contact step — universal para todos provedores
+  if (currentStep === 'pre_checkout_contact' && pendingConfirmPayload) {
+    const hints = (galleryResponse as any)?.payerHints as
+      | { fullName?: string | null; email?: string | null; phone?: string | null; cpfCnpj?: string | null }
+      | undefined;
+    return (
+      <PreCheckoutContactStep
+        valorTotal={pendingConfirmPayload.valorTotal}
+        provider={(gallery.saleSettings?.paymentMethod as any) || null}
+        studioName={galleryResponse?.studioSettings?.studio_name}
+        prefill={{
+          fullName: hints?.fullName,
+          email: hints?.email,
+          phone: hints?.phone,
+          cpfCnpj: hints?.cpfCnpj,
+        }}
+        missing={{
+          name: !hints?.fullName,
+          email: !hints?.email,
+          phone: !hints?.phone,
+          cpfCnpj: !hints?.cpfCnpj,
+        }}
+        isSubmitting={confirmMutation.isPending}
+        onBack={() => setCurrentStep('confirmation')}
+        onSubmit={handlePreCheckoutSubmit}
+        themeStyles={themeStyles}
+        backgroundMode={effectiveBackgroundMode}
+      />
+    );
+  }
+
   // Render Unified Confirmation Step (combines Review + Checkout)
   if (currentStep === 'confirmation') {
+
     // Check if payment provider is configured (for sale_with_payment mode)
     const isWithPayment = gallery.saleSettings?.mode === 'sale_with_payment';
     // hasPaymentProvider reflete se REALMENTE existe provider configurado
