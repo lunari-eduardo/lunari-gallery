@@ -635,7 +635,8 @@ export default function ClientGallery() {
 
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+
       // PIX Manual - show internal payment screen
       if (data.requiresPayment && data.paymentMethod === 'pix_manual' && data.pixData) {
         // Don't set isConfirmed - gallery is aguardando_pagamento, not confirmed
