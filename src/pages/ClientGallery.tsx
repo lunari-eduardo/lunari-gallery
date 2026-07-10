@@ -677,9 +677,27 @@ export default function ClientGallery() {
         return;
       }
       
+      // 🛡️ CONTRACT GUARD: se a galeria exige pagamento (sale_with_payment + extras > 0)
+      // e o backend voltou requiresPayment=false, NUNCA finalize localmente.
+      // Isso impede a tela "Seleção Confirmada" de aparecer indevidamente e força
+      // refetch para cair na PaymentPendingScreen — nunca perder rastreamento de pagamento.
+      const expectsPayment = gallery.saleSettings?.mode === 'sale_with_payment' && (extrasACobrar ?? 0) > 0;
+      if (expectsPayment && !data.requiresPayment) {
+        console.error('[CONTRACT VIOLATION] Gallery requires payment but backend returned requiresPayment=false', {
+          galleryId, mode: gallery.saleSettings?.mode, extrasACobrar, response: data,
+        });
+        toast.error('Falha na criação do pagamento', {
+          description: 'Reabrindo a galeria para retomar a cobrança. Se persistir, contate o fotógrafo.',
+          duration: 8000,
+        });
+        await refetchGallery();
+        return;
+      }
+
       // No payment required - go directly to confirmed
       setIsConfirmed(true);
       setCurrentStep('confirmed');
+
     },
     onError: (error: Error & { silent?: boolean }) => {
       // Silent errors (ex.: ALREADY_FINALIZED) já dispararam refetch — nada de toast.
