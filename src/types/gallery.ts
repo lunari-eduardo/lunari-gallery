@@ -35,7 +35,7 @@ export type GalleryOrigin = 'manual' | 'gestao';
 export type SaleMode = 'no_sale' | 'sale_with_payment' | 'sale_without_payment';
 export type PricingModel = 'fixed' | 'packages';
 export type ChargeType = 'all_selected' | 'only_extras';
-export type PaymentMethod = 'pix_manual' | 'infinitepay' | 'mercadopago';
+export type PaymentMethod = 'pix_manual' | 'infinitepay' | 'mercadopago' | 'asaas';
 
 export interface DiscountPackage {
   id: string;
