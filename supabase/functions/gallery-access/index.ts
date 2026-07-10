@@ -90,7 +90,7 @@ serve(async (req) => {
         success: true,
         requiresPassword: true,
         sessionName: gallery.nome_sessao,
-        studioSettings: settings,
+        studioSettings: settingsWithOwner,
         error: password ? 'Senha incorreta' : undefined,
         code: password ? 'WRONG_PASSWORD' : 'AUTH_REQUIRED'
       }), {
