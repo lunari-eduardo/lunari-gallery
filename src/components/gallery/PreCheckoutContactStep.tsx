@@ -77,6 +77,7 @@ export function PreCheckoutContactStep({
   valorTotal,
   provider,
   studioName,
+  photographerFirstName,
   prefill,
   missing,
   isSubmitting = false,
@@ -85,6 +86,7 @@ export function PreCheckoutContactStep({
   themeStyles = {},
   backgroundMode = 'light',
 }: Props) {
+
   const [nome, setNome] = useState(prefill?.fullName || '');
   const [email, setEmail] = useState(prefill?.email || '');
   const [phone, setPhone] = useState(prefill?.phone ? maskPhoneBR(prefill.phone) : '');
