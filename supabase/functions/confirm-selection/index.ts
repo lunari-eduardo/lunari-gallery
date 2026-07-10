@@ -365,29 +365,40 @@ Deno.serve(async (req) => {
 
     // 4. Parse sale settings to determine if payment is required
     // CRITICAL: Decision is 100% server-side — frontend's requestPayment is IGNORED
-    // Normalization rule: JSON saleSettings.mode is AUTHORITATIVE.
-    // Column venda_modo is fallback ONLY for valid current values.
+    // Normalization rule (contrato pipeline): COLUNAS > JSON > default.
+    // A trigger `tg_sync_gallery_sale_settings_json` mantém JSON alinhado, mas em
+    // caso de qualquer divergência residual, a coluna vence sempre.
     const saleSettingsMode = saleSettingsJson.mode;
     const vendaModoColumn = gallery.venda_modo;
-    
-    // Valid current modes
+
     const VALID_SALE_MODES = ['no_sale', 'sale_with_payment', 'sale_without_payment'];
-    const isValidVendaModo = vendaModoColumn && VALID_SALE_MODES.includes(vendaModoColumn);
-    
-    // Determine effective sale mode: JSON first, then valid column, then default
-    // 🛡️ REGRAS DE NEGÓCIO: Se o JSON diz sale_with_payment, FORÇAR este modo.
-    // Ignorar 'view_only' (valor legado inválido) e tratar como sem venda se nada for encontrado.
-    const saleMode = (saleSettingsMode === 'sale_with_payment')
-      ? 'sale_with_payment'
-      : (saleSettingsMode || (isValidVendaModo ? vendaModoColumn : 'no_sale'));
-    
-    // Determine payment method: JSON first, then column, then default integration
-    const configuredPaymentMethod = saleSettingsJson.paymentMethod || gallery.venda_pagamento_provedor;
+    const isValidVendaModoColumn = vendaModoColumn && VALID_SALE_MODES.includes(vendaModoColumn);
+    const isValidVendaModoJson = saleSettingsMode && VALID_SALE_MODES.includes(saleSettingsMode);
+
+    // Column-first precedence
+    const saleMode = isValidVendaModoColumn
+      ? vendaModoColumn
+      : (isValidVendaModoJson ? saleSettingsMode : 'no_sale');
+
+    if (isValidVendaModoColumn && isValidVendaModoJson && saleSettingsMode !== vendaModoColumn) {
+      console.warn(`⚠️ SALE_MODE_DIVERGENCE gallery=${galleryId} column=${vendaModoColumn} json=${saleSettingsMode} — column wins`);
+      await logAuditEvent({
+        correlationId,
+        eventType: 'SALE_MODE_DIVERGENCE',
+        source: 'edge_function',
+        sourceName: 'confirm-selection',
+        payload: { galleryId, column: vendaModoColumn, json: saleSettingsMode }
+      });
+    }
+
+    // Payment method: coluna venda_pagamento_provedor > JSON.paymentMethod
+    const configuredPaymentMethod = gallery.venda_pagamento_provedor || saleSettingsJson.paymentMethod;
 
     // Server-side rule: if mode is sale_with_payment AND there's value to charge, payment is required
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
-    console.log(`💰 Payment check: mode=${saleMode} (source: ${saleSettingsMode ? 'json' : isValidVendaModo ? 'column' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
+    console.log(`💰 Payment check: mode=${saleMode} (source: ${isValidVendaModoColumn ? 'column' : isValidVendaModoJson ? 'json' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
+
 
 
 
