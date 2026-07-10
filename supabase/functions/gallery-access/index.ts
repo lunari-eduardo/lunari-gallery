@@ -598,7 +598,7 @@ serve(async (req) => {
         finalizedAt: galleryFinalizedAt || visitorFinalizedAt || null,
         folders: folders || [],
 
-        studioSettings: settings || null,
+        studioSettings: settingsWithOwner || null,
         theme: themeData,
         clientMode,
         accountTheme, // New field for account heritage info
