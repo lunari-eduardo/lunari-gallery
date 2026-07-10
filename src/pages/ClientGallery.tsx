@@ -1789,30 +1789,57 @@ export default function ClientGallery() {
       valorTotal: resultado.valorACobrar,
     };
 
-    // Se cobrança externa e faltam dados de contato/CPF → coletar antes do redirect.
-    // Isso garante que o CRM seja enriquecido mesmo quando o provedor
-    // (InfinitePay) não devolve os dados do pagador no webhook, e evita
-    // 422 MISSING_CPF_CNPJ do Asaas por falta de CPF do pagador.
+    // 🧭 Etapa intermediária "Dados de cobrança": SEMPRE que houver pagamento
+    // pendente e qualquer dado (nome/email/whatsapp/CPF) estiver faltando,
+    // roteia para PreCheckoutContactStep — regardless of provider.
+    // Persiste no CRM (via upsert_visitor_contact) para pré-preencher próximas cobranças.
     const saleMode = gallery.saleSettings?.mode;
     const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
-    const missing = galleryResponse?.payerHintsMissing as ContactCollectionMissing | undefined;
-    const asaasPhoneRequired = !!missing?.cpfRequired && missing?.billingType !== 'CREDIT_CARD';
-    const needsCollection =
-      shouldRequestPayment && missing && (
-        missing.email ||
-        missing.name ||
-        (missing.phone && asaasPhoneRequired) ||
-        missing.cpfCnpj
+    const hints = (galleryResponse as any)?.payerHints as
+      | { fullName?: string | null; email?: string | null; phone?: string | null; cpfCnpj?: string | null }
+      | undefined;
+    const needsAny =
+      shouldRequestPayment && (
+        !hints?.fullName ||
+        !hints?.email ||
+        !hints?.phone ||
+        !hints?.cpfCnpj
       );
-    // Guardar payload permite re-tentar após coleta (inclusive fallback 422).
+    // Guardar payload permite retomar após coleta.
     setPendingConfirmPayload(payload);
-    if (needsCollection) {
-      setContactModalOpen(true);
+    if (needsAny) {
+      setCurrentStep('pre_checkout_contact');
       return;
     }
 
     confirmMutation.mutate(payload);
   };
+
+  // Submit da etapa "Dados de cobrança": persiste via RPC e dispara confirm-selection.
+  const handlePreCheckoutSubmit = async (values: {
+    nome: string; email: string; phone: string; cpfCnpj: string;
+  }) => {
+    try {
+      const { error } = await supabase.rpc('upsert_visitor_contact', {
+        p_token: identifier as string,
+        p_visitor_id: visitorId || null,
+        p_email: values.email,
+        p_phone: values.phone,
+        p_nome: values.nome,
+        p_cpf_cnpj: values.cpfCnpj,
+      } as any);
+      if (error) throw error;
+      // Reidrata payerHints antes de submeter — evita loop de "faltando dado".
+      await refetchGallery();
+      if (pendingConfirmPayload) {
+        confirmMutation.mutate(pendingConfirmPayload);
+      }
+    } catch (e) {
+      console.error('[handlePreCheckoutSubmit] falhou:', e);
+      toast.error('Não foi possível salvar seus dados. Tente novamente.');
+    }
+  };
+
 
 
   // Parse welcome message
