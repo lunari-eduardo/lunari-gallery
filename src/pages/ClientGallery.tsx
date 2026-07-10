@@ -2059,6 +2059,14 @@ export default function ClientGallery() {
         valorTotal={pendingConfirmPayload.valorTotal}
         provider={(gallery.saleSettings?.paymentMethod as any) || null}
         studioName={galleryResponse?.studioSettings?.studio_name}
+        photographerFirstName={(() => {
+          const raw = (galleryResponse?.studioSettings as any)?.photographer_name
+            || galleryResponse?.studioSettings?.studio_name
+            || gallery.clientName
+            || '';
+          return String(raw).trim().split(/\s+/)[0] || undefined;
+        })()}
+
         prefill={{
           fullName: hints?.fullName,
           email: hints?.email,
