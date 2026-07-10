@@ -18,6 +18,8 @@ import { PhotoCard } from '@/components/PhotoCard';
 import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
+import { PreCheckoutContactStep } from '@/components/gallery/PreCheckoutContactStep';
+
 import { UnifiedAccessScreen } from '@/components/UnifiedAccessScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
 import { PaymentRedirect } from '@/components/PaymentRedirect';
