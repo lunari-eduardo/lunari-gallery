@@ -566,6 +566,10 @@ serve(async (req) => {
             coverId: (gallery as any).cover_id ?? null,
             defaultCoverId: (settings as any)?.default_cover_id ?? 'fullscreen',
           },
+          // Sale settings canônicos (colunas > JSON). Frontend consome exclusivamente daqui.
+          saleSettings: normalizedSaleSettings,
+          saleModeSource,
+
         },
 
         photos: filteredPhotos,
