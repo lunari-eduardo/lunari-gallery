@@ -1818,11 +1818,16 @@ export default function ClientGallery() {
   };
 
   // Submit da etapa "Dados de cobrança": persiste via RPC e dispara confirm-selection.
+  // Regras:
+  //  - Erros de rede/RPC exibem toast claro e NÃO avançam (usuário precisa saber).
+  //  - `cpf_conflict` (o CPF já pertence a outro cliente do mesmo fotógrafo) NÃO trava
+  //    o pagamento: mostramos aviso claro, `galeria_visitantes` foi enriquecido, e
+  //    seguimos para o checkout com os valores digitados.
   const handlePreCheckoutSubmit = async (values: {
     nome: string; email: string; phone: string; cpfCnpj: string;
   }) => {
     try {
-      const { error } = await supabase.rpc('upsert_visitor_contact', {
+      const { data, error } = await supabase.rpc('upsert_visitor_contact', {
         p_token: identifier as string,
         p_visitor_id: visitorId || null,
         p_email: values.email,
@@ -1830,17 +1835,46 @@ export default function ClientGallery() {
         p_nome: values.nome,
         p_cpf_cnpj: values.cpfCnpj,
       } as any);
-      if (error) throw error;
+
+      if (error) {
+        // Duplicidade real (não deveria mais ocorrer com a RPC atualizada, mas mantemos guard).
+        if ((error as any).code === '23505') {
+          console.warn('[handlePreCheckoutSubmit] cpf duplicado (fallback):', error);
+          toast.warning(
+            'Este CPF/CNPJ já está cadastrado em outro cliente do fotógrafo. ' +
+            'Vamos usar seus dados apenas nesta cobrança.'
+          );
+        } else {
+          console.error('[handlePreCheckoutSubmit] rpc error:', error);
+          toast.error(
+            (error as any).message
+              ? `Não foi possível salvar seus dados: ${(error as any).message}`
+              : 'Não foi possível salvar seus dados. Verifique sua conexão e tente novamente.'
+          );
+          return; // Erros reais bloqueiam — usuário precisa ver o problema.
+        }
+      } else if ((data as any)?.cpf_conflict) {
+        toast.warning(
+          'Este CPF/CNPJ já está vinculado a outro cadastro do fotógrafo. ' +
+          'Vamos usar seus dados apenas nesta cobrança.'
+        );
+      }
+
       // Reidrata payerHints antes de submeter — evita loop de "faltando dado".
       await refetchGallery();
       if (pendingConfirmPayload) {
         confirmMutation.mutate(pendingConfirmPayload);
       }
-    } catch (e) {
-      console.error('[handlePreCheckoutSubmit] falhou:', e);
-      toast.error('Não foi possível salvar seus dados. Tente novamente.');
+    } catch (e: any) {
+      console.error('[handlePreCheckoutSubmit] exception:', e);
+      toast.error(
+        e?.message
+          ? `Falha ao salvar dados: ${e.message}`
+          : 'Falha inesperada ao salvar dados. Tente novamente.'
+      );
     }
   };
+
 
 
 
@@ -2059,6 +2093,14 @@ export default function ClientGallery() {
         valorTotal={pendingConfirmPayload.valorTotal}
         provider={(gallery.saleSettings?.paymentMethod as any) || null}
         studioName={galleryResponse?.studioSettings?.studio_name}
+        photographerFirstName={(() => {
+          const raw = (galleryResponse?.studioSettings as any)?.photographer_name
+            || galleryResponse?.studioSettings?.studio_name
+            || '';
+          return String(raw).trim().split(/\s+/)[0] || undefined;
+        })()}
+
+
         prefill={{
           fullName: hints?.fullName,
           email: hints?.email,

@@ -34,6 +34,7 @@ interface Props {
   valorTotal: number;
   provider: PaymentMethod | null;
   studioName?: string;
+  photographerFirstName?: string;
   prefill?: PayerHintsPrefill;
   missing?: Missing;
   isSubmitting?: boolean;
@@ -42,6 +43,7 @@ interface Props {
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
 }
+
 
 const emailSchema = z.string().trim().toLowerCase().email({ message: 'E-mail inválido' }).max(160);
 const phoneSchema = z
@@ -75,6 +77,7 @@ export function PreCheckoutContactStep({
   valorTotal,
   provider,
   studioName,
+  photographerFirstName,
   prefill,
   missing,
   isSubmitting = false,
@@ -83,6 +86,7 @@ export function PreCheckoutContactStep({
   themeStyles = {},
   backgroundMode = 'light',
 }: Props) {
+
   const [nome, setNome] = useState(prefill?.fullName || '');
   const [email, setEmail] = useState(prefill?.email || '');
   const [phone, setPhone] = useState(prefill?.phone ? maskPhoneBR(prefill.phone) : '');
@@ -158,12 +162,13 @@ export function PreCheckoutContactStep({
             <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
               <ShieldCheck className="h-6 w-6 text-primary" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight">Antes do pagamento</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Antes de continuar</h1>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Precisamos confirmar seus dados para gerar a cobrança de <strong className="text-foreground">{formattedValue}</strong>
-              {studioName ? <> com <strong className="text-foreground">{studioName}</strong></> : null}
-              . Eles serão usados apenas para emitir a cobrança e o recibo — e ficarão salvos para as próximas.
+              Confirme seus dados para finalizar seu pagamento
+              {photographerFirstName ? <> de <strong className="text-foreground">{photographerFirstName}</strong></> : null}
+              . Eles serão usados apenas para gerar a cobrança, facilitar o contato quando necessário e agilizar seus próximos pagamentos.
             </p>
+
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
