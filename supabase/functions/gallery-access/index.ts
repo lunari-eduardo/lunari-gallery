@@ -55,15 +55,33 @@ serve(async (req) => {
       })
     }
 
-    // 2. Pre-fetch studio settings (detailed)
-    const { data: settings } = await supabase
-      .from('gallery_settings')
-      .select('*')
-      .eq('user_id', gallery.user_id)
-      .maybeSingle()
+    // 2. Pre-fetch studio settings (detailed) + nome do fotógrafo (profiles).
+    const [{ data: settings }, { data: ownerProfile }] = await Promise.all([
+      supabase
+        .from('gallery_settings')
+        .select('*')
+        .eq('user_id', gallery.user_id)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('nome_completo')
+        .eq('id', gallery.user_id)
+        .maybeSingle(),
+    ]);
+
+    // Injeta photographer_name em studioSettings sem alterar o shape existente.
+    // Frontend usa esse campo para derivar o primeiro nome no PreCheckoutContactStep.
+    const photographerName: string | null =
+      (ownerProfile?.nome_completo && String(ownerProfile.nome_completo).trim()) ||
+      (settings?.studio_name && String(settings.studio_name).trim()) ||
+      null;
+    const settingsWithOwner = settings
+      ? { ...settings, photographer_name: photographerName }
+      : (photographerName ? { photographer_name: photographerName } : null);
 
     // Resolve owner settings (account theme)
-    const accountTheme = settings;
+    const accountTheme = settingsWithOwner;
+
 
     // 3. Check password if private (só exige senha se realmente houver uma cadastrada)
     const hasPassword = typeof gallery.gallery_password === 'string' && gallery.gallery_password.length > 0;
