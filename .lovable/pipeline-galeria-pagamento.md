@@ -85,4 +85,54 @@ a função no dashboard e forçar novo deploy. Não continuar o plano.
 Nunca chamar `infinitepay-create-link` / `mercadopago-create-link` / `asaas-gallery-payment` diretamente pelo front. **Sempre passar por `client-selection` (para fluxo público) ou `gallery-create-payment` (para fluxo interno)**.
 
 ---
-Última atualização: 2026-07-09 (bug PAYMENT_CREATE_ERROR causado por drift de deploy em `gallery-create-payment`).
+
+## Fonte de verdade do modo de venda (2026-07-10)
+
+Duas fontes coexistem no banco para o modo de venda:
+
+- **Colunas canônicas** — `galerias.venda_modo`, `galerias.venda_pagamento_provedor`, `galerias.venda_tipo_cobranca`.
+- **JSON legado** — `galerias.configuracoes.saleSettings.{mode, paymentMethod, chargeType}`.
+
+Regras invariantes:
+
+1. **Colunas vencem sempre.** Qualquer edge function que decide fluxo de pagamento
+   (`gallery-access`, `confirm-selection`, `client-selection`, `gallery-create-payment`)
+   deve tratar as colunas como source of truth e o JSON apenas como fallback para
+   registros legados.
+2. **Trigger `tg_sync_gallery_sale_settings_json`** mantém o JSON alinhado com as
+   colunas em todo INSERT/UPDATE. Não remover.
+3. **`gallery-access` projeta `saleSettings` normalizado** no payload devolvido ao
+   frontend (colunas > JSON > default `no_sale`) e loga `SALE_MODE_DIVERGENCE` se
+   detectar drift.
+4. **Frontend NUNCA aplica default silencioso** para `mode`. Se a resposta da
+   função vier sem `saleSettings.mode`, cair em `'no_sale'` conscientemente e
+   registrar no console — mas nunca em `'sale_without_payment'` (que faria o cliente
+   confirmar sem pagar).
+5. **Contract guard no `confirmMutation.onSuccess`**: se
+   `saleSettings.mode==='sale_with_payment'` e `extrasACobrar>0`, mas o backend
+   respondeu `requiresPayment=false`, **jamais** setar `isConfirmed=true`.
+   Refetch e cair na `PaymentPendingScreen`. Isso torna impossível a tela
+   "Seleção Confirmada" aparecer sem pagamento processado.
+
+## Etapa "Dados de cobrança" pré-checkout
+
+Componente: `src/components/gallery/PreCheckoutContactStep.tsx` (step
+`pre_checkout_contact` em `ClientGallery.tsx`).
+
+- Renderiza SEMPRE que `sale_with_payment` + valor a cobrar > 0 e faltar algum
+  campo em `payerHints` (Nome, E-mail, WhatsApp, CPF/CNPJ), **regardless do
+  provedor**.
+- Persiste via RPC `upsert_visitor_contact`, que:
+  - Atualiza `galeria_visitantes` (incluindo `cpf_cnpj`).
+  - Atualiza a tabela unificada `clientes` (Gestão) preservando dados não vazios
+    (`UPDATE ... WHERE campo IS NULL`) — não sobrescreve dados curados pelo
+    fotógrafo.
+- Após submit, `confirmMutation` é retomada com o payload guardado
+  (`pendingConfirmPayload`) e o payerHints atualizado.
+
+Novos provedores devem honrar esta etapa antes de qualquer redirect/inline
+checkout — a decisão fica em `handleConfirm`, provedor-agnóstica.
+
+---
+Última atualização: 2026-07-10 (unificação fonte-de-verdade saleSettings + step pré-checkout universal).
+
