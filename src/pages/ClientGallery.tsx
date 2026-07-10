@@ -448,7 +448,9 @@ export default function ClientGallery() {
         const precoExtraFromRegras = Number(regras?.pacote?.valorFotoExtra ?? 0);
 
         return {
-          mode: (rawSettings?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment') || 'sale_without_payment',
+          // Fonte de verdade: gallery-access já projeta colunas > JSON > default.
+          // Se ainda cair no fallback aqui, é apenas para o formato legado (UUID/direct).
+          mode: (rawSettings?.mode as 'no_sale' | 'sale_with_payment' | 'sale_without_payment') || 'no_sale',
           pricingModel: (rawSettings?.pricingModel as 'fixed' | 'packages') || 'fixed',
           chargeType: (rawSettings?.chargeType as 'all_selected' | 'only_extras') || 'only_extras',
           fixedPrice: (rawSettings?.fixedPrice as number)
@@ -456,8 +458,9 @@ export default function ClientGallery() {
             || (isEdgeFunctionFormat ? supabaseGallery.extraPhotoPrice : supabaseGallery.valor_foto_extra)
             || 25,
           discountPackages: (rawSettings?.discountPackages as DiscountPackage[]) || [],
-          paymentMethod: (rawSettings?.paymentMethod as 'pix_manual' | 'infinitepay' | 'mercadopago' | undefined),
+          paymentMethod: (rawSettings?.paymentMethod as 'pix_manual' | 'infinitepay' | 'mercadopago' | 'asaas' | undefined),
         };
+
       })(),
       settings: {
         welcomeMessage: (isEdgeFunctionFormat ? supabaseGallery.welcomeMessage : supabaseGallery.mensagem_boas_vindas) || '',
