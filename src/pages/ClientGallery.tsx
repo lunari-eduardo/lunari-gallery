@@ -2062,10 +2062,10 @@ export default function ClientGallery() {
         photographerFirstName={(() => {
           const raw = (galleryResponse?.studioSettings as any)?.photographer_name
             || galleryResponse?.studioSettings?.studio_name
-            || gallery.clientName
             || '';
           return String(raw).trim().split(/\s+/)[0] || undefined;
         })()}
+
 
         prefill={{
           fullName: hints?.fullName,
