@@ -2005,8 +2005,10 @@ export default function ClientGallery() {
   if (currentStep === 'confirmation') {
     // Check if payment provider is configured (for sale_with_payment mode)
     const isWithPayment = gallery.saleSettings?.mode === 'sale_with_payment';
-    const hasPaymentProvider = isWithPayment;
-    
+    // hasPaymentProvider reflete se REALMENTE existe provider configurado
+    // (evita mostrar "Confirmar e Pagar" sem provider, evita "cobrado depois" com provider).
+    const hasPaymentProvider = isWithPayment && !!gallery.saleSettings?.paymentMethod;
+
     return (
       <SelectionConfirmation
         gallery={gallery}
@@ -2026,6 +2028,7 @@ export default function ClientGallery() {
       />
     );
   }
+
 
   // Render Payment Step - PIX Manual (internal)
   if (currentStep === 'payment' && pixPaymentData) {
