@@ -34,6 +34,7 @@ interface Props {
   valorTotal: number;
   provider: PaymentMethod | null;
   studioName?: string;
+  photographerFirstName?: string;
   prefill?: PayerHintsPrefill;
   missing?: Missing;
   isSubmitting?: boolean;
@@ -42,6 +43,7 @@ interface Props {
   themeStyles?: React.CSSProperties;
   backgroundMode?: 'light' | 'dark';
 }
+
 
 const emailSchema = z.string().trim().toLowerCase().email({ message: 'E-mail inválido' }).max(160);
 const phoneSchema = z
