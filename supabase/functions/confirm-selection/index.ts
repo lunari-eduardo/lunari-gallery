@@ -304,6 +304,26 @@ Deno.serve(async (req) => {
     let extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
     const extrasCount = extraCount ?? extrasNecessarias;
 
+    // 🔧 SYNC ANTES DA RPC CANÔNICA
+    // A RPC calculate_gallery_extra_payment lê galerias.fotos_selecionadas.
+    // Essa coluna só era atualizada no commit final, então em cenários de
+    // primeira confirmação/reabertura a RPC recebia valor obsoleto (0/qtd antiga)
+    // e retornava extras_a_cobrar=0 → galeria era finalizada sem cobrar.
+    // Sincronizamos aqui, antes de qualquer decisão de cobrança.
+    {
+      const { error: syncErr } = await supabase
+        .from('galerias')
+        .update({ fotos_selecionadas: selectedCount, updated_at: new Date().toISOString() })
+        .eq('id', galleryId);
+      if (syncErr) {
+        console.error('❌ Falha ao sincronizar fotos_selecionadas antes da RPC:', syncErr);
+        await rollbackGalleryStatus();
+        return errorResponse('Erro ao sincronizar seleção', 500, 'SELECTION_SYNC_ERROR');
+      }
+    }
+
+
+
     try {
       const { data: canon, error: canonErr } = await supabase.rpc('calculate_gallery_extra_payment', {
         p_gallery_id: galleryId,
@@ -398,6 +418,33 @@ Deno.serve(async (req) => {
     const shouldCreatePayment = saleMode === 'sale_with_payment' && valorTotal > 0 && extrasACobrar > 0;
 
     console.log(`💰 Payment check: mode=${saleMode} (source: ${isValidVendaModoColumn ? 'column' : isValidVendaModoJson ? 'json' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
+
+    // 🛡️ CONTRACT GUARD (server-side): se a galeria opera em sale_with_payment e há
+    // seleção acima do incluído (ou all_selected com qualquer foto), mas o cálculo
+    // canônico retornou zero E não há histórico pago que justifique — NUNCA finalizar
+    // em silêncio. Devolve erro para o cliente retomar; rollback do status.
+    {
+      const debeCobrar =
+        saleMode === 'sale_with_payment' &&
+        (chargeType === 'all_selected'
+          ? selectedCount > 0
+          : selectedCount > (gallery.fotos_incluidas || 0));
+      const jaQuitado = extrasPagasTotal >= extrasNecessarias && extrasNecessarias > 0;
+      if (debeCobrar && !shouldCreatePayment && !jaQuitado) {
+        console.error('[CONTRACT GUARD] cálculo zero em galeria que deveria cobrar', {
+          galleryId, selectedCount, fotos_incluidas: gallery.fotos_incluidas,
+          extrasNecessarias, extrasPagasTotal, valorTotal, chargeType,
+        });
+        await rollbackGalleryStatus();
+        return errorResponse(
+          'Não foi possível calcular o valor a cobrar. Recarregue a página e tente novamente.',
+          500,
+          'PAYMENT_CALC_MISMATCH'
+        );
+      }
+    }
+
+
 
 
 
