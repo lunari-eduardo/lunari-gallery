@@ -4676,6 +4676,13 @@ export type Database = {
             referencedRelation: "clientes_sessoes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "system_audit_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_overpay_audit"
+            referencedColumns: ["session_uuid"]
+          },
         ]
       }
       system_cache: {
@@ -5409,6 +5416,39 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clientes"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_credit_overpay_audit: {
+        Row: {
+          cliente_id: string | null
+          credito_liquido: number | null
+          data: string | null
+          descricao: string | null
+          ledger_id: string | null
+          origem: string | null
+          session_id_origem: string | null
+          session_uuid: string | null
+          user_id: string | null
+          valor: number | null
+          valor_pago: number | null
+          valor_pendente: number | null
+          valor_total: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_creditos_ledger_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_creditos_ledger_session_id_origem_fkey"
+            columns: ["session_id_origem"]
+            isOneToOne: false
+            referencedRelation: "clientes_sessoes"
+            referencedColumns: ["session_id"]
           },
         ]
       }
