@@ -341,11 +341,12 @@ Deno.serve(async (req) => {
       }
 
       const c = canon as Record<string, any>;
+      canonRulesSource = c.rules_source ?? null;
       valorUnitario = Number(c.valor_unitario) || 0;
       valorTotal = Number(c.valor_a_cobrar) || 0;
       extrasACobrar = Number(c.extras_a_cobrar) || 0;
       extrasPagasTotal = Number(c.extras_pagas) || extrasPagasTotal;
-      valorJaPago = Number(c.valor_pago) || valorJaPago;
+
 
       console.log(`📊 [RPC canônica] rules_source=${c.rules_source}, extras_necess=${c.extras_necessarias}, extras_pagas=${c.extras_pagas}, extras_a_cobrar=${c.extras_a_cobrar}, valor_unitario=R$${c.valor_unitario}, valor_total_ideal=R$${c.valor_total_ideal}, valor_pago=R$${c.valor_pago}, valor_a_cobrar=R$${c.valor_a_cobrar}`);
     } catch (rpcErr) {
