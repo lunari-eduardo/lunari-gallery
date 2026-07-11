@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { logAuditEvent, getCorrelationId } from '../_shared/audit.ts';
 import { errorResponse, successResponse, corsHeaders } from '../_shared/responses.ts';
 import { resolveGalleryByToken } from '../_shared/database.ts';
+import { syncSessionOnFinalize } from '../_shared/session-sync.ts';
 
 
 // Rate limiter — in-memory per isolate
