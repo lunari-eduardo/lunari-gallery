@@ -3,6 +3,7 @@ import { Check, Clock, Info, Loader2, RefreshCw, Shield, Wallet } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { LightPaymentSurface } from '@/components/gallery/LightPaymentSurface';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 const POLL_MAX_DURATION = 10 * 60 * 1000;
