@@ -19,6 +19,7 @@ import { Lightbox } from '@/components/Lightbox';
 import { SelectionSummary } from '@/components/SelectionSummary';
 import { SelectionConfirmation } from '@/components/SelectionConfirmation';
 import { PreCheckoutContactStep } from '@/components/gallery/PreCheckoutContactStep';
+import { hintsAreComplete } from '@/lib/payerHintsValidation';
 
 import { UnifiedAccessScreen } from '@/components/UnifiedAccessScreen';
 import { FinalizedPreviewScreen } from '@/components/FinalizedPreviewScreen';
