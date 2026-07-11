@@ -303,6 +303,8 @@ Deno.serve(async (req) => {
     // Isso elimina divergências vs `tg_protect_no_overcharge` (que usa a mesma RPC).
     let extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
     const extrasCount = extraCount ?? extrasNecessarias;
+    let canonRulesSource: string | null = null;
+
 
     // 🔧 SYNC ANTES DA RPC CANÔNICA
     // A RPC calculate_gallery_extra_payment lê galerias.fotos_selecionadas.
@@ -327,7 +329,11 @@ Deno.serve(async (req) => {
     try {
       const { data: canon, error: canonErr } = await supabase.rpc('calculate_gallery_extra_payment', {
         p_gallery_id: galleryId,
+        // Bypass do pre_selecao_gate: estamos no momento canônico da transição
+        // selecao_iniciada -> selecao_completa; sem bypass a RPC retorna 0.
+        p_bypass_pre_selecao_gate: true,
       });
+
 
       if (canonErr) throw canonErr;
       if (!canon || (canon as any).success !== true) {
@@ -335,11 +341,15 @@ Deno.serve(async (req) => {
       }
 
       const c = canon as Record<string, any>;
+      canonRulesSource = c.rules_source ?? null;
       valorUnitario = Number(c.valor_unitario) || 0;
       valorTotal = Number(c.valor_a_cobrar) || 0;
       extrasACobrar = Number(c.extras_a_cobrar) || 0;
       extrasPagasTotal = Number(c.extras_pagas) || extrasPagasTotal;
       valorJaPago = Number(c.valor_pago) || valorJaPago;
+
+
+
 
       console.log(`📊 [RPC canônica] rules_source=${c.rules_source}, extras_necess=${c.extras_necessarias}, extras_pagas=${c.extras_pagas}, extras_a_cobrar=${c.extras_a_cobrar}, valor_unitario=R$${c.valor_unitario}, valor_total_ideal=R$${c.valor_total_ideal}, valor_pago=R$${c.valor_pago}, valor_a_cobrar=R$${c.valor_a_cobrar}`);
     } catch (rpcErr) {
@@ -434,7 +444,9 @@ Deno.serve(async (req) => {
         console.error('[CONTRACT GUARD] cálculo zero em galeria que deveria cobrar', {
           galleryId, selectedCount, fotos_incluidas: gallery.fotos_incluidas,
           extrasNecessarias, extrasPagasTotal, valorTotal, chargeType,
+          rulesSource: canonRulesSource,
         });
+
         await rollbackGalleryStatus();
         return errorResponse(
           'Não foi possível calcular o valor a cobrar. Recarregue a página e tente novamente.',
