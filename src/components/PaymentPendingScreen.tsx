@@ -292,10 +292,7 @@ export function PaymentPendingScreen({
         ];
 
   return (
-    <div
-      className="min-h-screen w-full bg-background text-foreground"
-      style={themeStyles}
-    >
+    <LightPaymentSurface themeStyles={themeStyles} className="bg-background text-foreground">
       <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-14">
         {/* Header - Logo grande, sem borda */}
         <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
