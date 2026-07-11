@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { LightPaymentSurface } from '@/components/gallery/LightPaymentSurface';
 import { isValidCpfCnpj, maskCpfCnpj, onlyDigits } from '@/lib/validateCpfCnpj';
 import type { PaymentMethod } from '@/types/gallery';
 
