@@ -244,6 +244,7 @@ export type Database = {
           resource_id: string | null
           resource_type: string | null
           user_agent: string | null
+          user_id: string | null
         }
         Insert: {
           action: string
@@ -257,6 +258,7 @@ export type Database = {
           resource_id?: string | null
           resource_type?: string | null
           user_agent?: string | null
+          user_id?: string | null
         }
         Update: {
           action?: string
@@ -270,6 +272,7 @@ export type Database = {
           resource_id?: string | null
           resource_type?: string | null
           user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
