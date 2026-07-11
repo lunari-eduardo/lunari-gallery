@@ -444,7 +444,9 @@ Deno.serve(async (req) => {
         console.error('[CONTRACT GUARD] cálculo zero em galeria que deveria cobrar', {
           galleryId, selectedCount, fotos_incluidas: gallery.fotos_incluidas,
           extrasNecessarias, extrasPagasTotal, valorTotal, chargeType,
+          rulesSource: canonRulesSource,
         });
+
         await rollbackGalleryStatus();
         return errorResponse(
           'Não foi possível calcular o valor a cobrar. Recarregue a página e tente novamente.',
