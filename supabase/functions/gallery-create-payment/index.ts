@@ -52,13 +52,6 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json().catch(() => ({} as RequestBody));
-    const { galleryId, provider } = body;
-
-    console.log(`[gcp][step:1 request] ${JSON.stringify({ galleryId, provider })}`);
-
-    if (!galleryId) {
-      return jsonResponse({ success: false, error: 'galleryId é obrigatório', code: 'MISSING_GALLERY_ID' }, 400);
-    }
 
     // 1. Fetch gallery
     const {
