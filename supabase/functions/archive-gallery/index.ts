@@ -183,8 +183,9 @@ Deno.serve(async (req) => {
         actor_type: 'user',
         actor_id: user.id,
         resource_type: 'gallery',
-        gallery_id: galleryId,
+        gallery_id: null,
         metadata: {
+          gallery_id: galleryId,
           failed_paths: failedPaths.slice(0, 200),
           failed_paths_total: failedPaths.length,
         },
