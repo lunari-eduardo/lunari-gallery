@@ -593,48 +593,27 @@ Deno.serve(async (req) => {
           (paymentResponse as Record<string, unknown>).__asaasCheckoutData = asaasCheckoutData;
           // Skip the external payment creation — continue to gallery update
         }
-        // ——— InfinitePay / MercadoPago: external checkout ———
+        // ——— InfinitePay / MercadoPago: pipeline unificado ———
+        // Contrato pipeline (.lovable/pipeline-galeria-pagamento.md): a criação
+        // do link SEMPRE passa por `gallery-create-payment`, nunca chama
+        // *-create-link diretamente. gcp é a fonte única de valor/qtd, faz
+        // cancelamento de cobranças antigas e escolhe provedor com fallback.
         else {
-        let functionName: string;
-        if (integracao.provedor === 'infinitepay') {
-          functionName = 'infinitepay-create-link';
-        } else {
-          functionName = 'mercadopago-create-link';
-        }
-
-        // Normalize session_id to text format
-        let sessionIdTexto = gallery.session_id;
-        if (sessionIdTexto && !sessionIdTexto.startsWith('workflow-') && !sessionIdTexto.startsWith('session_')) {
-          const { data: sessao } = await supabase
-            .from('clientes_sessoes')
-            .select('session_id')
-            .or(`id.eq.${sessionIdTexto},session_id.eq.${sessionIdTexto}`)
-            .maybeSingle();
-          sessionIdTexto = sessao?.session_id || sessionIdTexto;
-        }
-
-        const descricao = `${extrasACobrar} foto${extrasACobrar !== 1 ? 's' : ''} extra${extrasACobrar !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
-
         try {
-          // Use fetch() directly instead of supabase.functions.invoke() to get full error details
-          const functionUrl = `${supabaseUrl}/functions/v1/${functionName}`;
-          console.log(`💳 Calling ${functionName} via fetch()...`);
-          
-          const paymentFetchResponse = await fetch(functionUrl, {
+          const gcpUrl = `${supabaseUrl}/functions/v1/gallery-create-payment`;
+          console.log(`[confirm-selection] Delegating to gallery-create-payment (provider=${integracao.provedor})…`);
+
+          const gcpResponse = await fetch(gcpUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${supabaseServiceKey}`,
             },
             body: JSON.stringify({
-              clienteId: gallery.cliente_id,
-              sessionId: sessionIdTexto,
-              valor: valorTotal,
-              descricao,
-              userId: gallery.user_id,
-              galleryToken: gallery.public_token,
-              galeriaId: galleryId,
-              qtdFotos: extrasACobrar,
+              galleryId,
+              provider: integracao.provedor,
+              context: 'confirm_selection',
+              bypassPreSelecaoGate: true,
               visitorId: visitorId || undefined,
               snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
               snapshotRegrasCongeladas: gallery.regras_congeladas,
@@ -643,40 +622,38 @@ Deno.serve(async (req) => {
           });
 
           let paymentData: Record<string, unknown> | null = null;
-          const paymentContentType = paymentFetchResponse.headers.get('content-type') || '';
-          
+          const paymentContentType = gcpResponse.headers.get('content-type') || '';
           if (paymentContentType.includes('application/json')) {
-            paymentData = await paymentFetchResponse.json();
+            paymentData = await gcpResponse.json();
           } else {
-            const textBody = await paymentFetchResponse.text();
-            console.error(`❌ ${functionName} returned non-JSON (${paymentContentType}):`, textBody.substring(0, 300));
+            const textBody = await gcpResponse.text();
+            console.error(`❌ gallery-create-payment returned non-JSON (${paymentContentType}):`, textBody.substring(0, 300));
           }
 
-          console.log(`💳 Payment response (status ${paymentFetchResponse.status}):`, JSON.stringify({
+          console.log(`[confirm-selection] gcp response (status ${gcpResponse.status}):`, JSON.stringify({
             success: paymentData?.success,
-            error: paymentData?.error,
+            provedor: paymentData?.provedor,
             code: paymentData?.code,
+            error: paymentData?.error,
           }));
 
-          if (paymentFetchResponse.ok && paymentData?.success) {
-            const checkoutUrl = paymentData.checkoutUrl || paymentData.paymentLink || paymentData.checkout_url;
-            const cobrancaId = paymentData.cobrancaId || (paymentData.cobranca as Record<string, unknown>)?.id || paymentData.cobranca_id;
+          if (gcpResponse.ok && paymentData?.success) {
+            const checkoutUrl = paymentData.checkoutUrl as string | undefined;
+            const cobrancaId = paymentData.cobrancaId as string | undefined;
+            const provedorFinal = (paymentData.provedor as string) || integracao.provedor;
 
             paymentResponse = {
-              checkoutUrl: checkoutUrl as string,
-              provedor: integracao.provedor,
-              cobrancaId: cobrancaId as string,
+              checkoutUrl,
+              provedor: provedorFinal,
+              cobrancaId,
             };
-
             statusPagamento = 'pendente';
-            console.log(`💳 Payment created successfully: ${cobrancaId} via ${integracao.provedor}`);
+            console.log(`💳 Payment created via gcp: ${cobrancaId} @ ${provedorFinal}`);
           } else {
             const errorMsg = (paymentData?.error as string) || 'Falha na criação do link de pagamento';
-            let errorCode = (paymentData?.code as string) || 'PAYMENT_FAILED';
+            let errorCode = (paymentData?.code as string) || 'PAYMENT_CREATE_ERROR';
             const errorDetails = (paymentData?.details as string) || '';
 
-            // Mapeia rejeição do trigger tg_protect_no_overcharge para código próprio,
-            // com mensagem amigável (o cliente costuma ver isso após reativação).
             const isOverchargeReject =
               errorCode === 'CHARGE_DB_ERROR' &&
               /excederia o saldo|maior que o valor/i.test(errorDetails);
@@ -685,7 +662,7 @@ Deno.serve(async (req) => {
               : errorMsg;
             if (isOverchargeReject) errorCode = 'CHARGE_OVERCHARGE';
 
-            console.error(`❌ CRITICAL: Payment creation failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
+            console.error(`❌ CRITICAL: gcp failed: [${errorCode}] ${errorMsg} ${errorDetails}`);
 
             await rollbackGalleryStatus();
             return new Response(
@@ -694,8 +671,7 @@ Deno.serve(async (req) => {
             );
           }
         } catch (payErr) {
-          console.error('❌ CRITICAL: Payment fetch error:', payErr);
-          
+          console.error('❌ CRITICAL: gcp fetch error:', payErr);
           await rollbackGalleryStatus();
           return new Response(
             JSON.stringify({
