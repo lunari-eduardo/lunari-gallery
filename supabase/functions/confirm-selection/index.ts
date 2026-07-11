@@ -327,7 +327,11 @@ Deno.serve(async (req) => {
     try {
       const { data: canon, error: canonErr } = await supabase.rpc('calculate_gallery_extra_payment', {
         p_gallery_id: galleryId,
+        // Bypass do pre_selecao_gate: estamos no momento canônico da transição
+        // selecao_iniciada -> selecao_completa; sem bypass a RPC retorna 0.
+        p_bypass_pre_selecao_gate: true,
       });
+
 
       if (canonErr) throw canonErr;
       if (!canon || (canon as any).success !== true) {
