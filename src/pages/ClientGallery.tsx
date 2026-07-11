@@ -725,12 +725,19 @@ export default function ClientGallery() {
           description: 'Tente novamente em alguns minutos.',
           duration: 6000,
         });
+      } else if (msg.includes('PAYMENT_CALC_MISMATCH') || msg.includes('SELECTION_SYNC_ERROR') || msg.includes('Não foi possível calcular o valor')) {
+        toast.error('Não foi possível gerar sua cobrança', {
+          description: 'Recarregue a página e tente novamente. Se persistir, contate o fotógrafo.',
+          duration: 8000,
+        });
+        refetchGallery();
       } else {
         toast.error('Erro ao processar pagamento', {
           description: msg,
           duration: 6000,
         });
       }
+
     },
   });
 
