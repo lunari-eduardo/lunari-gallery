@@ -260,7 +260,7 @@ export function PreCheckoutContactStep({
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/30 p-4 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur border-t border-border/60 p-4 z-50">
         <div className="max-w-xl mx-auto">
           <Button
             variant="terracotta"
@@ -283,6 +283,6 @@ export function PreCheckoutContactStep({
           </Button>
         </div>
       </div>
-    </div>
+    </LightPaymentSurface>
   );
 }
