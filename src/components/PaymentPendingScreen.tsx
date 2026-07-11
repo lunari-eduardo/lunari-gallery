@@ -466,7 +466,7 @@ export function PaymentPendingScreen({
         </div>
 
         {/* Rodapé */}
-        <div className="mt-6 rounded-xl bg-muted/40 border border-border px-5 py-4 flex items-start gap-3">
+        <div className="mt-6 rounded-xl bg-muted/40 border border-border/60 px-5 py-4 flex items-start gap-3">
           <Shield className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" strokeWidth={1.5} />
           <p className="text-[12.5px] text-muted-foreground leading-relaxed text-center sm:text-left flex-1">
             O andamento do seu pedido continuará sendo atualizado nesta página. Em caso de dúvidas,
