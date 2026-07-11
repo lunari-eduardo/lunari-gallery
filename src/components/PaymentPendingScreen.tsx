@@ -380,7 +380,7 @@ export function PaymentPendingScreen({
                 </div>
               </div>
 
-              <div className="mt-6 rounded-xl bg-muted/50 border border-border px-4 py-3 flex items-start gap-3">
+              <div className="mt-6 rounded-xl bg-muted/40 border border-border/60 px-4 py-3 flex items-start gap-3">
                 <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" strokeWidth={1.5} />
                 <p className="text-[13px] text-muted-foreground leading-relaxed">
                   Assim que o pagamento for identificado, o processo continuará automaticamente.
