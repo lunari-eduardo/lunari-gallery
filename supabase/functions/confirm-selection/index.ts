@@ -839,46 +839,22 @@ Deno.serve(async (req) => {
       console.error('Log insert error:', logError);
     }
 
-    // 8. Sync with clientes_sessoes if gallery was created from Gestão
-    // 🛡️ Relemos a galeria após o UPDATE acima para capturar valores
-    // pós-heal (triggers de reconciliação podem ter ajustado
-    // total_fotos_extras_vendidas / valor_total_vendido). Sem isso, o
-    // fallback usava valores stale e causava double-count na sessão.
+    // 8. Sincronização Gallery→Sessão (contrato Gestão 2026-07-11)
+    // A trigger `sync_gallery_extras_to_session` já propagou qtd/valor
+    // a partir do UPDATE em `galerias` feito acima. Chamamos a edge
+    // `gallery-update-session-photos` APENAS para reafirmar `status_galeria`
+    // e deixar rastro em `audit_log`. Falha é não-bloqueante: a trigger cobre.
     if (gallery.session_id) {
-      const { data: refreshedGallery } = await supabase
-        .from('galerias')
-        .select('total_fotos_extras_vendidas, valor_total_vendido')
-        .eq('id', galleryId)
-        .maybeSingle();
-
-      const baseExtras = Number(refreshedGallery?.total_fotos_extras_vendidas ?? gallery.total_fotos_extras_vendidas ?? 0);
-      const baseValor = Number(refreshedGallery?.valor_total_vendido ?? gallery.valor_total_vendido ?? 0);
-      const totalExtrasAbsoluto = baseExtras + extrasACobrar;
-      const totalValorAbsoluto = baseValor + valorTotal;
-
-      const { error: sessionError } = await supabase.rpc('set_session_extras', {
-        p_session_id: gallery.session_id,
-        p_total_extras: totalExtrasAbsoluto,
-        p_valor_unitario: valorUnitario,
-        p_total_valor: totalValorAbsoluto,
-        p_status_galeria: 'selecao_completa',
+      const syncResult = await syncSessionOnFinalize({
+        supabase,
+        galleryId,
+        sessionId: gallery.session_id,
+        correlationId,
       });
-
-      if (sessionError) {
-        console.error('Session set_session_extras error:', sessionError);
-        const { error: fallbackError } = await supabase
-          .from('clientes_sessoes')
-          .update({
-            qtd_fotos_extra: totalExtrasAbsoluto,
-            valor_foto_extra: valorUnitario,
-            valor_total_foto_extra: totalValorAbsoluto,
-            status_galeria: 'selecao_completa',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('session_id', gallery.session_id);
-        if (fallbackError) console.error('Session fallback update error:', fallbackError);
-      } else {
-        console.log(`✅ Session ${gallery.session_id} set to absolute values: ${totalExtrasAbsoluto} extras, R$ ${valorUnitario}/photo, R$ ${totalValorAbsoluto} total`);
+      if (!syncResult.ok && !syncResult.skipped) {
+        console.warn(`⚠️ gallery-update-session-photos falhou (status=${syncResult.status}): ${JSON.stringify(syncResult.body)} — trigger cobre o estado`);
+      } else if (syncResult.ok && !syncResult.skipped) {
+        console.log(`✅ Sessão ${gallery.session_id} sincronizada via edge Gestão`);
       }
     }
 

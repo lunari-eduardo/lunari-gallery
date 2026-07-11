@@ -133,12 +133,14 @@ Deno.serve(async (req) => {
         })
         .eq('id', galleryId);
 
-      // Update session if linked
+      // Sincronização Sessão via edge do Gestão (contrato 2026-07-11).
+      // Escrita direta em `clientes_sessoes` foi removida — a edge é o único canal.
       if (gallery.session_id) {
-        await supabase
-          .from('clientes_sessoes')
-          .update({ status_galeria: 'selecao_completa', updated_at: now })
-          .eq('session_id', gallery.session_id);
+        await syncSessionOnFinalize({
+          supabase,
+          galleryId,
+          sessionId: gallery.session_id,
+        });
       }
 
       // Log action
@@ -481,12 +483,9 @@ Deno.serve(async (req) => {
         user_id: null,
       });
       
-      if (gallery.session_id) {
-        await supabase
-          .from('clientes_sessoes')
-          .update({ status_galeria: 'em_selecao', updated_at: new Date().toISOString() })
-          .eq('session_id', gallery.session_id);
-      }
+      // Escrita em `clientes_sessoes.status_galeria='em_selecao'` removida
+      // (contrato Gestão 2026-07-11). O Gestão não depende desse badge
+      // intermediário; a trigger sync_gallery_extras_to_session já cobre.
     }
 
     // 9. Log action
