@@ -223,6 +223,11 @@ Deno.serve(async (req) => {
       galeriaId: gallery.id,
       qtdFotos: extrasACobrar,
       galleryToken: gallery.public_token,
+      // Propaga metadados fornecidos pelo caller interno (confirm-selection)
+      visitorId: visitorId || undefined,
+      snapshotFotosIncluidas: snapshotFotosIncluidas ?? (gallery as any).fotos_incluidas ?? 0,
+      snapshotRegrasCongeladas: snapshotRegrasCongeladas ?? (gallery as any).regras_congeladas ?? null,
+      correlationId: correlationId || undefined,
     };
     if (redirectUrl) payloadBody.redirectUrl = redirectUrl;
 
