@@ -304,6 +304,26 @@ Deno.serve(async (req) => {
     let extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
     const extrasCount = extraCount ?? extrasNecessarias;
 
+    // 🔧 SYNC ANTES DA RPC CANÔNICA
+    // A RPC calculate_gallery_extra_payment lê galerias.fotos_selecionadas.
+    // Essa coluna só era atualizada no commit final, então em cenários de
+    // primeira confirmação/reabertura a RPC recebia valor obsoleto (0/qtd antiga)
+    // e retornava extras_a_cobrar=0 → galeria era finalizada sem cobrar.
+    // Sincronizamos aqui, antes de qualquer decisão de cobrança.
+    {
+      const { error: syncErr } = await supabase
+        .from('galerias')
+        .update({ fotos_selecionadas: selectedCount, updated_at: new Date().toISOString() })
+        .eq('id', galleryId);
+      if (syncErr) {
+        console.error('❌ Falha ao sincronizar fotos_selecionadas antes da RPC:', syncErr);
+        await rollbackGalleryStatus();
+        return errorResponse('Erro ao sincronizar seleção', 500, 'SELECTION_SYNC_ERROR');
+      }
+    }
+
+
+
     try {
       const { data: canon, error: canonErr } = await supabase.rpc('calculate_gallery_extra_payment', {
         p_gallery_id: galleryId,
