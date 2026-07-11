@@ -303,6 +303,8 @@ Deno.serve(async (req) => {
     // Isso elimina divergências vs `tg_protect_no_overcharge` (que usa a mesma RPC).
     let extrasACobrar = Math.max(0, extrasNecessarias - extrasPagasTotal);
     const extrasCount = extraCount ?? extrasNecessarias;
+    let canonRulesSource: string | null = null;
+
 
     // 🔧 SYNC ANTES DA RPC CANÔNICA
     // A RPC calculate_gallery_extra_payment lê galerias.fotos_selecionadas.
