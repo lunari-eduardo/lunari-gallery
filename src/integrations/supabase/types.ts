@@ -5560,7 +5560,7 @@ export type Database = {
         Returns: Json
       }
       calculate_gallery_extra_payment: {
-        Args: { p_gallery_id: string }
+        Args: { p_bypass_pre_selecao_gate?: boolean; p_gallery_id: string }
         Returns: Json
       }
       calculate_manual_products_total: {
