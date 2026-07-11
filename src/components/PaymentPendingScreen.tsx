@@ -337,7 +337,7 @@ export function PaymentPendingScreen({
         </div>
 
         {/* Card status */}
-        <div className="rounded-2xl bg-card border border-border shadow-[0_4px_20px_-12px_rgba(0,0,0,0.08)] p-6 sm:p-8">
+        <div className="rounded-2xl bg-card border border-border/60 p-6 sm:p-8">
           {status === 'confirmed' ? (
             <div className="flex flex-col items-center text-center gap-4 py-4">
               <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
