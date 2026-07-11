@@ -89,6 +89,17 @@
   `pg_cron`. Metadados de sessão vão para `galerias_sessao_historico`.
 - `session_id` é liberado no delete físico — permite recriar a galeria.
 
+## R11 — Audit/histórico não depende da galeria física
+- `audit_log.gallery_id` tem FK `ON DELETE SET NULL DEFERRABLE INITIALLY
+  DEFERRED`. Nenhum trigger ou RPC pode gravar `audit_log.gallery_id`
+  apontando para uma galeria que está sendo removida na mesma transação.
+- Toda função executada durante ou após delete físico de galeria deve:
+  - gravar `audit_log.gallery_id = NULL`;
+  - preservar o UUID original em `metadata.gallery_id_original`;
+  - opcionalmente, usar `resource_id = OLD.id` para consulta direta.
+- Aplica-se a triggers `AFTER DELETE ON galerias` e a qualquer função
+  que insira `audit_log` sem verificar `EXISTS` da galeria antes.
+
 ---
 
 ## Checklist obrigatória para planos futuros
@@ -106,7 +117,9 @@ Todo plano que toque neste fluxo deve começar com:
 [ ] R8  cálculo usa RPC canônica?
 [ ] R9  PaymentPendingScreen cobre todos os providers?
 [ ] R10 delete físico respeita histórico de sessão?
+[ ] R11 audit_log durante delete usa gallery_id=NULL + metadata?
 ```
 
-Última atualização: 2026-07-01 (bug JFkdA0svNBN4 — cobrança órfã +
-grid renderizado após reabertura).
+Última atualização: 2026-07-11 (R11 — trigger `on_galeria_deleted_reset_session`
+gravava `audit_log.gallery_id=OLD.id` durante delete físico, reabrindo o erro
+de FK mesmo após corrigir `delete_gallery_complete`).
