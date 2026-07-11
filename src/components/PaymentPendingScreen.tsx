@@ -474,6 +474,6 @@ export function PaymentPendingScreen({
           </p>
         </div>
       </div>
-    </div>
+    </LightPaymentSurface>
   );
 }
