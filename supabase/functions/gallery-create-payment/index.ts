@@ -12,6 +12,14 @@ interface RequestBody {
   extraCount?: number;
   descricao?: string;
   provider?: string;
+  // Contexto interno (caller = confirm-selection). Habilita bypass do
+  // pre_selecao_gate na RPC canônica e propaga metadados para *-create-link.
+  context?: 'confirm_selection' | 'regenerate' | string;
+  bypassPreSelecaoGate?: boolean;
+  visitorId?: string;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: unknown;
+  correlationId?: string;
 }
 
 interface PaymentResponse {
@@ -53,9 +61,27 @@ Deno.serve(async (req) => {
     }
 
     // 1. Fetch gallery
+    const {
+      galleryId,
+      provider,
+      context,
+      bypassPreSelecaoGate,
+      visitorId,
+      snapshotFotosIncluidas,
+      snapshotRegrasCongeladas,
+      correlationId,
+    } = body;
+
+    console.log(`[gcp][step:1 request] ${JSON.stringify({ galleryId, provider, context, visitorId: !!visitorId })}`);
+
+    if (!galleryId) {
+      return jsonResponse({ success: false, error: 'galleryId é obrigatório', code: 'MISSING_GALLERY_ID' }, 400);
+    }
+
+    // 1. Fetch gallery
     const { data: gallery, error: galleryError } = await supabase
       .from('galerias')
-      .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at')
+      .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at, fotos_incluidas, regras_congeladas')
       .eq('id', galleryId)
       .single();
 
@@ -67,9 +93,14 @@ Deno.serve(async (req) => {
     const galleryUrl = gallery.public_token ? `${BASE_GALLERY_URL}/g/${gallery.public_token}` : undefined;
 
     // 2. CANONICAL CALCULATION — fonte única de valor/qtd (R8 gallery-rules)
+    // Bypass do pre_selecao_gate quando chamado a partir de confirm-selection
+    // (transição selecao_iniciada → selecao_completa). Sem bypass a RPC retorna 0.
+    const shouldBypassGate = bypassPreSelecaoGate === true || context === 'confirm_selection';
     let calc: any = null;
     try {
-      const { data, error: calcError } = await supabase.rpc('calculate_gallery_extra_payment', { p_gallery_id: galleryId });
+      const rpcArgs: Record<string, unknown> = { p_gallery_id: galleryId };
+      if (shouldBypassGate) rpcArgs.p_bypass_pre_selecao_gate = true;
+      const { data, error: calcError } = await supabase.rpc('calculate_gallery_extra_payment', rpcArgs);
       if (calcError) throw calcError;
       calc = data || null;
     } catch (e) {
@@ -86,7 +117,7 @@ Deno.serve(async (req) => {
     const extrasACobrar = Number(calc.extras_a_cobrar || 0);
     const isFullyPaid = calc.is_fully_paid === true;
 
-    console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid}`);
+    console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} bypass=${shouldBypassGate}`);
 
     // 2a. Sem saldo a cobrar → sucesso informativo, com galleryUrl sempre presente
     if (valorCanonico <= 0 || isFullyPaid) {
@@ -192,6 +223,11 @@ Deno.serve(async (req) => {
       galeriaId: gallery.id,
       qtdFotos: extrasACobrar,
       galleryToken: gallery.public_token,
+      // Propaga metadados fornecidos pelo caller interno (confirm-selection)
+      visitorId: visitorId || undefined,
+      snapshotFotosIncluidas: snapshotFotosIncluidas ?? (gallery as any).fotos_incluidas ?? 0,
+      snapshotRegrasCongeladas: snapshotRegrasCongeladas ?? (gallery as any).regras_congeladas ?? null,
+      correlationId: correlationId || undefined,
     };
     if (redirectUrl) payloadBody.redirectUrl = redirectUrl;
 
