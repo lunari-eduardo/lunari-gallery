@@ -419,6 +419,33 @@ Deno.serve(async (req) => {
 
     console.log(`💰 Payment check: mode=${saleMode} (source: ${isValidVendaModoColumn ? 'column' : isValidVendaModoJson ? 'json' : 'default'}), provider=${configuredPaymentMethod}, valorTotal=${valorTotal}, extrasACobrar=${extrasACobrar}, shouldCreate=${shouldCreatePayment}`);
 
+    // 🛡️ CONTRACT GUARD (server-side): se a galeria opera em sale_with_payment e há
+    // seleção acima do incluído (ou all_selected com qualquer foto), mas o cálculo
+    // canônico retornou zero E não há histórico pago que justifique — NUNCA finalizar
+    // em silêncio. Devolve erro para o cliente retomar; rollback do status.
+    {
+      const debeCobrar =
+        saleMode === 'sale_with_payment' &&
+        (chargeType === 'all_selected'
+          ? selectedCount > 0
+          : selectedCount > (gallery.fotos_incluidas || 0));
+      const jaQuitado = extrasPagasTotal >= extrasNecessarias && extrasNecessarias > 0;
+      if (debeCobrar && !shouldCreatePayment && !jaQuitado) {
+        console.error('[CONTRACT GUARD] cálculo zero em galeria que deveria cobrar', {
+          galleryId, selectedCount, fotos_incluidas: gallery.fotos_incluidas,
+          extrasNecessarias, extrasPagasTotal, valorTotal, chargeType,
+        });
+        await rollbackGalleryStatus();
+        return errorResponse(
+          'Não foi possível calcular o valor a cobrar. Recarregue a página e tente novamente.',
+          500,
+          'PAYMENT_CALC_MISMATCH'
+        );
+      }
+    }
+
+
+
 
 
 
