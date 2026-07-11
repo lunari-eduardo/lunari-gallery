@@ -10,15 +10,23 @@
 
 ```text
 ClientGallery.tsx
-      │  action=regenerate_charge | finalize_payment
+      │  action=regenerate_charge | finalize_payment | confirm
       ▼
 supabase/functions/client-selection/index.ts
-      │  POST /gallery-create-payment { galleryId, provider, descricao }
+      │  ou supabase/functions/confirm-selection/index.ts (primeira confirmação)
+      │  POST /gallery-create-payment { galleryId, provider,
+      │                                  context?: 'confirm_selection',
+      │                                  bypassPreSelecaoGate?, visitorId?,
+      │                                  snapshotFotosIncluidas?,
+      │                                  snapshotRegrasCongeladas?,
+      │                                  correlationId? }
       ▼
 supabase/functions/gallery-create-payment/index.ts          ← FONTE ÚNICA
       │  SELECT galerias → deriva cliente_id, session_id, user_id,
-      │                     public_token, venda_pagamento_provedor
-      │  RPC calculate_gallery_extra_payment → valor, qtd, is_fully_paid
+      │                     public_token, venda_pagamento_provedor,
+      │                     fotos_incluidas, regras_congeladas
+      │  RPC calculate_gallery_extra_payment(p_bypass_pre_selecao_gate?)
+      │    → valor, qtd, is_fully_paid
       │  cancela cobranças 'pendente'/'aguardando_confirmacao' antigas
       │
       ├── provedor='asaas'        → devolve { transparentCheckout:true, galleryUrl }
@@ -30,8 +38,17 @@ supabase/functions/gallery-create-payment/index.ts          ← FONTE ÚNICA
                                     { clienteId, sessionId, valor,
                                       descricao, userId, galeriaId,
                                       qtdFotos, galleryToken,
-                                      redirectUrl? }
+                                      visitorId?, snapshotFotosIncluidas?,
+                                      snapshotRegrasCongeladas?,
+                                      correlationId?, redirectUrl? }
 ```
+
+> **R12 (2026-07-11):** `confirm-selection` **NÃO** chama `*-create-link`
+> diretamente. Toda criação de link passa por `gallery-create-payment` com
+> `context: 'confirm_selection'` e `bypassPreSelecaoGate: true` — necessário
+> porque a RPC canônica retorna 0 durante a transição
+> `selecao_iniciada → selecao_completa` sem esse bypass.
+
 
 ## Regras invariantes
 
