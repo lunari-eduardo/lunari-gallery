@@ -12,6 +12,14 @@ interface RequestBody {
   extraCount?: number;
   descricao?: string;
   provider?: string;
+  // Contexto interno (caller = confirm-selection). Habilita bypass do
+  // pre_selecao_gate na RPC canônica e propaga metadados para *-create-link.
+  context?: 'confirm_selection' | 'regenerate' | string;
+  bypassPreSelecaoGate?: boolean;
+  visitorId?: string;
+  snapshotFotosIncluidas?: number;
+  snapshotRegrasCongeladas?: unknown;
+  correlationId?: string;
 }
 
 interface PaymentResponse {
