@@ -3,6 +3,7 @@ import { Check, Clock, Info, Loader2, RefreshCw, Shield, Wallet } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { LightPaymentSurface } from '@/components/gallery/LightPaymentSurface';
 
 const SUPABASE_URL = 'https://tlnjspsywycbudhewsfv.supabase.co';
 const POLL_MAX_DURATION = 10 * 60 * 1000;
@@ -291,10 +292,7 @@ export function PaymentPendingScreen({
         ];
 
   return (
-    <div
-      className="min-h-screen w-full bg-background text-foreground"
-      style={themeStyles}
-    >
+    <LightPaymentSurface themeStyles={themeStyles} className="bg-background text-foreground">
       <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-14">
         {/* Header - Logo grande, sem borda */}
         <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
@@ -339,7 +337,7 @@ export function PaymentPendingScreen({
         </div>
 
         {/* Card status */}
-        <div className="rounded-2xl bg-card border border-border shadow-[0_4px_20px_-12px_rgba(0,0,0,0.08)] p-6 sm:p-8">
+        <div className="rounded-2xl bg-card border border-border/60 p-6 sm:p-8">
           {status === 'confirmed' ? (
             <div className="flex flex-col items-center text-center gap-4 py-4">
               <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
@@ -382,7 +380,7 @@ export function PaymentPendingScreen({
                 </div>
               </div>
 
-              <div className="mt-6 rounded-xl bg-muted/50 border border-border px-4 py-3 flex items-start gap-3">
+              <div className="mt-6 rounded-xl bg-muted/40 border border-border/60 px-4 py-3 flex items-start gap-3">
                 <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" strokeWidth={1.5} />
                 <p className="text-[13px] text-muted-foreground leading-relaxed">
                   Assim que o pagamento for identificado, o processo continuará automaticamente.
@@ -390,7 +388,7 @@ export function PaymentPendingScreen({
               </div>
 
               {valorTotal > 0 && (
-                <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
+                <div className="mt-6 flex items-center justify-between border-t border-border/60 pt-5">
                   <span className="text-sm text-muted-foreground">Valor</span>
                   <span className="text-xl font-semibold text-foreground tabular-nums">
                     R$ {valorTotal.toFixed(2).replace('.', ',')}
@@ -468,7 +466,7 @@ export function PaymentPendingScreen({
         </div>
 
         {/* Rodapé */}
-        <div className="mt-6 rounded-xl bg-muted/40 border border-border px-5 py-4 flex items-start gap-3">
+        <div className="mt-6 rounded-xl bg-muted/40 border border-border/60 px-5 py-4 flex items-start gap-3">
           <Shield className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" strokeWidth={1.5} />
           <p className="text-[12.5px] text-muted-foreground leading-relaxed text-center sm:text-left flex-1">
             O andamento do seu pedido continuará sendo atualizado nesta página. Em caso de dúvidas,
@@ -476,6 +474,6 @@ export function PaymentPendingScreen({
           </p>
         </div>
       </div>
-    </div>
+    </LightPaymentSurface>
   );
 }

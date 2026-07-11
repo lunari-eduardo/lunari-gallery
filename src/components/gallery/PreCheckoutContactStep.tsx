@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { LightPaymentSurface } from '@/components/gallery/LightPaymentSurface';
 import { isValidCpfCnpj, maskCpfCnpj, onlyDigits } from '@/lib/validateCpfCnpj';
 import type { PaymentMethod } from '@/types/gallery';
 
@@ -137,15 +137,12 @@ export function PreCheckoutContactStep({
   const formattedValue = `R$ ${valorTotal.toFixed(2).replace('.', ',')}`;
 
   return (
-    <div
-      className={cn(
-        'min-h-screen flex flex-col bg-background text-foreground',
-        backgroundMode === 'dark' && 'dark',
-      )}
-      style={themeStyles}
+    <LightPaymentSurface
+      themeStyles={themeStyles}
+      className="flex flex-col text-foreground bg-background"
     >
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border/30">
+      {/* Header — borda fina e clean */}
+      <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b border-border/60">
         <div className="flex items-center justify-between px-4 py-3 max-w-3xl mx-auto">
           <Button variant="ghost" size="sm" onClick={onBack} disabled={isSubmitting} className="gap-1.5 text-muted-foreground">
             <ArrowLeft className="h-4 w-4" />
@@ -263,7 +260,7 @@ export function PreCheckoutContactStep({
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/30 p-4 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur border-t border-border/60 p-4 z-50">
         <div className="max-w-xl mx-auto">
           <Button
             variant="terracotta"
@@ -286,6 +283,6 @@ export function PreCheckoutContactStep({
           </Button>
         </div>
       </div>
-    </div>
+    </LightPaymentSurface>
   );
 }
