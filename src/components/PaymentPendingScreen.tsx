@@ -388,7 +388,7 @@ export function PaymentPendingScreen({
               </div>
 
               {valorTotal > 0 && (
-                <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
+                <div className="mt-6 flex items-center justify-between border-t border-border/60 pt-5">
                   <span className="text-sm text-muted-foreground">Valor</span>
                   <span className="text-xl font-semibold text-foreground tabular-nums">
                     R$ {valorTotal.toFixed(2).replace('.', ',')}
