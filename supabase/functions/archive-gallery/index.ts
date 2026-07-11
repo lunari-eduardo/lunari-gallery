@@ -160,10 +160,13 @@ Deno.serve(async (req) => {
       actor_type: 'user',
       actor_id: user.id,
       resource_type: 'gallery',
-      gallery_id: galleryId,
+      // gallery_id fica NULL: a galeria já foi apagada fisicamente pelo RPC.
+      // O UUID é preservado em metadata.gallery_id para rastreabilidade.
+      gallery_id: null,
       ip_address: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
       user_agent: req.headers.get('user-agent') || null,
       metadata: {
+        gallery_id: galleryId,
         photo_count: result.photo_count ?? 0,
         storage_paths_total: paths.length,
         r2_deleted: deletedFromStorage,
