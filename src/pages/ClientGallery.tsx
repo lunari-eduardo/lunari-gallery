@@ -1791,25 +1791,19 @@ export default function ClientGallery() {
       valorTotal: resultado.valorACobrar,
     };
 
-    // 🧭 Etapa intermediária "Dados de cobrança": SEMPRE que houver pagamento
-    // pendente e qualquer dado (nome/email/whatsapp/CPF) estiver faltando,
-    // roteia para PreCheckoutContactStep — regardless of provider.
-    // Persiste no CRM (via upsert_visitor_contact) para pré-preencher próximas cobranças.
+    // 🧭 Etapa intermediária "Dados de cobrança": SÓ aparece quando faltar
+    // algum dado (nome/email/whatsapp/CPF) OU quando algum estiver inválido.
+    // Quando o cliente já tem tudo preenchido e válido, pulamos direto para
+    // o `confirm-selection` — sem tela intermediária.
     const saleMode = gallery.saleSettings?.mode;
     const shouldRequestPayment = saleMode === 'sale_with_payment' && payload.valorTotal > 0;
     const hints = (galleryResponse as any)?.payerHints as
       | { fullName?: string | null; email?: string | null; phone?: string | null; cpfCnpj?: string | null }
       | undefined;
-    const needsAny =
-      shouldRequestPayment && (
-        !hints?.fullName ||
-        !hints?.email ||
-        !hints?.phone ||
-        !hints?.cpfCnpj
-      );
+    const needsPreCheckout = shouldRequestPayment && !hintsAreComplete(hints);
     // Guardar payload permite retomar após coleta.
     setPendingConfirmPayload(payload);
-    if (needsAny) {
+    if (needsPreCheckout) {
       setCurrentStep('pre_checkout_contact');
       return;
     }
