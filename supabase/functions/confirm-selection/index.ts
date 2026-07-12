@@ -838,57 +838,72 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7. Log action in history
-    const { error: logError } = await supabase.from('galeria_acoes').insert({
-      galeria_id: galleryId,
-      tipo: 'cliente_confirmou',
-      descricao: `Cliente confirmou seleção de ${selectedCount || 0} fotos${extrasACobrar ? ` (${extrasACobrar} extras - R$ ${valorTotal.toFixed(2)})` : ''}`,
-      user_id: null,
-    });
+    // Fase 3 — Post-response non-blocking:
+    // Histórico, sync com Gestão e audit_log NÃO precisam bloquear o response.
+    // O `checkoutUrl` já pode ir para o frontend; estas escritas continuam
+    // em background via EdgeRuntime.waitUntil quando disponível.
+    const backgroundTasks = async () => {
+      try {
+        const { error: logError } = await supabase.from('galeria_acoes').insert({
+          galeria_id: galleryId,
+          tipo: 'cliente_confirmou',
+          descricao: `Cliente confirmou seleção de ${selectedCount || 0} fotos${extrasACobrar ? ` (${extrasACobrar} extras - R$ ${valorTotal.toFixed(2)})` : ''}`,
+          user_id: null,
+        });
+        if (logError) console.error('[bg] Log insert error:', logError);
+      } catch (e) { console.error('[bg] galeria_acoes insert exc:', e); }
 
-    if (logError) {
-      console.error('Log insert error:', logError);
-    }
-
-    // 8. Sincronização Gallery→Sessão (contrato Gestão 2026-07-11)
-    // A trigger `sync_gallery_extras_to_session` já propagou qtd/valor
-    // a partir do UPDATE em `galerias` feito acima. Chamamos a edge
-    // `gallery-update-session-photos` APENAS para reafirmar `status_galeria`
-    // e deixar rastro em `audit_log`. Falha é não-bloqueante: a trigger cobre.
-    if (gallery.session_id) {
-      const syncResult = await syncSessionOnFinalize({
-        supabase,
-        galleryId,
-        sessionId: gallery.session_id,
-        correlationId,
-      });
-      if (!syncResult.ok && !syncResult.skipped) {
-        console.warn(`⚠️ gallery-update-session-photos falhou (status=${syncResult.status}): ${JSON.stringify(syncResult.body)} — trigger cobre o estado`);
-      } else if (syncResult.ok && !syncResult.skipped) {
-        console.log(`✅ Sessão ${gallery.session_id} sincronizada via edge Gestão`);
+      if (gallery.session_id) {
+        try {
+          const syncResult = await syncSessionOnFinalize({
+            supabase,
+            galleryId,
+            sessionId: gallery.session_id,
+            correlationId,
+          });
+          if (!syncResult.ok && !syncResult.skipped) {
+            console.warn(`[bg] ⚠️ gallery-update-session-photos falhou (status=${syncResult.status}): ${JSON.stringify(syncResult.body)} — trigger cobre o estado`);
+          } else if (syncResult.ok && !syncResult.skipped) {
+            console.log(`[bg] ✅ Sessão ${gallery.session_id} sincronizada via edge Gestão`);
+          }
+        } catch (e) { console.error('[bg] syncSessionOnFinalize exc:', e); }
       }
+
+      try {
+        const { error: auditErr } = await supabase.from('audit_log').insert({
+          action: 'confirm_selection',
+          actor_type: 'client',
+          ip_address: clientIp,
+          resource_type: 'gallery',
+          resource_id: galleryId,
+          gallery_id: galleryId,
+          user_agent: req.headers.get('user-agent') || null,
+          metadata: {
+            selectedCount,
+            extrasACobrar,
+            valorTotal,
+            valorUnitario,
+            paymentRequired: shouldCreatePayment,
+            provedor: paymentResponse?.provedor || null,
+          },
+        });
+        if (auditErr) console.warn('[bg] Audit log error:', auditErr.message);
+      } catch (e) { console.error('[bg] audit_log insert exc:', e); }
+    };
+
+    const bgPromise = backgroundTasks();
+    // @ts-ignore — EdgeRuntime é injetado no runtime Deno Deploy do Supabase
+    if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(bgPromise);
+    } else {
+      // Fallback: dispara sem await (a Promise continua rodando após o return)
+      bgPromise.catch((e) => console.error('[bg] tasks failed:', e));
     }
 
     console.log(`✅ Gallery ${galleryId} selection confirmed with ${selectedCount} photos, status_pagamento=${statusPagamento}`);
 
-    // AUDIT LOG: Record selection confirmation
-    await supabase.from('audit_log').insert({
-      action: 'confirm_selection',
-      actor_type: 'client',
-      ip_address: clientIp,
-      resource_type: 'gallery',
-      resource_id: galleryId,
-      gallery_id: galleryId,
-      user_agent: req.headers.get('user-agent') || null,
-      metadata: {
-        selectedCount,
-        extrasACobrar,
-        valorTotal,
-        valorUnitario,
-        paymentRequired: shouldCreatePayment,
-        provedor: paymentResponse?.provedor || null,
-      },
-    }).then(({ error }) => { if (error) console.warn('Audit log error:', error.message); });
+
 
     // 9. Return response based on payment type
     // 🛡️ CRITICAL SAFETY CHECK: If payment was required but not created, BLOCK finalization
