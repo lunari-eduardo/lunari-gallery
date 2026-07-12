@@ -315,6 +315,44 @@ export default function ClientGallery() {
     };
   }, [galleryResponse]);
 
+  // Fase 5 — Preconnect para o host do provedor de pagamento assim que sabemos
+  // qual é. Reduz DNS + TLS na hora do redirect (~200-500ms perceptivos).
+  // Só dispara quando saleMode === 'sale_with_payment' para não abrir socket
+  // desnecessário em galerias no_sale.
+  useEffect(() => {
+    if (!galleryResponse) return;
+    const g: any = (galleryResponse as any).gallery || galleryResponse;
+    const settings: any =
+      (galleryResponse as any).saleSettings ||
+      g?.saleSettings ||
+      g?.configuracoes?.saleSettings ||
+      null;
+    if (!settings || settings.mode !== 'sale_with_payment') return;
+    const method: string | undefined = settings.paymentMethod || g?.venda_pagamento_provedor;
+    const HOSTS: Record<string, string> = {
+      infinitepay: 'https://checkout.infinitepay.io',
+      mercadopago: 'https://www.mercadopago.com.br',
+    };
+    const host = method ? HOSTS[method] : undefined;
+    if (!host) return;
+
+    const links: HTMLLinkElement[] = [];
+    const mk = (rel: string) => {
+      const l = document.createElement('link');
+      l.rel = rel;
+      l.href = host;
+      if (rel === 'preconnect') l.crossOrigin = 'anonymous';
+      document.head.appendChild(l);
+      links.push(l);
+    };
+    mk('preconnect');
+    mk('dns-prefetch');
+    return () => {
+      links.forEach((l) => l.parentNode?.removeChild(l));
+    };
+  }, [galleryResponse]);
+
+
   // Extract gallery data from response (handle both legacy and new format)
   const supabaseGallery = useMemo(() => {
     if (!galleryResponse) return null;
