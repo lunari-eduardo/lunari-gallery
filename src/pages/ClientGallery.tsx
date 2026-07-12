@@ -665,10 +665,25 @@ export default function ClientGallery() {
       // Checkout externo (InfinitePay/MercadoPago) - redirect immediately
       if (data.requiresPayment && data.checkoutUrl) {
         console.log('💳 Redirecionando para checkout externo:', data.checkoutUrl);
-        // Usar location.assign para garantir navegação
-        window.location.assign(data.checkoutUrl);
+        // Fase 6: overlay imediato + breadcrumb + replace (tira galeria do histórico).
+        // O overlay mostra transição visual enquanto o browser resolve DNS/TLS.
+        try {
+          sessionStorage.setItem(`gallery_checkout_pending_${identifier}`, JSON.stringify({
+            cobrancaId: data.cobrancaId ?? null,
+            provedor: data.provedor ?? 'externo',
+            valorTotal: data.valorTotal ?? 0,
+            timestamp: Date.now(),
+          }));
+        } catch { /* ignore quota */ }
+        setIsRedirectingToCheckout(true);
+        // rAF garante que o overlay pintou antes do navigate
+        requestAnimationFrame(() => {
+          window.location.replace(data.checkoutUrl);
+        });
         return;
       }
+      
+
       
       // GUARD: If backend says payment is required but no checkout data arrived,
       // do NOT confirm — this is likely a config/payload issue
