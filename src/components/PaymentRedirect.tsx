@@ -51,15 +51,16 @@ export function PaymentRedirect({
       return () => clearTimeout(timer);
     } else if (!redirected) {
       setRedirected(true);
-      window.location.href = checkoutUrl;
+      window.location.replace(checkoutUrl);
     }
   }, [countdown, checkoutUrl, redirected, isValidUrl]);
 
   const handleManualRedirect = () => {
     if (!isValidUrl) return;
     setRedirected(true);
-    window.location.href = checkoutUrl;
+    window.location.replace(checkoutUrl);
   };
+
 
   // Show error screen if URL is invalid
   if (!isValidUrl) {
