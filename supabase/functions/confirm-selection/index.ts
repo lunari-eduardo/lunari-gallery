@@ -258,45 +258,51 @@ Deno.serve(async (req) => {
     // cobrança pendente de contabilização — a RPC é idempotente via
     // `extras_contabilizados`, então é seguro chamar múltiplas vezes.
     if (extrasPagasTotal === 0) {
-      // 🛡️ Filtro relaxado: incluímos cobranças mesmo com qtd_fotos=0/null,
-      // pois a RPC `finalize_gallery_payment` agora infere qtd_fotos da descrição
-      // ou do preço unitário. Isso fecha o ciclo do bug em que cobranças InfinitePay
-      // gravadas com qtd_fotos=0 nunca eram contabilizadas.
-      const { data: paidCharges } = await supabase
+      // Fase 4: HEAD count antes do SELECT completo — só carrega payload de cobranças
+      // quando realmente há divergência. 99% das primeiras confirmações não têm.
+      const { count: paidCount } = await supabase
         .from('cobrancas')
-        .select('id, valor, qtd_fotos, extras_contabilizados, status')
+        .select('id', { count: 'exact', head: true })
         .eq('galeria_id', galleryId)
         .in('status', ['pago', 'pago_manual']);
 
-      const needsHeal = (paidCharges || []).filter((c) => c.extras_contabilizados !== true);
-      if (needsHeal.length > 0) {
-        console.warn(`⚠️ DIVERGÊNCIA: galeria ${galleryId} tem ${needsHeal.length} cobrança(s) paga(s) não contabilizada(s). Auto-heal disparado.`);
-        for (const c of needsHeal) {
-          try {
-            await supabase.rpc('finalize_gallery_payment', {
-              p_cobranca_id: c.id,
-              p_receipt_url: null,
-              p_paid_at: new Date().toISOString(),
-              p_manual_method: null,
-              p_manual_obs: null,
-            });
-          } catch (healErr) {
-            console.error(`❌ Auto-heal falhou para cobrança ${c.id}:`, healErr);
+      if ((paidCount ?? 0) > 0) {
+        const { data: paidCharges } = await supabase
+          .from('cobrancas')
+          .select('id, valor, qtd_fotos, extras_contabilizados, status')
+          .eq('galeria_id', galleryId)
+          .in('status', ['pago', 'pago_manual']);
+
+        const needsHeal = (paidCharges || []).filter((c) => c.extras_contabilizados !== true);
+        if (needsHeal.length > 0) {
+          console.warn(`⚠️ DIVERGÊNCIA: galeria ${galleryId} tem ${needsHeal.length} cobrança(s) paga(s) não contabilizada(s). Auto-heal disparado.`);
+          for (const c of needsHeal) {
+            try {
+              await supabase.rpc('finalize_gallery_payment', {
+                p_cobranca_id: c.id,
+                p_receipt_url: null,
+                p_paid_at: new Date().toISOString(),
+                p_manual_method: null,
+                p_manual_obs: null,
+              });
+            } catch (healErr) {
+              console.error(`❌ Auto-heal falhou para cobrança ${c.id}:`, healErr);
+            }
           }
-        }
-        // Reler contadores após heal
-        const { data: refreshed } = await supabase
-          .from('galerias')
-          .select('total_fotos_extras_vendidas, valor_total_vendido')
-          .eq('id', galleryId)
-          .single();
-        if (refreshed) {
-          extrasPagasTotal = refreshed.total_fotos_extras_vendidas || 0;
-          valorJaPago = refreshed.valor_total_vendido || 0;
-          console.log(`✅ Auto-heal concluído: extras_pagas=${extrasPagasTotal}, valor_pago=R$${valorJaPago}`);
+          const { data: refreshed } = await supabase
+            .from('galerias')
+            .select('total_fotos_extras_vendidas, valor_total_vendido')
+            .eq('id', galleryId)
+            .single();
+          if (refreshed) {
+            extrasPagasTotal = refreshed.total_fotos_extras_vendidas || 0;
+            valorJaPago = refreshed.valor_total_vendido || 0;
+            console.log(`✅ Auto-heal concluído: extras_pagas=${extrasPagasTotal}, valor_pago=R$${valorJaPago}`);
+          }
         }
       }
     }
+
 
     // ── SOURCE OF TRUTH FOR PRICE ──
     // R8 (gallery-rules): valor é calculado EXCLUSIVAMENTE pela RPC canônica
