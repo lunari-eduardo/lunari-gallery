@@ -157,6 +157,8 @@ export default function ClientGallery() {
   // Controla se o cliente já clicou em "Ir para pagamento" e queremos mostrar
   // o checkout inline (Asaas) ou tela de PIX, em vez da PaymentPendingScreen.
   const [showInlineCheckout, setShowInlineCheckout] = useState(false);
+  // Overlay imediato de "abrindo checkout" — reduz percepção de lentidão
+  const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
   const paymentRetryRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Password state
