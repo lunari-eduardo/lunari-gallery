@@ -607,7 +607,17 @@ Deno.serve(async (req) => {
         else {
         try {
           const gcpUrl = `${supabaseUrl}/functions/v1/gallery-create-payment`;
-          console.log(`[confirm-selection] Delegating to gallery-create-payment (provider=${integracao.provedor})…`);
+          console.log(`[confirm-selection] Delegating to gallery-create-payment (provider=${integracao.provedor}) with preloaded…`);
+
+          // Fase 2: envia payload preloaded para que gcp pule SELECT galerias,
+          // RPC canônica e SELECT usuarios_integracoes que já fizemos aqui.
+          // Fast-path só é aceito porque estamos autenticando com service key.
+          let sessionIdTextoPre: string | null = null;
+          if (gallery.session_id) {
+            if (gallery.session_id.startsWith('workflow-') || gallery.session_id.startsWith('session_')) {
+              sessionIdTextoPre = gallery.session_id;
+            }
+          }
 
           const gcpResponse = await fetch(gcpUrl, {
             method: 'POST',
@@ -624,8 +634,26 @@ Deno.serve(async (req) => {
               snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
               snapshotRegrasCongeladas: gallery.regras_congeladas,
               correlationId,
+              preloaded: {
+                gallery: {
+                  id: galleryId,
+                  user_id: gallery.user_id,
+                  cliente_id: gallery.cliente_id,
+                  session_id: gallery.session_id,
+                  nome_sessao: gallery.nome_sessao,
+                  public_token: gallery.public_token,
+                  fotos_incluidas: gallery.fotos_incluidas,
+                  regras_congeladas: gallery.regras_congeladas,
+                },
+                valorCanonico: valorTotal,
+                extrasACobrar: extrasACobrar,
+                isFullyPaid: false,
+                provedor: integracao.provedor,
+                sessionIdTexto: sessionIdTextoPre,
+              },
             }),
           });
+
 
           let paymentData: Record<string, unknown> | null = null;
           const paymentContentType = gcpResponse.headers.get('content-type') || '';
