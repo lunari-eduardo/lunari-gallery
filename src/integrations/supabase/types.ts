@@ -244,7 +244,6 @@ export type Database = {
           resource_id: string | null
           resource_type: string | null
           user_agent: string | null
-          user_id: string | null
         }
         Insert: {
           action: string
@@ -258,7 +257,6 @@ export type Database = {
           resource_id?: string | null
           resource_type?: string | null
           user_agent?: string | null
-          user_id?: string | null
         }
         Update: {
           action?: string
@@ -272,7 +270,6 @@ export type Database = {
           resource_id?: string | null
           resource_type?: string | null
           user_agent?: string | null
-          user_id?: string | null
         }
         Relationships: [
           {
@@ -713,25 +710,11 @@ export type Database = {
             referencedColumns: ["session_id"]
           },
           {
-            foreignKeyName: "cliente_creditos_ledger_session_id_consumo_fkey"
-            columns: ["session_id_consumo"]
-            isOneToOne: false
-            referencedRelation: "v_workflow_extras_divergence"
-            referencedColumns: ["session_slug"]
-          },
-          {
             foreignKeyName: "cliente_creditos_ledger_session_id_origem_fkey"
             columns: ["session_id_origem"]
             isOneToOne: false
             referencedRelation: "clientes_sessoes"
             referencedColumns: ["session_id"]
-          },
-          {
-            foreignKeyName: "cliente_creditos_ledger_session_id_origem_fkey"
-            columns: ["session_id_origem"]
-            isOneToOne: false
-            referencedRelation: "v_workflow_extras_divergence"
-            referencedColumns: ["session_slug"]
           },
           {
             foreignKeyName: "cliente_creditos_ledger_transacao_id_fkey"
@@ -1178,13 +1161,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clientes_sessoes"
             referencedColumns: ["session_id"]
-          },
-          {
-            foreignKeyName: "fk_transacoes_session_id"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "v_workflow_extras_divergence"
-            referencedColumns: ["session_slug"]
           },
         ]
       }
@@ -4700,20 +4676,6 @@ export type Database = {
             referencedRelation: "clientes_sessoes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "system_audit_logs_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "v_credit_overpay_audit"
-            referencedColumns: ["session_uuid"]
-          },
-          {
-            foreignKeyName: "system_audit_logs_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "v_workflow_extras_divergence"
-            referencedColumns: ["session_id"]
-          },
         ]
       }
       system_cache: {
@@ -5450,46 +5412,6 @@ export type Database = {
           },
         ]
       }
-      v_credit_overpay_audit: {
-        Row: {
-          cliente_id: string | null
-          credito_liquido: number | null
-          data: string | null
-          descricao: string | null
-          ledger_id: string | null
-          origem: string | null
-          session_id_origem: string | null
-          session_uuid: string | null
-          user_id: string | null
-          valor: number | null
-          valor_pago: number | null
-          valor_pendente: number | null
-          valor_total: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cliente_creditos_ledger_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cliente_creditos_ledger_session_id_origem_fkey"
-            columns: ["session_id_origem"]
-            isOneToOne: false
-            referencedRelation: "clientes_sessoes"
-            referencedColumns: ["session_id"]
-          },
-          {
-            foreignKeyName: "cliente_creditos_ledger_session_id_origem_fkey"
-            columns: ["session_id_origem"]
-            isOneToOne: false
-            referencedRelation: "v_workflow_extras_divergence"
-            referencedColumns: ["session_slug"]
-          },
-        ]
-      }
       v_infinitepay_latency: {
         Row: {
           cobranca_created: string | null
@@ -5504,61 +5426,6 @@ export type Database = {
           webhook_status: string | null
         }
         Relationships: []
-      }
-      v_workflow_extras_divergence: {
-        Row: {
-          cliente_id: string | null
-          galeria_id: string | null
-          qtd_rpc: number | null
-          qtd_sessao: number | null
-          session_id: string | null
-          session_slug: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          cliente_id?: string | null
-          galeria_id?: string | null
-          qtd_rpc?: never
-          qtd_sessao?: number | null
-          session_id?: string | null
-          session_slug?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          cliente_id?: string | null
-          galeria_id?: string | null
-          qtd_rpc?: never
-          qtd_sessao?: number | null
-          session_id?: string | null
-          session_slug?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "clientes_sessoes_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clientes_sessoes_galeria_id_fkey"
-            columns: ["galeria_id"]
-            isOneToOne: false
-            referencedRelation: "galerias"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clientes_sessoes_galeria_id_fkey"
-            columns: ["galeria_id"]
-            isOneToOne: false
-            referencedRelation: "vw_cobrancas_suspeitas"
-            referencedColumns: ["galeria_id_candidata"]
-          },
-        ]
       }
       vw_cobrancas_suspeitas: {
         Row: {
