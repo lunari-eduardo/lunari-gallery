@@ -20,7 +20,7 @@ export function PaymentRedirect({
   themeStyles = {},
   backgroundMode = 'light',
 }: PaymentRedirectProps) {
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(0);
   const [redirected, setRedirected] = useState(false);
 
   const provedorInfo = {
