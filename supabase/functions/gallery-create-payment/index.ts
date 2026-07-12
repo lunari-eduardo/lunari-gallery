@@ -1,4 +1,4 @@
-// gallery-create-payment v2.1 — redeploy marker (2026-07-03)
+// gallery-create-payment v2.2 — preloaded fast-path (2026-07-12)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {
@@ -6,20 +6,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+interface PreloadedPayload {
+  gallery?: {
+    id: string;
+    user_id: string;
+    cliente_id: string | null;
+    session_id: string | null;
+    nome_sessao: string | null;
+    public_token: string | null;
+    fotos_incluidas?: number | null;
+    regras_congeladas?: unknown;
+  };
+  valorCanonico?: number;
+  extrasACobrar?: number;
+  isFullyPaid?: boolean;
+  provedor?: 'infinitepay' | 'mercadopago' | 'asaas' | string;
+  sessionIdTexto?: string | null;
+}
+
 interface RequestBody {
   galleryId: string;
   valorTotal?: number;
   extraCount?: number;
   descricao?: string;
   provider?: string;
-  // Contexto interno (caller = confirm-selection). Habilita bypass do
-  // pre_selecao_gate na RPC canônica e propaga metadados para *-create-link.
   context?: 'confirm_selection' | 'regenerate' | string;
   bypassPreSelecaoGate?: boolean;
   visitorId?: string;
   snapshotFotosIncluidas?: number;
   snapshotRegrasCongeladas?: unknown;
   correlationId?: string;
+  // Fast-path: quando o caller já executou RPC canônica + integrações lookup.
+  // Só é honrado se a Authorization contiver a service_role_key (chamada interna).
+  preloaded?: PreloadedPayload;
 }
 
 interface PaymentResponse {
@@ -53,7 +72,6 @@ Deno.serve(async (req) => {
 
     const body: RequestBody = await req.json().catch(() => ({} as RequestBody));
 
-    // 1. Fetch gallery
     const {
       galleryId,
       provider,
@@ -63,56 +81,79 @@ Deno.serve(async (req) => {
       snapshotFotosIncluidas,
       snapshotRegrasCongeladas,
       correlationId,
+      preloaded,
     } = body;
 
-    console.log(`[gcp][step:1 request] ${JSON.stringify({ galleryId, provider, context, visitorId: !!visitorId })}`);
+    // ── SEGURANÇA DO FAST-PATH ──
+    // preloaded só é aceito quando a request veio com service role key
+    // (chamada interna). Chamadas externas re-executam RPC/queries.
+    const authHeader = req.headers.get('authorization') || '';
+    const bearer = authHeader.replace(/^Bearer\s+/i, '');
+    const isInternalCall = !!preloaded && bearer === supabaseServiceKey;
+    const usePreloaded = isInternalCall;
+
+    console.log(`[gcp][step:1 request] ${JSON.stringify({ galleryId, provider, context, visitorId: !!visitorId, preloaded: usePreloaded })}`);
 
     if (!galleryId) {
       return jsonResponse({ success: false, error: 'galleryId é obrigatório', code: 'MISSING_GALLERY_ID' }, 400);
     }
 
-    // 1. Fetch gallery
-    const { data: gallery, error: galleryError } = await supabase
-      .from('galerias')
-      .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at, fotos_incluidas, regras_congeladas')
-      .eq('id', galleryId)
-      .single();
+    // 1. Gallery — usa preloaded se disponível
+    let gallery: any;
+    if (usePreloaded && preloaded?.gallery) {
+      gallery = preloaded.gallery;
+    } else {
+      const { data, error: galleryError } = await supabase
+        .from('galerias')
+        .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at, fotos_incluidas, regras_congeladas')
+        .eq('id', galleryId)
+        .single();
 
-    if (galleryError || !gallery) {
-      console.error('[gcp][step:2 gallery-fetch-error]', galleryError);
-      return jsonResponse({ success: false, error: 'Galeria não encontrada', code: 'GALLERY_NOT_FOUND' }, 404);
+      if (galleryError || !data) {
+        console.error('[gcp][step:2 gallery-fetch-error]', galleryError);
+        return jsonResponse({ success: false, error: 'Galeria não encontrada', code: 'GALLERY_NOT_FOUND' }, 404);
+      }
+      gallery = data;
     }
 
     const galleryUrl = gallery.public_token ? `${BASE_GALLERY_URL}/g/${gallery.public_token}` : undefined;
 
-    // 2. CANONICAL CALCULATION — fonte única de valor/qtd (R8 gallery-rules)
-    // Bypass do pre_selecao_gate quando chamado a partir de confirm-selection
-    // (transição selecao_iniciada → selecao_completa). Sem bypass a RPC retorna 0.
+    // 2. Cálculo canônico — pula se preloaded (R8 preservado; caller garantiu)
+    let valorCanonico: number;
+    let extrasACobrar: number;
+    let isFullyPaid: boolean;
     const shouldBypassGate = bypassPreSelecaoGate === true || context === 'confirm_selection';
-    let calc: any = null;
-    try {
-      const rpcArgs: Record<string, unknown> = { p_gallery_id: galleryId };
-      if (shouldBypassGate) rpcArgs.p_bypass_pre_selecao_gate = true;
-      const { data, error: calcError } = await supabase.rpc('calculate_gallery_extra_payment', rpcArgs);
-      if (calcError) throw calcError;
-      calc = data || null;
-    } catch (e) {
-      console.error('[gcp][step:3 calc-error]', e);
-      return jsonResponse({ success: false, error: 'Erro ao calcular valor canônico', code: 'CALC_ERROR' }, 500);
+
+    if (usePreloaded && typeof preloaded?.valorCanonico === 'number' && typeof preloaded?.extrasACobrar === 'number') {
+      valorCanonico = Number(preloaded.valorCanonico) || 0;
+      extrasACobrar = Number(preloaded.extrasACobrar) || 0;
+      isFullyPaid = preloaded.isFullyPaid === true;
+      console.log(`[gcp][step:3 calc-preloaded] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid}`);
+    } else {
+      let calc: any = null;
+      try {
+        const rpcArgs: Record<string, unknown> = { p_gallery_id: galleryId };
+        if (shouldBypassGate) rpcArgs.p_bypass_pre_selecao_gate = true;
+        const { data, error: calcError } = await supabase.rpc('calculate_gallery_extra_payment', rpcArgs);
+        if (calcError) throw calcError;
+        calc = data || null;
+      } catch (e) {
+        console.error('[gcp][step:3 calc-error]', e);
+        return jsonResponse({ success: false, error: 'Erro ao calcular valor canônico', code: 'CALC_ERROR' }, 500);
+      }
+
+      if (!calc?.success) {
+        console.error('[gcp][step:3 calc-invalid]', calc);
+        return jsonResponse({ success: false, error: 'Erro ao calcular valor da galeria', code: 'CALC_INVALID' }, 500);
+      }
+
+      valorCanonico = Number(calc.valor_a_cobrar || 0);
+      extrasACobrar = Number(calc.extras_a_cobrar || 0);
+      isFullyPaid = calc.is_fully_paid === true;
+      console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} bypass=${shouldBypassGate}`);
     }
 
-    if (!calc?.success) {
-      console.error('[gcp][step:3 calc-invalid]', calc);
-      return jsonResponse({ success: false, error: 'Erro ao calcular valor da galeria', code: 'CALC_INVALID' }, 500);
-    }
-
-    const valorCanonico = Number(calc.valor_a_cobrar || 0);
-    const extrasACobrar = Number(calc.extras_a_cobrar || 0);
-    const isFullyPaid = calc.is_fully_paid === true;
-
-    console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} bypass=${shouldBypassGate}`);
-
-    // 2a. Sem saldo a cobrar → sucesso informativo, com galleryUrl sempre presente
+    // 2a. Sem saldo a cobrar → sucesso informativo
     if (valorCanonico <= 0 || isFullyPaid) {
       return jsonResponse({
         success: true,
@@ -125,46 +166,61 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
-    // 3. Discover active payment provider (com fallback ao invés de 400)
-    const { data: integracoes } = await supabase
-      .from('usuarios_integracoes')
-      .select('provedor, is_default')
-      .eq('user_id', gallery.user_id)
-      .eq('status', 'ativo')
-      .in('provedor', ['mercadopago', 'infinitepay', 'asaas']);
-
-    if (!integracoes || integracoes.length === 0) {
-      console.error('[gcp][step:4 no-provider]');
-      return jsonResponse({ success: false, error: 'Nenhum provedor de pagamento configurado', code: 'NO_PROVIDER' }, 400);
-    }
-
-    const requested = provider || (gallery as any).venda_pagamento_provedor || null;
-    let provedor = requested;
+    // 3. Provedor — usa preloaded se disponível
+    let provedor: string;
     let providerFallback: string | undefined;
 
-    if (requested && !integracoes.find((i: any) => i.provedor === requested)) {
-      const def = integracoes.find((i: any) => i.is_default) || integracoes[0];
-      providerFallback = def.provedor;
-      provedor = providerFallback;
-      console.warn(`[gcp][step:4 provider-fallback] requested=${requested} → ${provedor}`);
-    } else if (!requested) {
-      const def = integracoes.find((i: any) => i.is_default) || integracoes[0];
-      provedor = def.provedor;
+    if (usePreloaded && preloaded?.provedor) {
+      provedor = preloaded.provedor;
+    } else {
+      const { data: integracoes } = await supabase
+        .from('usuarios_integracoes')
+        .select('provedor, is_default')
+        .eq('user_id', gallery.user_id)
+        .eq('status', 'ativo')
+        .in('provedor', ['mercadopago', 'infinitepay', 'asaas']);
+
+      if (!integracoes || integracoes.length === 0) {
+        console.error('[gcp][step:4 no-provider]');
+        return jsonResponse({ success: false, error: 'Nenhum provedor de pagamento configurado', code: 'NO_PROVIDER' }, 400);
+      }
+
+      const requested = provider || (gallery as any).venda_pagamento_provedor || null;
+      provedor = requested;
+
+      if (requested && !integracoes.find((i: any) => i.provedor === requested)) {
+        const def = integracoes.find((i: any) => i.is_default) || integracoes[0];
+        providerFallback = def.provedor;
+        provedor = providerFallback;
+        console.warn(`[gcp][step:4 provider-fallback] requested=${requested} → ${provedor}`);
+      } else if (!requested) {
+        const def = integracoes.find((i: any) => i.is_default) || integracoes[0];
+        provedor = def.provedor;
+      }
     }
 
-    console.log(`[gcp][step:4 provider-ok] ${provedor}${providerFallback ? ' (fallback)' : ''}`);
+    console.log(`[gcp][step:4 provider-ok] ${provedor}${providerFallback ? ' (fallback)' : ''}${usePreloaded ? ' (preloaded)' : ''}`);
 
     const descricao = `${extrasACobrar} foto${extrasACobrar !== 1 ? 's' : ''} extra${extrasACobrar !== 1 ? 's' : ''} - ${gallery.nome_sessao || 'Galeria'}`;
 
-    // 3a. Cancela cobranças antigas pendentes (evita duplicidade e valor errado)
+    // 3a. Cancela cobranças antigas pendentes — SELECT antes do UPDATE (D7)
     try {
-      const { error: cancelError } = await supabase
+      const { data: stale } = await supabase
         .from('cobrancas')
-        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+        .select('id')
         .eq('galeria_id', galleryId)
         .eq('finalidade', 'fotos_extras')
-        .in('status', ['pendente', 'aguardando_confirmacao']);
-      if (cancelError) console.warn('[gcp][step:5 cancel-stale-warn]', cancelError);
+        .in('status', ['pendente', 'aguardando_confirmacao'])
+        .limit(1);
+      if (stale && stale.length > 0) {
+        const { error: cancelError } = await supabase
+          .from('cobrancas')
+          .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+          .eq('galeria_id', galleryId)
+          .eq('finalidade', 'fotos_extras')
+          .in('status', ['pendente', 'aguardando_confirmacao']);
+        if (cancelError) console.warn('[gcp][step:5 cancel-stale-warn]', cancelError);
+      }
     } catch (e) {
       console.warn('[gcp][step:5 cancel-stale-exc]', e);
     }
@@ -188,13 +244,15 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
-    // 5. InfinitePay / Mercado Pago → chama create-link internamente com valor canônico
+    // 5. InfinitePay / Mercado Pago → chama create-link internamente
     const functionName = provedor === 'infinitepay' ? 'infinitepay-create-link' : 'mercadopago-create-link';
     const redirectUrl = galleryUrl ? `${galleryUrl}?payment=success` : undefined;
 
-    // Normaliza session_id para formato texto (compatibilidade legada)
+    // Normaliza session_id — usa preloaded se disponível
     let sessionIdTexto: string | null = null;
-    if (gallery.session_id) {
+    if (usePreloaded && preloaded?.sessionIdTexto !== undefined) {
+      sessionIdTexto = preloaded.sessionIdTexto;
+    } else if (gallery.session_id) {
       if (gallery.session_id.startsWith('workflow-') || gallery.session_id.startsWith('session_')) {
         sessionIdTexto = gallery.session_id;
       } else {
@@ -216,7 +274,6 @@ Deno.serve(async (req) => {
       galeriaId: gallery.id,
       qtdFotos: extrasACobrar,
       galleryToken: gallery.public_token,
-      // Propaga metadados fornecidos pelo caller interno (confirm-selection)
       visitorId: visitorId || undefined,
       snapshotFotosIncluidas: snapshotFotosIncluidas ?? (gallery as any).fotos_incluidas ?? 0,
       snapshotRegrasCongeladas: snapshotRegrasCongeladas ?? (gallery as any).regras_congeladas ?? null,

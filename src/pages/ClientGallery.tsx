@@ -157,6 +157,8 @@ export default function ClientGallery() {
   // Controla se o cliente já clicou em "Ir para pagamento" e queremos mostrar
   // o checkout inline (Asaas) ou tela de PIX, em vez da PaymentPendingScreen.
   const [showInlineCheckout, setShowInlineCheckout] = useState(false);
+  // Overlay imediato de "abrindo checkout" — reduz percepção de lentidão
+  const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
   const paymentRetryRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Password state
@@ -312,6 +314,44 @@ export default function ClientGallery() {
       applyTheme(DEFAULT_THEME);
     };
   }, [galleryResponse]);
+
+  // Fase 5 — Preconnect para o host do provedor de pagamento assim que sabemos
+  // qual é. Reduz DNS + TLS na hora do redirect (~200-500ms perceptivos).
+  // Só dispara quando saleMode === 'sale_with_payment' para não abrir socket
+  // desnecessário em galerias no_sale.
+  useEffect(() => {
+    if (!galleryResponse) return;
+    const g: any = (galleryResponse as any).gallery || galleryResponse;
+    const settings: any =
+      (galleryResponse as any).saleSettings ||
+      g?.saleSettings ||
+      g?.configuracoes?.saleSettings ||
+      null;
+    if (!settings || settings.mode !== 'sale_with_payment') return;
+    const method: string | undefined = settings.paymentMethod || g?.venda_pagamento_provedor;
+    const HOSTS: Record<string, string> = {
+      infinitepay: 'https://checkout.infinitepay.io',
+      mercadopago: 'https://www.mercadopago.com.br',
+    };
+    const host = method ? HOSTS[method] : undefined;
+    if (!host) return;
+
+    const links: HTMLLinkElement[] = [];
+    const mk = (rel: string) => {
+      const l = document.createElement('link');
+      l.rel = rel;
+      l.href = host;
+      if (rel === 'preconnect') l.crossOrigin = 'anonymous';
+      document.head.appendChild(l);
+      links.push(l);
+    };
+    mk('preconnect');
+    mk('dns-prefetch');
+    return () => {
+      links.forEach((l) => l.parentNode?.removeChild(l));
+    };
+  }, [galleryResponse]);
+
 
   // Extract gallery data from response (handle both legacy and new format)
   const supabaseGallery = useMemo(() => {
@@ -663,10 +703,25 @@ export default function ClientGallery() {
       // Checkout externo (InfinitePay/MercadoPago) - redirect immediately
       if (data.requiresPayment && data.checkoutUrl) {
         console.log('💳 Redirecionando para checkout externo:', data.checkoutUrl);
-        // Usar location.assign para garantir navegação
-        window.location.assign(data.checkoutUrl);
+        // Fase 6: overlay imediato + breadcrumb + replace (tira galeria do histórico).
+        // O overlay mostra transição visual enquanto o browser resolve DNS/TLS.
+        try {
+          sessionStorage.setItem(`gallery_checkout_pending_${identifier}`, JSON.stringify({
+            cobrancaId: data.cobrancaId ?? null,
+            provedor: data.provedor ?? 'externo',
+            valorTotal: data.valorTotal ?? 0,
+            timestamp: Date.now(),
+          }));
+        } catch { /* ignore quota */ }
+        setIsRedirectingToCheckout(true);
+        // rAF garante que o overlay pintou antes do navigate
+        requestAnimationFrame(() => {
+          window.location.replace(data.checkoutUrl);
+        });
         return;
       }
+      
+
       
       // GUARD: If backend says payment is required but no checkout data arrived,
       // do NOT confirm — this is likely a config/payload issue
@@ -998,8 +1053,36 @@ export default function ClientGallery() {
   const galleryFolders = galleryResponse?.folders || [];
   const hasFolders = galleryFolders.length > 0;
 
+  // Fase 6 — Overlay imediato de redirect para checkout externo.
+  // Renderizado com PRIORIDADE máxima: mantém a tela travada e clara
+  // enquanto o browser resolve DNS/TLS e o checkout carrega.
+  if (isRedirectingToCheckout) {
+    return (
+      <div
+        className={cn(
+          'min-h-screen flex flex-col items-center justify-center bg-background text-foreground',
+          effectiveBackgroundMode === 'dark' && 'dark'
+        )}
+        style={themeStyles}
+        aria-live="polite"
+      >
+        {galleryResponse?.studioSettings?.studio_logo_url && (
+          <img
+            src={galleryResponse.studioSettings.studio_logo_url}
+            alt=""
+            className="h-16 max-w-[200px] object-contain mb-8 opacity-80"
+          />
+        )}
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
+        <p className="mt-6 text-base font-medium">Abrindo checkout…</p>
+        <p className="mt-1 text-sm text-muted-foreground">Você será redirecionado em instantes.</p>
+      </div>
+    );
+  }
+
   // Loading state with branded skeleton
   if (isLoading) {
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background" style={themeStyles}>
         {galleryResponse?.studioSettings?.studio_logo_url && (
