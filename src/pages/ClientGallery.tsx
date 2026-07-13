@@ -130,6 +130,11 @@ export default function ClientGallery() {
   const [pendingConfirmPayload, setPendingConfirmPayload] = useState<null | {
     selectedCount: number; extraCount: number; valorUnitario: number; valorTotal: number;
   }>(null);
+  // Erros do provedor de pagamento que devem ser mostrados no PreCheckoutContactStep
+  // (ex.: Asaas rejeitou email/telefone/CPF). Reabre a etapa com foco no campo.
+  const [preCheckoutExternalErrors, setPreCheckoutExternalErrors] = useState<
+    Partial<Record<'nome' | 'email' | 'phone' | 'cpfCnpj', string>>
+  >({});
   
   
   
