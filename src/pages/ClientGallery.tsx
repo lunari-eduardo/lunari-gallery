@@ -1937,6 +1937,7 @@ export default function ClientGallery() {
   const handlePreCheckoutSubmit = async (values: {
     nome: string; email: string; phone: string; cpfCnpj: string;
   }) => {
+    setPreCheckoutExternalErrors({});
     try {
       const { data, error } = await supabase.rpc('upsert_visitor_contact', {
         p_token: identifier as string,
