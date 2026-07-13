@@ -2225,7 +2225,8 @@ export default function ClientGallery() {
           cpfCnpj: !hints?.cpfCnpj,
         }}
         isSubmitting={confirmMutation.isPending}
-        onBack={() => setCurrentStep('confirmation')}
+        externalErrors={preCheckoutExternalErrors}
+        onBack={() => { setPreCheckoutExternalErrors({}); setCurrentStep('confirmation'); }}
         onSubmit={handlePreCheckoutSubmit}
         themeStyles={themeStyles}
         backgroundMode={effectiveBackgroundMode}
