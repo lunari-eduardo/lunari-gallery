@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { TitleCaseMode } from '@/types/gallery';
 import { applyTitleCase } from '@/lib/textTransform';
+import { validatePhoneBR, maskPhoneBR } from '@/lib/phoneBR';
+import { validateEmailStrict } from '@/lib/emailStrict';
 
 interface VisitorIdentificationScreenProps {
   sessionName?: string;
