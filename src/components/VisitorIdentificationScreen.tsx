@@ -137,11 +137,12 @@ export function VisitorIdentificationScreen({
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Seu nome"
+                placeholder="Seu nome *"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 className="pl-10 text-base h-11 rounded-sm"
                 disabled={isLoading}
+                aria-required="true"
                 autoFocus
               />
             </div>
@@ -150,11 +151,11 @@ export function VisitorIdentificationScreen({
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={() => { setContatoTipo('whatsapp'); setContato(''); }}
+                onClick={() => { setContatoTipo('whatsapp'); setContato(''); setContatoError(null); setContatoTouched(false); }}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                  contatoTipo === 'whatsapp' 
-                    ? "bg-primary text-primary-foreground" 
+                  contatoTipo === 'whatsapp'
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -163,11 +164,11 @@ export function VisitorIdentificationScreen({
               </button>
               <button
                 type="button"
-                onClick={() => { setContatoTipo('email'); setContato(''); }}
+                onClick={() => { setContatoTipo('email'); setContato(''); setContatoError(null); setContatoTouched(false); }}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                  contatoTipo === 'email' 
-                    ? "bg-primary text-primary-foreground" 
+                  contatoTipo === 'email'
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -185,13 +186,28 @@ export function VisitorIdentificationScreen({
               )}
               <Input
                 type={contatoTipo === 'email' ? 'email' : 'tel'}
-                placeholder={contatoTipo === 'whatsapp' ? '(11) 99999-9999' : 'seu@email.com'}
+                inputMode={contatoTipo === 'email' ? 'email' : 'tel'}
+                placeholder={contatoTipo === 'whatsapp' ? '(11) 99999-9999 *' : 'seu@email.com *'}
                 value={contato}
                 onChange={(e) => handleContatoChange(e.target.value)}
+                onBlur={handleContatoBlur}
                 className="pl-10 text-base h-11 rounded-sm"
                 disabled={isLoading}
+                aria-required="true"
+                aria-invalid={!!contatoError && contatoTouched}
+                maxLength={contatoTipo === 'whatsapp' ? 20 : 160}
               />
             </div>
+
+            {contatoTouched && contatoError && (
+              <p role="alert" className="text-xs text-destructive text-left px-1">
+                {contatoError}
+              </p>
+            )}
+
+            <p className="text-[11px] text-muted-foreground text-center">
+              Campos marcados com <span className="text-destructive">*</span> são obrigatórios.
+            </p>
 
             {error && (
               <div className="flex items-center justify-center gap-2 text-destructive text-sm">
@@ -199,6 +215,7 @@ export function VisitorIdentificationScreen({
                 <span>{error}</span>
               </div>
             )}
+
 
             <Button 
               type="submit" 
