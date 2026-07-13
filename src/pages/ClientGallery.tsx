@@ -130,6 +130,11 @@ export default function ClientGallery() {
   const [pendingConfirmPayload, setPendingConfirmPayload] = useState<null | {
     selectedCount: number; extraCount: number; valorUnitario: number; valorTotal: number;
   }>(null);
+  // Erros do provedor de pagamento que devem ser mostrados no PreCheckoutContactStep
+  // (ex.: Asaas rejeitou email/telefone/CPF). Reabre a etapa com foco no campo.
+  const [preCheckoutExternalErrors, setPreCheckoutExternalErrors] = useState<
+    Partial<Record<'nome' | 'email' | 'phone' | 'cpfCnpj', string>>
+  >({});
   
   
   
@@ -763,10 +768,30 @@ export default function ClientGallery() {
       if (error?.silent || error?.message === 'ALREADY_FINALIZED') return;
       const msg = error.message || 'Erro ao confirmar seleção';
 
+      // Erros de validação do provedor devolvem o cliente à etapa de coleta
+      // com a mensagem grudada no campo certo — em vez do toast genérico.
+      const upper = msg.toUpperCase();
+      const providerFieldErrors: Partial<Record<'nome' | 'email' | 'phone' | 'cpfCnpj', string>> = {};
+      if (upper.includes('INVALID_EMAIL') || /e-?mail\s*inv[aá]lid/i.test(msg) || /invalid.*email/i.test(msg)) {
+        providerFieldErrors.email = 'O e-mail foi rejeitado pelo processador de pagamento. Confira e digite novamente.';
+      }
+      if (upper.includes('INVALID_PHONE') || /telefone\s*inv[aá]lid|invalid.*phone|invalid.*mobilephone/i.test(msg)) {
+        providerFieldErrors.phone = 'O WhatsApp foi rejeitado pelo processador. Confira DDD e número.';
+      }
+      if (upper.includes('INVALID_CPF') || upper.includes('INVALID_CNPJ') || /cpf.*inv[aá]lid|cnpj.*inv[aá]lid/i.test(msg)) {
+        providerFieldErrors.cpfCnpj = 'CPF/CNPJ inválido para o processador. Confira os números digitados.';
+      }
+      if (Object.keys(providerFieldErrors).length > 0) {
+        setPreCheckoutExternalErrors(providerFieldErrors);
+        setCurrentStep('pre_checkout_contact');
+        return;
+      }
+
       // Fallback: Asaas exigiu CPF que o cache do gallery-access ainda não sabia
-      // que estava faltando. Reabrir modal de coleta (agora sabemos que precisa).
+      // que estava faltando. Reabrir a etapa de coleta com o campo marcado.
       if (msg.includes('MISSING_CPF_CNPJ')) {
-        refetchGallery().finally(() => setContactModalOpen(true));
+        setPreCheckoutExternalErrors({ cpfCnpj: 'CPF/CNPJ é obrigatório para gerar a cobrança.' });
+        refetchGallery().finally(() => setCurrentStep('pre_checkout_contact'));
         return;
       }
 
@@ -792,6 +817,7 @@ export default function ClientGallery() {
           duration: 6000,
         });
       }
+
 
     },
   });
@@ -1911,6 +1937,7 @@ export default function ClientGallery() {
   const handlePreCheckoutSubmit = async (values: {
     nome: string; email: string; phone: string; cpfCnpj: string;
   }) => {
+    setPreCheckoutExternalErrors({});
     try {
       const { data, error } = await supabase.rpc('upsert_visitor_contact', {
         p_token: identifier as string,
@@ -2199,7 +2226,8 @@ export default function ClientGallery() {
           cpfCnpj: !hints?.cpfCnpj,
         }}
         isSubmitting={confirmMutation.isPending}
-        onBack={() => setCurrentStep('confirmation')}
+        externalErrors={preCheckoutExternalErrors}
+        onBack={() => { setPreCheckoutExternalErrors({}); setCurrentStep('confirmation'); }}
         onSubmit={handlePreCheckoutSubmit}
         themeStyles={themeStyles}
         backgroundMode={effectiveBackgroundMode}

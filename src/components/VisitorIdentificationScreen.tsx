@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { TitleCaseMode } from '@/types/gallery';
 import { applyTitleCase } from '@/lib/textTransform';
+import { validatePhoneBR, maskPhoneBR } from '@/lib/phoneBR';
+import { validateEmailStrict } from '@/lib/emailStrict';
 
 interface VisitorIdentificationScreenProps {
   sessionName?: string;
@@ -34,26 +36,59 @@ export function VisitorIdentificationScreen({
   const [nome, setNome] = useState('');
   const [contato, setContato] = useState('');
   const [contatoTipo, setContatoTipo] = useState<'whatsapp' | 'email'>('whatsapp');
+  const [contatoError, setContatoError] = useState<string | null>(null);
+  const [contatoTouched, setContatoTouched] = useState(false);
+
+  const validateContato = (value: string, tipo: 'whatsapp' | 'email'): string | null => {
+    if (!value.trim()) return null; // vazio não mostra erro até tocar
+    if (tipo === 'email') {
+      const r = validateEmailStrict(value);
+      return r.ok === true ? null : (r as { message: string }).message;
+    }
+    const r = validatePhoneBR(value);
+    return r.ok === true ? null : (r as { message: string }).message;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (nome.trim() && contato.trim()) {
-      await onSubmit({ nome: nome.trim(), contato: contato.trim(), contatoTipo });
+    if (!nome.trim() || !contato.trim()) return;
+    const err = validateContato(contato, contatoTipo);
+    setContatoTouched(true);
+    if (err) {
+      setContatoError(err);
+      return;
     }
+    // Envia normalizado (email lowercased / phone só dígitos locais).
+    let contatoNormalizado = contato.trim();
+    if (contatoTipo === 'email') {
+      const r = validateEmailStrict(contato);
+      if (r.ok === true) contatoNormalizado = r.value;
+    } else {
+      const r = validatePhoneBR(contato);
+      if (r.ok === true) contatoNormalizado = r.digits;
+    }
+    await onSubmit({ nome: nome.trim(), contato: contatoNormalizado, contatoTipo });
   };
 
-  // Format WhatsApp input
   const handleContatoChange = (value: string) => {
     if (contatoTipo === 'whatsapp') {
-      // Allow only digits, spaces, parentheses, plus, and hyphens
-      const cleaned = value.replace(/[^\d\s()+\-]/g, '');
-      setContato(cleaned);
+      setContato(maskPhoneBR(value));
     } else {
       setContato(value);
     }
+    if (contatoError) setContatoError(null);
   };
 
-  const isValid = nome.trim().length >= 2 && contato.trim().length >= 5;
+  const handleContatoBlur = () => {
+    setContatoTouched(true);
+    setContatoError(validateContato(contato, contatoTipo));
+  };
+
+  const isValid =
+    nome.trim().length >= 2 &&
+    contato.trim().length >= 5 &&
+    !validateContato(contato, contatoTipo);
+
 
   return (
     <div 
@@ -102,11 +137,12 @@ export function VisitorIdentificationScreen({
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Seu nome"
+                placeholder="Seu nome *"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 className="pl-10 text-base h-11 rounded-sm"
                 disabled={isLoading}
+                aria-required="true"
                 autoFocus
               />
             </div>
@@ -115,11 +151,11 @@ export function VisitorIdentificationScreen({
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={() => { setContatoTipo('whatsapp'); setContato(''); }}
+                onClick={() => { setContatoTipo('whatsapp'); setContato(''); setContatoError(null); setContatoTouched(false); }}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                  contatoTipo === 'whatsapp' 
-                    ? "bg-primary text-primary-foreground" 
+                  contatoTipo === 'whatsapp'
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -128,11 +164,11 @@ export function VisitorIdentificationScreen({
               </button>
               <button
                 type="button"
-                onClick={() => { setContatoTipo('email'); setContato(''); }}
+                onClick={() => { setContatoTipo('email'); setContato(''); setContatoError(null); setContatoTouched(false); }}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                  contatoTipo === 'email' 
-                    ? "bg-primary text-primary-foreground" 
+                  contatoTipo === 'email'
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -150,13 +186,28 @@ export function VisitorIdentificationScreen({
               )}
               <Input
                 type={contatoTipo === 'email' ? 'email' : 'tel'}
-                placeholder={contatoTipo === 'whatsapp' ? '(11) 99999-9999' : 'seu@email.com'}
+                inputMode={contatoTipo === 'email' ? 'email' : 'tel'}
+                placeholder={contatoTipo === 'whatsapp' ? '(11) 99999-9999 *' : 'seu@email.com *'}
                 value={contato}
                 onChange={(e) => handleContatoChange(e.target.value)}
+                onBlur={handleContatoBlur}
                 className="pl-10 text-base h-11 rounded-sm"
                 disabled={isLoading}
+                aria-required="true"
+                aria-invalid={!!contatoError && contatoTouched}
+                maxLength={contatoTipo === 'whatsapp' ? 20 : 160}
               />
             </div>
+
+            {contatoTouched && contatoError && (
+              <p role="alert" className="text-xs text-destructive text-left px-1">
+                {contatoError}
+              </p>
+            )}
+
+            <p className="text-[11px] text-muted-foreground text-center">
+              Campos marcados com <span className="text-destructive">*</span> são obrigatórios.
+            </p>
 
             {error && (
               <div className="flex items-center justify-center gap-2 text-destructive text-sm">
@@ -164,6 +215,7 @@ export function VisitorIdentificationScreen({
                 <span>{error}</span>
               </div>
             )}
+
 
             <Button 
               type="submit" 
