@@ -122,13 +122,13 @@ export function PreCheckoutContactStep({
     }
     if (key === 'email') {
       const r = validateEmailStrict(value);
-      if (r.ok) return undefined;
-      return r.message;
+      if (r.ok === true) return undefined;
+      return (r as { message: string }).message;
     }
     if (key === 'phone') {
       const r = validatePhoneBR(value);
-      if (r.ok) return undefined;
-      return r.message;
+      if (r.ok === true) return undefined;
+      return (r as { message: string }).message;
     }
     if (key === 'cpfCnpj') {
       if (!value.trim()) return 'Informe seu CPF ou CNPJ.';
