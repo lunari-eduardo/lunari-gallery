@@ -333,6 +333,69 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_extras_backfill_20260713: {
+        Row: {
+          backup_at: string | null
+          data_sessao: string | null
+          desconto: number | null
+          excedente: number | null
+          extras_overridden_antes: boolean | null
+          id: string | null
+          qtd_calculada: number | null
+          qtd_fotos_extra_antes: number | null
+          resto_para_valor_adicional: number | null
+          session_id: string | null
+          unit: number | null
+          user_id: string | null
+          valor_adicional: number | null
+          valor_base_pacote: number | null
+          valor_extras_calculado: number | null
+          valor_foto_extra_antes: number | null
+          valor_pago: number | null
+          valor_total_foto_extra_antes: number | null
+        }
+        Insert: {
+          backup_at?: string | null
+          data_sessao?: string | null
+          desconto?: number | null
+          excedente?: number | null
+          extras_overridden_antes?: boolean | null
+          id?: string | null
+          qtd_calculada?: number | null
+          qtd_fotos_extra_antes?: number | null
+          resto_para_valor_adicional?: number | null
+          session_id?: string | null
+          unit?: number | null
+          user_id?: string | null
+          valor_adicional?: number | null
+          valor_base_pacote?: number | null
+          valor_extras_calculado?: number | null
+          valor_foto_extra_antes?: number | null
+          valor_pago?: number | null
+          valor_total_foto_extra_antes?: number | null
+        }
+        Update: {
+          backup_at?: string | null
+          data_sessao?: string | null
+          desconto?: number | null
+          excedente?: number | null
+          extras_overridden_antes?: boolean | null
+          id?: string | null
+          qtd_calculada?: number | null
+          qtd_fotos_extra_antes?: number | null
+          resto_para_valor_adicional?: number | null
+          session_id?: string | null
+          unit?: number | null
+          user_id?: string | null
+          valor_adicional?: number | null
+          valor_base_pacote?: number | null
+          valor_extras_calculado?: number | null
+          valor_foto_extra_antes?: number | null
+          valor_pago?: number | null
+          valor_total_foto_extra_antes?: number | null
+        }
+        Relationships: []
+      }
       backup_recovery_extras_audit_20260424: {
         Row: {
           appointment_id: string | null
@@ -915,6 +978,7 @@ export type Database = {
           qtd_fotos_extra: number | null
           regras_congeladas: Json | null
           session_id: string
+          snapshot_extras_at_gallery_delete: Json | null
           status: string | null
           status_financeiro: string | null
           status_galeria: string | null
@@ -952,6 +1016,7 @@ export type Database = {
           qtd_fotos_extra?: number | null
           regras_congeladas?: Json | null
           session_id: string
+          snapshot_extras_at_gallery_delete?: Json | null
           status?: string | null
           status_financeiro?: string | null
           status_galeria?: string | null
@@ -989,6 +1054,7 @@ export type Database = {
           qtd_fotos_extra?: number | null
           regras_congeladas?: Json | null
           session_id?: string
+          snapshot_extras_at_gallery_delete?: Json | null
           status?: string | null
           status_financeiro?: string | null
           status_galeria?: string | null
@@ -4229,6 +4295,80 @@ export type Database = {
         }
         Relationships: []
       }
+      site_promotions: {
+        Row: {
+          badge_label: string | null
+          created_at: string
+          cta_href: string | null
+          cta_label: string
+          discount_type: string
+          discount_value_cents: number
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          show_on_home: boolean
+          show_on_pricing: boolean
+          slug: string
+          sort_order: number
+          starts_at: string | null
+          subtitle: string | null
+          target_credit_package_id: string | null
+          target_plan_code: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          badge_label?: string | null
+          created_at?: string
+          cta_href?: string | null
+          cta_label?: string
+          discount_type?: string
+          discount_value_cents?: number
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          show_on_home?: boolean
+          show_on_pricing?: boolean
+          slug: string
+          sort_order?: number
+          starts_at?: string | null
+          subtitle?: string | null
+          target_credit_package_id?: string | null
+          target_plan_code?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          badge_label?: string | null
+          created_at?: string
+          cta_href?: string | null
+          cta_label?: string
+          discount_type?: string
+          discount_value_cents?: number
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          show_on_home?: boolean
+          show_on_pricing?: boolean
+          slug?: string
+          sort_order?: number
+          starts_at?: string | null
+          subtitle?: string | null
+          target_credit_package_id?: string | null
+          target_plan_code?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_promotions_target_credit_package_id_fkey"
+            columns: ["target_credit_package_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_credit_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean | null
@@ -5047,6 +5187,7 @@ export type Database = {
         Row: {
           configuracoes_agenda: Json | null
           configuracoes_financeiro: Json | null
+          configuracoes_workflow: Json
           created_at: string
           id: string
           idioma: string | null
@@ -5060,6 +5201,7 @@ export type Database = {
         Insert: {
           configuracoes_agenda?: Json | null
           configuracoes_financeiro?: Json | null
+          configuracoes_workflow?: Json
           created_at?: string
           id?: string
           idioma?: string | null
@@ -5073,6 +5215,7 @@ export type Database = {
         Update: {
           configuracoes_agenda?: Json | null
           configuracoes_financeiro?: Json | null
+          configuracoes_workflow?: Json
           created_at?: string
           id?: string
           idioma?: string | null
