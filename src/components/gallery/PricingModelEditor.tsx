@@ -394,9 +394,9 @@ export function PricingModelEditor({
                         type="number"
                         min={0}
                         step={0.01}
-                        value={pkg.pricePerPhoto}
+                        value={pkg.pricePerPhoto || ''}
                         onChange={(e) =>
-                          updatePackage(pkg.id, 'pricePerPhoto', parseFloat(e.target.value) || 0)
+                          updatePackage(pkg.id, 'pricePerPhoto', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))
                         }
                         className="h-8"
                         disabled={disabled}
