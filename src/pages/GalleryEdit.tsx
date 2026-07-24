@@ -626,37 +626,382 @@ export default function GalleryEdit() {
                 Dados básicos e configurações de preço
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Photo Spacing Control */}
-              <div className="space-y-4 pb-4 border-b">
-                <div>
-                  <Label className="text-base font-medium">Espaçamento entre fotos (Grid)</Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Ajuste a borda entre as fotos nesta galeria específica
-                  </p>
-                </div>
-                <div className="flex items-center gap-6 max-w-sm pt-2">
-                  <Slider
-                    value={[photoSpacing]}
-                    onValueChange={(vals) => setPhotoSpacing(vals[0])}
-                    min={0}
-                    max={40}
-                    step={1}
-                    className="flex-1"
+            <CardContent className="space-y-5">
+              {/* Fonte do Título */}
+              <div className="space-y-2">
+                <Label>Fonte do Título</Label>
+                <FontSelect 
+                  value={sessionFont} 
+                  onChange={setSessionFont} 
+                  previewText={nomeSessao || 'Ensaio Gestante'} 
+                  titleCaseMode={titleCaseMode} 
+                  onTitleCaseModeChange={setTitleCaseMode} 
+                />
+              </div>
+
+              {/* Nome + Pacote */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="nomeSessao">Nome da Sessão</Label>
+                  <Input
+                    id="nomeSessao"
+                    value={nomeSessao}
+                    onChange={(e) => setNomeSessao(e.target.value)}
+                    placeholder="Ex: Ensaio Família Silva"
                   />
-                  <span className="text-sm font-mono w-10 text-right">{photoSpacing}px</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="nomePacote">Pacote (opcional)</Label>
+                  {hasGestaoIntegration && gestaoPackages.length > 0 ? (
+                    <PackageSelect
+                      packages={gestaoPackages}
+                      selectedPackage={nomePacote}
+                      onSelect={(name, pkg) => {
+                        setNomePacote(name);
+                        if (pkg) {
+                          if (pkg.fotosIncluidas) setFotosIncluidas(pkg.fotosIncluidas);
+                          if (pkg.valorFotoExtra) setValorFotoExtra(pkg.valorFotoExtra);
+                        }
+                      }}
+                      placeholder="Selecionar pacote..."
+                      disabled={isBillingLocked}
+                    />
+                  ) : (
+                    <Input
+                      id="nomePacote"
+                      value={nomePacote}
+                      onChange={(e) => setNomePacote(e.target.value)}
+                      placeholder="Ex: Premium"
+                      disabled={isBillingLocked}
+                    />
+                  )}
                 </div>
               </div>
+
+              {/* Cliente */}
+              <div className="space-y-2">
+                <Label>Cliente</Label>
+                <ClientSelect
+                  clients={clients}
+                  selectedClient={selectedClient}
+                  onSelect={handleClientSelect}
+                  onCreateNew={() => setIsClientModalOpen(true)}
+                />
+              </div>
+
+              {/* Email + Telefone */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="clienteEmail">Email do Cliente</Label>
+                  <Input
+                    id="clienteEmail"
+                    type="email"
+                    value={clienteEmail}
+                    onChange={(e) => setClienteEmail(e.target.value)}
+                    placeholder="email@exemplo.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="clienteTelefone">Telefone</Label>
+                  <Input
+                    id="clienteTelefone"
+                    type="tel"
+                    value={clienteTelefone}
+                    onChange={handlePhoneChange}
+                    placeholder="(00) 00000-0000"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Necessário para abrir a conversa direta com o cliente no WhatsApp.
+                  </p>
+                </div>
+              </div>
+
+              {/* Senha da Galeria - Read Only */}
+              <div className="space-y-2">
+                <Label>Senha da Galeria</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      value={gallery.galleryPassword || ''}
+                      readOnly
+                      className="pr-10 bg-muted"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyPassword}
+                    disabled={!gallery.galleryPassword}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ============ Card: Regras de Cobrança ============ */}
+          <Card className="glass">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Regras de Cobrança
+              </CardTitle>
+              <CardDescription>
+                Como esta galeria calcula fotos incluídas e extras
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {isBillingLocked && (
                 <div className="glass rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3">
                   <Lock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                   <div className="space-y-1 text-sm">
                     <p className="font-medium text-foreground">Galeria concluída</p>
                     <p className="text-muted-foreground">
-                      Os parâmetros de cobrança (pacote, fotos incluídas, valor da foto extra e template de desconto) estão bloqueados para preservar o histórico de pagamentos. Para alterá-los, <span className="font-medium text-foreground">reative a seleção</span> usando o botão "Reativar" no topo da página.
+                      Os parâmetros de cobrança estão bloqueados para preservar o histórico de pagamentos. Para alterá-los, <span className="font-medium text-foreground">reative a seleção</span> pelo botão "Reativar".
                     </p>
                   </div>
                 </div>
+              )}
+
+              {/* Modo Studio (recomendado) */}
+              {isLunariLinked && (
+                <button
+                  type="button"
+                  onClick={() => handleBillingModeChange('studio')}
+                  disabled={isBillingLocked || billingMode === 'studio'}
+                  className={cn(
+                    'w-full text-left rounded-xl border-2 p-4 transition-all',
+                    'hover:border-primary/50',
+                    billingMode === 'studio'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                      : 'border-primary/30 bg-primary/[0.03]',
+                    isBillingLocked && 'opacity-60 pointer-events-none',
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+                      billingMode === 'studio' ? 'bg-primary/20' : 'bg-primary/10',
+                    )}>
+                      <Sparkles className={cn(
+                        'h-4 w-4',
+                        billingMode === 'studio' ? 'text-primary' : 'text-primary/70',
+                      )} />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium">Usar regras do Lunari Studio</p>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/15 text-primary">
+                          Recomendado
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Esta galeria utiliza automaticamente as regras da sessão original: fotos incluídas, valor extra e tabela progressiva. Se você criar regras personalizadas abaixo, elas passarão a valer apenas nesta galeria — a sessão do cliente no Lunari Studio não é alterada. Você pode voltar ao modo sincronizado a qualquer momento.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {/* Modo: Preço único (colapsável) */}
+              <Collapsible open={billingMode === 'fixed'}>
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => handleBillingModeChange('fixed')}
+                    disabled={isBillingLocked}
+                    className={cn(
+                      'w-full text-left rounded-xl border-2 p-4 transition-all group',
+                      'hover:border-primary/50',
+                      billingMode === 'fixed' ? 'border-primary bg-primary/[0.04]' : 'border-border bg-card',
+                      isBillingLocked && 'opacity-60 pointer-events-none',
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+                        billingMode === 'fixed' ? 'bg-primary/20' : 'bg-muted',
+                      )}>
+                        <Tag className={cn(
+                          'h-4 w-4',
+                          billingMode === 'fixed' ? 'text-primary' : 'text-muted-foreground',
+                        )} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">Preço único por foto</p>
+                        <p className="text-xs text-muted-foreground">Um valor fixo por foto extra</p>
+                      </div>
+                      <ChevronDown className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform',
+                        billingMode === 'fixed' && 'rotate-180',
+                      )} />
+                    </div>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3 pl-1 pr-1">
+                  <div className="grid gap-4 md:grid-cols-2 rounded-lg border border-border/50 bg-muted/20 p-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fotosIncluidasFixed">Fotos Incluídas</Label>
+                      <Input
+                        id="fotosIncluidasFixed"
+                        type="number"
+                        min="0"
+                        value={fotosIncluidas || ''}
+                        onChange={(e) => {
+                          setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0));
+                          setPricingDirty(true);
+                        }}
+                        disabled={isBillingLocked}
+                        aria-invalid={fotosIncluidasAbaixoDoMinimo}
+                      />
+                      {fotosIncluidasAbaixoDoMinimo && (
+                        <p className="text-xs text-destructive">
+                          Mínimo permitido: <span className="font-medium">{minFotosIncluidasPermitido}</span> — existem fotos extras já pagas.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="valorFotoExtraFixed">Valor por foto (R$)</Label>
+                      <Input
+                        id="valorFotoExtraFixed"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={valorFotoExtra || ''}
+                        onChange={(e) => {
+                          setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0));
+                          setPricingDirty(true);
+                        }}
+                        disabled={isBillingLocked}
+                      />
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* Modo: Pacotes com descontos (colapsável) */}
+              <Collapsible open={billingMode === 'packages'}>
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => handleBillingModeChange('packages')}
+                    disabled={isBillingLocked}
+                    className={cn(
+                      'w-full text-left rounded-xl border-2 p-4 transition-all',
+                      'hover:border-primary/50',
+                      billingMode === 'packages' ? 'border-primary bg-primary/[0.04]' : 'border-border bg-card',
+                      isBillingLocked && 'opacity-60 pointer-events-none',
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+                        billingMode === 'packages' ? 'bg-primary/20' : 'bg-muted',
+                      )}>
+                        <Package className={cn(
+                          'h-4 w-4',
+                          billingMode === 'packages' ? 'text-primary' : 'text-muted-foreground',
+                        )} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">Desconto progressivo personalizado</p>
+                        <p className="text-xs text-muted-foreground">Preço diferente por faixa de quantidade</p>
+                      </div>
+                      <ChevronDown className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform',
+                        billingMode === 'packages' && 'rotate-180',
+                      )} />
+                    </div>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3 pl-1 pr-1 space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 rounded-lg border border-border/50 bg-muted/20 p-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fotosIncluidasPkg">Fotos Incluídas</Label>
+                      <Input
+                        id="fotosIncluidasPkg"
+                        type="number"
+                        min="0"
+                        value={fotosIncluidas || ''}
+                        onChange={(e) => {
+                          setFotosIncluidas(e.target.value === '' ? 0 : (parseInt(e.target.value) || 0));
+                          setPricingDirty(true);
+                        }}
+                        disabled={isBillingLocked}
+                        aria-invalid={fotosIncluidasAbaixoDoMinimo}
+                      />
+                      {fotosIncluidasAbaixoDoMinimo && (
+                        <p className="text-xs text-destructive">
+                          Mínimo permitido: <span className="font-medium">{minFotosIncluidasPermitido}</span>.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="valorFotoExtraPkg">Valor base da foto extra (R$)</Label>
+                      <Input
+                        id="valorFotoExtraPkg"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={valorFotoExtra || ''}
+                        onChange={(e) => {
+                          setValorFotoExtra(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0));
+                          setPricingDirty(true);
+                        }}
+                        disabled={isBillingLocked}
+                      />
+                    </div>
+                  </div>
+
+                  <PricingModelEditor
+                    pricingModel="packages"
+                    onPricingModelChange={() => { /* controlado externamente */ }}
+                    fixedPrice={valorFotoExtra}
+                    onFixedPriceChange={(v) => {
+                      setValorFotoExtra(v);
+                      setPricingDirty(true);
+                    }}
+                    discountPackages={discountPackages}
+                    onDiscountPackagesChange={(pkgs) => {
+                      setDiscountPackages(pkgs);
+                      setPricingDirty(true);
+                    }}
+                    disabled={isBillingLocked}
+                    hideModeSelector
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* Aviso de override ativo (quando vinculada mas custom) */}
+              {isLunariLinked && !isBillingLocked && billingMode !== 'studio' && regrasOverride && (
+                <p className="text-xs text-muted-foreground pl-1">
+                  Regras personalizadas ativas para esta galeria.{' '}
+                  <button
+                    type="button"
+                    className="underline hover:text-foreground"
+                    onClick={() => setRestoreDialogOpen(true)}
+                  >
+                    Voltar ao modo sincronizado
+                  </button>
+                </p>
               )}
 
               <div className="space-y-2">
