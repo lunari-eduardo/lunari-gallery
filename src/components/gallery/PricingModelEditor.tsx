@@ -38,6 +38,11 @@ interface PricingModelEditorProps {
   discountPackages: DiscountPackage[];
   onDiscountPackagesChange: (packages: DiscountPackage[]) => void;
   disabled?: boolean;
+  /**
+   * Quando true, oculta o RadioGroup interno de seleção de modo.
+   * Usado pela tela de edição, onde o modo é controlado por cards colapsáveis externos.
+   */
+  hideModeSelector?: boolean;
 }
 
 /**
