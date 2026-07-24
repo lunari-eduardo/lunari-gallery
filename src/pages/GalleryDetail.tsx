@@ -646,9 +646,6 @@ export default function GalleryDetail() {
                 <Pencil className="h-4 w-4 mr-2" /> Editar
               </Link>
             </Button>
-            <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Duplicação estará disponível em breve.'); }}>
-              <Copy className="h-4 w-4 mr-2" /> Duplicar
-            </Button>
             {canReactivate && (
               <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); setReactivateOpen(true); }}>
                 <RotateCcw className="h-4 w-4 mr-2" /> Reativar
