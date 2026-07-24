@@ -187,111 +187,113 @@ export function PricingModelEditor({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-4">
-        <Label className="text-base font-medium">Qual formato de preço?</Label>
-        <RadioGroup
-          value={pricingModel}
-          onValueChange={(v) => onPricingModelChange(v as PricingModel)}
-          className="flex flex-col gap-3"
-          disabled={disabled}
-        >
-          <div>
-            <RadioGroupItem value="fixed" id="pricing-fixed-edit" className="peer sr-only" />
-            <Label
-              htmlFor="pricing-fixed-edit"
-              className={cn(
-                'flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all',
-                'hover:border-primary/50 hover:bg-muted/50',
-                pricingModel === 'fixed' ? 'border-primary bg-primary/5' : 'border-border',
-                disabled && 'opacity-60 pointer-events-none',
-              )}
-            >
-              <div className="flex items-center gap-3">
+      {!hideModeSelector && (
+        <div className="space-y-4">
+          <Label className="text-base font-medium">Qual formato de preço?</Label>
+          <RadioGroup
+            value={pricingModel}
+            onValueChange={(v) => onPricingModelChange(v as PricingModel)}
+            className="flex flex-col gap-3"
+            disabled={disabled}
+          >
+            <div>
+              <RadioGroupItem value="fixed" id="pricing-fixed-edit" className="peer sr-only" />
+              <Label
+                htmlFor="pricing-fixed-edit"
+                className={cn(
+                  'flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all',
+                  'hover:border-primary/50 hover:bg-muted/50',
+                  pricingModel === 'fixed' ? 'border-primary bg-primary/5' : 'border-border',
+                  disabled && 'opacity-60 pointer-events-none',
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      'w-8 h-8 rounded-full flex items-center justify-center',
+                      pricingModel === 'fixed' ? 'bg-primary/20' : 'bg-muted',
+                    )}
+                  >
+                    <Tag
+                      className={cn(
+                        'h-4 w-4',
+                        pricingModel === 'fixed' ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium">Preço único por foto</p>
+                    <p className="text-xs text-muted-foreground">
+                      Defina um valor fixo para cada foto
+                    </p>
+                  </div>
+                </div>
+
+                {pricingModel === 'fixed' && (
+                  <div className="pt-3 border-t border-border/50">
+                    <Label htmlFor="fixedPrice-edit" className="text-sm">
+                      Valor por foto (R$)
+                    </Label>
+                    <Input
+                      id="fixedPrice-edit"
+                      type="number"
+                      min={0}
+                      max={999.99}
+                      step={0.01}
+                      value={fixedPrice || ''}
+                      onChange={(e) =>
+                        onFixedPriceChange(
+                          e.target.value === '' ? 0 : parseFloat(e.target.value) || 0,
+                        )
+                      }
+                      onBlur={(e) => {
+                        const sanitized = sanitizeExtraPrice(e.target.value);
+                        if (sanitized !== fixedPrice) onFixedPriceChange(sanitized);
+                      }}
+                      className="mt-2"
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={disabled}
+                    />
+                  </div>
+                )}
+              </Label>
+            </div>
+
+            <div>
+              <RadioGroupItem value="packages" id="pricing-packages-edit" className="peer sr-only" />
+              <Label
+                htmlFor="pricing-packages-edit"
+                className={cn(
+                  'flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative',
+                  'hover:border-primary/50 hover:bg-muted/50',
+                  pricingModel === 'packages' ? 'border-primary bg-primary/5' : 'border-border',
+                  disabled && 'opacity-60 pointer-events-none',
+                )}
+              >
                 <div
                   className={cn(
                     'w-8 h-8 rounded-full flex items-center justify-center',
-                    pricingModel === 'fixed' ? 'bg-primary/20' : 'bg-muted',
+                    pricingModel === 'packages' ? 'bg-primary/20' : 'bg-muted',
                   )}
                 >
-                  <Tag
+                  <Package
                     className={cn(
                       'h-4 w-4',
-                      pricingModel === 'fixed' ? 'text-primary' : 'text-muted-foreground',
+                      pricingModel === 'packages' ? 'text-primary' : 'text-muted-foreground',
                     )}
                   />
                 </div>
                 <div>
-                  <p className="font-medium">Preço único por foto</p>
+                  <p className="font-medium">Pacotes com descontos</p>
                   <p className="text-xs text-muted-foreground">
-                    Defina um valor fixo para cada foto
+                    Descontos progressivos por quantidade
                   </p>
                 </div>
-              </div>
-
-              {pricingModel === 'fixed' && (
-                <div className="pt-3 border-t border-border/50">
-                  <Label htmlFor="fixedPrice-edit" className="text-sm">
-                    Valor por foto (R$)
-                  </Label>
-                  <Input
-                    id="fixedPrice-edit"
-                    type="number"
-                    min={0}
-                    max={999.99}
-                    step={0.01}
-                    value={fixedPrice || ''}
-                    onChange={(e) =>
-                      onFixedPriceChange(
-                        e.target.value === '' ? 0 : parseFloat(e.target.value) || 0,
-                      )
-                    }
-                    onBlur={(e) => {
-                      const sanitized = sanitizeExtraPrice(e.target.value);
-                      if (sanitized !== fixedPrice) onFixedPriceChange(sanitized);
-                    }}
-                    className="mt-2"
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={disabled}
-                  />
-                </div>
-              )}
-            </Label>
-          </div>
-
-          <div>
-            <RadioGroupItem value="packages" id="pricing-packages-edit" className="peer sr-only" />
-            <Label
-              htmlFor="pricing-packages-edit"
-              className={cn(
-                'flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all relative',
-                'hover:border-primary/50 hover:bg-muted/50',
-                pricingModel === 'packages' ? 'border-primary bg-primary/5' : 'border-border',
-                disabled && 'opacity-60 pointer-events-none',
-              )}
-            >
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center',
-                  pricingModel === 'packages' ? 'bg-primary/20' : 'bg-muted',
-                )}
-              >
-                <Package
-                  className={cn(
-                    'h-4 w-4',
-                    pricingModel === 'packages' ? 'text-primary' : 'text-muted-foreground',
-                  )}
-                />
-              </div>
-              <div>
-                <p className="font-medium">Pacotes com descontos</p>
-                <p className="text-xs text-muted-foreground">
-                  Descontos progressivos por quantidade
-                </p>
-              </div>
-            </Label>
-          </div>
-        </RadioGroup>
-      </div>
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+      )}
 
       {pricingModel === 'packages' && (
         <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
