@@ -27,7 +27,29 @@ import {
   CreditCard,
   RotateCcw,
   RotateCw,
+  MoreHorizontal,
+  Share2,
+  Copy,
+  Archive,
+  Trash2,
+  Link2,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
 import { getEffectiveGalleryStatus } from '@/lib/galleryStatus';
 
