@@ -96,6 +96,9 @@ export default function GalleryDetail() {
   const [codesFilter, setCodesFilter] = useState<'all' | 'favorites'>('all');
   const [activeDetailFolderId, setActiveDetailFolderId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('selection');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
   
   // Get settings for email templates
   const { settings } = useSettings();
