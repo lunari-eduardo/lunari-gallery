@@ -18,10 +18,18 @@ interface DeleteGalleryDialogProps {
   galleryName: string;
   onDelete: () => Promise<any>;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function DeleteGalleryDialog({ galleryName, onDelete, trigger }: DeleteGalleryDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function DeleteGalleryDialog({ galleryName, onDelete, trigger, open, onOpenChange }: DeleteGalleryDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = (v: boolean) => {
+    if (isControlled) onOpenChange?.(v);
+    else setInternalOpen(v);
+  };
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -43,14 +51,16 @@ export function DeleteGalleryDialog({ galleryName, onDelete, trigger }: DeleteGa
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-      <AlertDialogTrigger asChild>
-        {trigger || (
-          <Button variant="destructive" size="sm">
-            <Trash2 className="h-4 w-4 mr-2" />
-            Excluir Galeria
-          </Button>
-        )}
-      </AlertDialogTrigger>
+      {(trigger || !isControlled) && (
+        <AlertDialogTrigger asChild>
+          {trigger || (
+            <Button variant="destructive" size="sm">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir Galeria
+            </Button>
+          )}
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir galeria definitivamente?</AlertDialogTitle>
