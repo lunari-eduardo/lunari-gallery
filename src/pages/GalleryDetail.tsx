@@ -760,18 +760,12 @@ export default function GalleryDetail() {
               </Button>
             </div>
 
-            {/* Delete dialog controlado — trigger invisível */}
+            {/* Delete dialog controlado — sem trigger, aberto via menu */}
             <DeleteGalleryDialog
               galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
               onDelete={handleDeleteGallery}
-              trigger={
-                <button
-                  type="button"
-                  className="hidden"
-                  data-delete-trigger
-                  onClick={(e) => e.preventDefault()}
-                />
-              }
+              open={deleteDialogOpen}
+              onOpenChange={setDeleteDialogOpen}
             />
           </div>
         );
