@@ -224,14 +224,23 @@ export default function GalleryEdit() {
       // Hydrate pricing model + faixas a partir das regras congeladas
       const regras = gallery.regrasCongeladas;
       const faixasFromRegras = discountPackagesFromRegras(regras);
-      if (faixasFromRegras.length >= 2) {
+      const isPackages = faixasFromRegras.length >= 2;
+      if (isPackages) {
         setPricingModel('packages');
         setDiscountPackages(faixasFromRegras);
       } else {
         setPricingModel('fixed');
         setDiscountPackages([]);
       }
-      setRegrasOverride(gallery.regrasOverride ?? false);
+      const override = gallery.regrasOverride ?? false;
+      setRegrasOverride(override);
+      // Deriva billingMode inicial: vinculada e sem override => studio; senão segue pricingModel.
+      const linked = !!gallery.sessionId;
+      if (linked && !override) {
+        setBillingMode('studio');
+      } else {
+        setBillingMode(isPackages ? 'packages' : 'fixed');
+      }
       setPricingDirty(false);
 
       // Hydrate theme settings from configuracoes
