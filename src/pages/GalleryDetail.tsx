@@ -618,10 +618,6 @@ export default function GalleryDetail() {
                 Editar
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => toast.info('Duplicação estará disponível em breve.')}>
-              <Copy className="h-4 w-4 mr-2" />
-              Duplicar
-            </DropdownMenuItem>
             {canReactivate && (
               <DropdownMenuItem onClick={() => setReactivateOpen(true)}>
                 <RotateCcw className="h-4 w-4 mr-2" />
