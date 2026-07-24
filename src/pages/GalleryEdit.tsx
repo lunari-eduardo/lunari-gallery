@@ -22,7 +22,12 @@ import {
   Play,
   CheckSquare,
   Square,
-  Lock
+  Lock,
+  Sparkles,
+  ChevronDown,
+  Tag,
+  Package,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +37,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +58,6 @@ import { PhotoUploader, UploadedPhoto } from '@/components/PhotoUploader';
 import { FolderManager } from '@/components/FolderManager';
 import { PackageSelect } from '@/components/PackageSelect';
 import { FontSelect } from '@/components/FontSelect';
-import { Slider } from '@/components/ui/slider';
 import { TitleCaseMode } from '@/types/gallery';
 import { useSupabaseGalleries } from '@/hooks/useSupabaseGalleries';
 import { useGalleryClients } from '@/hooks/useGalleryClients';
