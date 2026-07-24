@@ -147,6 +147,39 @@ export default function GalleryEdit() {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [pricingDirty, setPricingDirty] = useState(false);
 
+  // Modo de cobrança para a UI colapsável ('studio' | 'fixed' | 'packages').
+  // Derivado inicialmente de regrasOverride + pricingModel na hidratação.
+  type BillingMode = 'studio' | 'fixed' | 'packages';
+  const [billingMode, setBillingMode] = useState<BillingMode>('studio');
+
+  const handleBillingModeChange = (mode: BillingMode) => {
+    if (mode === billingMode) return;
+    setBillingMode(mode);
+    if (mode === 'studio') {
+      // Restaurar regras da sessão dispara diálogo (mesma lógica antiga do link).
+      if (isLunariLinked && regrasOverride) {
+        setRestoreDialogOpen(true);
+      }
+      return;
+    }
+    // Alternar entre 'fixed' e 'packages': muda o pricingModel e marca dirty.
+    if (mode === 'fixed') {
+      setPricingModel('fixed');
+      setPricingDirty(true);
+    } else {
+      // packages: se ainda não houver 2 faixas, semear com 2 iniciais.
+      if (discountPackages.length < 2) {
+        const base = fotosIncluidas || 0;
+        setDiscountPackages([
+          { id: crypto.randomUUID(), minPhotos: base + 1, maxPhotos: base + 5, pricePerPhoto: valorFotoExtra || 0 },
+          { id: crypto.randomUUID(), minPhotos: base + 6, maxPhotos: null, pricePerPhoto: 0 },
+        ]);
+      }
+      setPricingModel('packages');
+      setPricingDirty(true);
+    }
+  };
+
   // Theme state for client gallery
   const [clientMode, setClientMode] = useState<'light' | 'dark'>('light');
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>();
