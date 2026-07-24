@@ -540,139 +540,244 @@ export default function GalleryDetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/galleries')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3 mb-1 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-bold">
-                {supabaseGallery.nomeSessao || 'Galeria'}
-              </h1>
-              <StatusBadge status={effectiveStatus} />
-              {(() => {
-                const vendido = supabaseGallery.valorTotalVendido || 0;
-                const pendente = calculatedExtraTotal || 0;
-                if (vendido <= 0 && pendente <= 0) return null;
-                if (vendido > 0 && pendente > 0) {
-                  return (
-                    <button
-                      onClick={() => setActiveTab('details')}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30 hover:opacity-80 transition"
-                      title="Ver detalhes do pagamento"
-                    >
-                      <Clock className="h-3.5 w-3.5" />
-                      Parcial · Pago R$ {vendido.toFixed(2)} / Pendente R$ {pendente.toFixed(2)}
-                    </button>
-                  );
-                }
-                if (pendente > 0) {
-                  return (
-                    <button
-                      onClick={() => setActiveTab('details')}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:opacity-80 transition"
-                      title="Ver detalhes do pagamento"
-                    >
-                      <Clock className="h-3.5 w-3.5" />
-                      Pendente R$ {pendente.toFixed(2)}
-                    </button>
-                  );
-                }
-                return (
-                  <button
-                    onClick={() => setActiveTab('details')}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30 hover:opacity-80 transition"
-                    title="Ver detalhes do pagamento"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    Pago R$ {vendido.toFixed(2)}
-                  </button>
-                );
-              })()}
-              {(() => {
-                const exp = (supabaseGallery as any).expiresAt as Date | null | undefined;
-                if (!exp) return null;
-                const diffDays = Math.ceil((exp.getTime() - Date.now()) / 86400000);
-                if (diffDays > 60) return null; // mostra só quando próximo
-                const isExpired = diffDays <= 0;
-                const isUrgent = diffDays <= 30;
-                const cls = isExpired
-                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
-                  : isUrgent
-                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                    : 'bg-muted text-muted-foreground border-border';
-                const label = isExpired
-                  ? 'Expira hoje (12m)'
-                  : `Expira em ${diffDays} dia${diffDays === 1 ? '' : 's'}`;
-                return (
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${cls}`}
-                    title={`Galerias são excluídas automaticamente após 12 meses. Expira em ${format(exp, "dd/MM/yyyy", { locale: ptBR })}.`}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    {label}
-                  </span>
-                );
-              })()}
-            </div>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <User className="h-4 w-4" />
-                {supabaseGallery.clienteNome || 'Cliente'}
-              </span>
-              <span className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                {format(deadline, "dd 'de' MMM", { locale: ptBR })}
-              </span>
-              <span className="flex items-center gap-1">
-                <Image className="h-4 w-4" />
-                {supabaseGallery.totalFotos} fotos
-              </span>
+      {/* Header — Identificação + Informações + Ações */}
+      {(() => {
+        const vendido = supabaseGallery.valorTotalVendido || 0;
+        const pendente = calculatedExtraTotal || 0;
+        const exp = (supabaseGallery as any).expiresAt as Date | null | undefined;
+        const isLinkedToStudio = !!supabaseGallery.sessionId;
+
+        const paymentBadge = (() => {
+          if (vendido <= 0 && pendente <= 0) return null;
+          const commonProps = {
+            onClick: () => setActiveTab('details'),
+            title: 'Ver detalhes do pagamento',
+          };
+          if (vendido > 0 && pendente > 0) {
+            return (
+              <button {...commonProps} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30 hover:opacity-80 transition">
+                <Clock className="h-3.5 w-3.5" />
+                Parcial · Pago R$ {vendido.toFixed(2)} / Pendente R$ {pendente.toFixed(2)}
+              </button>
+            );
+          }
+          if (pendente > 0) {
+            return (
+              <button {...commonProps} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:opacity-80 transition">
+                <Clock className="h-3.5 w-3.5" />
+                Pendente R$ {pendente.toFixed(2)}
+              </button>
+            );
+          }
+          return (
+            <button {...commonProps} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30 hover:opacity-80 transition">
+              <Check className="h-3.5 w-3.5" />
+              Pago R$ {vendido.toFixed(2)}
+            </button>
+          );
+        })();
+
+        const expirationBadge = (() => {
+          if (!exp) return null;
+          const diffDays = Math.ceil((exp.getTime() - Date.now()) / 86400000);
+          if (diffDays > 60) return null;
+          const isExpired = diffDays <= 0;
+          const isUrgent = diffDays <= 30;
+          const cls = isExpired
+            ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
+            : isUrgent
+              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+              : 'bg-muted text-muted-foreground border-border';
+          const label = isExpired ? 'Expira hoje (12m)' : `Expira em ${diffDays} dia${diffDays === 1 ? '' : 's'}`;
+          return (
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${cls}`}
+              title={`Galerias são excluídas automaticamente após 12 meses. Expira em ${format(exp, "dd/MM/yyyy", { locale: ptBR })}.`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {label}
+            </span>
+          );
+        })();
+
+        const InfoCard = ({ icon: Icon, label, value }: { icon: any; label: string; value: React.ReactNode }) => (
+          <div className="flex items-start gap-3 rounded-xl border border-border/50 bg-card/40 px-4 py-3 min-w-0">
+            <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+              <p className="text-sm font-medium truncate" title={typeof value === 'string' ? value : undefined}>{value}</p>
             </div>
           </div>
-        </div>
+        );
 
-        <div className="flex gap-2 flex-wrap">
-          {/* Primary Actions */}
-          <Button variant="outline" size="sm" asChild>
-            <Link to={`/gallery/${supabaseGallery.id}/edit`}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Editar
-            </Link>
-          </Button>
-          
-          <Button variant="outline" size="sm" asChild>
-            <Link to={`/gallery/${supabaseGallery.id}/preview`}>
-              <Eye className="h-4 w-4 mr-2" />
-              Visualizar
-            </Link>
-          </Button>
-          
-          {/* Send/Share Button */}
-          <Button 
-            variant="terracotta" 
-            size="sm" 
-            onClick={() => setIsSendModalOpen(true)}
-          >
-            <Send className="h-4 w-4 mr-2" />
-            {hasPublicToken ? 'Compartilhar' : 'Enviar para Cliente'}
-          </Button>
-          
-          {canReactivate && (
-            <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reativar
+        const menuItems = (
+          <>
+            <DropdownMenuItem asChild>
+              <Link to={`/gallery/${supabaseGallery.id}/edit`}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => toast.info('Duplicação estará disponível em breve.')}>
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicar
+            </DropdownMenuItem>
+            {canReactivate && (
+              <DropdownMenuItem onClick={() => setReactivateOpen(true)}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reativar
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => toast.info('Arquivamento estará disponível em breve.')}>
+              <Archive className="h-4 w-4 mr-2" />
+              Arquivar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={(e) => { e.preventDefault(); setDeleteDialogOpen(true); }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir galeria
+            </DropdownMenuItem>
+          </>
+        );
+
+        const sheetMenuItems = (
+          <div className="flex flex-col gap-1 mt-2">
+            <Button variant="ghost" className="justify-start" asChild onClick={() => setMobileMenuOpen(false)}>
+              <Link to={`/gallery/${supabaseGallery.id}/edit`}>
+                <Pencil className="h-4 w-4 mr-2" /> Editar
+              </Link>
             </Button>
-          )}
-          
-          <DeleteGalleryDialog 
-            galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
-            onDelete={handleDeleteGallery}
-          />
-        </div>
-      </div>
+            <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Duplicação estará disponível em breve.'); }}>
+              <Copy className="h-4 w-4 mr-2" /> Duplicar
+            </Button>
+            {canReactivate && (
+              <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); setReactivateOpen(true); }}>
+                <RotateCcw className="h-4 w-4 mr-2" /> Reativar
+              </Button>
+            )}
+            <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Arquivamento estará disponível em breve.'); }}>
+              <Archive className="h-4 w-4 mr-2" /> Arquivar
+            </Button>
+            <div className="h-px bg-border my-1" />
+            <Button
+              variant="ghost"
+              className="justify-start text-destructive hover:text-destructive"
+              onClick={() => { setMobileMenuOpen(false); setDeleteDialogOpen(true); }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir galeria
+            </Button>
+          </div>
+        );
+
+        return (
+          <div className="flex flex-col gap-6">
+            {/* Área 1 — Identificação */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+                <Button variant="ghost" size="icon" onClick={() => navigate('/galleries')} className="shrink-0 -ml-2">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3 flex-wrap min-w-0">
+                    <h1 className="text-2xl md:text-3xl font-semibold tracking-tight truncate min-w-0">
+                      {supabaseGallery.nomeSessao || 'Galeria'}
+                    </h1>
+                    <StatusBadge status={effectiveStatus} />
+                  </div>
+                  {(paymentBadge || expirationBadge) && (
+                    <div className="flex items-center gap-2 flex-wrap mt-2">
+                      {paymentBadge}
+                      {expirationBadge}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Ações — Desktop */}
+              <div className="hidden md:flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/gallery/${supabaseGallery.id}/preview`}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Visualizar
+                  </Link>
+                </Button>
+                <Button variant="terracotta" size="sm" onClick={() => setIsSendModalOpen(true)}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Compartilhar
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" aria-label="Mais ações">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {menuItems}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Menu — Mobile */}
+              <div className="md:hidden shrink-0">
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="icon" aria-label="Mais ações">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="bottom" className="rounded-t-2xl">
+                    <SheetHeader>
+                      <SheetTitle className="text-left">Ações da galeria</SheetTitle>
+                    </SheetHeader>
+                    {sheetMenuItems}
+                  </SheetContent>
+                </Sheet>
+              </div>
+            </div>
+
+            {/* Área 2 — Cards informativos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <InfoCard icon={User} label="Cliente" value={supabaseGallery.clienteNome || '—'} />
+              <InfoCard icon={Calendar} label="Data da sessão" value={format(deadline, "dd MMM yyyy", { locale: ptBR })} />
+              <InfoCard icon={Image} label="Total de fotos" value={`${supabaseGallery.totalFotos} fotos`} />
+              <InfoCard icon={Link2} label="Vinculada ao Studio" value={isLinkedToStudio ? 'Sim' : 'Não'} />
+            </div>
+
+            {/* Ações primárias — Mobile (abaixo dos cards) */}
+            <div className="flex flex-col gap-2 md:hidden">
+              <Button variant="terracotta" size="sm" className="w-full" onClick={() => setIsSendModalOpen(true)}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Compartilhar
+              </Button>
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to={`/gallery/${supabaseGallery.id}/preview`}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Visualizar
+                </Link>
+              </Button>
+            </div>
+
+            {/* Delete dialog controlado — trigger invisível */}
+            <DeleteGalleryDialog
+              galleryName={supabaseGallery.nomeSessao || 'Esta galeria'}
+              onDelete={handleDeleteGallery}
+              trigger={
+                <button
+                  type="button"
+                  className="hidden"
+                  data-delete-trigger
+                  onClick={(e) => e.preventDefault()}
+                />
+              }
+            />
+          </div>
+        );
+      })()}
+
+
 
       {/* PIX Manual Payment Confirmation Banner */}
       {supabaseGallery.statusPagamento === 'aguardando_confirmacao' && (
