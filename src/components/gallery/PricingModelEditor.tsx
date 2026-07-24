@@ -58,6 +58,7 @@ export function PricingModelEditor({
   discountPackages,
   onDiscountPackagesChange,
   disabled = false,
+  hideModeSelector = false,
 }: PricingModelEditorProps) {
   const { settings } = useSettings();
   const { createDiscountPreset, updateDiscountPreset, deleteDiscountPreset } = useGallerySettings();
@@ -70,14 +71,17 @@ export function PricingModelEditor({
 
   const addDiscountPackage = () => {
     const updated = [...discountPackages];
+    // Fecha automaticamente a faixa anterior "infinita" para permitir uma nova faixa depois.
     if (updated.length > 0) {
       const lastIdx = updated.length - 1;
       const last = updated[lastIdx];
       if (last.maxPhotos === null) {
-        updated[lastIdx] = { ...last, maxPhotos: last.minPhotos + 9 };
+        // Fecha em (min + 4) para 5-faixa por padrão; usuário revisa depois.
+        updated[lastIdx] = { ...last, maxPhotos: Math.max(last.minPhotos, last.minPhotos + 4) };
       }
     }
     const last = updated[updated.length - 1];
+    // "De" = último "Até" + 1. Preço novo fica vazio (0) para o usuário digitar.
     const minPhotos = last ? (last.maxPhotos as number) + 1 : 1;
     onDiscountPackagesChange([
       ...updated,
@@ -85,15 +89,27 @@ export function PricingModelEditor({
         id: generateId(),
         minPhotos,
         maxPhotos: null,
-        pricePerPhoto: Math.max(1, fixedPrice - (discountPackages.length + 1) * 5),
+        pricePerPhoto: 0,
       },
     ]);
   };
 
   const updatePackage = (id: string, field: keyof DiscountPackage, value: number | null) => {
-    onDiscountPackagesChange(
-      discountPackages.map((pkg) => (pkg.id === id ? { ...pkg, [field]: value } : pkg)),
-    );
+    const idx = discountPackages.findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    const next = discountPackages.map((pkg) => (pkg.id === id ? { ...pkg, [field]: value } : pkg));
+
+    // Auto-propaga: ao editar "Até" de uma faixa intermediária, ajusta "De" da próxima
+    // se ela ficou <= novo Até. Assim o usuário nunca precisa recalcular manualmente.
+    if (field === 'maxPhotos' && typeof value === 'number' && idx < next.length - 1) {
+      const nextIdx = idx + 1;
+      const nextPkg = next[nextIdx];
+      if (nextPkg.minPhotos <= value) {
+        next[nextIdx] = { ...nextPkg, minPhotos: value + 1 };
+      }
+    }
+
+    onDiscountPackagesChange(next);
   };
 
   const removePackage = (id: string) => {
