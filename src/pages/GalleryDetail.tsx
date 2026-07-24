@@ -618,10 +618,6 @@ export default function GalleryDetail() {
                 Editar
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => toast.info('Duplicação estará disponível em breve.')}>
-              <Copy className="h-4 w-4 mr-2" />
-              Duplicar
-            </DropdownMenuItem>
             {canReactivate && (
               <DropdownMenuItem onClick={() => setReactivateOpen(true)}>
                 <RotateCcw className="h-4 w-4 mr-2" />
@@ -649,9 +645,6 @@ export default function GalleryDetail() {
               <Link to={`/gallery/${supabaseGallery.id}/edit`}>
                 <Pencil className="h-4 w-4 mr-2" /> Editar
               </Link>
-            </Button>
-            <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Duplicação estará disponível em breve.'); }}>
-              <Copy className="h-4 w-4 mr-2" /> Duplicar
             </Button>
             {canReactivate && (
               <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); setReactivateOpen(true); }}>
