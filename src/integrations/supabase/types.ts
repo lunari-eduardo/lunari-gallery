@@ -630,6 +630,108 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_tasks_duplicates_20260724: {
+        Row: {
+          active_sections: Json | null
+          assignee_id: string | null
+          assignee_name: string | null
+          attachments: Json | null
+          call_to_action: string | null
+          captions: Json | null
+          category: string | null
+          checked: boolean | null
+          checklist_items: Json | null
+          completed_at: string | null
+          created_at: string | null
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          id: string | null
+          last_notified_at: string | null
+          notes: string | null
+          priority: string | null
+          related_budget_id: string | null
+          related_cliente_id: string | null
+          related_session_id: string | null
+          snooze_until: string | null
+          social_platforms: string[] | null
+          source: string | null
+          status: string | null
+          tags: string[] | null
+          text_blocks: Json | null
+          title: string | null
+          type: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          active_sections?: Json | null
+          assignee_id?: string | null
+          assignee_name?: string | null
+          attachments?: Json | null
+          call_to_action?: string | null
+          captions?: Json | null
+          category?: string | null
+          checked?: boolean | null
+          checklist_items?: Json | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string | null
+          last_notified_at?: string | null
+          notes?: string | null
+          priority?: string | null
+          related_budget_id?: string | null
+          related_cliente_id?: string | null
+          related_session_id?: string | null
+          snooze_until?: string | null
+          social_platforms?: string[] | null
+          source?: string | null
+          status?: string | null
+          tags?: string[] | null
+          text_blocks?: Json | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          active_sections?: Json | null
+          assignee_id?: string | null
+          assignee_name?: string | null
+          attachments?: Json | null
+          call_to_action?: string | null
+          captions?: Json | null
+          category?: string | null
+          checked?: boolean | null
+          checklist_items?: Json | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string | null
+          last_notified_at?: string | null
+          notes?: string | null
+          priority?: string | null
+          related_budget_id?: string | null
+          related_cliente_id?: string | null
+          related_session_id?: string | null
+          snooze_until?: string | null
+          social_platforms?: string[] | null
+          source?: string | null
+          status?: string | null
+          tags?: string[] | null
+          text_blocks?: Json | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       blog_posts: {
         Row: {
           content: string
@@ -5039,6 +5141,7 @@ export type Database = {
           estimated_hours: number | null
           id: string
           last_notified_at: string | null
+          mirror_product_tag: string | null
           notes: string | null
           priority: string | null
           related_budget_id: string | null
@@ -5072,6 +5175,7 @@ export type Database = {
           estimated_hours?: number | null
           id?: string
           last_notified_at?: string | null
+          mirror_product_tag?: string | null
           notes?: string | null
           priority?: string | null
           related_budget_id?: string | null
@@ -5105,6 +5209,7 @@ export type Database = {
           estimated_hours?: number | null
           id?: string
           last_notified_at?: string | null
+          mirror_product_tag?: string | null
           notes?: string | null
           priority?: string | null
           related_budget_id?: string | null
@@ -5964,6 +6069,49 @@ export type Database = {
         Args: { p_visitor_id: string }
         Returns: Json
       }
+      upsert_product_mirror_task: {
+        Args: { p_payload: Json; p_product_tag: string; p_session_id: string }
+        Returns: {
+          active_sections: Json | null
+          assignee_id: string | null
+          assignee_name: string | null
+          attachments: Json | null
+          call_to_action: string | null
+          captions: Json | null
+          category: string | null
+          checked: boolean | null
+          checklist_items: Json | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          id: string
+          last_notified_at: string | null
+          mirror_product_tag: string | null
+          notes: string | null
+          priority: string | null
+          related_budget_id: string | null
+          related_cliente_id: string | null
+          related_session_id: string | null
+          snooze_until: string | null
+          social_platforms: string[] | null
+          source: string | null
+          status: string | null
+          tags: string[] | null
+          text_blocks: Json | null
+          title: string
+          type: string | null
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       upsert_visitor_contact:
         | {
             Args: {
@@ -6022,6 +6170,24 @@ export type Database = {
           valor_pendente: number
           valor_produtos: number
           valor_total: number
+        }[]
+      }
+      workflow_photo_production_month: {
+        Args: {
+          p_categoria?: string
+          p_end: string
+          p_start: string
+          p_user_id: string
+        }
+        Returns: {
+          categoria_top: string
+          fotos_categoria_top: number
+          fotos_extras: number
+          fotos_incluidas: number
+          fotos_total: number
+          media_fotos_por_sessao: number
+          sessoes_com_pacote: number
+          sessoes_sem_pacote: number
         }[]
       }
       workflow_session_financials: {
