@@ -127,6 +127,27 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           cliente_id: string | null
@@ -228,6 +249,179 @@ export type Database = {
           payload?: Json | null
           payment_id?: string | null
           processed?: boolean | null
+        }
+        Relationships: []
+      }
+      assistant_approvals: {
+        Row: {
+          approval_token_hash: string | null
+          consumed_at: string | null
+          created_at: string
+          decided_at: string | null
+          expires_at: string
+          id: string
+          requested_at: string
+          status: Database["public"]["Enums"]["assistant_approval_status"]
+          summary: string | null
+          token_id: string | null
+          tool_args: Json
+          tool_name: string
+          user_id: string
+        }
+        Insert: {
+          approval_token_hash?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          decided_at?: string | null
+          expires_at?: string
+          id?: string
+          requested_at?: string
+          status?: Database["public"]["Enums"]["assistant_approval_status"]
+          summary?: string | null
+          token_id?: string | null
+          tool_args?: Json
+          tool_name: string
+          user_id: string
+        }
+        Update: {
+          approval_token_hash?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          decided_at?: string | null
+          expires_at?: string
+          id?: string
+          requested_at?: string
+          status?: Database["public"]["Enums"]["assistant_approval_status"]
+          summary?: string | null
+          token_id?: string | null
+          tool_args?: Json
+          tool_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_approvals_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_mcp_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_beta_access: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_invocations: {
+        Row: {
+          actor: string
+          approved_at: string | null
+          approved_by: string | null
+          auth_source: string | null
+          capability_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          input_hash: string | null
+          kind: string
+          latency_ms: number | null
+          module: string
+          needs_approval: boolean
+          output_status: string
+          ts: string
+          user_id: string
+        }
+        Insert: {
+          actor?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          auth_source?: string | null
+          capability_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_hash?: string | null
+          kind: string
+          latency_ms?: number | null
+          module: string
+          needs_approval?: boolean
+          output_status: string
+          ts?: string
+          user_id: string
+        }
+        Update: {
+          actor?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          auth_source?: string | null
+          capability_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_hash?: string | null
+          kind?: string
+          latency_ms?: number | null
+          module?: string
+          needs_approval?: boolean
+          output_status?: string
+          ts?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_mcp_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          last_used_at: string | null
+          name: string
+          revoked_at: string | null
+          scopes: string[]
+          token_hash: string
+          token_prefix: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name: string
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash: string
+          token_prefix: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash?: string
+          token_prefix?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -5797,6 +5991,79 @@ export type Database = {
         Args: { p_gallery_id: string }
         Returns: undefined
       }
+      assistant_access_allowed: { Args: { _uid: string }; Returns: boolean }
+      assistant_approval_consume: {
+        Args: { _approval_token: string; _tool_name: string; _user_id: string }
+        Returns: {
+          approval_id: string
+          tool_args: Json
+        }[]
+      }
+      assistant_approval_create: {
+        Args: {
+          _summary: string
+          _token_id: string
+          _tool_args: Json
+          _tool_name: string
+          _user_id: string
+        }
+        Returns: string
+      }
+      assistant_approval_decide: {
+        Args: { _approve: boolean; _id: string }
+        Returns: {
+          approval_token_hash: string | null
+          consumed_at: string | null
+          created_at: string
+          decided_at: string | null
+          expires_at: string
+          id: string
+          requested_at: string
+          status: Database["public"]["Enums"]["assistant_approval_status"]
+          summary: string | null
+          token_id: string | null
+          tool_args: Json
+          tool_name: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "assistant_approvals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      assistant_mcp_token_create: {
+        Args: { _expires_at?: string; _name: string; _scopes?: string[] }
+        Returns: {
+          id: string
+          token: string
+          token_prefix: string
+        }[]
+      }
+      assistant_mcp_token_validate: {
+        Args: { _token: string }
+        Returns: {
+          scopes: string[]
+          token_id: string
+          user_id: string
+        }[]
+      }
+      assistant_oauth_app_revoke: {
+        Args: { _authorization_id: string }
+        Returns: boolean
+      }
+      assistant_oauth_apps_list: {
+        Args: never
+        Returns: {
+          approved_at: string
+          client_id: string
+          client_name: string
+          id: string
+          last_used_at: string
+          scopes: string[]
+        }[]
+      }
       atomic_update_session_extras: {
         Args: {
           p_extras_increment: number
@@ -6220,6 +6487,12 @@ export type Database = {
       account_status: "active" | "suspended" | "canceled"
       account_type: "gallery_solo" | "starter" | "pro" | "pro_gallery"
       app_role: "admin" | "moderator" | "user"
+      assistant_approval_status:
+        | "pending"
+        | "approved"
+        | "denied"
+        | "expired"
+        | "consumed"
       email_delivery_event_type:
         | "gallery_sent"
         | "payment_confirmed"
@@ -6391,6 +6664,13 @@ export const Constants = {
       account_status: ["active", "suspended", "canceled"],
       account_type: ["gallery_solo", "starter", "pro", "pro_gallery"],
       app_role: ["admin", "moderator", "user"],
+      assistant_approval_status: [
+        "pending",
+        "approved",
+        "denied",
+        "expired",
+        "consumed",
+      ],
       email_delivery_event_type: [
         "gallery_sent",
         "payment_confirmed",
