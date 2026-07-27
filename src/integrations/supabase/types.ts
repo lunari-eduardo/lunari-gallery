@@ -482,6 +482,92 @@ export type Database = {
           },
         ]
       }
+      automation_rules: {
+        Row: {
+          capability_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          notes: string | null
+          severity_max: string
+          source_kind: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          capability_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          severity_max?: string
+          source_kind?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          capability_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          severity_max?: string
+          source_kind?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      automation_runs: {
+        Row: {
+          actor: string
+          capability_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          proposal_id: string | null
+          result: Json | null
+          rule_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          actor: string
+          capability_id: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          proposal_id?: string | null
+          result?: Json | null
+          rule_id?: string | null
+          status: string
+          user_id: string
+        }
+        Update: {
+          actor?: string
+          capability_id?: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          proposal_id?: string | null
+          result?: Json | null
+          rule_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_slots: {
         Row: {
           color: string | null
@@ -2112,6 +2198,57 @@ export type Database = {
         }
         Relationships: []
       }
+      decision_proposals: {
+        Row: {
+          capability_id: string
+          computed_at: string
+          created_at: string
+          expires_at: string
+          id: string
+          input: Json
+          rationale: Json
+          score: number
+          severity: string
+          source_kind: string
+          source_scope_key: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          capability_id: string
+          computed_at?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input?: Json
+          rationale?: Json
+          score?: number
+          severity?: string
+          source_kind: string
+          source_scope_key: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          capability_id?: string
+          computed_at?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input?: Json
+          rationale?: Json
+          score?: number
+          severity?: string
+          source_kind?: string
+          source_scope_key?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_delivery_logs: {
         Row: {
           cliente_email: string | null
@@ -3630,6 +3767,87 @@ export type Database = {
         }
         Relationships: []
       }
+      intelligence_signals: {
+        Row: {
+          computed_at: string
+          expires_at: string
+          id: string
+          inputs_hash: string | null
+          kind: string
+          reasons: Json
+          scope_key: string
+          score: number
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          computed_at?: string
+          expires_at?: string
+          id?: string
+          inputs_hash?: string | null
+          kind: string
+          reasons?: Json
+          scope_key: string
+          score?: number
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          computed_at?: string
+          expires_at?: string
+          id?: string
+          inputs_hash?: string | null
+          kind?: string
+          reasons?: Json
+          scope_key?: string
+          score?: number
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      knowledge_documents: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string
+          external_id: string | null
+          id: string
+          metadata: Json
+          model_version: string
+          source: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding: string
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          model_version?: string
+          source: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          model_version?: string
+          source?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lead_follow_up_config: {
         Row: {
           ativo: boolean | null
@@ -3797,6 +4015,143 @@ export type Database = {
           },
         ]
       }
+      learning_patches: {
+        Row: {
+          applied_at: string | null
+          created_at: string
+          id: string
+          patch_kind: string
+          pattern_id: string
+          payload: Json
+          rationale: string[]
+          status: string
+          target: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          patch_kind: string
+          pattern_id: string
+          payload?: Json
+          rationale?: string[]
+          status?: string
+          target: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          patch_kind?: string
+          pattern_id?: string
+          payload?: Json
+          rationale?: string[]
+          status?: string
+          target?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_patches_pattern_id_fkey"
+            columns: ["pattern_id"]
+            isOneToOne: false
+            referencedRelation: "learning_patterns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_patterns: {
+        Row: {
+          acceptance_rate: number
+          accepted_count: number
+          capability_id: string
+          created_at: string
+          dismissed_count: number
+          id: string
+          last_computed_at: string
+          sample_size: number
+          signal_strength: number
+          source_kind: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acceptance_rate?: number
+          accepted_count?: number
+          capability_id: string
+          created_at?: string
+          dismissed_count?: number
+          id?: string
+          last_computed_at?: string
+          sample_size?: number
+          signal_strength?: number
+          source_kind: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          acceptance_rate?: number
+          accepted_count?: number
+          capability_id?: string
+          created_at?: string
+          dismissed_count?: number
+          id?: string
+          last_computed_at?: string
+          sample_size?: number
+          signal_strength?: number
+          source_kind?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      memory_entries: {
+        Row: {
+          confidence: number
+          created_at: string
+          expires_at: string | null
+          id: string
+          key: string
+          scope: string
+          source: string
+          updated_at: string
+          user_id: string
+          value: Json
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          key: string
+          scope: string
+          source?: string
+          updated_at?: string
+          user_id: string
+          value: Json
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          key?: string
+          scope?: string
+          source?: string
+          updated_at?: string
+          user_id?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       metas_personalizadas: {
         Row: {
           ano: number
@@ -3878,6 +4233,42 @@ export type Database = {
           nome?: string
           regiao?: string
           uf?: string
+        }
+        Relationships: []
+      }
+      observation_events: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          occurred_at: string
+          payload: Json
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          source: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          source?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -6206,6 +6597,23 @@ export type Database = {
         Args: { p_date: string; p_time: string; p_user_id: string }
         Returns: boolean
       }
+      knowledge_match: {
+        Args: {
+          p_limit?: number
+          p_query: string
+          p_source?: string
+          p_user_id: string
+        }
+        Returns: {
+          content: string
+          external_id: string
+          id: string
+          metadata: Json
+          similarity: number
+          source: string
+          title: string
+        }[]
+      }
       prepare_gallery_share: {
         Args: { p_gallery_id: string; p_mark_as_sent?: boolean }
         Returns: Json
@@ -6407,6 +6815,15 @@ export type Database = {
         Args: { _end: string; _start: string }
         Returns: number
       }
+      workflow_analytics_summary: {
+        Args: {
+          p_end: string
+          p_include_historico?: boolean
+          p_start: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       workflow_month_metrics: {
         Args: { p_end: string; p_start: string; p_user_id: string }
         Returns: {
@@ -6455,6 +6872,26 @@ export type Database = {
           media_fotos_por_sessao: number
           sessoes_com_pacote: number
           sessoes_sem_pacote: number
+        }[]
+      }
+      workflow_range_metrics: {
+        Args: {
+          p_end: string
+          p_granularity?: string
+          p_include_historico?: boolean
+          p_start: string
+          p_user_id: string
+        }
+        Returns: {
+          bucket_key: string
+          bucket_start: string
+          caixa_recebido: number
+          creditos_gerados: number
+          creditos_utilizados: number
+          pendente: number
+          previsto: number
+          receita: number
+          sessoes: number
         }[]
       }
       workflow_session_financials: {
