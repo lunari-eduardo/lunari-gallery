@@ -644,9 +644,6 @@ export default function GalleryDetail() {
                 <Pencil className="h-4 w-4 mr-2" /> Editar
               </Link>
             </Button>
-            <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Arquivamento estará disponível em breve.'); }}>
-              <Archive className="h-4 w-4 mr-2" /> Arquivar
-            </Button>
             <div className="h-px bg-border my-1" />
             <Button
               variant="ghost"
