@@ -135,9 +135,7 @@ export default function Home() {
   }, [galleries]);
 
   return (
-    <>
-      <DashboardBackground />
-      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen">
+    <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen">
         <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8 relative z-10">
           {/* Section 1 — Account Resources */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
