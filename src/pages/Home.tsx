@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
@@ -24,9 +24,6 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { differenceInDays, format, startOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Canvas, useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import { useBrandColor } from '@/lib/brandColor';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
