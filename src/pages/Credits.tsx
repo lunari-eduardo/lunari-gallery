@@ -218,8 +218,9 @@ export default function Credits() {
             <p className="text-sm text-muted-foreground">
               Você usa créditos com frequência?{' '}
               <span className="text-muted-foreground/60">
-                Talvez um plano integrado faça mais sentido no longo prazo.
+                Sim aplique
               </span>
+
             </p>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Estruture seu negócio para crescer</h2>
             <p className="text-sm md:text-base text-muted-foreground max-w-lg mx-auto">
