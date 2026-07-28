@@ -33,7 +33,15 @@ import {
   Archive,
   Trash2,
   Link2,
+  Unlink,
+  Database,
 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -618,12 +626,6 @@ export default function GalleryDetail() {
                 Editar
               </Link>
             </DropdownMenuItem>
-            {canReactivate && (
-              <DropdownMenuItem onClick={() => setReactivateOpen(true)}>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reativar
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onClick={() => toast.info('Arquivamento estará disponível em breve.')}>
               <Archive className="h-4 w-4 mr-2" />
               Arquivar
@@ -646,11 +648,6 @@ export default function GalleryDetail() {
                 <Pencil className="h-4 w-4 mr-2" /> Editar
               </Link>
             </Button>
-            {canReactivate && (
-              <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); setReactivateOpen(true); }}>
-                <RotateCcw className="h-4 w-4 mr-2" /> Reativar
-              </Button>
-            )}
             <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Arquivamento estará disponível em breve.'); }}>
               <Archive className="h-4 w-4 mr-2" /> Arquivar
             </Button>
@@ -691,12 +688,42 @@ export default function GalleryDetail() {
 
               {/* Ações — Desktop */}
               <div className="hidden md:flex items-center gap-2 shrink-0">
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/gallery/${supabaseGallery.id}/preview`}>
-                    <Eye className="h-4 w-4 mr-2" />
-                    Visualizar
-                  </Link>
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={cn(
+                          "rounded-full transition-colors",
+                          isLinkedToStudio ? "text-green-500 hover:text-green-600 hover:bg-green-50" : "text-red-500 hover:text-red-600 hover:bg-red-50"
+                        )}
+                        onClick={() => toast.info(isLinkedToStudio ? "Esta galeria está vinculada a uma sessão do estúdio" : "Esta galeria não possui vínculo com o estúdio")}
+                      >
+                        {isLinkedToStudio ? <Database className="h-5 w-5" /> : <Unlink className="h-5 w-5" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isLinkedToStudio ? "Vinculada ao estúdio" : "Não vinculada ao estúdio"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {canReactivate && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setReactivateOpen(true)}
+                    className={cn(
+                      "transition-opacity",
+                      !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
+                    )}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reativar
+                  </Button>
+                )}
+                
                 <Button variant="terracotta" size="sm" onClick={() => setIsSendModalOpen(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Compartilhar
@@ -732,25 +759,45 @@ export default function GalleryDetail() {
             </div>
 
             {/* Área 2 — Cards informativos */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <InfoCard icon={User} label="Cliente" value={supabaseGallery.clienteNome || '—'} />
               <InfoCard icon={Calendar} label="Data da sessão" value={format(deadline, "dd MMM yyyy", { locale: ptBR })} />
               <InfoCard icon={Image} label="Total de fotos" value={`${supabaseGallery.totalFotos} fotos`} />
-              <InfoCard icon={Link2} label="Vinculada ao Studio" value={isLinkedToStudio ? 'Sim' : 'Não'} />
             </div>
 
             {/* Ações primárias — Mobile (abaixo dos cards) */}
             <div className="flex flex-col gap-2 md:hidden">
+              <div className="flex items-center gap-2 mb-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className={cn(
+                    "flex-1 justify-center gap-2 rounded-xl",
+                    isLinkedToStudio ? "text-green-500 bg-green-50" : "text-red-500 bg-red-50"
+                  )}
+                  onClick={() => toast.info(isLinkedToStudio ? "Esta galeria está vinculada a uma sessão do estúdio" : "Esta galeria não possui vínculo com o estúdio")}
+                >
+                  {isLinkedToStudio ? <Database className="h-4 w-4" /> : <Unlink className="h-4 w-4" />}
+                  <span className="text-xs font-medium">{isLinkedToStudio ? "Vinculada" : "Não vinculada"}</span>
+                </Button>
+              </div>
+
               <Button variant="terracotta" size="sm" className="w-full" onClick={() => setIsSendModalOpen(true)}>
                 <Share2 className="h-4 w-4 mr-2" />
                 Compartilhar
               </Button>
-              <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link to={`/gallery/${supabaseGallery.id}/preview`}>
-                  <Eye className="h-4 w-4 mr-2" />
-                  Visualizar
-                </Link>
-              </Button>
+              
+              {canReactivate && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={() => setReactivateOpen(true)}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reativar
+                </Button>
+              )}
             </div>
 
             {/* Delete dialog controlado — sem trigger, aberto via menu */}
