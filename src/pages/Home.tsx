@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePhotoCredits } from '@/hooks/usePhotoCredits';
 import { useTransferStorage } from '@/hooks/useTransferStorage';
@@ -24,9 +24,6 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { differenceInDays, format, startOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Canvas, useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import { useBrandColor } from '@/lib/brandColor';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -59,168 +56,6 @@ function getStatusBadge(status: string) {
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: map.color }} />
       {map.label}
     </span>
-  );
-}
-
-/* ─── 3D Orbital Scene — Premium Orbital Field ─── */
-
-const RING_CONFIGS = [
-  // Ring 1 — tilted horizontal, clockwise, 36s period
-  { initialRotation: [65 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 72, direction: 1, tube: 0.025, opacityLight: 0.35, opacityDark: 0.12 },
-  // Ring 2 — tilted vertical, counter-clockwise, 96s period
-  { initialRotation: [0, 45 * Math.PI / 180, 0] as [number, number, number], axis: 'x' as const, period: 96, direction: -1, tube: 0.015, opacityLight: 0.20, opacityDark: 0.08 },
-  // Ring 3 — opposite tilt, clockwise, 120s period
-  { initialRotation: [-40 * Math.PI / 180, 0, 0] as [number, number, number], axis: 'y' as const, period: 120, direction: 1, tube: 0.020, opacityLight: 0.25, opacityDark: 0.10 },
-  // Ring 4 — diagonal tilt, counter-clockwise, 144s period
-  { initialRotation: [0, 0, 30 * Math.PI / 180] as [number, number, number], axis: 'x' as const, period: 144, direction: -1, tube: 0.012, opacityLight: 0.12, opacityDark: 0.06 },
-];
-
-const SPHERE_CONFIGS = [
-  { ringIndex: 0, offset: 0, size: 0.08 },
-  { ringIndex: 2, offset: Math.PI, size: 0.08 },
-];
-
-function TorusRing({ index, isDark, brandHex, children }: { index: number; isDark: boolean; brandHex: string; children?: React.ReactNode }) {
-  const ref = useRef<THREE.Group>(null!);
-  const cfg = RING_CONFIGS[index];
-  const speed = (2 * Math.PI / cfg.period) * cfg.direction;
-
-  useFrame((_, delta) => {
-    if (cfg.axis === 'y') {
-      ref.current.rotation.y += speed * delta;
-    } else {
-      ref.current.rotation.x += speed * delta;
-    }
-  });
-
-  const opacity = isDark ? cfg.opacityDark : cfg.opacityLight;
-
-  return (
-    <group ref={ref} rotation={cfg.initialRotation}>
-      <mesh>
-        <torusGeometry args={[6.0, cfg.tube, 16, 120]} />
-        <meshBasicMaterial color={brandHex} transparent opacity={opacity} />
-      </mesh>
-      {children}
-    </group>
-  );
-}
-
-function OrbitingSphere({ index, isDark, brandHex }: { index: number; isDark: boolean; brandHex: string }) {
-  const ref = useRef<THREE.Mesh>(null!);
-  const cfg = SPHERE_CONFIGS[index];
-  const ringCfg = RING_CONFIGS[cfg.ringIndex];
-  const orbitSpeed = (2 * Math.PI / ringCfg.period) * ringCfg.direction;
-  const timeRef = useRef(cfg.offset);
-
-  useFrame((_, delta) => {
-    timeRef.current += delta * orbitSpeed;
-    const angle = timeRef.current;
-    ref.current.position.set(Math.cos(angle) * 6, Math.sin(angle) * 6, 0);
-  });
-
-  const opacity = isDark ? 0.25 : 0.6;
-
-  return (
-    <mesh ref={ref}>
-      <sphereGeometry args={[cfg.size, 16, 16]} />
-      <meshBasicMaterial color={brandHex} transparent opacity={opacity} />
-    </mesh>
-  );
-}
-
-function OrbitalScene({ isDark, brandHex }: { isDark: boolean; brandHex: string }) {
-  return (
-    <group>
-      <TorusRing index={0} isDark={isDark} brandHex={brandHex}>
-        <OrbitingSphere index={0} isDark={isDark} brandHex={brandHex} />
-      </TorusRing>
-      <TorusRing index={1} isDark={isDark} brandHex={brandHex} />
-      <TorusRing index={2} isDark={isDark} brandHex={brandHex}>
-        <OrbitingSphere index={1} isDark={isDark} brandHex={brandHex} />
-      </TorusRing>
-      <TorusRing index={3} isDark={isDark} brandHex={brandHex} />
-    </group>
-  );
-}
-
-/* ─── Background with 3D orbits + glow + noise ─── */
-function DashboardBackground() {
-  const [isDark, setIsDark] = useState(false);
-  const brand = useBrandColor();
-
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains('dark'));
-    check();
-    const observer = new MutationObserver(check);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  const [reducedMotion, setReducedMotion] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  const { h, s, l, glowL } = brand;
-  const auroraLight = `
-    linear-gradient(120deg, hsl(${h} ${s}% ${l}% / 0.25), transparent 50%),
-    linear-gradient(240deg, hsl(${h} ${Math.max(s - 15, 0)}% ${Math.min(l + 20, 75)}% / 0.20), transparent 50%),
-    linear-gradient(0deg,   hsl(${h} ${s}% ${l}% / 0.15), transparent 60%)
-  `;
-  const auroraDark = `
-    linear-gradient(120deg, hsl(${h} ${s}% ${glowL}% / 0.05), transparent 50%),
-    linear-gradient(240deg, hsl(${h} ${Math.max(s - 10, 0)}% ${Math.min(glowL + 10, 90)}% / 0.04), transparent 50%),
-    linear-gradient(0deg,   hsl(${h} ${s}% ${glowL}% / 0.03), transparent 60%)
-  `;
-
-  return (
-    <div className="fixed inset-0 z-0 pointer-events-none">
-      {/* Base gradient — light usa o token de surface para casar com --background */}
-      <div
-        className="absolute inset-0 transition-colors duration-700"
-        style={{
-          background: isDark
-            ? 'linear-gradient(135deg, #0D0A08 0%, #141010 50%, #0D0A08 100%)'
-            : 'hsl(var(--surface-hue) calc(var(--surface-sat) * 4) 98%)',
-        }}
-      />
-
-      {/* 3D Canvas */}
-      {!reducedMotion && (
-        <div className="absolute inset-0">
-          <Canvas
-            camera={{ position: [0, 0, 10], fov: 60 }}
-            gl={{ alpha: true, antialias: true }}
-            style={{ background: 'transparent' }}
-            dpr={[1, 1.5]}
-          >
-            <OrbitalScene isDark={isDark} brandHex={brand.hex} />
-          </Canvas>
-        </div>
-      )}
-
-      {/* Aurora gradient */}
-      <div
-        className="absolute inset-[-20%] aurora-animate"
-        style={{
-          background: isDark ? auroraDark : auroraLight,
-          filter: isDark ? 'blur(60px)' : 'blur(40px)',
-        }}
-      />
-
-      {/* Noise overlay */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.02]">
-        <filter id="dashboard-noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#dashboard-noise)" />
-      </svg>
-    </div>
   );
 }
 
@@ -300,9 +135,7 @@ export default function Home() {
   }, [galleries]);
 
   return (
-    <>
-      <DashboardBackground />
-      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen">
+    <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-screen">
         <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-8 relative z-10">
           {/* Section 1 — Account Resources */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
@@ -526,6 +359,5 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </>
   );
 }
