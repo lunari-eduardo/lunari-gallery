@@ -626,10 +626,6 @@ export default function GalleryDetail() {
                 Editar
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => toast.info('Arquivamento estará disponível em breve.')}>
-              <Archive className="h-4 w-4 mr-2" />
-              Arquivar
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
