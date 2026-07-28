@@ -218,7 +218,7 @@ export default function Credits() {
             <p className="text-sm text-muted-foreground">
               Você usa créditos com frequência?{' '}
               <span className="text-muted-foreground/60">
-                Sim aplique
+                Aprovado
               </span>
 
             </p>
