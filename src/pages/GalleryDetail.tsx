@@ -30,7 +30,7 @@ import {
   MoreHorizontal,
   Share2,
   Copy,
-  Archive,
+  
   Trash2,
   Link2,
   Unlink,
@@ -626,10 +626,6 @@ export default function GalleryDetail() {
                 Editar
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => toast.info('Arquivamento estará disponível em breve.')}>
-              <Archive className="h-4 w-4 mr-2" />
-              Arquivar
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
@@ -647,9 +643,6 @@ export default function GalleryDetail() {
               <Link to={`/gallery/${supabaseGallery.id}/edit`}>
                 <Pencil className="h-4 w-4 mr-2" /> Editar
               </Link>
-            </Button>
-            <Button variant="ghost" className="justify-start" onClick={() => { setMobileMenuOpen(false); toast.info('Arquivamento estará disponível em breve.'); }}>
-              <Archive className="h-4 w-4 mr-2" /> Arquivar
             </Button>
             <div className="h-px bg-border my-1" />
             <Button
