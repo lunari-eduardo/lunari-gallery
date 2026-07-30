@@ -59,7 +59,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
-import { getEffectiveGalleryStatus } from '@/lib/galleryStatus';
+import { getEffectiveGalleryStatus, getBillingModeLabel } from '@/lib/galleryStatus';
 
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1275,15 +1275,21 @@ export default function GalleryDetail() {
                     {supabaseGallery.permissao === 'public' ? 'Pública' : 'Privada'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Modo de cobrança</span>
-                  <span className="font-medium">
-                    {(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode === 'no_sale' && 'Sem cobrança'}
-                    {(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode === 'sale_with_payment' && 'Pagamento online'}
-                    {(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode === 'sale_without_payment' && 'Cobrança posterior'}
-                    {!(supabaseGallery.configuracoes?.saleSettings as { mode?: string } | undefined)?.mode && 'Cobrança posterior'}
-                  </span>
-                </div>
+                {(() => {
+                  const billing = getBillingModeLabel({
+                    vendaModo: (supabaseGallery as any).vendaModo,
+                    vendaPagamentoProvedor: (supabaseGallery as any).vendaPagamentoProvedor,
+                    saleSettings: supabaseGallery.configuracoes?.saleSettings as { mode?: string; paymentMethod?: string } | undefined,
+                  });
+                  return (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Modo de cobrança</span>
+                      <span className={billing.missingProvider ? 'font-medium text-destructive' : 'font-medium'}>
+                        {billing.label}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Comentários</span>
                   <span className="font-medium">

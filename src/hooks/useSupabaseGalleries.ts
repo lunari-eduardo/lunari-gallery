@@ -101,6 +101,10 @@ export interface Galeria {
   themeOverrides?: any;
   coverId?: string | null;
   expiresAt?: Date | null;
+  /** Colunas de venda (fonte da verdade; JSON `configuracoes.saleSettings` é fallback). */
+  vendaModo: string | null;
+  vendaPagamentoProvedor: string | null;
+  vendaTipoCobranca: string | null;
 }
 
 export interface CreateGaleriaData {
@@ -185,6 +189,9 @@ function transformGaleria(row: any): Galeria {
     themeOverrides: row.theme_overrides ?? {},
     coverId: row.cover_id ?? null,
     expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+    vendaModo: row.venda_modo ?? null,
+    vendaPagamentoProvedor: row.venda_pagamento_provedor ?? null,
+    vendaTipoCobranca: row.venda_tipo_cobranca ?? null,
   };
 }
 

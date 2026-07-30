@@ -36,3 +36,32 @@ export function getEffectiveGalleryStatus(
 
   return statusMap[status] || 'created';
 }
+
+const PAYMENT_PROVIDER_LABELS: Record<string, string> = {
+  pix_manual: 'PIX Manual',
+  infinitepay: 'InfinitePay',
+  mercadopago: 'Mercado Pago',
+  asaas: 'Asaas',
+};
+
+/**
+ * Rótulo do modo de cobrança da galeria, incluindo o provedor ativo.
+ * Precedência: colunas `venda_*` vencem sobre o JSON `configuracoes.saleSettings`.
+ */
+export function getBillingModeLabel(params: {
+  vendaModo?: string | null;
+  vendaPagamentoProvedor?: string | null;
+  saleSettings?: { mode?: string; paymentMethod?: string } | null;
+}): { label: string; missingProvider: boolean } {
+  const mode = params.vendaModo || params.saleSettings?.mode || 'sale_without_payment';
+
+  if (mode === 'no_sale') return { label: 'Sem cobrança', missingProvider: false };
+  if (mode !== 'sale_with_payment') return { label: 'Cobrança posterior', missingProvider: false };
+
+  const provider = params.vendaPagamentoProvedor || params.saleSettings?.paymentMethod || '';
+  const providerLabel = PAYMENT_PROVIDER_LABELS[provider];
+
+  return providerLabel
+    ? { label: `Pagamento online · ${providerLabel}`, missingProvider: false }
+    : { label: 'Pagamento online · Nenhum', missingProvider: true };
+}
