@@ -2568,6 +2568,39 @@ export type Database = {
         }
         Relationships: []
       }
+      fin_opening_balances: {
+        Row: {
+          ano: number
+          created_at: string
+          id: string
+          observacoes: string | null
+          origem: string
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: string
+          observacoes?: string | null
+          origem?: string
+          updated_at?: string
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: string
+          observacoes?: string | null
+          origem?: string
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       fin_recurring_blueprints: {
         Row: {
           created_at: string | null
@@ -6534,6 +6567,53 @@ export type Database = {
           p_receipt_url?: string
         }
         Returns: Json
+      }
+      finance_apply_saldo_ajuste: {
+        Args: { _data: string; _observacoes?: string; _saldo_desejado: number }
+        Returns: {
+          acao: string
+          transaction_id: string
+          valor_delta: number
+        }[]
+      }
+      finance_clear_opening_balance: {
+        Args: { _ano: number }
+        Returns: undefined
+      }
+      finance_ensure_ajuste_items: {
+        Args: never
+        Returns: {
+          item_entrada: string
+          item_saida: string
+        }[]
+      }
+      finance_get_opening_balance: {
+        Args: { _ano: number }
+        Returns: {
+          ano_base: number
+          origem: string
+          valor: number
+        }[]
+      }
+      finance_get_saldo_ate: { Args: { _data: string }; Returns: number }
+      finance_set_opening_balance: {
+        Args: { _ano: number; _observacoes?: string; _valor: number }
+        Returns: {
+          ano: number
+          created_at: string
+          id: string
+          observacoes: string | null
+          origem: string
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fin_opening_balances"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       fix_all_valor_pago: { Args: never; Returns: number }
       generate_public_token: { Args: never; Returns: string }
