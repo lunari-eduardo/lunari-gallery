@@ -59,7 +59,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { calcularPrecoProgressivoComCredito, RegrasCongeladas } from '@/lib/pricingUtils';
-import { getEffectiveGalleryStatus } from '@/lib/galleryStatus';
+import { getEffectiveGalleryStatus, getBillingModeLabel } from '@/lib/galleryStatus';
 
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
