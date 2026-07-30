@@ -252,9 +252,45 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_access_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          message: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          message?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          message?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       assistant_approvals: {
         Row: {
           approval_token_hash: string | null
+          args_fingerprint: string | null
+          client_id: string | null
+          confirmation_mode: string | null
           consumed_at: string | null
           created_at: string
           decided_at: string | null
@@ -263,6 +299,7 @@ export type Database = {
           requested_at: string
           status: Database["public"]["Enums"]["assistant_approval_status"]
           summary: string | null
+          surface: string
           token_id: string | null
           tool_args: Json
           tool_name: string
@@ -270,6 +307,9 @@ export type Database = {
         }
         Insert: {
           approval_token_hash?: string | null
+          args_fingerprint?: string | null
+          client_id?: string | null
+          confirmation_mode?: string | null
           consumed_at?: string | null
           created_at?: string
           decided_at?: string | null
@@ -278,6 +318,7 @@ export type Database = {
           requested_at?: string
           status?: Database["public"]["Enums"]["assistant_approval_status"]
           summary?: string | null
+          surface?: string
           token_id?: string | null
           tool_args?: Json
           tool_name: string
@@ -285,6 +326,9 @@ export type Database = {
         }
         Update: {
           approval_token_hash?: string | null
+          args_fingerprint?: string | null
+          client_id?: string | null
+          confirmation_mode?: string | null
           consumed_at?: string | null
           created_at?: string
           decided_at?: string | null
@@ -293,6 +337,7 @@ export type Database = {
           requested_at?: string
           status?: Database["public"]["Enums"]["assistant_approval_status"]
           summary?: string | null
+          surface?: string
           token_id?: string | null
           tool_args?: Json
           tool_name?: string
@@ -332,12 +377,15 @@ export type Database = {
       assistant_invocations: {
         Row: {
           actor: string
+          approval_id: string | null
           approved_at: string | null
           approved_by: string | null
           auth_source: string | null
           capability_id: string
+          client_id: string | null
           created_at: string
           error_message: string | null
+          granted_tiers: string[] | null
           id: string
           input_hash: string | null
           kind: string
@@ -345,17 +393,24 @@ export type Database = {
           module: string
           needs_approval: boolean
           output_status: string
+          request_id: string | null
+          required_tier: string | null
+          surface: string | null
+          tool_name: string | null
           ts: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           actor?: string
+          approval_id?: string | null
           approved_at?: string | null
           approved_by?: string | null
           auth_source?: string | null
           capability_id: string
+          client_id?: string | null
           created_at?: string
           error_message?: string | null
+          granted_tiers?: string[] | null
           id?: string
           input_hash?: string | null
           kind: string
@@ -363,17 +418,24 @@ export type Database = {
           module: string
           needs_approval?: boolean
           output_status: string
+          request_id?: string | null
+          required_tier?: string | null
+          surface?: string | null
+          tool_name?: string | null
           ts?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           actor?: string
+          approval_id?: string | null
           approved_at?: string | null
           approved_by?: string | null
           auth_source?: string | null
           capability_id?: string
+          client_id?: string | null
           created_at?: string
           error_message?: string | null
+          granted_tiers?: string[] | null
           id?: string
           input_hash?: string | null
           kind?: string
@@ -381,7 +443,52 @@ export type Database = {
           module?: string
           needs_approval?: boolean
           output_status?: string
+          request_id?: string | null
+          required_tier?: string | null
+          surface?: string | null
+          tool_name?: string | null
           ts?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_invocations_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_approvals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_mcp_client_grants: {
+        Row: {
+          client_id: string
+          client_name: string | null
+          created_at: string
+          id: string
+          last_used_at: string | null
+          tiers: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          tiers?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          tiers?: string[]
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -482,9 +589,66 @@ export type Database = {
           },
         ]
       }
+      automation_queue: {
+        Row: {
+          attempts: number
+          capability_id: string
+          created_at: string
+          entity_id: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          processed_at: string | null
+          rule_id: string
+          trigger_kind: string
+          user_id: string
+          window_key: string
+        }
+        Insert: {
+          attempts?: number
+          capability_id: string
+          created_at?: string
+          entity_id: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          processed_at?: string | null
+          rule_id: string
+          trigger_kind: string
+          user_id: string
+          window_key: string
+        }
+        Update: {
+          attempts?: number
+          capability_id?: string
+          created_at?: string
+          entity_id?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          processed_at?: string | null
+          rule_id?: string
+          trigger_kind?: string
+          user_id?: string
+          window_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_queue_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_rules: {
         Row: {
           capability_id: string
+          config: Json
           created_at: string
           enabled: boolean
           id: string
@@ -496,6 +660,7 @@ export type Database = {
         }
         Insert: {
           capability_id: string
+          config?: Json
           created_at?: string
           enabled?: boolean
           id?: string
@@ -507,6 +672,7 @@ export type Database = {
         }
         Update: {
           capability_id?: string
+          config?: Json
           created_at?: string
           enabled?: boolean
           id?: string
@@ -523,6 +689,7 @@ export type Database = {
           actor: string
           capability_id: string
           created_at: string
+          entity_id: string | null
           error_code: string | null
           error_message: string | null
           id: string
@@ -530,12 +697,15 @@ export type Database = {
           result: Json | null
           rule_id: string | null
           status: string
+          trigger_kind: string | null
           user_id: string
+          window_key: string | null
         }
         Insert: {
           actor: string
           capability_id: string
           created_at?: string
+          entity_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -543,12 +713,15 @@ export type Database = {
           result?: Json | null
           rule_id?: string | null
           status: string
+          trigger_kind?: string | null
           user_id: string
+          window_key?: string | null
         }
         Update: {
           actor?: string
           capability_id?: string
           created_at?: string
+          entity_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -556,7 +729,9 @@ export type Database = {
           result?: Json | null
           rule_id?: string | null
           status?: string
+          trigger_kind?: string | null
           user_id?: string
+          window_key?: string | null
         }
         Relationships: [
           {
@@ -567,6 +742,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      automation_schedule_state: {
+        Row: {
+          consecutive_errors: number
+          created_at: string
+          last_cycle: Json
+          last_run_at: string | null
+          next_run_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          consecutive_errors?: number
+          created_at?: string
+          last_cycle?: Json
+          last_run_at?: string | null
+          next_run_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          consecutive_errors?: number
+          created_at?: string
+          last_cycle?: Json
+          last_run_at?: string | null
+          next_run_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       availability_slots: {
         Row: {
@@ -6416,6 +6621,10 @@ export type Database = {
         Returns: undefined
       }
       assistant_access_allowed: { Args: { _uid: string }; Returns: boolean }
+      assistant_access_request_decide: {
+        Args: { _approve: boolean; _id: string }
+        Returns: string
+      }
       assistant_approval_consume: {
         Args: { _approval_token: string; _tool_name: string; _user_id: string }
         Returns: {
@@ -6437,6 +6646,9 @@ export type Database = {
         Args: { _approve: boolean; _id: string }
         Returns: {
           approval_token_hash: string | null
+          args_fingerprint: string | null
+          client_id: string | null
+          confirmation_mode: string | null
           consumed_at: string | null
           created_at: string
           decided_at: string | null
@@ -6445,6 +6657,7 @@ export type Database = {
           requested_at: string
           status: Database["public"]["Enums"]["assistant_approval_status"]
           summary: string | null
+          surface: string
           token_id: string | null
           tool_args: Json
           tool_name: string
@@ -6456,6 +6669,25 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      assistant_approval_record_inline: {
+        Args: {
+          _approved: boolean
+          _confirmation_mode: string
+          _summary: string
+          _tool_args: Json
+          _tool_name: string
+        }
+        Returns: string
+      }
+      assistant_approvals_expire_stale: { Args: never; Returns: number }
+      assistant_mcp_grant_resolve: {
+        Args: { _client_id: string; _client_name?: string; _user_id: string }
+        Returns: string[]
+      }
+      assistant_mcp_grant_set: {
+        Args: { _client_id: string; _tiers: string[] }
+        Returns: string[]
       }
       assistant_mcp_token_create: {
         Args: { _expires_at?: string; _name: string; _scopes?: string[] }
@@ -6488,6 +6720,7 @@ export type Database = {
           scopes: string[]
         }[]
       }
+      assistant_rollout_set: { Args: { _stage: string }; Returns: string }
       atomic_update_session_extras: {
         Args: {
           p_extras_increment: number
@@ -6498,6 +6731,7 @@ export type Database = {
         }
         Returns: Json
       }
+      automation_schedule_overview: { Args: never; Returns: Json }
       calculate_gallery_extra_payment: {
         Args: { p_bypass_pre_selecao_gate?: boolean; p_gallery_id: string }
         Returns: Json
@@ -6707,6 +6941,7 @@ export type Database = {
         }
         Returns: string
       }
+      purge_webhook_logs: { Args: never; Returns: Json }
       recalculate_referral_transfer_bonus: {
         Args: { _new_plan_storage_bytes: number; _referred_user_id: string }
         Returns: boolean
