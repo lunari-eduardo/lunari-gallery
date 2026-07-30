@@ -101,6 +101,10 @@ export interface Galeria {
   themeOverrides?: any;
   coverId?: string | null;
   expiresAt?: Date | null;
+  /** Colunas de venda (fonte da verdade; JSON `configuracoes.saleSettings` é fallback). */
+  vendaModo: string | null;
+  vendaPagamentoProvedor: string | null;
+  vendaTipoCobranca: string | null;
 }
 
 export interface CreateGaleriaData {
