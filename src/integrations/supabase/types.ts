@@ -493,6 +493,57 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_mcp_handshakes: {
+        Row: {
+          auth_reason: string | null
+          auth_source: string | null
+          client_id: string | null
+          created_at: string
+          flow_id: string | null
+          has_authorization: boolean
+          id: string
+          latency_ms: number | null
+          methods: string[]
+          protocol_version: string | null
+          response_bytes: number | null
+          status: number | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          auth_reason?: string | null
+          auth_source?: string | null
+          client_id?: string | null
+          created_at?: string
+          flow_id?: string | null
+          has_authorization?: boolean
+          id?: string
+          latency_ms?: number | null
+          methods?: string[]
+          protocol_version?: string | null
+          response_bytes?: number | null
+          status?: number | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          auth_reason?: string | null
+          auth_source?: string | null
+          client_id?: string | null
+          created_at?: string
+          flow_id?: string | null
+          has_authorization?: boolean
+          id?: string
+          latency_ms?: number | null
+          methods?: string[]
+          protocol_version?: string | null
+          response_bytes?: number | null
+          status?: number | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       assistant_mcp_tokens: {
         Row: {
           created_at: string
@@ -1805,6 +1856,13 @@ export type Database = {
             foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
             columns: ["cobranca_id"]
             isOneToOne: false
+            referencedRelation: "vw_cobrancas_extras_orfas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
             referencedRelation: "vw_cobrancas_suspeitas"
             referencedColumns: ["cobranca_id"]
           },
@@ -1891,6 +1949,13 @@ export type Database = {
             columns: ["cobranca_id"]
             isOneToOne: false
             referencedRelation: "v_infinitepay_latency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_parcelas_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_extras_orfas"
             referencedColumns: ["id"]
           },
           {
@@ -2539,6 +2604,13 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "v_infinitepay_latency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_delivery_logs_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_extras_orfas"
             referencedColumns: ["id"]
           },
           {
@@ -6498,6 +6570,36 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_cobrancas_extras_orfas: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          id: string | null
+          session_id: string | null
+          status: string | null
+          user_id: string | null
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string | null
+          session_id?: string | null
+          status?: string | null
+          user_id?: string | null
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string | null
+          session_id?: string | null
+          status?: string | null
+          user_id?: string | null
+          valor?: number | null
+        }
+        Relationships: []
+      }
       vw_cobrancas_suspeitas: {
         Row: {
           cliente_nome: string | null
@@ -6550,6 +6652,13 @@ export type Database = {
             columns: ["cobranca_id"]
             isOneToOne: false
             referencedRelation: "v_infinitepay_latency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_transacoes_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cobrancas_extras_orfas"
             referencedColumns: ["id"]
           },
           {
@@ -6998,6 +7107,25 @@ export type Database = {
       revoke_client_credit: {
         Args: { p_ledger_id: string; p_motivo?: string }
         Returns: string
+      }
+      sales_analytics_compare: {
+        Args: {
+          p_ano_base: number
+          p_ano_comparacao: number
+          p_categoria?: string
+          p_limite_mes?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      sales_analytics_summary: {
+        Args: {
+          p_categoria?: string
+          p_month?: number
+          p_user_id: string
+          p_year: number
+        }
+        Returns: Json
       }
       set_session_extras: {
         Args: {
