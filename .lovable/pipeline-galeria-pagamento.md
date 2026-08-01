@@ -64,6 +64,24 @@ supabase/functions/gallery-create-payment/index.ts          ← FONTE ÚNICA
 
 Em 2026-07-09 (20:46 UTC) o repositório estava com `gallery-create-payment` v2.1, mas a Supabase servia uma versão anterior que **exigia `clienteId` no body**. `client-selection` (atualizado) mandava apenas `{ galleryId }`; o edge respondia `400 { error: "clienteId é obrigatório" }`; o front exibia `PAYMENT_CREATE_ERROR` no toast. Confirmação: a string `"clienteId é obrigatório"` **não existe** em nenhum arquivo do HEAD (nem código, nem migrations, nem `pg_proc`), e os logs do edge implantado usavam `[gallery-create-payment] Request:` enquanto o HEAD já usava `[gcp][step:1 request]`. Correção: redeploy explícito. Prevenção: canary abaixo.
 
+**Reincidência 2026-08-01 (02:33 UTC) — mesmo drift, mesma assinatura.** `confirm-selection` retornava 500 com o toast "clienteId é obrigatório"; logs mostravam `POST /gallery-create-payment → 400` logo antes, e o log da função implantada era `[gallery-create-payment] Request: {"galleryId":...}` (versão antiga) em vez de `[gcp][step:1 request]` do HEAD v2.2. O body recebido pelo gcp era só `{ galleryId }`, sem `provider`/`context`/`preloaded` — logo o `confirm-selection` publicado também estava velho. Nenhuma linha de código foi alterada: redeploy atômico de `gallery-create-payment`, `confirm-selection`, `infinitepay-create-link`, `mercadopago-create-link` e `client-selection` + canary (confirmado `[gcp][step:1 request]` e `[gcp][step:3 calc-ok]`).
+
+### Regra de diagnóstico (ler ANTES de formular hipóteses)
+
+Ao investigar qualquer erro deste pipeline, o **primeiro passo obrigatório** é ler o log inicial da função na Supabase e comparar com o formato do HEAD:
+
+| Função | Log inicial esperado no HEAD |
+| --- | --- |
+| `gallery-create-payment` | `[gcp][step:1 request] {...}` |
+| `infinitepay-create-link` | `💳 [infinitepay-create-link] body recebido:` + `[INFINITEPAY_ENDPOINT_VERSION] v2-checkout-api` |
+| `confirm-selection` | `[confirm-selection] Delegating to gallery-create-payment (provider=...) with preloaded…` |
+
+Se o formato divergir → **é drift, não bug de código**. Redeploy das 5 funções antes de qualquer outra investigação.
+
+**Nota:** existe no mesmo projeto Supabase a função `gestao-infinitepay-create-link`, pertencente ao projeto Gestão. Ela **não** faz parte deste pipeline e nunca deve ser redeployada/alterada a partir do Gallery.
+
+
+
 ## Checklist antes de editar qualquer função do pipeline
 
 ```text
