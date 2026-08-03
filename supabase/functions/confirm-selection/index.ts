@@ -35,6 +35,7 @@ import { RegrasCongeladas, Gallery } from '../_shared/types.ts';
 import { calcularPrecoProgressivoComCredito } from '../_shared/pricing.ts';
 
 
+// confirm-selection v2.2.1-final (2026-08-03)
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
