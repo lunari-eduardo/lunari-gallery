@@ -1,4 +1,4 @@
-/**
+/** v1.0.3-final (deploy 2026-08-03) — Null-safety clienteId (2026-08-03)
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
  * ║                                                              ║
@@ -190,13 +190,15 @@ Deno.serve(async (req) => {
     }
 
     // 2. Find or create Asaas customer (prioritize externalReference over email)
+    // [v1.0.3-final (deploy 2026-08-03)] Normalização clienteId
+    const targetClienteId = clienteId || null;
     let asaasCustomerId: string | null = null;
 
     // 🎯 Resolve payer hints (nome, email, telefone) para prefill do checkout Asaas.
     //    Ordem: cliente → visitante. Falha silenciosa nunca bloqueia o fluxo.
     let payerHints: Awaited<ReturnType<typeof resolvePayerHints>> = {};
     try {
-      payerHints = await resolvePayerHints(supabase, { clienteId, visitorId: body.visitorId });
+      payerHints = await resolvePayerHints(supabase, { clienteId: targetClienteId, visitorId: body.visitorId });
       console.log(`[ASAAS_PREFILL] ${payerHintsFlags(payerHints)}`);
     } catch (e) {
       console.warn('[ASAAS_PREFILL] falha:', e instanceof Error ? e.message : e);
@@ -220,11 +222,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (clienteId) {
+    if (targetClienteId) {
       const { data: cliente } = await supabase
         .from('clientes')
         .select('nome, email, telefone, whatsapp, cpf_cnpj, cep, endereco, endereco_numero, endereco_complemento, bairro, cidade, uf')
-        .eq('id', clienteId)
+        .eq('id', targetClienteId)
         .maybeSingle();
 
       if (cliente) {
@@ -256,8 +258,8 @@ Deno.serve(async (req) => {
           return u;
         };
 
-        // Step 1: Search by externalReference (clienteId) — most precise
-        const refResp = await fetch(`${asaasBaseUrl}/v3/customers?externalReference=${encodeURIComponent(clienteId)}`, {
+        // Step 1: Search by externalReference (targetClienteId) — most precise
+        const refResp = await fetch(`${asaasBaseUrl}/v3/customers?externalReference=${encodeURIComponent(targetClienteId)}`, {
           headers: { access_token: asaasApiKey },
         });
         if (refResp.ok) {
@@ -286,13 +288,13 @@ Deno.serve(async (req) => {
           if (searchResp.ok) {
             const searchData = await searchResp.json();
             if (searchData.data && searchData.data.length > 0) {
-              const match = searchData.data.find((c: Record<string, unknown>) => c.externalReference === clienteId) || searchData.data[0];
+              const match = searchData.data.find((c: Record<string, unknown>) => c.externalReference === targetClienteId) || searchData.data[0];
               asaasCustomerId = match.id;
               console.log(`📋 Found Asaas customer by email: ${asaasCustomerId} (name: ${match.name})`);
 
               const updates: Record<string, unknown> = { ...buildFillUpdates(match) };
               if (match.name !== clienteName) updates.name = clienteName;
-              if (match.externalReference !== clienteId) updates.externalReference = clienteId;
+              if (match.externalReference !== targetClienteId) updates.externalReference = targetClienteId;
               if (centralizarEmailsLunari) updates.notificationDisabled = true;
               if (Object.keys(updates).length > 0) {
                 console.log(`📝 Updating Asaas customer:`, Object.keys(updates));
@@ -319,7 +321,7 @@ Deno.serve(async (req) => {
             province: addr?.province,
             cityName: addr?.city,
             state: addr?.state,
-            externalReference: clienteId,
+            externalReference: targetClienteId,
             ...(centralizarEmailsLunari ? { notificationDisabled: true } : {}),
           };
           // Remove chaves undefined para não poluir o payload.

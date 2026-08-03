@@ -1,5 +1,5 @@
 /**
- * v1.0.2 — Auto-heal + validação defensiva (2026-03-21)
+ * v1.0.3-final (deploy 2026-08-03) — Null-safety clienteId (2026-08-03)
  *
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
@@ -125,8 +125,9 @@ Deno.serve(async (req) => {
       return errorResponse(400, 'É necessário um cliente ou galeria vinculada para criar cobrança', 'MISSING_REFERENCE');
     }
 
-    if (!clienteId && galeriaId) {
-      console.log('⚠️ Criando cobrança InfinitePay para galeria pública (sem cliente vinculado)');
+    // [v1.0.3-final (deploy 2026-08-03)] LOG DE REFERÊNCIA
+    if (!clienteId) {
+      console.log(`⚠️ Criando cobrança InfinitePay para galeria ${galeriaId} (clienteId ausente/nulo)`);
     }
 
     // 🛡️ Inferência defensiva: se vier qtdFotos=0/null mas há galeriaId e valor>0,

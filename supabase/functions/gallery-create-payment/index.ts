@@ -1,4 +1,4 @@
-// gallery-create-payment v2.2 — preloaded fast-path (2026-07-12)
+// gallery-create-payment v2.2.1-final (deploy 2026-08-03) (2026-08-03)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {
@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
     }
 
     const payloadBody: Record<string, unknown> = {
-      clienteId: gallery.cliente_id,
+      clienteId: gallery.cliente_id || null,
       sessionId: sessionIdTexto,
       valor: valorCanonico,
       descricao,
