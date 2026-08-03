@@ -1,4 +1,4 @@
-/**
+/** v1.0.3-final — Null-safety clienteId (2026-08-03)
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
  * ║                                                              ║
@@ -91,10 +91,13 @@ Deno.serve(async (req) => {
     
     console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId, 'clienteId:', body.clienteId || 'NULL');
     
+    // [v1.0.3-final] Normalização clienteId
+    const clienteId = body.clienteId || null;
+    
     // 2. Buscar dados do pagador (nome + email + telefone) para pré-preencher o checkout.
     //    Prioridade: cliente → visitante. NUNCA usar email placeholder inválido.
     const payerHints = await resolvePayerHints(supabase, {
-      clienteId: body.clienteId,
+      clienteId: clienteId,
       visitorId: body.visitorId,
     });
     console.log(`[MP_PREFILL] ${payerHintsFlags(payerHints)}`);
@@ -135,7 +138,7 @@ Deno.serve(async (req) => {
         .from('cobrancas')
         .insert({
           user_id: photographerId,
-          cliente_id: body.clienteId || null,
+          cliente_id: clienteId,
           galeria_id: body.galeriaId,
           session_id: body.sessionId || null,
           valor: body.valor,
