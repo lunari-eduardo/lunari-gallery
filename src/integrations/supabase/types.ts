@@ -6489,6 +6489,7 @@ export type Database = {
           data: string | null
           data_competencia: string | null
           descricao: string | null
+          escopo: string | null
           id: string | null
           meio_pagamento: string | null
           natureza: string | null
