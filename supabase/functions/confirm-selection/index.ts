@@ -639,10 +639,10 @@ Deno.serve(async (req) => {
                 gallery: {
                   id: galleryId,
                   user_id: gallery.user_id,
-                  cliente_id: gallery.cliente_id,
+                  cliente_id: gallery.cliente_id || null, // [v2.2.1-final] Garantir null em galeria pública
                   session_id: gallery.session_id,
                   nome_sessao: gallery.nome_sessao,
-                  public_token: gallery.public_token,
+                  public_token: galleryToken,
                   fotos_incluidas: gallery.fotos_incluidas,
                   regras_congeladas: gallery.regras_congeladas,
                 },
