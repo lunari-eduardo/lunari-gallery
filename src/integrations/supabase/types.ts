@@ -5141,6 +5141,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: string | null
           avatar_url: string | null
           cidade: string | null
           cidade_ibge_id: number | null
@@ -5148,6 +5149,7 @@ export type Database = {
           cidade_uf: string | null
           cpf_cnpj: string | null
           created_at: string
+          deletion_requested_at: string | null
           email: string | null
           empresa: string | null
           endereco_comercial: string | null
@@ -5168,6 +5170,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_status?: string | null
           avatar_url?: string | null
           cidade?: string | null
           cidade_ibge_id?: number | null
@@ -5175,6 +5178,7 @@ export type Database = {
           cidade_uf?: string | null
           cpf_cnpj?: string | null
           created_at?: string
+          deletion_requested_at?: string | null
           email?: string | null
           empresa?: string | null
           endereco_comercial?: string | null
@@ -5195,6 +5199,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_status?: string | null
           avatar_url?: string | null
           cidade?: string | null
           cidade_ibge_id?: number | null
@@ -5202,6 +5207,7 @@ export type Database = {
           cidade_uf?: string | null
           cpf_cnpj?: string | null
           created_at?: string
+          deletion_requested_at?: string | null
           email?: string | null
           empresa?: string | null
           endereco_comercial?: string | null
