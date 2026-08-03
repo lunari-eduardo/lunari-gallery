@@ -1,4 +1,4 @@
-/** v1.0.3-final — Null-safety clienteId (2026-08-03)
+/** v1.0.3-final (deploy 2026-08-03) — Null-safety clienteId (2026-08-03)
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
  * ║                                                              ║
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     
     console.log('Criando pagamento MP para fotógrafo:', photographerId, 'galeriaId:', body.galeriaId, 'clienteId:', body.clienteId || 'NULL');
     
-    // [v1.0.3-final] Normalização clienteId
+    // [v1.0.3-final (deploy 2026-08-03)] Normalização clienteId
     const clienteId = body.clienteId || null;
     
     // 2. Buscar dados do pagador (nome + email + telefone) para pré-preencher o checkout.

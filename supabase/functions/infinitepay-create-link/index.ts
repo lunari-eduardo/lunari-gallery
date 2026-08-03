@@ -1,5 +1,5 @@
 /**
- * v1.0.3-final — Null-safety clienteId (2026-08-03)
+ * v1.0.3-final (deploy 2026-08-03) — Null-safety clienteId (2026-08-03)
  *
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       return errorResponse(400, 'É necessário um cliente ou galeria vinculada para criar cobrança', 'MISSING_REFERENCE');
     }
 
-    // [v1.0.3-final] LOG DE REFERÊNCIA
+    // [v1.0.3-final (deploy 2026-08-03)] LOG DE REFERÊNCIA
     if (!clienteId) {
       console.log(`⚠️ Criando cobrança InfinitePay para galeria ${galeriaId} (clienteId ausente/nulo)`);
     }

@@ -1,4 +1,4 @@
-// gallery-create-payment v2.2.1-final (2026-08-03)
+// gallery-create-payment v2.2.1-final (deploy 2026-08-03) (2026-08-03)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {

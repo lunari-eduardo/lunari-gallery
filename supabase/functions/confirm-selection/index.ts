@@ -35,7 +35,7 @@ import { RegrasCongeladas, Gallery } from '../_shared/types.ts';
 import { calcularPrecoProgressivoComCredito } from '../_shared/pricing.ts';
 
 
-// confirm-selection v2.2.1-final (2026-08-03)
+// confirm-selection v2.2.1-final (deploy 2026-08-03) (2026-08-03)
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -639,7 +639,7 @@ Deno.serve(async (req) => {
                 gallery: {
                   id: galleryId,
                   user_id: gallery.user_id,
-                  cliente_id: gallery.cliente_id || null, // [v2.2.1-final] Garantir null em galeria pública
+                  cliente_id: gallery.cliente_id || null, // [v2.2.1-final (deploy 2026-08-03)] Garantir null em galeria pública
                   session_id: gallery.session_id,
                   nome_sessao: gallery.nome_sessao,
                   public_token: galleryToken,

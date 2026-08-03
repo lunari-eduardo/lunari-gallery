@@ -1,4 +1,4 @@
-/** v1.0.3-final — Null-safety clienteId (2026-08-03)
+/** v1.0.3-final (deploy 2026-08-03) — Null-safety clienteId (2026-08-03)
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  CONTRATO COMPARTILHADO — NÃO MODIFICAR SEM COORDENAÇÃO    ║
  * ║                                                              ║
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
     }
 
     // 2. Find or create Asaas customer (prioritize externalReference over email)
-    // [v1.0.3-final] Normalização clienteId
+    // [v1.0.3-final (deploy 2026-08-03)] Normalização clienteId
     const targetClienteId = clienteId || null;
     let asaasCustomerId: string | null = null;
 
