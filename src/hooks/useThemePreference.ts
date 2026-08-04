@@ -20,6 +20,14 @@ export function useRemoteThemeSync(
 
   // Hidratação + assinatura realtime quando autenticado
   useEffect(() => {
+    // Se o user_id for injetado no contexto futuramente, podemos otimizar.
+    // Por enquanto, checamos se há sessão ativa no localStorage antes de iniciar o fluxo assíncrono.
+    const hasLocalSession = !!localStorage.getItem('sb-' + import.meta.env.VITE_SUPABASE_ID + '-auth-token');
+    if (!hasLocalSession) {
+      hydratedRef.current = true;
+      return;
+    }
+
     let cancelled = false;
 
     const cleanupChannel = () => {
