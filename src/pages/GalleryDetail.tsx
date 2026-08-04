@@ -488,7 +488,8 @@ export default function GalleryDetail() {
     supabaseGallery.status,
     supabaseGallery.statusPagamento,
     supabaseGallery.finalizedAt,
-    supabaseGallery.statusSelecao
+    supabaseGallery.statusSelecao,
+    supabaseGallery.prazoSelecao
   );
 
 
@@ -702,20 +703,18 @@ export default function GalleryDetail() {
                   </Tooltip>
                 </TooltipProvider>
 
-                {canReactivate && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setReactivateOpen(true)}
-                    className={cn(
-                      "transition-opacity",
-                      !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
-                    )}
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Reativar
-                  </Button>
-                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setReactivateOpen(true)}
+                  className={cn(
+                    "transition-opacity",
+                    !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
+                  )}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reativar
+                </Button>
                 
                 <Button variant="terracotta" size="sm" onClick={() => setIsSendModalOpen(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
@@ -780,17 +779,18 @@ export default function GalleryDetail() {
                 Compartilhar
               </Button>
               
-              {canReactivate && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => setReactivateOpen(true)}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reativar
-                </Button>
-              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className={cn(
+                  "w-full",
+                  !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
+                )}
+                onClick={() => setReactivateOpen(true)}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reativar
+              </Button>
             </div>
 
             {/* Delete dialog controlado — sem trigger, aberto via menu */}
@@ -1284,7 +1284,10 @@ export default function GalleryDetail() {
                   return (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Modo de cobrança</span>
-                      <span className={billing.missingProvider ? 'font-medium text-destructive' : 'font-medium'}>
+                      <span className={cn(
+                        "font-medium",
+                        billing.missingProvider ? "text-amber-500" : "text-foreground"
+                      )}>
                         {billing.label}
                       </span>
                     </div>
