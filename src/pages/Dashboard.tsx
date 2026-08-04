@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ReactivateGalleryDialog } from '@/components/ReactivateGalleryDialog';
 import { ReactivateSuccessModal } from '@/components/ReactivateSuccessModal';
