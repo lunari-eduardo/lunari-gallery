@@ -718,6 +718,7 @@ export default function GalleryDetail() {
                     "transition-opacity",
                     !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
                   )}
+                  disabled={!canReactivate}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Reativar
@@ -794,6 +795,7 @@ export default function GalleryDetail() {
                   !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
                 )}
                 onClick={() => setReactivateOpen(true)}
+                disabled={!canReactivate}
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Reativar
