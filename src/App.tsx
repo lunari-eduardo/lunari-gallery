@@ -75,11 +75,8 @@ const App = () => (
               } />
               
               {/* Protected photographer routes (with layout) */}
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Layout><Index /></Layout>
-                </ProtectedRoute>
-              } />
+              {/* Smart root redirector */}
+              <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <Layout><Home /></Layout>
