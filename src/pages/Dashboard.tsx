@@ -179,6 +179,7 @@ export default function Dashboard() {
   
   const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, reopenSelection, refetch } = useSupabaseGalleries() as any;
   const { settings } = useSettings();
+  const queryClient = useQueryClient();
 
   // Share, Delete & Reactivate modal state
   const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
