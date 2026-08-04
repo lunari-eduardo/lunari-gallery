@@ -6,14 +6,23 @@ import { GalleryStatus, SelectionStatus } from '@/types/gallery';
  */
 export function getEffectiveGalleryStatus(
   status: string,
-  statusPagamento?: string,
+  statusPagamento?: string | null,
   finalizedAt?: Date | string | null,
-  statusSelecao?: string
+  statusSelecao?: string | null,
+  prazoSelecao?: Date | string | null
 ): 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled' {
   
   // Se já foi finalizada ou paga, o status efetivo é sempre concluída
   if (finalizedAt || statusPagamento === 'pago' || statusPagamento === 'pago_manual' || statusSelecao === 'selecao_completa') {
     return 'selection_completed';
+  }
+
+  // Se o prazo expirou e a galeria está em um estado ativo, ela é considerada expirada
+  const isPastDeadline = prazoSelecao && new Date(prazoSelecao).getTime() < Date.now();
+  const isActiveStatus = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada'].includes(status);
+  
+  if (isPastDeadline && isActiveStatus) {
+    return 'expired';
   }
 
   const statusMap: Record<string, 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled'> = {

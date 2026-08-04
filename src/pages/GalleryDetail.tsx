@@ -488,7 +488,8 @@ export default function GalleryDetail() {
     supabaseGallery.status,
     supabaseGallery.statusPagamento,
     supabaseGallery.finalizedAt,
-    supabaseGallery.statusSelecao
+    supabaseGallery.statusSelecao,
+    supabaseGallery.prazoSelecao
   );
 
 

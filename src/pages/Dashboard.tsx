@@ -199,22 +199,36 @@ export default function Dashboard() {
   // Sync expired galleries to database (trigger auto-syncs clientes_sessoes)
   useEffect(() => {
     if (!supabaseGalleries.length) return;
+    
+    // Filtramos apenas as galerias que ainda não estão marcadas como expiradas no banco
     const expiredGalleries = supabaseGalleries.filter(g => {
-      const isActive = ['enviado', 'selecao_iniciada'].includes(g.status);
-      return isActive && g.prazoSelecao && isPast(g.prazoSelecao);
+      const isActive = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada'].includes(g.status);
+      const isPastDeadline = g.prazoSelecao && isPast(g.prazoSelecao);
+      return isActive && isPastDeadline;
     });
+
     if (expiredGalleries.length === 0) return;
 
+    console.log('[Dashboard] Auto-syncing expired status for:', expiredGalleries.map(g => g.id));
+
     const syncExpired = async () => {
-      await Promise.all(expiredGalleries.map(async (g) => {
-        await supabase
-          .from('galerias')
-          .update({ status: 'expirado', updated_at: new Date().toISOString() })
-          .eq('id', g.id);
-      }));
+      const { error } = await supabase
+        .from('galerias')
+        .update({ 
+          status: 'expirado', 
+          updated_at: new Date().toISOString() 
+        })
+        .in('id', expiredGalleries.map(g => g.id));
+
+      if (error) {
+        console.error('[Dashboard] Error auto-syncing expired galleries:', error);
+      } else {
+        // Invalida cache para refletir a mudança no banco sem refresh total
+        queryClient.invalidateQueries({ queryKey: ['galleries'] });
+      }
     };
     syncExpired();
-  }, [supabaseGalleries]);
+  }, [supabaseGalleries, queryClient]);
 
   const allGalleries = useMemo(() => {
     return supabaseGalleries.map(transformSupabaseToLocal);
