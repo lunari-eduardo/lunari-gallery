@@ -11,9 +11,17 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let mounted = true;
+    
     const checkSession = async () => {
+      // Pequeno atraso para evitar conflitos de renderização imediata no Router
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (!mounted) return;
+
       const { data: { session } } = await supabase.auth.getSession();
       
+      if (!mounted) return;
+
       if (session) {
         navigate('/dashboard', { replace: true });
       } else {
@@ -22,7 +30,9 @@ const Index = () => {
     };
 
     checkSession();
+    return () => { mounted = false; };
   }, [navigate]);
+
 
   // Enquanto verifica a sessão, mostra um estado neutro ou vazio
   return (
