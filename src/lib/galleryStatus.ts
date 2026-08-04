@@ -5,13 +5,16 @@ import { GalleryStatus, SelectionStatus } from '@/types/gallery';
  * Prioriza finalized_at e status_pagamento sobre o campo status bruto.
  */
 export function getEffectiveGalleryStatus(
-  status: string,
+  status: string | null | undefined,
   statusPagamento?: string | null,
   finalizedAt?: Date | string | null,
   statusSelecao?: string | null,
   prazoSelecao?: Date | string | null
 ): 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled' {
   
+  // Normalização inicial do status bruto (Português/Inglês)
+  const normalizedRawStatus = (status || '').toLowerCase();
+
   // Se já foi finalizada ou paga, o status efetivo é sempre concluída
   if (finalizedAt || statusPagamento === 'pago' || statusPagamento === 'pago_manual' || statusSelecao === 'selecao_completa') {
     return 'selection_completed';
@@ -19,7 +22,11 @@ export function getEffectiveGalleryStatus(
 
   // Se o prazo expirou e a galeria está em um estado ativo, ela é considerada expirada
   const isPastDeadline = prazoSelecao && new Date(prazoSelecao).getTime() < Date.now();
-  const isActiveStatus = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada'].includes(status);
+  const isActiveStatus = [
+    'enviado', 'sent', 
+    'em_selecao', 'selection_started', 'selecao_iniciada',
+    'publicada'
+  ].includes(normalizedRawStatus);
   
   if (isPastDeadline && isActiveStatus) {
     return 'expired';
@@ -27,8 +34,10 @@ export function getEffectiveGalleryStatus(
 
   const statusMap: Record<string, 'created' | 'sent' | 'selection_started' | 'selection_completed' | 'expired' | 'cancelled'> = {
     'rascunho': 'created',
+    'criado': 'created',
     'created': 'created',
     'enviado': 'sent',
+    'publicada': 'sent',
     'sent': 'sent',
     'em_selecao': 'selection_started',
     'selection_started': 'selection_started',
@@ -43,7 +52,7 @@ export function getEffectiveGalleryStatus(
     'cancelled': 'cancelled',
   };
 
-  return statusMap[status] || 'created';
+  return statusMap[normalizedRawStatus] || 'created';
 }
 
 const PAYMENT_PROVIDER_LABELS: Record<string, string> = {

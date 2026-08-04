@@ -470,11 +470,18 @@ export default function GalleryDetail() {
   };
 
   // Check if gallery can be reactivated
-  const canReactivate = supabaseGallery.statusSelecao === 'selecao_completa' || 
-                        supabaseGallery.status === 'selecao_completa' ||
-                        supabaseGallery.status === 'expirado' ||
-                        supabaseGallery.status === 'expirada' ||
-                        supabaseGallery.finalizedAt !== null;
+  const canReactivate = useMemo(() => {
+    const status = getEffectiveGalleryStatus(
+      supabaseGallery.status,
+      supabaseGallery.statusPagamento,
+      supabaseGallery.finalizedAt,
+      supabaseGallery.statusSelecao,
+      supabaseGallery.prazoSelecao
+    );
+    
+    // Pode reativar se estiver expirada ou concluída (bloqueada)
+    return status === 'expired' || status === 'selection_completed';
+  }, [supabaseGallery]);
 
   // Default watermark settings
   const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
@@ -711,6 +718,7 @@ export default function GalleryDetail() {
                     "transition-opacity",
                     !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
                   )}
+                  disabled={!canReactivate}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Reativar
@@ -787,6 +795,7 @@ export default function GalleryDetail() {
                   !canReactivate && "opacity-40 cursor-not-allowed pointer-events-none"
                 )}
                 onClick={() => setReactivateOpen(true)}
+                disabled={!canReactivate}
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Reativar

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Loader2, AlertCircle, MousePointerClick, Send, Trash2, HardDrive, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -8,6 +8,7 @@ import { getGalleryUrl } from '@/lib/galleryUrl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { getEffectiveGalleryStatus } from '@/lib/galleryStatus';
 import { GalleryCard } from '@/components/GalleryCard';
 import { DeliverGalleryCard } from '@/components/DeliverGalleryCard';
 import { SendGalleryModal } from '@/components/SendGalleryModal';
@@ -87,40 +88,22 @@ const deliverStatusFilters: { value: DeliverStatusFilter; label: string }[] = [
   { value: 'expired', label: 'Expiradas' },
 ];
 
-// Map Supabase gallery status to local gallery status
-function mapSupabaseStatus(status: string): GalleryStatus {
-  switch (status) {
-    case 'rascunho':
-    case 'criado':
-      return 'created';
-    case 'enviado':
-    case 'publicada':
-      return 'sent';
-    case 'selecao_iniciada':
-    case 'em_selecao':
-      return 'selection_started';
-    case 'selecao_completa':
-    case 'confirmada':
-      return 'selection_completed';
-    case 'expirado':
-    case 'expirada':
-    case 'expired_due_to_plan':
-      return 'expired';
-    default:
-      return 'created';
-  }
+// O status bruto do Supabase agora é traduzido via getEffectiveGalleryStatus.
+// Esta função foi mantida apenas para compatibilidade de tipos, mas o cálculo
+// real agora é centralizado para evitar divergências.
+function mapSupabaseStatus(galeria: Galeria): GalleryStatus {
+  return getEffectiveGalleryStatus(
+    galeria.status,
+    galeria.statusPagamento,
+    galeria.finalizedAt,
+    galeria.statusSelecao,
+    galeria.prazoSelecao
+  );
 }
 
 // Transform Supabase gallery to local format for display
 function transformSupabaseToLocal(galeria: Galeria): Gallery & { tipo: 'selecao' | 'entrega'; totalFotos: number; firstPhotoKey: string | null; coverPhotoKey: string | null } {
-  let status = mapSupabaseStatus(galeria.status);
-  
-  const hasDeadline = galeria.prazoSelecao !== null;
-  const isActiveStatus = ['sent', 'selection_started'].includes(status);
-  
-  if (hasDeadline && isActiveStatus && isPast(galeria.prazoSelecao!)) {
-    status = 'expired';
-  }
+  const status = mapSupabaseStatus(galeria);
   
   const deadline = galeria.prazoSelecao || galeria.createdAt;
   
@@ -181,6 +164,7 @@ export default function Dashboard() {
   const { galleries: supabaseGalleries, isLoading, error, deleteGallery, sendGallery, reopenSelection, refetch } = useSupabaseGalleries() as any;
   const { settings } = useSettings();
   const queryClient = useQueryClient();
+  const processedGalleriesRef = useRef<Set<string>>(new Set());
 
   // Share, Delete & Reactivate modal state
   const [shareGalleryId, setShareGalleryId] = useState<string | null>(null);
@@ -203,13 +187,28 @@ export default function Dashboard() {
     if (!supabaseGalleries.length) return;
     
     // Filtramos apenas as galerias que ainda não estão marcadas como expiradas no banco
+    // e que ainda não tentamos processar nesta sessão para evitar loops
     const expiredGalleries = supabaseGalleries.filter(g => {
-      const isActive = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada'].includes(g.status);
+      if (processedGalleriesRef.current.has(g.id)) return false;
+
+      const effectiveStatus = getEffectiveGalleryStatus(
+        g.status,
+        g.statusPagamento,
+        g.finalizedAt,
+        g.statusSelecao,
+        g.prazoSelecao
+      );
+      
       const isPastDeadline = g.prazoSelecao && isPast(g.prazoSelecao);
-      return isActive && isPastDeadline;
+      const rawStatusIsActive = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada', 'publicada'].includes((g.status || '').toLowerCase());
+      
+      return effectiveStatus === 'expired' && rawStatusIsActive && isPastDeadline;
     });
 
     if (expiredGalleries.length === 0) return;
+
+    // Marcar como processadas antes de disparar o update para evitar concorrência
+    expiredGalleries.forEach(g => processedGalleriesRef.current.add(g.id));
 
     console.log('[Dashboard] Auto-syncing expired status for:', expiredGalleries.map(g => g.id));
 
@@ -224,8 +223,9 @@ export default function Dashboard() {
 
       if (error) {
         console.error('[Dashboard] Error auto-syncing expired galleries:', error);
+        // Remove do ref em caso de erro para permitir nova tentativa se necessário
+        expiredGalleries.forEach(g => processedGalleriesRef.current.delete(g.id));
       } else {
-        // Invalida cache para refletir a mudança no banco sem refresh total
         queryClient.invalidateQueries({ queryKey: ['galleries'] });
       }
     };
