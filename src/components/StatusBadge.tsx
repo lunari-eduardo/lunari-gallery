@@ -18,14 +18,22 @@ interface StatusBadgeProps {
 }
 
 // Mapeamento de status em português (banco) para inglês (código)
+// Unificado para respeitar a mesma lógica do helper central
 const statusTranslation: Record<string, GalleryStatus | SelectionStatus> = {
   // Português → Inglês (Gallery)
   'rascunho': 'created',
+  'criado': 'created',
   'enviado': 'sent',
+  'publicada': 'sent',
   'selecao_iniciada': 'selection_started',
+  'em_selecao': 'selection_started',
   'selecao_concluida': 'selection_completed',
+  'selecao_completa': 'selection_completed',
+  'confirmada': 'selection_completed',
   'expirado': 'expired',
+  'expirada': 'expired',
   'cancelado': 'cancelled',
+  'cancelada': 'cancelled',
   // Inglês → Inglês (já corretos)
   'created': 'created',
   'sent': 'sent',
@@ -38,7 +46,6 @@ const statusTranslation: Record<string, GalleryStatus | SelectionStatus> = {
   'confirmed': 'confirmed',
   'blocked': 'blocked',
   'em_andamento': 'in_progress',
-  'selecao_completa': 'confirmed',
   'bloqueado': 'blocked',
   'aguardando_pagamento': 'blocked',
 };
