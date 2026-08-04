@@ -399,6 +399,21 @@ export default function GalleryDetail() {
         description: action.descricao || action.tipo,
       }));
   }, [galleryActions]);
+
+  // Auto-sync expired status to DB if detected effectively
+  useEffect(() => {
+    if (supabaseGallery && effectiveStatus === 'expired' && !['expirado', 'expirada', 'expired'].includes(supabaseGallery.status)) {
+      console.log('[GalleryDetail] Auto-syncing expired status to DB');
+      supabase
+        .from('galerias')
+        .update({ status: 'expirado', updated_at: new Date().toISOString() })
+        .eq('id', supabaseGallery.id)
+        .then(({ error }) => {
+          if (!error) queryClient.invalidateQueries({ queryKey: ['galleries'] });
+        });
+    }
+  }, [effectiveStatus, supabaseGallery?.status, supabaseGallery?.id, queryClient]);
+
   // Combined loading state
   const isLoadingData = isSupabaseLoading || isLoadingPhotos;
 
@@ -470,10 +485,8 @@ export default function GalleryDetail() {
   };
 
   // Check if gallery can be reactivated
-  const canReactivate = supabaseGallery.statusSelecao === 'selecao_completa' || 
-                        supabaseGallery.status === 'selecao_completa' ||
-                        supabaseGallery.status === 'expirado' ||
-                        supabaseGallery.status === 'expirada' ||
+  const canReactivate = effectiveStatus === 'selection_completed' || 
+                        effectiveStatus === 'expired' ||
                         supabaseGallery.finalizedAt !== null;
 
   // Default watermark settings
