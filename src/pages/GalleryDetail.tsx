@@ -470,7 +470,8 @@ export default function GalleryDetail() {
   };
 
   // Check if gallery can be reactivated
-  const canReactivate = useMemo(() => {
+  // (cálculo direto — não pode ser hook, pois está após early returns)
+  const canReactivate = (() => {
     const status = getEffectiveGalleryStatus(
       supabaseGallery.status,
       supabaseGallery.statusPagamento,
@@ -478,10 +479,11 @@ export default function GalleryDetail() {
       supabaseGallery.statusSelecao,
       supabaseGallery.prazoSelecao
     );
-    
+
     // Pode reativar se estiver expirada ou concluída (bloqueada)
     return status === 'expired' || status === 'selection_completed';
-  }, [supabaseGallery]);
+  })();
+
 
   // Default watermark settings
   const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
