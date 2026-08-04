@@ -1285,7 +1285,10 @@ export default function GalleryDetail() {
                   return (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Modo de cobrança</span>
-                      <span className={billing.missingProvider ? 'font-medium text-destructive' : 'font-medium'}>
+                      <span className={cn(
+                        "font-medium",
+                        billing.missingProvider ? "text-amber-500" : "text-foreground"
+                      )}>
                         {billing.label}
                       </span>
                     </div>
