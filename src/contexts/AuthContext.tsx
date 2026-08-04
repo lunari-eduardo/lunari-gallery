@@ -133,12 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     session,
     loading,
-    accessLevel,
-    hasGalleryAccess: hasAccess,
-    hasGestaoIntegration,
-    isAdmin,
-    planName,
-    accessLoading,
+    accessLevel: user ? accessLevel : 'free',
+    hasGalleryAccess: !!user && hasAccess,
+    hasGestaoIntegration: !!user && hasGestaoIntegration,
+    isAdmin: !!user && isAdmin,
+    planName: user ? planName : null,
+    accessLoading: !!user && accessLoading,
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,
@@ -154,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
 
 export function useAuthContext() {
   const context = useContext(AuthContext);
