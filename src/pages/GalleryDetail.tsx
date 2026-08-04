@@ -399,10 +399,8 @@ export default function GalleryDetail() {
         description: action.descricao || action.tipo,
       }));
   }, [galleryActions]);
-
   // Combined loading state
   const isLoadingData = isSupabaseLoading || isLoadingPhotos;
-
 
   // Show loading state while galleries are being loaded
   if (isLoadingData) {
@@ -471,22 +469,12 @@ export default function GalleryDetail() {
     navigate('/');
   };
 
-  // Map status
-  const effectiveStatus = useMemo(() => {
-    if (!supabaseGallery) return 'created';
-    return getEffectiveGalleryStatus(
-      supabaseGallery.status,
-      supabaseGallery.statusPagamento,
-      supabaseGallery.finalizedAt,
-      supabaseGallery.statusSelecao,
-      supabaseGallery.prazoSelecao
-    );
-  }, [supabaseGallery]);
-
   // Check if gallery can be reactivated
-  const canReactivate = effectiveStatus === 'selection_completed' || 
-                        effectiveStatus === 'expired' ||
-                        (supabaseGallery && supabaseGallery.finalizedAt !== null);
+  const canReactivate = supabaseGallery.statusSelecao === 'selecao_completa' || 
+                        supabaseGallery.status === 'selecao_completa' ||
+                        supabaseGallery.status === 'expirado' ||
+                        supabaseGallery.status === 'expirada' ||
+                        supabaseGallery.finalizedAt !== null;
 
   // Default watermark settings
   const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
@@ -495,20 +483,14 @@ export default function GalleryDetail() {
     position: 'center',
   };
 
-  // Auto-sync expired status to DB if detected effectively
-  useEffect(() => {
-    if (supabaseGallery && effectiveStatus === 'expired' && !['expirado', 'expirada', 'expired'].includes(supabaseGallery.status)) {
-      console.log('[GalleryDetail] Auto-syncing expired status to DB');
-      supabase
-        .from('galerias')
-        .update({ status: 'expirado', updated_at: new Date().toISOString() })
-        .eq('id', supabaseGallery.id)
-        .then(({ error }) => {
-          if (!error) queryClient.invalidateQueries({ queryKey: ['galleries'] });
-        });
-    }
-  }, [effectiveStatus, supabaseGallery?.status, supabaseGallery?.id, queryClient]);
-
+  // Map status
+  const effectiveStatus = getEffectiveGalleryStatus(
+    supabaseGallery.status,
+    supabaseGallery.statusPagamento,
+    supabaseGallery.finalizedAt,
+    supabaseGallery.statusSelecao,
+    supabaseGallery.prazoSelecao
+  );
 
 
   // Calculate progressive pricing for summary using credit system
