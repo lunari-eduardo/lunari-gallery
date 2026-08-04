@@ -400,22 +400,9 @@ export default function GalleryDetail() {
       }));
   }, [galleryActions]);
 
-  // Auto-sync expired status to DB if detected effectively
-  useEffect(() => {
-    if (supabaseGallery && effectiveStatus === 'expired' && !['expirado', 'expirada', 'expired'].includes(supabaseGallery.status)) {
-      console.log('[GalleryDetail] Auto-syncing expired status to DB');
-      supabase
-        .from('galerias')
-        .update({ status: 'expirado', updated_at: new Date().toISOString() })
-        .eq('id', supabaseGallery.id)
-        .then(({ error }) => {
-          if (!error) queryClient.invalidateQueries({ queryKey: ['galleries'] });
-        });
-    }
-  }, [effectiveStatus, supabaseGallery?.status, supabaseGallery?.id, queryClient]);
-
   // Combined loading state
   const isLoadingData = isSupabaseLoading || isLoadingPhotos;
+
 
   // Show loading state while galleries are being loaded
   if (isLoadingData) {
