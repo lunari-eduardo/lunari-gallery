@@ -501,6 +501,28 @@ export default function GalleryDetail() {
                         effectiveStatus === 'expired' ||
                         (supabaseGallery && supabaseGallery.finalizedAt !== null);
 
+  // Default watermark settings
+  const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
+    type: 'standard',
+    opacity: 40,
+    position: 'center',
+  };
+
+  // Auto-sync expired status to DB if detected effectively
+  useEffect(() => {
+    if (supabaseGallery && effectiveStatus === 'expired' && !['expirado', 'expirada', 'expired'].includes(supabaseGallery.status)) {
+      console.log('[GalleryDetail] Auto-syncing expired status to DB');
+      supabase
+        .from('galerias')
+        .update({ status: 'expirado', updated_at: new Date().toISOString() })
+        .eq('id', supabaseGallery.id)
+        .then(({ error }) => {
+          if (!error) queryClient.invalidateQueries({ queryKey: ['galleries'] });
+        });
+    }
+  }, [effectiveStatus, supabaseGallery?.status, supabaseGallery?.id, queryClient]);
+
+
 
   // Calculate progressive pricing for summary using credit system
   const regrasCongeladas = supabaseGallery.regrasCongeladas as RegrasCongeladas | null;
