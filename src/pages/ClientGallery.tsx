@@ -301,9 +301,9 @@ export default function ClientGallery() {
     }
   }, [galleryResponse]);
 
-  // Aplicar tema do Studio do fotógrafo (preset + mode) na galeria pública.
+  // Aplica tema do Studio do fotógrafo (preset + mode) na galeria pública.
   // Não persiste no localStorage — apenas overlay temporário enquanto o visitante
-  // está na rota pública. Ao desmontar, restaura o tema default.
+  // está na rota pública.
   useEffect(() => {
     const studioTheme = (galleryResponse as any)?.studioTheme;
     if (studioTheme?.presetId && studioTheme?.mode) {
@@ -314,11 +314,15 @@ export default function ClientGallery() {
     } else if (galleryResponse) {
       applyTheme(DEFAULT_THEME);
     }
+  }, [galleryResponse]);
+
+  // Restaurar default ao sair da rota pública
+  useEffect(() => {
     return () => {
-      // Restaurar default ao sair da rota pública
       applyTheme(DEFAULT_THEME);
     };
-  }, [galleryResponse]);
+  }, []);
+
 
   // Fase 5 — Preconnect para o host do provedor de pagamento assim que sabemos
   // qual é. Reduz DNS + TLS na hora do redirect (~200-500ms perceptivos).
