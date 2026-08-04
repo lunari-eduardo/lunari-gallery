@@ -19,7 +19,7 @@ export function getEffectiveGalleryStatus(
 
   // Se o prazo expirou e a galeria está em um estado ativo, ela é considerada expirada
   const isPastDeadline = prazoSelecao && new Date(prazoSelecao).getTime() < Date.now();
-  const isActiveStatus = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada'].includes(status);
+  const isActiveStatus = ['enviado', 'sent', 'em_selecao', 'selection_started', 'selecao_iniciada', 'created', 'rascunho'].includes(status);
   
   if (isPastDeadline && isActiveStatus) {
     return 'expired';
