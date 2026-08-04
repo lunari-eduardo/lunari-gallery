@@ -484,26 +484,22 @@ export default function GalleryDetail() {
     navigate('/');
   };
 
+  // Map status
+  const effectiveStatus = useMemo(() => {
+    if (!supabaseGallery) return 'created';
+    return getEffectiveGalleryStatus(
+      supabaseGallery.status,
+      supabaseGallery.statusPagamento,
+      supabaseGallery.finalizedAt,
+      supabaseGallery.statusSelecao,
+      supabaseGallery.prazoSelecao
+    );
+  }, [supabaseGallery]);
+
   // Check if gallery can be reactivated
   const canReactivate = effectiveStatus === 'selection_completed' || 
                         effectiveStatus === 'expired' ||
-                        supabaseGallery.finalizedAt !== null;
-
-  // Default watermark settings
-  const watermark: WatermarkSettings = (supabaseGallery.configuracoes?.watermark as WatermarkSettings) || {
-    type: 'standard',
-    opacity: 40,
-    position: 'center',
-  };
-
-  // Map status
-  const effectiveStatus = getEffectiveGalleryStatus(
-    supabaseGallery.status,
-    supabaseGallery.statusPagamento,
-    supabaseGallery.finalizedAt,
-    supabaseGallery.statusSelecao,
-    supabaseGallery.prazoSelecao
-  );
+                        (supabaseGallery && supabaseGallery.finalizedAt !== null);
 
 
   // Calculate progressive pricing for summary using credit system
