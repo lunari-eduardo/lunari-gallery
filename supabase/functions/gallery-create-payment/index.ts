@@ -60,6 +60,8 @@ interface PaymentResponse {
   code?: string;
   error?: string;
   message?: string;
+  version?: string;
+  ok?: boolean;
 }
 
 const BASE_GALLERY_URL = 'https://gallery.lunarihub.com';
