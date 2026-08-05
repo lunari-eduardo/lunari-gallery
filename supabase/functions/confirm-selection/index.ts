@@ -4,6 +4,9 @@ import { errorResponse, successResponse, corsHeaders } from '../_shared/response
 import { resolveGalleryByToken } from '../_shared/database.ts';
 import { syncSessionOnFinalize } from '../_shared/session-sync.ts';
 
+// Handshake com gallery-create-payment — deve bater com GCP_VERSION lá.
+const EXPECTED_GCP_VERSION = 'v2.2.1';
+
 
 // Rate limiter — in-memory per isolate
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -620,16 +623,11 @@ Deno.serve(async (req) => {
             }
           }
 
-          const gcpResponse = await fetch(gcpUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
+          const gcpBody: Record<string, unknown> = {
               galleryId,
               provider: integracao.provedor,
               context: 'confirm_selection',
+              expectedVersion: EXPECTED_GCP_VERSION,
               bypassPreSelecaoGate: true,
               visitorId: visitorId || undefined,
               snapshotFotosIncluidas: gallery.fotos_incluidas || 0,
@@ -652,20 +650,53 @@ Deno.serve(async (req) => {
                 provedor: integracao.provedor,
                 sessionIdTexto: sessionIdTextoPre,
               },
-            }),
+          };
+
+          const postGcp = (extra?: Record<string, unknown>) => fetch(gcpUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify(extra ? { ...gcpBody, ...extra } : gcpBody),
           });
 
+          const readGcp = async (res: Response): Promise<Record<string, unknown> | null> => {
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return await res.json();
+            const textBody = await res.text();
+            console.error(`❌ gallery-create-payment returned non-JSON (${ct}):`, textBody.substring(0, 300));
+            return null;
+          };
 
-          let paymentData: Record<string, unknown> | null = null;
-          const paymentContentType = gcpResponse.headers.get('content-type') || '';
-          if (paymentContentType.includes('application/json')) {
-            paymentData = await gcpResponse.json();
-          } else {
-            const textBody = await gcpResponse.text();
-            console.error(`❌ gallery-create-payment returned non-JSON (${paymentContentType}):`, textBody.substring(0, 300));
+          let gcpResponse = await postGcp();
+          let paymentData = await readGcp(gcpResponse);
+
+          // ── Detecção de drift de versão (build publicada != HEAD) ──
+          const gotVersion = (paymentData?.version as string) || gcpResponse.headers.get('x-gcp-version') || 'unknown';
+          if (gotVersion !== EXPECTED_GCP_VERSION) {
+            console.warn(`⚠️ PIPELINE_VERSION_DRIFT expected=${EXPECTED_GCP_VERSION} got=${gotVersion}`);
           }
 
-          console.log(`[confirm-selection] gcp response (status ${gcpResponse.status}):`, JSON.stringify({
+          // ── Shim de compatibilidade com build legada do gcp ──
+          // Build antiga exige clienteId/sessionId/valorTotal no body raiz.
+          const legacyNeedsCliente =
+            gcpResponse.status === 400 &&
+            /clienteid/i.test(String(paymentData?.error ?? ''));
+
+          if (legacyNeedsCliente) {
+            console.warn('⚠️ GCP_LEGACY_FALLBACK — build antiga detectada, repetindo com payload legado');
+            gcpResponse = await postGcp({
+              clienteId: gallery.cliente_id || null,
+              sessionId: sessionIdTextoPre || gallery.session_id || null,
+              valorTotal,
+              extraCount: extrasACobrar,
+              descricao: `Fotos extras — ${gallery.nome_sessao || 'Galeria'}`,
+            });
+            paymentData = await readGcp(gcpResponse);
+          }
+
+          console.log(`[confirm-selection] gcp response (status ${gcpResponse.status}, version ${gotVersion}):`, JSON.stringify({
             success: paymentData?.success,
             provedor: paymentData?.provedor,
             code: paymentData?.code,

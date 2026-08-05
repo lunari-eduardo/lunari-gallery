@@ -19,6 +19,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { resolvePayerHints, payerHintsFlags } from '../_shared/payer-hints.ts';
 
+const IPCL_VERSION = 'v2.2.1';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -107,6 +108,15 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
+
+    // Health check de versão (não toca no banco)
+    if ((body as Record<string, unknown>)?.ping) {
+      console.log(`[infinitepay-create-link][ping] ${IPCL_VERSION}`);
+      return new Response(JSON.stringify({ success: true, ok: true, version: IPCL_VERSION }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-fn-version': IPCL_VERSION },
+      });
+    }
+
     const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, visitorId } = body;
     let { qtdFotos } = body;
 

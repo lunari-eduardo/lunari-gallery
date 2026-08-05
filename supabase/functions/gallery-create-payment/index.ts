@@ -1,4 +1,7 @@
 // gallery-create-payment v2.2.1-final (deploy 2026-08-03) (2026-08-03)
+// Handshake de versão: incrementar GCP_VERSION exige atualizar o expectedVersion
+// em confirm-selection e client-selection na MESMA edição.
+export const GCP_VERSION = 'v2.2.1';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {
@@ -26,6 +29,8 @@ interface PreloadedPayload {
 
 interface RequestBody {
   galleryId: string;
+  ping?: boolean;
+  expectedVersion?: string;
   valorTotal?: number;
   extraCount?: number;
   descricao?: string;
@@ -55,6 +60,8 @@ interface PaymentResponse {
   code?: string;
   error?: string;
   message?: string;
+  version?: string;
+  ok?: boolean;
 }
 
 const BASE_GALLERY_URL = 'https://gallery.lunarihub.com';
@@ -71,6 +78,13 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json().catch(() => ({} as RequestBody));
+
+    // Health check de versão (não toca no banco)
+    if (body?.ping) {
+      console.log(`[gcp][ping] ${GCP_VERSION}`);
+      return jsonResponse({ success: true, ok: true }, 200);
+    }
+
 
     const {
       galleryId,
@@ -350,8 +364,8 @@ Deno.serve(async (req) => {
 });
 
 function jsonResponse(body: PaymentResponse, status: number): Response {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify({ ...body, version: GCP_VERSION }), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-gcp-version': GCP_VERSION },
   });
 }

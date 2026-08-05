@@ -17,6 +17,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { resolvePayerHints, payerHintsFlags } from '../_shared/payer-hints.ts';
 
+const MPCL_VERSION = 'v2.2.1';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -58,6 +59,15 @@ Deno.serve(async (req) => {
 
   try {
     const body: CreateLinkRequest = await req.json();
+
+    // Health check de versão (não toca no banco)
+    if ((body as Record<string, unknown>)?.ping) {
+      console.log(`[mercadopago-create-link][ping] ${MPCL_VERSION}`);
+      return new Response(JSON.stringify({ success: true, ok: true, version: MPCL_VERSION }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-fn-version': MPCL_VERSION },
+      });
+    }
+
     
     // === NORMALIZAÇÃO DE PARÂMETROS ===
     

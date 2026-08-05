@@ -1,6 +1,7 @@
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { UserCreditsManager } from '@/components/admin/UserCreditsManager';
+import { PaymentPipelineHealth } from '@/components/admin/PaymentPipelineHealth';
 import { Shield } from 'lucide-react';
 
 export default function Admin() {
@@ -34,6 +35,7 @@ export default function Admin() {
       {/* Admin Components */}
       <div className="grid gap-6 lg:grid-cols-2">
         <UserCreditsManager />
+        <PaymentPipelineHealth />
       </div>
     </div>
   );
