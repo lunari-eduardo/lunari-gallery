@@ -66,6 +66,46 @@ Em 2026-07-09 (20:46 UTC) o repositório estava com `gallery-create-payment` v2.
 
 **Reincidência 2026-08-01 (02:33 UTC) — mesmo drift, mesma assinatura.** `confirm-selection` retornava 500 com o toast "clienteId é obrigatório"; logs mostravam `POST /gallery-create-payment → 400` logo antes, e o log da função implantada era `[gallery-create-payment] Request: {"galleryId":...}` (versão antiga) em vez de `[gcp][step:1 request]` do HEAD v2.2. O body recebido pelo gcp era só `{ galleryId }`, sem `provider`/`context`/`preloaded` — logo o `confirm-selection` publicado também estava velho. Nenhuma linha de código foi alterada: redeploy atômico de `gallery-create-payment`, `confirm-selection`, `infinitepay-create-link`, `mercadopago-create-link` e `client-selection` + canary (confirmado `[gcp][step:1 request]` e `[gcp][step:3 calc-ok]`).
 
+**Reincidência 2026-08-05 (04:14 UTC) — drift PARCIAL.** Galeria `4wGectzJcJxE`
+(`5212813d-6d35-4a61-8c8f-7002a89143c4`). Desta vez o `confirm-selection` publicado
+**estava no HEAD** (logou `Delegating to gallery-create-payment (provider=infinitepay) with preloaded…`),
+mas o `gallery-create-payment` publicado era antigo (`[gallery-create-payment] Request: {...}`)
+e respondeu `400 clienteId é obrigatório`. Prova de que **o drift pode atingir uma
+única função** — redeploy isolado nunca é seguro, sempre redeployar as 5 juntas.
+Correção: redeploy atômico + as três guardas abaixo (handshake, shim legado, ping).
+
+---
+
+## Guardas anti-drift (implantadas em 2026-08-05)
+
+### 1. Handshake de versão
+
+- `gallery-create-payment` exporta `GCP_VERSION` e devolve `version` no corpo de
+  **toda** resposta + header `x-gcp-version`.
+- `confirm-selection` e `client-selection` enviam `expectedVersion` e comparam com
+  o retorno. Divergência → `⚠️ PIPELINE_VERSION_DRIFT expected=… got=…`
+  (`got=unknown` quando a build antiga não devolve o campo).
+- **Regra:** ao mudar `GCP_VERSION`, atualizar `EXPECTED_GCP_VERSION` nos dois
+  callers e `EXPECTED_VERSION` em `src/components/admin/PaymentPipelineHealth.tsx`
+  na MESMA edição.
+
+### 2. Shim de compatibilidade com build legada
+
+Se o gcp responder `400` com mensagem contendo `clienteId`, o caller loga
+`⚠️ GCP_LEGACY_FALLBACK` e repete a chamada **uma única vez** acrescentando
+`clienteId`, `sessionId`, `valorTotal`, `extraCount`, `descricao` no body raiz.
+O gcp atual ignora esses campos extras; a build antiga passa a funcionar. O cliente
+não vê mais erro — o drift vira apenas um alerta no log.
+
+### 3. Ping de versão
+
+`gallery-create-payment`, `infinitepay-create-link` e `mercadopago-create-link`
+aceitam `{ "ping": true }` e respondem `200 { ok: true, version }` sem tocar no banco.
+Superfície de uso: cartão **"Saúde do pipeline de pagamento"** em `/admin`
+(`src/components/admin/PaymentPipelineHealth.tsx`). Verificar esse cartão **antes**
+de qualquer teste com galeria real após deploy.
+
+
 ### Regra de diagnóstico (ler ANTES de formular hipóteses)
 
 Ao investigar qualquer erro deste pipeline, o **primeiro passo obrigatório** é ler o log inicial da função na Supabase e comparar com o formato do HEAD:
