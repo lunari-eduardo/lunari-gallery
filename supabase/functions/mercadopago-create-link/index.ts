@@ -58,6 +58,15 @@ Deno.serve(async (req) => {
 
   try {
     const body: CreateLinkRequest = await req.json();
+
+    // Health check de versão (não toca no banco)
+    if ((body as Record<string, unknown>)?.ping) {
+      console.log(`[mercadopago-create-link][ping] ${MPCL_VERSION}`);
+      return new Response(JSON.stringify({ success: true, ok: true, version: MPCL_VERSION }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-fn-version': MPCL_VERSION },
+      });
+    }
+
     
     // === NORMALIZAÇÃO DE PARÂMETROS ===
     
