@@ -207,6 +207,7 @@ Deno.serve(async (req) => {
               galleryId,
               provider: provedor || undefined,
               descricao: 'Regeneração via cliente',
+              expectedVersion: EXPECTED_GCP_VERSION,
             }),
             signal: gcpAc.signal,
           });
