@@ -107,6 +107,15 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
+
+    // Health check de versão (não toca no banco)
+    if ((body as Record<string, unknown>)?.ping) {
+      console.log(`[infinitepay-create-link][ping] ${IPCL_VERSION}`);
+      return new Response(JSON.stringify({ success: true, ok: true, version: IPCL_VERSION }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-fn-version': IPCL_VERSION },
+      });
+    }
+
     const { clienteId, sessionId, valor, descricao, userId, redirectUrl, webhookUrl, galleryToken, galeriaId, visitorId } = body;
     let { qtdFotos } = body;
 
