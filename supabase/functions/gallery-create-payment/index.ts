@@ -79,6 +79,13 @@ Deno.serve(async (req) => {
 
     const body: RequestBody = await req.json().catch(() => ({} as RequestBody));
 
+    // Health check de versão (não toca no banco)
+    if (body?.ping) {
+      console.log(`[gcp][ping] ${GCP_VERSION}`);
+      return jsonResponse({ success: true, ok: true }, 200);
+    }
+
+
     const {
       galleryId,
       provider,
