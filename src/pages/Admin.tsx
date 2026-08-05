@@ -35,6 +35,7 @@ export default function Admin() {
       {/* Admin Components */}
       <div className="grid gap-6 lg:grid-cols-2">
         <UserCreditsManager />
+        <PaymentPipelineHealth />
       </div>
     </div>
   );
