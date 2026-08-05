@@ -350,8 +350,8 @@ Deno.serve(async (req) => {
 });
 
 function jsonResponse(body: PaymentResponse, status: number): Response {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify({ ...body, version: GCP_VERSION }), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-gcp-version': GCP_VERSION },
   });
 }
