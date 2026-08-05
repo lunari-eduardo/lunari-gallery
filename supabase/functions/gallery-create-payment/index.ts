@@ -1,4 +1,7 @@
 // gallery-create-payment v2.2.1-final (deploy 2026-08-03) (2026-08-03)
+// Handshake de versão: incrementar GCP_VERSION exige atualizar o expectedVersion
+// em confirm-selection e client-selection na MESMA edição.
+export const GCP_VERSION = 'v2.2.1';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 
 const corsHeaders = {
