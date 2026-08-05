@@ -226,7 +226,42 @@ Deno.serve(async (req) => {
           clearTimeout(gcpTimer);
         }
 
-        const charge = await gcpResp.json().catch(() => ({} as any));
+        let charge = await gcpResp.json().catch(() => ({} as any));
+
+        // ── Handshake de versão ──
+        const gotGcpVersion = charge?.version || gcpResp.headers.get('x-gcp-version') || 'unknown';
+        if (gotGcpVersion !== EXPECTED_GCP_VERSION) {
+          console.warn(`⚠️ PIPELINE_VERSION_DRIFT expected=${EXPECTED_GCP_VERSION} got=${gotGcpVersion}`);
+        }
+
+        // ── Shim de compatibilidade com build legada do gcp ──
+        if (gcpResp.status === 400 && /clienteid/i.test(String(charge?.error ?? ''))) {
+          console.warn('⚠️ GCP_LEGACY_FALLBACK — build antiga detectada, repetindo com payload legado');
+          const { data: legacyGallery } = await supabase
+            .from('galerias')
+            .select('cliente_id, session_id, nome_sessao')
+            .eq('id', galleryId)
+            .maybeSingle();
+
+          gcpResp = await fetch(gcpUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceKey}`,
+              'apikey': serviceKey,
+            },
+            body: JSON.stringify({
+              galleryId,
+              provider: provedor || undefined,
+              descricao: 'Regeneração via cliente',
+              expectedVersion: EXPECTED_GCP_VERSION,
+              clienteId: legacyGallery?.cliente_id || null,
+              sessionId: legacyGallery?.session_id || null,
+              valorTotal: valorACobrar,
+            }),
+          });
+          charge = await gcpResp.json().catch(() => ({} as any));
+        }
 
         if (!gcpResp.ok || !charge?.success) {
           console.error('[regenerate_charge][step:4 upstream-error]', gcpResp.status, charge);
