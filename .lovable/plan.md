@@ -1,85 +1,133 @@
-# Correção: erro "clienteId é obrigatório" ao finalizar seleção
+# Correção definitiva: "clienteId é obrigatório" na finalização de galerias
 
-## Diagnóstico (confirmado nos logs, não é hipótese)
+## Diagnóstico (confirmado nos logs de agora, não é hipótese)
 
-O código do repositório está correto. O que está errado é a **versão publicada** das
-funções na Supabase — é exatamente o cenário de drift já documentado em
-`.lovable/pipeline-galeria-pagamento.md` (seção "Cenário de drift").
+Galeria testada: `4wGectzJcJxE` (`gallery-access` logou `Fetching gallery with token: 4wGectzJcJxE` às 04:14 UTC).
 
-Evidências coletadas agora:
+Evidências desta sessão:
 
-1. Logs de borda (01/08 02:33 UTC): `POST /confirm-selection → 500` precedido de
-   `POST /gallery-create-payment → 400`. O 500 do `confirm-selection` é apenas o
-   repasse do erro do gcp (ele devolve `paymentData.error` com status 500).
-2. Log da função `gallery-create-payment` publicada:
-   `INFO [gallery-create-payment] Request: {"galleryId":"1e3b9dea-..."}`.
-   O HEAD do repositório (v2.2) loga `[gcp][step:1 request] {...}` — ou seja, a
-   Supabase está servindo uma versão **anterior**, que exige `clienteId` no body
-   e responde `400 { error: "clienteId é obrigatório" }`.
-3. A string "clienteId é obrigatório" **não existe** em nenhum arquivo do
-   repositório nem em nenhuma função do Postgres (`pg_proc` verificado) —
-   confirma que vem do binário publicado antigo.
-4. O mesmo log mostra que o body recebido foi só `{ galleryId }`, sem
-   `provider`/`context`/`preloaded` — logo o `confirm-selection` publicado
-   **também** é uma versão antiga (o HEAD envia o payload completo com fast-path).
+1. `confirm-selection` está **na versão do HEAD** — logou exatamente
+   `[confirm-selection] Delegating to gallery-create-payment (provider=infinitepay) with preloaded…`,
+   que é o formato atual do repositório.
+2. `gallery-create-payment` está **numa versão antiga** — logou
+   `[gallery-create-payment] Request: {"galleryId":"5212813d-…"}`.
+   O HEAD (`v2.2.1-final`, linha 95 do arquivo) loga `[gcp][step:1 request] {...}`.
+3. Resposta recebida: `gcp response (status 400): {"success":false,"error":"clienteId é obrigatório"}`
+   → `❌ CRITICAL: gcp failed: [PAYMENT_CREATE_ERROR]` → rollback correto para `selecao_iniciada`.
+4. A string `clienteId é obrigatório` **não existe em nenhum arquivo do repositório**
+   (busca no projeto inteiro retornou zero ocorrências). Ela só pode vir do binário
+   publicado antigo.
 
-Conclusão: nenhuma linha de código precisa mudar para resolver o erro. É preciso
-forçar o redeploy atômico do pipeline e validar com canary.
+Conclusão: o código está certo. O ambiente Supabase está servindo uma build antiga
+de **uma única função** do pipeline (`gallery-create-payment`). É a 4ª reincidência
+do mesmo drift já documentado em `.lovable/pipeline-galeria-pagamento.md`.
 
-## O que será feito
+Efeito no cliente: a seleção é revertida (rollback funciona, sem dado corrompido),
+mas o cliente vê erro e não consegue pagar.
 
-### 1. Redeploy atômico das 4 funções do pipeline (obrigatório em conjunto)
+## Correção imediata
+
+### 1. Redeploy atômico do pipeline
+
+Redeploy conjunto (nunca isolado) de:
 
 - `gallery-create-payment`
 - `confirm-selection`
+- `client-selection`
 - `infinitepay-create-link`
 - `mercadopago-create-link`
 
-Mais `client-selection` (mesmo contrato, chama o gcp no fluxo de reabertura/
-"gerar novo link") e o shared `_shared/session-sync.ts` / `_shared/payer-hints.ts`
-que sobem junto com elas.
+### 2. Canary obrigatório na galeria real
 
-### 2. Canary pós-deploy (conforme o contrato do pipeline)
+Contra a galeria `5212813d-6d35-4a61-8c8f-7002a89143c4` (token `4wGectzJcJxE`),
+confirmar nos logs, em ordem:
 
-Executar contra a galeria real usada no teste (`1e3b9dea-b657-4def-9bb4-6da3cf8896e0`):
+- `[gcp][step:1 request]`
+- `[gcp][step:3 calc-ok]` (ou `calc-preloaded`)
+- `[gcp][step:6 calling] infinitepay-create-link`
+- `[gcp][step:7 done] provedor=infinitepay cobrancaId=…`
 
-- Confirmar nos logs a presença de `[gcp][step:1 request]`,
-  `[gcp][step:3 calc-ok ...]` ou `calc-preloaded`, `[gcp][step:6 calling]
-  infinitepay-create-link` e `[gcp][step:7 done] cobrancaId=...`.
-- Se qualquer um desses logs não aparecer, o deploy não pegou → forçar novamente
-  antes de declarar resolvido.
+E no banco: nova linha em `cobrancas` com `galeria_id` correto,
+`finalidade='fotos_extras'`, `qtd_fotos=4`, `valor=100`, `status='pendente'`,
+`ip_checkout_url` preenchido; cobranças antigas em `pendente` movidas para
+`cancelado` pelo `step:5 cancel-stale`.
 
-### 3. Verificação de estado no banco após o canary
+Se qualquer log divergir, o deploy não pegou — forçar de novo antes de seguir.
 
-- `cobrancas`: nova linha com `galeria_id` correto, `finalidade='fotos_extras'`,
-  `qtd_fotos > 0`, `status='pendente'`, `ip_checkout_url` preenchido.
-- `galerias`: `status_pagamento='pendente'`.
-- Conferir se sobraram cobranças antigas em `pendente` não canceladas (o
-  `step:5 cancel-stale` deve tê-las movido para `cancelado`).
+## Prevenção (o que faltou nas 3 vezes anteriores)
 
-### 4. Guarda contra reincidência (baixo custo)
+O contrato atual só descreve *como diagnosticar* o drift depois que o cliente
+já quebrou. As três medidas abaixo fazem o sistema detectar e contornar sozinho.
 
-O drift já aconteceu 3 vezes. Além do redeploy, será adicionado ao
-`.lovable/pipeline-galeria-pagamento.md`:
+### A. Version handshake entre caller e callee
 
-- Um **marcador de versão** explícito no primeiro log de cada uma das 4 funções
-  (`[gcp v2.2]`, `[cs v?]`, etc.) e a regra: antes de investigar qualquer erro do
-  pipeline, ler o primeiro log da função e comparar com a versão do HEAD. Se
-  divergir, o diagnóstico é drift — redeploy antes de qualquer outra hipótese.
-- Registro deste incidente (01/08/2026) na seção "Cenário de drift".
+- Constante `GCP_VERSION = 'v2.2.1'` exportada no topo de `gallery-create-payment`,
+  devolvida em **toda** resposta (campo `version`) e no header `x-gcp-version`.
+- `confirm-selection` e `client-selection` passam a enviar
+  `expectedVersion: 'v2.2.1'` no body e comparar com o retorno.
+- Divergência → log `⚠️ PIPELINE_VERSION_DRIFT expected=… got=…` (ou `got=unknown`
+  quando a resposta não traz o campo, que é exatamente o caso da build antiga).
+  Isso transforma um erro opaco de negócio num sinal inequívoco de deploy.
 
-## Observação sobre a função `gestao-infinitepay-create-link`
+### B. Shim de compatibilidade (o cliente nunca mais vê o erro)
 
-Os logs mostram uma função `gestao-infinitepay-create-link` respondendo 200 pouco
-antes do teste. Ela pertence ao projeto Gestão e não faz parte deste pipeline —
-não será tocada, apenas registrada no contrato para evitar confusão futura entre
-as duas funções de mesmo propósito.
+Em `confirm-selection` e `client-selection`, quando a chamada ao gcp falhar com
+status 400 **e** a mensagem contiver `clienteId`:
 
-## Detalhes técnicos
+1. Logar `⚠️ GCP_LEGACY_FALLBACK — build antiga detectada`.
+2. Repetir a chamada **uma única vez** incluindo no body os campos que a build
+   antiga exige: `clienteId` (de `gallery.cliente_id`, que o caller já tem em mãos
+   — `confirm-selection` linha 573 e o bloco `preloaded` linha 638), `sessionId`,
+   `valorTotal`, `extraCount`, `descricao`.
+3. Se a repetição funcionar, o pagamento segue normalmente e o drift fica
+   registrado no log em vez de virar incidente.
+4. Se falhar de novo, mantém o rollback atual.
 
-- O 500 no `confirm-selection` não é bug próprio: em `index.ts` (bloco do gcp) ele
-  faz `rollbackGalleryStatus()` e devolve `500` com a mensagem vinda do gcp. Como o
-  gcp antigo devolve `400 "clienteId é obrigatório"`, é essa string que chega no
-  toast. Após o redeploy, esse caminho deixa de ser acionado.
-- O rollback funcionou corretamente (a galeria não ficou finalizada indevidamente),
-  então não há dado corrompido a limpar — a ser confirmado na etapa 3.
+Isso é retrocompatibilidade explícita e barata: nenhum caminho do HEAD é alterado
+(o gcp atual simplesmente ignora campos extras), e a galeria pública continua
+funcionando quando `cliente_id` é `NULL` — o shim só preenche o que existir.
+
+### C. Health check de versão do pipeline
+
+- `gallery-create-payment` passa a aceitar `{ ping: true }` e responder
+  `200 { ok: true, version: GCP_VERSION }` sem tocar em banco.
+  Mesmo tratamento em `infinitepay-create-link` e `mercadopago-create-link`.
+- Nova aba/cartão em `src/pages/Admin.tsx`: "Saúde do pipeline de pagamento",
+  com botão que dispara os 3 pings e mostra, por função, a versão publicada
+  contra a versão esperada — verde quando bate, vermelho com instrução de
+  redeploy quando não bate.
+- Ganho prático: dá para verificar em 2 segundos, antes de qualquer teste com
+  cliente real, se o deploy pegou.
+
+### D. Atualização do contrato
+
+`.lovable/pipeline-galeria-pagamento.md` recebe, na mesma edição do código:
+
+- Registro do incidente de 05/08/2026 (só o `gallery-create-payment` estava velho,
+  o `confirm-selection` estava novo — prova de que o drift pode ser parcial e que
+  redeploy isolado de uma função não é seguro).
+- Descrição do handshake de versão, do shim legado e do endpoint de ping.
+- Regra: ao subir versão do gcp, incrementar `GCP_VERSION` **e** o
+  `expectedVersion` dos dois callers na mesma edição.
+
+## Arquivos tocados
+
+| Arquivo | Mudança |
+| --- | --- |
+| `supabase/functions/gallery-create-payment/index.ts` | `GCP_VERSION`, `version` na resposta + header, suporte a `{ping:true}` |
+| `supabase/functions/confirm-selection/index.ts` | `expectedVersion`, detecção de drift, shim de retry legado |
+| `supabase/functions/client-selection/index.ts` | idem, no caminho `regenerate_charge` |
+| `supabase/functions/infinitepay-create-link/index.ts` | suporte a `{ping:true}` + versão |
+| `supabase/functions/mercadopago-create-link/index.ts` | idem |
+| `src/pages/Admin.tsx` | cartão "Saúde do pipeline de pagamento" |
+| `.lovable/pipeline-galeria-pagamento.md` | incidente + novo contrato de versão |
+
+## Ordem de execução
+
+1. Aplicar as mudanças de código (A, B, C, D).
+2. Redeploy atômico das 5 funções.
+3. Ping das 3 funções pelo cartão do Admin — todas devem reportar a versão nova.
+4. Canary na galeria `4wGectzJcJxE` com os 4 logs esperados.
+5. Conferência no banco (`cobrancas` / `galerias.status_pagamento`).
+
+Nada é declarado resolvido antes dos passos 3 e 4 passarem.
