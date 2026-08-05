@@ -4,6 +4,9 @@ import { errorResponse, successResponse, corsHeaders } from '../_shared/response
 import { resolveGalleryByToken } from '../_shared/database.ts';
 import { syncSessionOnFinalize } from '../_shared/session-sync.ts';
 
+// Handshake com gallery-create-payment — deve bater com GCP_VERSION lá.
+const EXPECTED_GCP_VERSION = 'v2.2.1';
+
 
 // Rate limiter — in-memory per isolate
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
