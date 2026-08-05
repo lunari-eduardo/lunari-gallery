@@ -29,6 +29,8 @@ interface PreloadedPayload {
 
 interface RequestBody {
   galleryId: string;
+  ping?: boolean;
+  expectedVersion?: string;
   valorTotal?: number;
   extraCount?: number;
   descricao?: string;
