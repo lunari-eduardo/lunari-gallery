@@ -228,7 +228,14 @@ export function PaymentStatusCard({
       }
 
       if (data?.success && data.code === 'NO_AMOUNT_DUE') {
-        toast.success('Galeria já quitada — não há saldo a cobrar');
+        if (data.selectionPending) {
+          toast.warning('Seleção pendente', {
+            description: 'O cliente ainda não confirmou a seleção. Aguarde a confirmação para gerar a cobrança.',
+            duration: 7000,
+          });
+        } else {
+          toast.success('Galeria já quitada — não há saldo a cobrar');
+        }
         if (data.galleryUrl) setNewCheckoutUrl(data.galleryUrl);
         onStatusUpdated?.();
         return;

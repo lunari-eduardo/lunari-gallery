@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
     } else {
       const { data, error: galleryError } = await supabase
         .from('galerias')
-        .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at, fotos_incluidas, regras_congeladas')
+        .select('id, user_id, cliente_id, session_id, nome_sessao, public_token, venda_pagamento_provedor, finalized_at, fotos_incluidas, fotos_selecionadas, regras_congeladas, status, status_selecao')
         .eq('id', galleryId)
         .single();
 
@@ -138,6 +138,15 @@ Deno.serve(async (req) => {
     let isFullyPaid: boolean;
     const shouldBypassGate = bypassPreSelecaoGate === true || context === 'confirm_selection';
 
+    // [Fix-1] Bypass automático para rebill legítimo:
+    // Quando a galeria tem fotos_selecionadas > fotos_incluidas e status de seleção indica
+    // que o cliente já selecionou (mesmo que confirm-selection não tenha completado),
+    // o gate pré-seleção bloquearia incorretamente o cálculo retornando valor=0.
+    // Exemplo: galeria travada em selecao_iniciada por falha no confirm-selection.
+    const galleryHasSelectionWithExtras =
+      ['selecao_iniciada', 'selecao_completa'].includes(gallery.status_selecao ?? '') &&
+      (Number(gallery.fotos_selecionadas) || 0) > (Number(gallery.fotos_incluidas) || 0);
+
     if (usePreloaded && typeof preloaded?.valorCanonico === 'number' && typeof preloaded?.extrasACobrar === 'number') {
       valorCanonico = Number(preloaded.valorCanonico) || 0;
       extrasACobrar = Number(preloaded.extrasACobrar) || 0;
@@ -147,7 +156,11 @@ Deno.serve(async (req) => {
       let calc: any = null;
       try {
         const rpcArgs: Record<string, unknown> = { p_gallery_id: galleryId };
-        if (shouldBypassGate) rpcArgs.p_bypass_pre_selecao_gate = true;
+        // Aplica bypass se: caller explícito (confirm_selection) OU rebill legítimo com seleção pendente
+        if (shouldBypassGate || galleryHasSelectionWithExtras) {
+          rpcArgs.p_bypass_pre_selecao_gate = true;
+          console.log(`[gcp][step:3 bypass-applied] explicit=${shouldBypassGate} rebill=${galleryHasSelectionWithExtras}`);
+        }
         const { data, error: calcError } = await supabase.rpc('calculate_gallery_extra_payment', rpcArgs);
         if (calcError) throw calcError;
         calc = data || null;
@@ -164,16 +177,31 @@ Deno.serve(async (req) => {
       valorCanonico = Number(calc.valor_a_cobrar || 0);
       extrasACobrar = Number(calc.extras_a_cobrar || 0);
       isFullyPaid = calc.is_fully_paid === true;
-      console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} bypass=${shouldBypassGate}`);
+      console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} bypass=${shouldBypassGate || galleryHasSelectionWithExtras}`);
     }
 
     // 2a. Sem saldo a cobrar → sucesso informativo
-    if (valorCanonico <= 0 || isFullyPaid) {
+    // [Fix-2] Guard ampliado: também bloqueia extrasACobrar<=0 para evitar
+    // chamar downstream (infinitepay/mercadopago) com valor=0, gerando
+    // o erro "valor deve ser maior que zero".
+    if (valorCanonico <= 0 || extrasACobrar <= 0 || isFullyPaid) {
+      // [Fix: selectionPending] Detecta se a seleção do cliente ainda não foi confirmada
+      // vs galeria genuinamente quitada — para feedback de UX diferenciado no frontend.
+      const selectionPending =
+        !isFullyPaid &&
+        galleryHasSelectionWithExtras &&
+        (valorCanonico <= 0 || extrasACobrar <= 0);
+
+      console.log(`[gcp][step:3 no-amount-due] valorCanonico=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} selectionPending=${selectionPending}`);
+
       return jsonResponse({
         success: true,
         code: 'NO_AMOUNT_DUE',
-        alreadyPaid: true,
-        message: 'Galeria já quitada — não há saldo a cobrar',
+        alreadyPaid: !selectionPending,
+        selectionPending,
+        message: selectionPending
+          ? 'O cliente ainda não confirmou a seleção. Aguarde a confirmação para gerar a cobrança.'
+          : 'Galeria já quitada — não há saldo a cobrar',
         galleryUrl,
         valorTotal: 0,
         extraCount: 0,
