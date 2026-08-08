@@ -127,8 +127,11 @@ Deno.serve(async (req) => {
     }));
 
     // Validate required fields - userId is always required (passed in body, no JWT needed)
-    if (!valor || !userId) {
-      return errorResponse(400, 'valor e userId são obrigatórios', 'MISSING_FIELDS');
+    if (typeof valor !== 'number' || valor <= 0) {
+      return errorResponse(400, 'valor deve ser maior que zero', 'PAYMENT_CREATE_ERROR');
+    }
+    if (!userId) {
+      return errorResponse(400, 'userId é obrigatório', 'MISSING_FIELDS');
     }
 
     if (!clienteId && !galeriaId) {

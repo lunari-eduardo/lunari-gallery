@@ -74,6 +74,14 @@ Deno.serve(async (req) => {
     // 1. Identificar photographer_id (aceita ambos os nomes)
     const photographerId = body.photographer_id || body.userId;
     
+    if (typeof body.valor !== 'number' || body.valor <= 0) {
+      console.error('Valor inválido ou zerado:', body.valor);
+      return new Response(
+        JSON.stringify({ success: false, error: 'valor deve ser maior que zero', code: 'PAYMENT_CREATE_ERROR' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!photographerId) {
       console.error('Nenhum ID de fotógrafo fornecido (photographer_id ou userId)');
       return new Response(

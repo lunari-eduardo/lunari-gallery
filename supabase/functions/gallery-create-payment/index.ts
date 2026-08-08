@@ -180,13 +180,25 @@ Deno.serve(async (req) => {
       console.log(`[gcp][step:3 calc-ok] valor=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid} bypass=${shouldBypassGate || galleryHasSelectionWithExtras}`);
     }
 
-    // 2a. Sem saldo a cobrar → sucesso informativo
-    // [Fix-2] Guard ampliado: também bloqueia extrasACobrar<=0 para evitar
-    // chamar downstream (infinitepay/mercadopago) com valor=0, gerando
-    // o erro "valor deve ser maior que zero".
+    // 2a. Sem saldo a cobrar ou erro de sincronização
+    // [Fix-2] Guard ampliado para bloquear valores anômalos.
+    // [Fix-3] Se valorCanonico for <= 0 mas a galeria NÃO estiver quitada,
+    // significa que houve dessincronização no frontend. Retornamos SYNC_REQUIRED
+    // em vez de fingir que está pago.
+    if (Number.isNaN(valorCanonico) || Number.isNaN(extrasACobrar)) {
+      return jsonResponse({ success: false, error: 'Valores calculados são inválidos (NaN).', code: 'CALC_INVALID' }, 500);
+    }
+
     if (valorCanonico <= 0 || extrasACobrar <= 0 || isFullyPaid) {
-      // [Fix: selectionPending] Detecta se a seleção do cliente ainda não foi confirmada
-      // vs galeria genuinamente quitada — para feedback de UX diferenciado no frontend.
+      if (!isFullyPaid && (valorCanonico <= 0 || extrasACobrar <= 0)) {
+        console.warn(`[gcp][step:3 sync-required] valorCanonico=${valorCanonico} extras=${extrasACobrar} fullyPaid=${isFullyPaid}`);
+        return jsonResponse({
+          success: false,
+          code: 'SYNC_REQUIRED',
+          error: 'Os valores da seleção estão zerados, mas a galeria não consta como quitada. É necessário sincronizar.',
+        }, 400);
+      }
+
       const selectionPending =
         !isFullyPaid &&
         galleryHasSelectionWithExtras &&

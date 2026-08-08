@@ -1564,7 +1564,18 @@ export default function ClientGallery() {
         }
       } catch (e) {
         console.error('[handleRegenerateCharge] erro:', e);
-        toast.error(e instanceof Error ? e.message : 'Erro ao gerar novo link');
+        const errMsg = e instanceof Error ? e.message : 'Erro ao gerar novo link';
+        
+        // Auto-heal: se o erro for de valor zerado ou PAYMENT_CREATE_ERROR (indicando
+        // dessincronização de backend), forçamos um refetch da galeria para corrigir
+        // a UI em vez de travar o usuário.
+        if (errMsg.includes('PAYMENT_CREATE_ERROR') || errMsg.toLowerCase().includes('maior que zero') || errMsg.includes('SYNC_REQUIRED')) {
+          toast.info('Sincronizando cobrança...');
+          const fresh = await refetchGallery();
+          if (routeFromFreshData(fresh?.data)) return;
+        } else {
+          toast.error(errMsg);
+        }
       }
     };
 
