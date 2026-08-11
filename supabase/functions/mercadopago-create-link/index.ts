@@ -74,11 +74,11 @@ Deno.serve(async (req) => {
     // 1. Identificar photographer_id (aceita ambos os nomes)
     const photographerId = body.photographer_id || body.userId;
     
-    if (typeof body.valor !== 'number' || body.valor <= 0) {
-      console.error('Valor inválido ou zerado:', body.valor);
+    const valorParsed = typeof body.valor === 'string' ? parseFloat(body.valor) : Number(body.valor);
+    if (Number.isNaN(valorParsed) || valorParsed <= 0) {
       return new Response(
         JSON.stringify({ success: false, error: 'valor deve ser maior que zero', code: 'PAYMENT_CREATE_ERROR' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
       // 🛡️ Inferência defensiva: se vier qtdFotos=0/null mas há valor>0,
       // tentamos extrair "N foto" da descrição ou dividir valor pelo preço unitário.
       let qtdFotosFinal = body.qtdFotos || 0;
-      if (qtdFotosFinal <= 0 && body.valor > 0) {
+      if (qtdFotosFinal <= 0 && valorParsed > 0) {
         console.warn(`⚠️ [mercadopago-create-link] qtdFotos ausente/zero para galeria ${body.galeriaId} — tentando inferir`);
         let inferred: number | null = null;
         const m = body.descricao?.match(/(\d+)\s*foto/i);
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
           const { data: g } = await supabase
             .from('galerias').select('valor_foto_extra').eq('id', body.galeriaId).maybeSingle();
           const unit = Number(g?.valor_foto_extra || 0);
-          if (unit > 0) inferred = Math.round(body.valor / unit);
+          if (unit > 0) inferred = Math.round(valorParsed / unit);
         }
         if (inferred && inferred > 0) {
           qtdFotosFinal = inferred;
@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
           cliente_id: clienteId,
           galeria_id: body.galeriaId,
           session_id: body.sessionId || null,
-          valor: body.valor,
+          valor: valorParsed,
           descricao: body.descricao,
           tipo_cobranca: 'link',
           finalidade: 'fotos_extras', // link MP gerado para fotos extras de galeria
@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
       if (payerHints.phoneParts) pixPayer.phone = payerHints.phoneParts;
 
       const pixPayload = {
-        transaction_amount: body.valor,
+        transaction_amount: valorParsed,
         description: body.descricao,
         payment_method_id: 'pix',
         payer: pixPayer,
@@ -415,7 +415,7 @@ Deno.serve(async (req) => {
         items: [{
           title: body.descricao,
           quantity: 1,
-          unit_price: body.valor,
+          unit_price: valorParsed,
           currency_id: 'BRL',
         }],
         external_reference: cobrancaId,

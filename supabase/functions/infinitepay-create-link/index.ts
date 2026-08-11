@@ -127,7 +127,8 @@ Deno.serve(async (req) => {
     }));
 
     // Validate required fields - userId is always required (passed in body, no JWT needed)
-    if (typeof valor !== 'number' || valor <= 0) {
+    const valorParsed = typeof valor === 'string' ? parseFloat(valor) : Number(valor);
+    if (Number.isNaN(valorParsed) || valorParsed <= 0) {
       return errorResponse(400, 'valor deve ser maior que zero', 'PAYMENT_CREATE_ERROR');
     }
     if (!userId) {
@@ -204,7 +205,7 @@ Deno.serve(async (req) => {
 
     // 2. Build payload
     const orderNsu = `gallery-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const valorCentavos = Math.round(valor * 100);
+    const valorCentavos = Math.round(valorParsed * 100);
 
     const infinitePayload: Record<string, unknown> = {
       handle,
