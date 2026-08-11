@@ -22,6 +22,34 @@ export default function Auth() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [showUpdatePassword, setShowUpdatePassword] = useState(false);
 
+  // Processa captura de erros de OAuth (Google/Supabase)
+  useEffect(() => {
+    let error = searchParams.get('error');
+    let errorDescription = searchParams.get('error_description');
+    const hash = window.location.hash;
+
+    if (hash) {
+      try {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        if (!error && hashParams.get('error')) error = hashParams.get('error');
+        if (!errorDescription && hashParams.get('error_description')) {
+          errorDescription = hashParams.get('error_description');
+        }
+      } catch (e) {
+        // Ignorar
+      }
+    }
+
+    if (errorDescription) {
+      const decoded = decodeURIComponent(errorDescription).replace(/\+/g, ' ');
+      toast.error(`Falha de autenticação: ${decoded}`, { duration: 8000 });
+      window.history.replaceState(null, '', window.location.pathname);
+    } else if (error) {
+      toast.error(`Falha de autenticação: ${error}`, { duration: 8000 });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [searchParams]);
+
   // Processa OAuth callback / email change
   useEffect(() => {
     const hash = window.location.hash;
