@@ -619,6 +619,13 @@ Deno.serve(async (req) => {
             }
           }
 
+          const strictValorTotal = typeof valorTotal === 'number' && !Number.isNaN(valorTotal) ? valorTotal : Number(valorTotal) || 0;
+          const strictExtras = typeof extrasACobrar === 'number' && !Number.isNaN(extrasACobrar) ? extrasACobrar : Number(extrasACobrar) || 0;
+
+          if (strictValorTotal <= 0) {
+            console.error(`🚨 [confirm-selection] GCP bypass: Tentando criar pagamento com valor nulo/zero.`, { valorTotal, strictValorTotal });
+          }
+
           const gcpBody: Record<string, unknown> = {
               galleryId,
               provider: integracao.provedor,
@@ -640,8 +647,8 @@ Deno.serve(async (req) => {
                   fotos_incluidas: gallery.fotos_incluidas,
                   regras_congeladas: gallery.regras_congeladas,
                 },
-                valorCanonico: valorTotal,
-                extrasACobrar: extrasACobrar,
+                valorCanonico: strictValorTotal,
+                extrasACobrar: strictExtras,
                 isFullyPaid: false,
                 provedor: integracao.provedor,
                 sessionIdTexto: sessionIdTextoPre,

@@ -319,14 +319,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    const strictValorCanonico = typeof valorCanonico === 'number' && !Number.isNaN(valorCanonico) ? valorCanonico : Number(valorCanonico) || 0;
+    const strictExtrasACobrar = typeof extrasACobrar === 'number' && !Number.isNaN(extrasACobrar) ? extrasACobrar : Number(extrasACobrar) || 0;
+
     const payloadBody: Record<string, unknown> = {
       clienteId: gallery.cliente_id || null,
       sessionId: sessionIdTexto,
-      valor: valorCanonico,
+      valor: strictValorCanonico,
       descricao,
       userId: gallery.user_id,
       galeriaId: gallery.id,
-      qtdFotos: extrasACobrar,
+      qtdFotos: strictExtrasACobrar,
       galleryToken: gallery.public_token,
       visitorId: visitorId || undefined,
       snapshotFotosIncluidas: snapshotFotosIncluidas ?? (gallery as any).fotos_incluidas ?? 0,
@@ -335,7 +338,8 @@ Deno.serve(async (req) => {
     };
     if (redirectUrl) payloadBody.redirectUrl = redirectUrl;
 
-    console.log(`[gcp][step:6 calling] ${functionName} valor=${valorCanonico} qtd=${extrasACobrar}`);
+    console.log(`[gcp][step:6 calling] ${functionName} valor=${strictValorCanonico} qtd=${strictExtrasACobrar}`);
+    console.log(`[gcp][step:6 payload_log] Sending to provider:`, JSON.stringify({ ...payloadBody, galleryToken: '***' }));
 
     const fnUrl = `${supabaseUrl}/functions/v1/${functionName}`;
     const ac = new AbortController();

@@ -75,7 +75,17 @@ Deno.serve(async (req) => {
     const photographerId = body.photographer_id || body.userId;
     
     const valorParsed = typeof body.valor === 'string' ? parseFloat(body.valor) : Number(body.valor);
-    if (Number.isNaN(valorParsed) || valorParsed <= 0) {
+    
+    if (body.valor === undefined || body.valor === null || Number.isNaN(valorParsed)) {
+      console.error('💳 [mercadopago-create-link] ERRO FATAL: valor ausente ou NaN no payload!', { valor: body.valor });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Valor de cobrança ausente ou corrompido no payload recebido pelo orquestrador.', code: 'PAYMENT_PAYLOAD_INVALID' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (valorParsed <= 0) {
+      console.error('💳 [mercadopago-create-link] ERRO FATAL: valor <= 0 bloqueado pelo gate final!', { valorParsed });
       return new Response(
         JSON.stringify({ success: false, error: 'valor deve ser maior que zero', code: 'PAYMENT_CREATE_ERROR' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

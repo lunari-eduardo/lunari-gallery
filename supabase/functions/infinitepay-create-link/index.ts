@@ -128,7 +128,14 @@ Deno.serve(async (req) => {
 
     // Validate required fields - userId is always required (passed in body, no JWT needed)
     const valorParsed = typeof valor === 'string' ? parseFloat(valor) : Number(valor);
-    if (Number.isNaN(valorParsed) || valorParsed <= 0) {
+    
+    if (valor === undefined || valor === null || Number.isNaN(valorParsed)) {
+      console.error('💳 [infinitepay-create-link] ERRO FATAL: valor ausente ou NaN no payload!', { valor });
+      return errorResponse(400, 'Valor de cobrança ausente ou corrompido no payload recebido pelo orquestrador.', 'PAYMENT_PAYLOAD_INVALID');
+    }
+    
+    if (valorParsed <= 0) {
+      console.error('💳 [infinitepay-create-link] ERRO FATAL: valor <= 0 bloqueado pelo gate final!', { valorParsed });
       return errorResponse(400, 'valor deve ser maior que zero', 'PAYMENT_CREATE_ERROR');
     }
     if (!userId) {
