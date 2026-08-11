@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useRef, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -11,7 +11,24 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuthContext();
   const location = useLocation();
 
-  if (loading) {
+  // Guarda o estado indicando que estamos num callback OAuth
+  // (evita Race Condition entre React Router limando a URL e Supabase pegando o PKCE code)
+  const isOauthPending = useRef(
+    location.search.includes('code=') || location.hash.includes('access_token=')
+  );
+
+  useEffect(() => {
+    // Quando o usuário for carregado ou o load terminar falhando
+    if (user || (!loading && !user)) {
+      const timer = setTimeout(() => {
+        isOauthPending.current = false;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [user, loading]);
+
+  // Seguramos no Spinner se a trava de OAuth estiver ativa (isOauthPending.current === true)
+  if (loading || isOauthPending.current) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
