@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
  */
 const Index = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
@@ -25,13 +26,13 @@ const Index = () => {
       if (session) {
         navigate('/dashboard', { replace: true });
       } else {
-        navigate('/auth', { replace: true });
+        navigate({ pathname: '/auth', search: location.search, hash: location.hash }, { replace: true });
       }
     };
 
     checkSession();
     return () => { mounted = false; };
-  }, [navigate]);
+  }, [navigate, location.search, location.hash]);
 
 
   // Enquanto verifica a sessão, mostra um estado neutro ou vazio

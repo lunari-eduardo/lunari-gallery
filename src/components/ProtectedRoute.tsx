@@ -36,14 +36,24 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Preserva pathname + search (ex: /gallery/new?session_id=...&cliente_id=...)
-  // para restaurar após login. Crítico para fluxo Studio → Gallery em PWA mobile.
+  // Preserva pathname + search para restaurar após login. 
+  // Também garante que flags de erro OAuth (error_description) não sejam apagadas pelo Redirect.
   if (!user) {
     const redirectTarget = `${location.pathname}${location.search}${location.hash}`;
-    const redirect = redirectTarget && redirectTarget !== '/'
-      ? `?redirect=${encodeURIComponent(redirectTarget)}`
-      : '';
-    return <Navigate to={`/auth${redirect}`} replace />;
+    const params = new URLSearchParams(location.search);
+    
+    if (redirectTarget && redirectTarget !== '/') {
+      params.set('redirect', redirectTarget);
+    }
+    
+    const searchString = params.toString() ? `?${params.toString()}` : '';
+
+    return (
+      <Navigate 
+        to={{ pathname: '/auth', search: searchString, hash: location.hash }} 
+        replace 
+      />
+    );
   }
 
   return <>{children}</>;
