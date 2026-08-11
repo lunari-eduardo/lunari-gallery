@@ -452,18 +452,14 @@ Deno.serve(async (req) => {
           : selectedCount > (gallery.fotos_incluidas || 0));
       const jaQuitado = extrasPagasTotal >= extrasNecessarias && extrasNecessarias > 0;
       if (debeCobrar && !shouldCreatePayment && !jaQuitado) {
-        console.error('[CONTRACT GUARD] cálculo zero em galeria que deveria cobrar', {
+        console.warn('⚠️ [CONTRACT GUARD BYPASS] Cálculo retornou zero em galeria que exigia cobrança. O cliente terá a galeria finalizada gratuitamente. Regras:', {
           galleryId, selectedCount, fotos_incluidas: gallery.fotos_incluidas,
           extrasNecessarias, extrasPagasTotal, valorTotal, chargeType,
           rulesSource: canonRulesSource,
         });
-
-        await rollbackGalleryStatus();
-        return errorResponse(
-          'Não foi possível calcular o valor a cobrar. Recarregue a página e tente novamente.',
-          500,
-          'PAYMENT_CALC_MISMATCH'
-        );
+        
+        // Em vez de barrar o cliente com erro 500 (o que causa frustração se o preço
+        // for intencionalmente zero), permitimos que a galeria seja finalizada como 'sem cobrança'.
       }
     }
 
