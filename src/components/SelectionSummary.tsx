@@ -140,7 +140,7 @@ export function SelectionSummary({
               <span className={cn('text-muted-foreground', isMobile ? 'text-[10px]' : 'text-sm')}>/ {includedPhotos}</span>
             </div>
             {isOverLimit && (
-              <div className={cn('flex items-center gap-1 text-primary', isMobile ? 'text-[10px]' : 'text-sm')}>
+              <div className={cn('flex items-center gap-1 text-foreground font-semibold', isMobile ? 'text-[10px]' : 'text-sm')}>
                 <span className="font-medium">+{currentExtras}</span>
                 {extrasPagasTotal > 0 && (
                   <span className={cn('text-muted-foreground font-normal', isMobile ? 'text-[9px]' : 'text-xs')}>
@@ -229,7 +229,7 @@ export function SelectionSummary({
             <span className="text-[10px] uppercase tracking-widest opacity-40 block">Selecionadas</span>
             <span className={cn(
               'text-xl font-bold transition-colors',
-              isOverLimit ? 'text-amber-500' : 'text-primary'
+              isOverLimit ? 'text-amber-500' : 'text-foreground'
             )}>
               {selectedCount}
             </span>
@@ -264,7 +264,7 @@ export function SelectionSummary({
                 )}
                 <div className="flex items-center justify-between pt-2 border-t border-white/5">
                   <span className="text-base font-medium">Total a cobrar</span>
-                  <span className="text-2xl font-bold text-primary">
+                  <span className="text-2xl font-bold text-foreground">
                     R$ {displayTotal.toFixed(2)}
                   </span>
                 </div>

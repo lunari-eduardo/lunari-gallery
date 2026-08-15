@@ -91,14 +91,14 @@ export function PhotoCard({
         onClick={(e) => { e.stopPropagation(); if (!disabled) onSelect(); }}
         disabled={disabled}
         className={cn(
-          'absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10',
+          'absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 z-10 shadow-md',
           isSelected 
             ? 'bg-primary border-primary text-primary-foreground' 
-            : 'border-white/80 bg-black/30 hover:border-white hover:bg-black/50',
+            : 'border-white/80 bg-black/30 hover:border-white hover:bg-black/50 drop-shadow-md',
           disabled && 'pointer-events-none'
         )}
       >
-        {isSelected && <Check className="h-4 w-4" />}
+        {isSelected && <Check className="h-4 w-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />}
       </button>
 
       {/* Favorite button - always visible when favorited, otherwise on hover only */}

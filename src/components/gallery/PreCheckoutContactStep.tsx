@@ -372,7 +372,7 @@ export function PreCheckoutContactStep({
       <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur border-t border-border/60 p-4 z-50">
         <div className="max-w-xl mx-auto">
           <Button
-            variant="terracotta"
+            variant="default"
             size="lg"
             className="w-full lg:max-w-md lg:mx-auto lg:flex gap-2"
             onClick={() => handleSubmit()}

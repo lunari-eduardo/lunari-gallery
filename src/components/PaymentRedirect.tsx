@@ -138,7 +138,7 @@ export function PaymentRedirect({
           <Button
             onClick={handleManualRedirect}
             className="w-full gap-2"
-            variant="terracotta"
+            variant="default"
             size="lg"
           >
             <ExternalLink className="h-4 w-4" />

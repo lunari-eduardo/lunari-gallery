@@ -34,6 +34,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 export interface VisualThemeConfig {
   presetId: ThemePresetId;
   mode: VisualThemeMode;
+  customHex?: string;
 }
 
 export const DEFAULT_THEME: VisualThemeConfig = {
@@ -146,6 +147,7 @@ function clamp(n: number, min: number, max: number) {
 export function resolvePresetTokens(
   presetId: ThemePresetId,
   effectiveMode: 'light' | 'dark',
+  customHex?: string
 ): ResolvedTokens {
   const preset = THEME_PRESETS.find((p) => p.id === presetId) ?? THEME_PRESETS[0];
 
@@ -155,7 +157,8 @@ export function resolvePresetTokens(
       : { brandH: 0, brandS: 0, brandL: 10, brandHoverL: 4,  brandGlowL: 25,  primaryForegroundL: 100, surfaceHue: 220, surfaceSat: 4 };
   }
 
-  const { h, s, l } = hexToHsl(preset.hex);
+  const hexToUse = customHex || preset.hex;
+  const { h, s, l } = hexToHsl(hexToUse);
 
   const brandL = effectiveMode === 'dark'
     ? clamp(Math.max(l, 60), 55, 75)
@@ -182,7 +185,7 @@ export function applyTheme(theme: VisualThemeConfig): void {
   const useDark = theme.mode === 'dark' || (theme.mode === 'system' && prefersDark);
   root.classList.toggle('dark', useDark);
 
-  const t = resolvePresetTokens(theme.presetId, useDark ? 'dark' : 'light');
+  const t = resolvePresetTokens(theme.presetId, useDark ? 'dark' : 'light', theme.customHex);
   const r = root.style;
   r.setProperty('--brand-h', String(t.brandH));
   r.setProperty('--brand-s', `${t.brandS}%`);

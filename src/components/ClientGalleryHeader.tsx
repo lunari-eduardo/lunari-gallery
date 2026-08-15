@@ -192,14 +192,14 @@ export function ClientGalleryHeader({
         )}>
           <div className="flex items-center justify-center gap-4 text-sm">
             <span>
-              <span className="font-semibold text-primary">{selectedCount}</span>
-              <span className="text-muted-foreground">/{includedPhotos} selecionadas</span>
+              <span className="font-semibold text-foreground">{selectedCount}</span>
+              <span className="text-foreground/70">/{includedPhotos} selecionadas</span>
             </span>
             {extraCount > 0 && (
-              <span className="text-primary font-medium flex items-center gap-1">
+              <span className="text-foreground font-medium flex items-center gap-1">
                 +{extraCount} extras
                 {extrasPagasAnteriormente > 0 && (
-                  <span className="text-xs text-muted-foreground font-normal">
+                  <span className="text-xs text-foreground/70 font-normal">
                     ({extrasPagasAnteriormente} já pagas{typeof extrasACobrar === 'number' ? `, ${extrasACobrar} a pagar` : ''})
                   </span>
                 )}
